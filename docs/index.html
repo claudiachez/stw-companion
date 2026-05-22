@@ -1458,6 +1458,15 @@ function showModule(id, btn) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('on'));
   document.getElementById('mod-'+id).classList.add('on');
   btn.classList.add('on');
+  localStorage.setItem('activeTab', id);
+}
+
+function restoreTab() {
+  const saved = localStorage.getItem('activeTab');
+  if (saved && saved !== 'stw') {
+    const btn = document.querySelector(`.nav-btn[onclick*="'${saved}'"]`);
+    if (btn) showModule(saved, btn);
+  }
 }
 
 // ── Init ─────────────────────────────────────────────────
@@ -1471,6 +1480,7 @@ function renderAll() {
   renderBasketBar();
   renderList();
   renderGraddox();
+  restoreTab();
 }
 
 async function init() {
