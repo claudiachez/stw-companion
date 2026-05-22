@@ -798,6 +798,16 @@ window.GRADDOX_DATA = {
         <option value="options">Options</option>
         <option value="mixed">Mixed</option>
       </select>
+      <select class="filter-select" id="f-sort" onchange="applySort(this.value)">
+        <option value="conviction">Sort: Conviction</option>
+        <option value="az">Sort: A → Z</option>
+        <option value="za">Sort: Z → A</option>
+        <option value="recent">Sort: Newest First</option>
+        <option value="oldest">Sort: Oldest First</option>
+        <option value="pnl_desc">Sort: P&amp;L ↓ Best</option>
+        <option value="pnl_asc">Sort: P&amp;L ↑ Worst</option>
+        <option value="weight_desc">Sort: Weight ↓</option>
+      </select>
       <button class="filter-clear" id="f-clear" onclick="clearFilters()" style="display:none">Clear</button>
       <span class="filter-count" id="f-count"></span>
     </div>
@@ -987,6 +997,7 @@ function bColor(b) { return BASKET_COLORS[b] || "#A8A29E"; }
 // ── State ────────────────────────────────────────────────
 let selectedTicker = null;
 let filteredHoldings = [];
+let _sortMode   = 'conviction';
 let _priceCache = {};  // { TICKER: { c, pc, dp, h, l, o } } from Finnhub /quote
 let _ibkrCache  = {};  // { TICKER: { legs: [{strike,right,expiry,entry,price,pnl_pct}] } } from IBKR proxy
 
@@ -1122,6 +1133,21 @@ function clearFilters() {
   applyFilters();
 }
 
+function applySort(mode) {
+  _sortMode = mode;
+  renderList();
+}
+
+// Best available P&L % for a holding (IBKR → calculated → null)
+function _getPnlPct(h) {
+  const ibkr = _ibkrCache[h.ticker];
+  if (ibkr?.pnlPct != null) return ibkr.pnlPct;
+  const cost = parseCostBasis(h);
+  const pc   = _priceCache[h.ticker];
+  if (cost && pc?.c) return (pc.c - cost) / cost * 100;
+  return null;
+}
+
 // ── Render list ──────────────────────────────────────────
 function renderList() {
   const maxW = Math.max(...(window.STW_DATA?.holdings||[]).map(h=>h.current_weight??h.initial_weight??0));
@@ -1129,71 +1155,103 @@ function renderList() {
   const panel = document.getElementById('list-panel');
   panel.className = 'list-panel' + (narrow?' narrow':'');
 
+  // ── Sort helpers ──────────────────────────────────────
+  const dateVal = h => h.action_date ? new Date(h.action_date).getTime() : 0;
+  const sortFns = {
+    conviction: null,   // handled by tier-group loop below
+    az:         (a,b) => a.ticker.localeCompare(b.ticker),
+    za:         (a,b) => b.ticker.localeCompare(a.ticker),
+    recent:     (a,b) => dateVal(b) - dateVal(a),
+    oldest:     (a,b) => dateVal(a) - dateVal(b),
+    pnl_desc:   (a,b) => {
+      const pa = _getPnlPct(a), pb = _getPnlPct(b);
+      if (pa == null && pb == null) return 0;
+      if (pa == null) return 1;
+      if (pb == null) return -1;
+      return pb - pa;
+    },
+    pnl_asc:    (a,b) => {
+      const pa = _getPnlPct(a), pb = _getPnlPct(b);
+      if (pa == null && pb == null) return 0;
+      if (pa == null) return 1;
+      if (pb == null) return -1;
+      return pa - pb;
+    },
+    weight_desc: (a,b) => (b.current_weight??0) - (a.current_weight??0),
+  };
+
   let html = '';
-  [5,4,3,2,1,0].forEach(conv => {
-    const group = filteredHoldings.filter(h => h.conviction === conv);
-    if (!group.length) return;
-    const t = TIERS[conv];
-    const count = group.length;
-    html += `<div class="tier-head" style="color:${t.color};background:${t.bg};border-color:${t.border}">
-      ${t.label}
-      <span class="tier-head-count">${count}</span>
-    </div>`;
-    group.forEach(h => {
-      const isSelected = selectedTicker === h.ticker;
-      const cw = h.current_weight ?? h.initial_weight ?? 0;
-      const wPct = maxW > 0 ? (cw/maxW*100).toFixed(0) : 0;
-      const wChanged = h.current_weight != null && h.current_weight !== h.initial_weight;
-      const c = bColor(h.basket);
-      html += `<div class="ticker-row${isSelected?' selected':''}" onclick="selectTicker('${h.ticker}')">
-        <span class="row-rank">${String(h.rank).padStart(2,'0')}</span>
-        <div class="row-bar" style="background:${t.color}"></div>
-        <div class="row-main">
-          <div class="row-sym" style="color:${isSelected?t.color:'var(--text)'}">${h.ticker}</div>
-          <div class="row-info">
-            ${basketTag(h.basket)}
-            <span class="row-snippet">${(h.summary||'').replace(/"/g,'').slice(0,70)}…</span>
-          </div>
+
+  const renderRow = h => {
+    const t = TIERS[h.conviction];
+    const isSelected = selectedTicker === h.ticker;
+    const cw = h.current_weight ?? h.initial_weight ?? 0;
+    const wPct = maxW > 0 ? (cw/maxW*100).toFixed(0) : 0;
+    const wChanged = h.current_weight != null && h.current_weight !== h.initial_weight;
+    html += `<div class="ticker-row${isSelected?' selected':''}" onclick="selectTicker('${h.ticker}')">
+      <span class="row-rank">${String(h.rank).padStart(2,'0')}</span>
+      <div class="row-bar" style="background:${t.color}"></div>
+      <div class="row-main">
+        <div class="row-sym" style="color:${isSelected?t.color:'var(--text)'}">${h.ticker}</div>
+        <div class="row-info">
+          ${basketTag(h.basket)}
+          <span class="row-snippet">${(h.summary||'').replace(/"/g,'').slice(0,70)}…</span>
         </div>
-        <div class="row-right">
-          <div class="row-weight">
-            <span class="row-wnum" style="${wChanged?'color:var(--text)':''}">${cw.toFixed(1)}%</span>
-            <div class="row-wbar-bg"><div class="row-wbar-fill" style="width:${wPct}%"></div></div>
-          </div>
-          <span class="row-date">${fmtDate(h.action_date)}</span>
-          ${(() => {
-            if (h.ticker === 'CASH') return '';
-            const pc   = _priceCache[h.ticker];
-            const ibkr = _ibkrCache[h.ticker];
-            // Price display: always use Finnhub underlying stock price
-            const price = pc?.c;
-            if (!price) return '';
-            let pctStr = '', pctCls = '';
-            if (ibkr?.pnlPct != null) {
-              // IBKR real option P&L — most accurate
-              pctStr = `${ibkr.pnlPct >= 0 ? '+' : ''}${ibkr.pnlPct.toFixed(1)}%`;
-              pctCls = ibkr.pnlPct >= 0 ? 'price-up' : 'price-dn';
-            } else {
-              const cost = parseCostBasis(h);
-              if (cost) {
-                const pnl = (pc.c - cost) / cost * 100;
-                pctStr = `${pnl >= 0 ? '+' : ''}${pnl.toFixed(1)}%`;
-                pctCls = pnl >= 0 ? 'price-up' : 'price-dn';
-              } else if (pc?.dp != null) {
-                pctStr = `${pc.dp >= 0 ? '+' : ''}${pc.dp.toFixed(2)}%`;
-                pctCls = (pc.dp >= 0 ? 'price-up' : 'price-dn') + ' row-price-day';
-              }
+      </div>
+      <div class="row-right">
+        <div class="row-weight">
+          <span class="row-wnum" style="${wChanged?'color:var(--text)':''}">${cw.toFixed(1)}%</span>
+          <div class="row-wbar-bg"><div class="row-wbar-fill" style="width:${wPct}%"></div></div>
+        </div>
+        <span class="row-date">${fmtDate(h.action_date)}</span>
+        ${(() => {
+          if (h.ticker === 'CASH') return '';
+          const pc   = _priceCache[h.ticker];
+          const ibkr = _ibkrCache[h.ticker];
+          const price = pc?.c;
+          if (!price) return '';
+          let pctStr = '', pctCls = '';
+          if (ibkr?.pnlPct != null) {
+            pctStr = `${ibkr.pnlPct >= 0 ? '+' : ''}${ibkr.pnlPct.toFixed(1)}%`;
+            pctCls = ibkr.pnlPct >= 0 ? 'price-up' : 'price-dn';
+          } else {
+            const cost = parseCostBasis(h);
+            if (cost) {
+              const pnl = (pc.c - cost) / cost * 100;
+              pctStr = `${pnl >= 0 ? '+' : ''}${pnl.toFixed(1)}%`;
+              pctCls = pnl >= 0 ? 'price-up' : 'price-dn';
+            } else if (pc?.dp != null) {
+              pctStr = `${pc.dp >= 0 ? '+' : ''}${pc.dp.toFixed(2)}%`;
+              pctCls = (pc.dp >= 0 ? 'price-up' : 'price-dn') + ' row-price-day';
             }
-            return `<div class="row-price">
-              <span class="row-price-num">$${price.toFixed(2)}</span>
-              ${pctStr ? `<span class="row-price-chg ${pctCls}">${pctStr}</span>` : ''}
-            </div>`;
-          })()}
-        </div>
-        ${isSelected?`<span style="color:${t.color};font-size:11px;flex-shrink:0">▶</span>`:''}
+          }
+          return `<div class="row-price">
+            <span class="row-price-num">$${price.toFixed(2)}</span>
+            ${pctStr ? `<span class="row-price-chg ${pctCls}">${pctStr}</span>` : ''}
+          </div>`;
+        })()}
+      </div>
+      ${isSelected ? `<span style="color:${t.color};font-size:11px;flex-shrink:0">▶</span>` : ''}
+    </div>`;
+  };
+
+  // ── Render: conviction-grouped (default) or flat-sorted ──
+  if (_sortMode === 'conviction') {
+    [5,4,3,2,1,0].forEach(conv => {
+      const group = filteredHoldings.filter(h => h.conviction === conv);
+      if (!group.length) return;
+      const t = TIERS[conv];
+      html += `<div class="tier-head" style="background:${t.bg};color:${t.color};border-color:${t.border}">
+        ${t.label}
+        <span class="tier-head-count">${group.length}</span>
       </div>`;
+      group.forEach(h => renderRow(h));
     });
-  });
+  } else {
+    const fn = sortFns[_sortMode];
+    const sorted = fn ? [...filteredHoldings].sort(fn) : [...filteredHoldings];
+    sorted.forEach(h => renderRow(h));
+  }
 
   if (!html) html = '<div class="empty">No positions match your filters.</div>';
   panel.innerHTML = html;
