@@ -904,11 +904,13 @@ function fmtDate(s) {
   return d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'2-digit' });
 }
 
+const ET = { timeZone: 'America/New_York' };
+
 function fmtUpdated(s) {
   if (!s) return '–';
   const d = new Date(s);
-  return 'Updated ' + d.toLocaleDateString('en-US',{month:'short',day:'numeric'})
-    + ' · ' + d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  return 'Updated ' + d.toLocaleDateString('en-US',{month:'short',day:'numeric',...ET})
+    + ' · ' + d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',...ET});
 }
 
 function basketTag(name) {
@@ -1275,7 +1277,7 @@ function renderGraddox() {
 
   // Updated time
   const updStr = gx.last_updated
-    ? new Date(gx.last_updated).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) + ' ET'
+    ? new Date(gx.last_updated).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',...ET}) + ' ET'
     : '–';
 
   // ── Level row renderer (shared by SPX + QQQ) ─────────────
@@ -1359,6 +1361,19 @@ function renderGraddox() {
         </div>
       </div>
       <div class="gx-right">
+        <div class="gx-card" style="overflow:visible">
+          <div class="gx-card-hdr" style="border-bottom:1px solid var(--border)">📈 SPY &amp; QQQ — 30 min <span style="font-size:10px;color:var(--t3);font-weight:400;margin-left:6px">via TradingView</span></div>
+          <div style="display:flex;gap:0;height:380px;">
+            <iframe id="tv-spy"
+              src="https://s3.tradingview.com/widgetembed/?frameElementId=tv-spy&symbol=AMEX%3ASPY&interval=30&hidesidetoolbar=0&hidetoptoolbar=0&symboledit=0&saveimage=0&toolbarbg=F7F5F1&theme=light&style=1&timezone=America%2FNew_York&locale=en&allow_symbol_change=0"
+              style="flex:1;border:none;border-right:1px solid var(--border);"
+              allowtransparency="true" scrolling="no" allowfullscreen></iframe>
+            <iframe id="tv-qqq"
+              src="https://s3.tradingview.com/widgetembed/?frameElementId=tv-qqq&symbol=NASDAQ%3AQQQ&interval=30&hidesidetoolbar=0&hidetoptoolbar=0&symboledit=0&saveimage=0&toolbarbg=F7F5F1&theme=light&style=1&timezone=America%2FNew_York&locale=en&allow_symbol_change=0"
+              style="flex:1;border:none;"
+              allowtransparency="true" scrolling="no" allowfullscreen></iframe>
+          </div>
+        </div>
         ${SIG_ROWS ? `
         <div class="gx-card">
           <div class="gx-card-hdr">📋 Trade Signals — IV &amp; flow data not checked today</div>
