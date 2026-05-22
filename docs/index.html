@@ -363,6 +363,20 @@ window.GRADDOX_DATA = {
       white-space: nowrap;
     }
 
+    .row-price {
+      display: flex; align-items: center; gap: 4px;
+    }
+    .row-price-num {
+      font-size: 11px; font-weight: 600;
+      font-variant-numeric: tabular-nums; color: var(--text);
+    }
+    .row-price-chg {
+      font-size: 10px; font-weight: 500;
+      font-variant-numeric: tabular-nums;
+    }
+    .price-up { color: #16A34A; }
+    .price-dn { color: #DC2626; }
+
     /* ── Tags ────────────────────────────── */
     .tag {
       display: inline-flex; align-items: center; gap: 4px;
@@ -761,6 +775,20 @@ window.GRADDOX_DATA = {
         <option value="2">Tier 4 — Waning</option>
         <option value="1">Tier 5 — Concern</option>
       </select>
+      <select class="filter-select" id="f-status" onchange="applyFilters()">
+        <option value="">All Status</option>
+        <option value="New">New</option>
+        <option value="Upsized">Upsized</option>
+        <option value="Hold">Hold</option>
+        <option value="Trimmed">Trimmed</option>
+        <option value="Closed">Closed</option>
+      </select>
+      <select class="filter-select" id="f-type" onchange="applyFilters()">
+        <option value="">All Types</option>
+        <option value="shares">Shares</option>
+        <option value="options">Options</option>
+        <option value="mixed">Mixed</option>
+      </select>
       <button class="filter-clear" id="f-clear" onclick="clearFilters()" style="display:none">Clear</button>
       <span class="filter-count" id="f-count"></span>
     </div>
@@ -950,6 +978,7 @@ function bColor(b) { return BASKET_COLORS[b] || "#A8A29E"; }
 // ── State ────────────────────────────────────────────────
 let selectedTicker = null;
 let filteredHoldings = [];
+let _priceCache = {};  // { TICKER: { c, pc, dp, h, l, o } } from Finnhub /quote
 
 // ── Helpers ──────────────────────────────────────────────
 function fmtDate(s) {
@@ -980,6 +1009,24 @@ function actionBadge(a) {
   const k = a.toLowerCase();
   const cls = ['new','closed','upsized','trimmed','hold'].includes(k) ? `badge-${k}` : 'badge-hold';
   return `<span class="badge ${cls}">${a}</span>`;
+}
+
+// ── Position type detection ──────────────────────────────
+function positionType(h) {
+  const d = h.position_detail || '';
+  if (!d || h.ticker === 'CASH') return null;
+  const hasShares  = /Common\s*@/i.test(d);
+  const hasOptions = /\$[\d.]+[CP]\b|\b(options\s+only)\b|\d+[CP]\s+[@$]/i.test(d);
+  if (hasShares && hasOptions) return 'mixed';
+  if (hasOptions) return 'options';
+  if (hasShares)  return 'shares';
+  return null;
+}
+
+// Parse shares cost basis from position_detail e.g. "Common @ $86.14"
+function parseCostBasis(h) {
+  const m = (h.position_detail||'').match(/Common\s*@\s*\$([0-9]+\.?[0-9]*)/i);
+  return m ? parseFloat(m[1]) : null;
 }
 
 // ── Basket bar + legend ──────────────────────────────────
@@ -1033,13 +1080,17 @@ function applyFilters() {
   const search = document.getElementById('f-search').value.toLowerCase();
   const basket = document.getElementById('f-basket').value;
   const tier   = document.getElementById('f-tier').value;
-  const hasFilter = search || basket || tier;
+  const status = document.getElementById('f-status').value;
+  const type   = document.getElementById('f-type').value;
+  const hasFilter = search || basket || tier || status || type;
 
   document.getElementById('f-clear').style.display = hasFilter ? 'block' : 'none';
 
   filteredHoldings = data.holdings.filter(h => {
     if (basket && h.basket !== basket) return false;
     if (tier   && h.conviction !== Number(tier)) return false;
+    if (status && h.last_action !== status) return false;
+    if (type   && positionType(h) !== type) return false;
     if (search && !h.ticker.toLowerCase().includes(search) &&
         !h.basket.toLowerCase().includes(search) &&
         !(h.name||'').toLowerCase().includes(search)) return false;
@@ -1056,6 +1107,8 @@ function clearFilters() {
   document.getElementById('f-search').value = '';
   document.getElementById('f-basket').value = '';
   document.getElementById('f-tier').value = '';
+  document.getElementById('f-status').value = '';
+  document.getElementById('f-type').value = '';
   applyFilters();
 }
 
@@ -1098,6 +1151,16 @@ function renderList() {
             <div class="row-wbar-bg"><div class="row-wbar-fill" style="width:${wPct}%"></div></div>
           </div>
           <span class="row-date">${fmtDate(h.action_date)}</span>
+          ${(() => {
+            const pc = _priceCache[h.ticker];
+            if (!pc || !pc.c || h.ticker === 'CASH') return '';
+            const dpCls = pc.dp >= 0 ? 'price-up' : 'price-dn';
+            const dpStr = pc.dp != null ? `${pc.dp >= 0 ? '+' : ''}${pc.dp.toFixed(2)}%` : '';
+            return `<div class="row-price">
+              <span class="row-price-num">$${pc.c.toFixed(2)}</span>
+              ${dpStr ? `<span class="row-price-chg ${dpCls}">${dpStr}</span>` : ''}
+            </div>`;
+          })()}
         </div>
         ${isSelected?`<span style="color:${t.color};font-size:11px;flex-shrink:0">▶</span>`:''}
       </div>`;
@@ -1271,6 +1334,33 @@ function renderDetail(h) {
         <div class="meta-value" style="color:${t.color}">${t.short}</div>
       </div>
     </div>
+
+    <!-- Live Market block -->
+    ${(() => {
+      const pc = _priceCache[h.ticker];
+      if (!pc || !pc.c || h.ticker === 'CASH') return '';
+      const cost = parseCostBasis(h);
+      const pnl  = cost ? ((pc.c - cost) / cost * 100) : null;
+      const dpCls   = pc.dp >= 0 ? '#16A34A' : '#DC2626';
+      const pnlCls  = pnl == null ? '' : (pnl >= 0 ? '#16A34A' : '#DC2626');
+      const dpStr   = pc.dp != null ? `${pc.dp >= 0 ? '+' : ''}${pc.dp.toFixed(2)}%` : '';
+      const hiloStr = (pc.h && pc.l) ? `H $${pc.h.toFixed(2)} · L $${pc.l.toFixed(2)}` : '';
+      return `<div style="margin-bottom:14px;background:var(--s2);border:1px solid var(--bsub);border-radius:var(--rsm);padding:12px 14px;">
+        <div style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--t3);margin-bottom:8px">Live Market</div>
+        <div style="display:flex;gap:20px;align-items:flex-end;flex-wrap:wrap">
+          <div>
+            <div style="font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--text);line-height:1">$${pc.c.toFixed(2)}</div>
+            ${dpStr ? `<div style="font-size:12px;font-weight:600;color:${dpCls};margin-top:3px">${dpStr} today</div>` : ''}
+            ${hiloStr ? `<div style="font-size:10px;color:var(--t3);margin-top:2px">${hiloStr}</div>` : ''}
+          </div>
+          ${pnl != null ? `<div style="text-align:right;margin-left:auto">
+            <div style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--t3);margin-bottom:2px">Open P&amp;L (shares)</div>
+            <div style="font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;color:${pnlCls}">${pnl >= 0 ? '+' : ''}${pnl.toFixed(1)}%</div>
+            <div style="font-size:10px;color:var(--t3)">from $${cost.toFixed(2)}</div>
+          </div>` : ''}
+        </div>
+      </div>`;
+    })()}
 
     <!-- Position block: full detail + weights side by side -->
     <div style="margin-bottom:16px;background:var(--s2);border:1px solid var(--bsub);border-radius:var(--rsm);padding:12px 14px;">
@@ -1675,6 +1765,33 @@ async function initCharts() {
 }
 
 // ── Init ─────────────────────────────────────────────────
+// ── Live prices (Finnhub /quote) ────────────────────────
+async function fetchLivePrices() {
+  const data = window.STW_DATA;
+  if (!data) return;
+  const tickers = [...new Set(
+    data.holdings.filter(h => h.ticker !== 'CASH').map(h => h.ticker)
+  )];
+  const results = await Promise.allSettled(
+    tickers.map(t =>
+      fetch(`https://finnhub.io/api/v1/quote?symbol=${t}&token=${FINNHUB_KEY}`)
+        .then(r => r.json())
+        .then(q => ({ ticker: t, ...q }))
+    )
+  );
+  results.forEach(r => {
+    if (r.status === 'fulfilled' && r.value?.c) {
+      _priceCache[r.value.ticker] = r.value;
+    }
+  });
+  renderList();
+  // Also refresh detail panel if open
+  if (selectedTicker) {
+    const h = data.holdings.find(x => x.ticker === selectedTicker);
+    if (h) renderDetail(h);
+  }
+}
+
 function renderAll() {
   const data = window.STW_DATA;
   if (!data) return;
@@ -1686,6 +1803,8 @@ function renderAll() {
   renderList();
   renderGraddox();
   restoreTab();
+  // Fetch live prices in the background — re-renders list/detail when done
+  fetchLivePrices();
 }
 
 async function init() {
