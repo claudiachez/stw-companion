@@ -602,7 +602,6 @@ window.GRADDOX_DATA = {
     }
     .gx-left {
       flex: 0 0 300px; overflow-y: auto;
-      border-right: 1px solid var(--border);
       padding: 14px; display: flex;
       flex-direction: column; gap: 10px;
     }
@@ -783,13 +782,13 @@ window.GRADDOX_DATA = {
     <div class="gx-right">
 
       <!-- Charts: static HTML so scripts execute on page load -->
-      <div class="gx-card" style="padding:0;overflow:hidden;flex-shrink:0">
+      <div class="gx-card" style="overflow:hidden;flex-shrink:0;padding:0">
+        <div class="gx-card-hdr" style="padding:10px 14px">📈 SPY &amp; QQQ — 30 min</div>
         <div style="display:flex;height:420px">
 
           <!-- SPY -->
           <div class="tradingview-widget-container" style="flex:1;height:100%;border-right:1px solid var(--border)">
-            <div class="tradingview-widget-container__widget" style="height:calc(100% - 32px);width:100%"></div>
-            <div class="tradingview-widget-copyright"><a href="https://www.tradingview.com/symbols/AMEX-SPY/" rel="noopener nofollow" target="_blank"><span class="blue-text">SPY chart</span></a><span class="trademark"> by TradingView</span></div>
+            <div class="tradingview-widget-container__widget" style="height:100%;width:100%"></div>
             <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
             {
               "autosize": true, "symbol": "AMEX:SPY", "interval": "30",
@@ -810,8 +809,7 @@ window.GRADDOX_DATA = {
 
           <!-- QQQ -->
           <div class="tradingview-widget-container" style="flex:1;height:100%">
-            <div class="tradingview-widget-container__widget" style="height:calc(100% - 32px);width:100%"></div>
-            <div class="tradingview-widget-copyright"><a href="https://www.tradingview.com/symbols/NASDAQ-QQQ/" rel="noopener nofollow" target="_blank"><span class="blue-text">QQQ chart</span></a><span class="trademark"> by TradingView</span></div>
+            <div class="tradingview-widget-container__widget" style="height:100%;width:100%"></div>
             <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
             {
               "autosize": true, "symbol": "NASDAQ:QQQ", "interval": "30",
@@ -844,7 +842,9 @@ window.GRADDOX_DATA = {
 // ── Supabase ─────────────────────────────────────────────
 const SUPABASE_URL = 'https://usmqbohcjcyszjxxvnqu.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_aPliJhMtRvi3kUST45VeTA_4rIjNfrR';
-const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: { flowType: 'implicit', detectSessionInUrl: true, persistSession: true }
+});
 
 // ── Auth ──────────────────────────────────────────────────
 const AUTHORIZED_EMAILS = ['cc@claudiachez.com'];
