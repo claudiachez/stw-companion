@@ -768,90 +768,76 @@ window.GRADDOX_DATA = {
 </div>
 
 <!-- ── Graddox Module ────────────────────────── -->
-<div class="module" id="mod-gradoxx" style="display:flex;flex-direction:column;overflow:hidden">
+<div class="module" id="mod-gradoxx">
 
-  <!-- Charts — static HTML so scripts execute on page load -->
-  <div style="display:flex;height:420px;flex-shrink:0;border-bottom:1px solid var(--border);">
+  <!-- Subhdr: filled by renderGraddox() -->
+  <div id="gx-subhdr-wrap"></div>
 
-    <!-- SPY -->
-    <div class="tradingview-widget-container" style="flex:1;height:100%;border-right:1px solid var(--border)">
-      <div class="tradingview-widget-container__widget" style="height:calc(100% - 32px);width:100%"></div>
-      <div class="tradingview-widget-copyright"><a href="https://www.tradingview.com/symbols/AMEX-SPY/" rel="noopener nofollow" target="_blank"><span class="blue-text">SPY chart</span></a><span class="trademark"> by TradingView</span></div>
-      <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
-      {
-        "autosize": true,
-        "symbol": "AMEX:SPY",
-        "interval": "30",
-        "timezone": "America/New_York",
-        "theme": "light",
-        "style": "1",
-        "locale": "en",
-        "backgroundColor": "#ffffff",
-        "gridColor": "rgba(46, 46, 46, 0.06)",
-        "hide_side_toolbar": true,
-        "hide_top_toolbar": false,
-        "hide_legend": false,
-        "hide_volume": false,
-        "allow_symbol_change": false,
-        "save_image": true,
-        "calendar": false,
-        "hotlist": false,
-        "details": false,
-        "withdateranges": false,
-        "compareSymbols": [],
-        "watchlist": [],
-        "studies": [
-          { "id": "MAExp@tv-basicstudies", "inputs": { "length": 5  }, "override": { "MA.color": "#22C55E", "MA.linewidth": 2 } },
-          { "id": "MAExp@tv-basicstudies", "inputs": { "length": 9  }, "override": { "MA.color": "#06B6D4", "MA.linewidth": 2 } },
-          { "id": "MAExp@tv-basicstudies", "inputs": { "length": 21 }, "override": { "MA.color": "#F97316", "MA.linewidth": 2 } },
-          { "id": "MAExp@tv-basicstudies", "inputs": { "length": 50 }, "override": { "MA.color": "#EF4444", "MA.linewidth": 2 } }
-        ]
-      }
-      </script>
+  <!-- Body -->
+  <div class="gx-body">
+
+    <!-- Left column: SPX/QQQ levels — filled by renderGraddox() -->
+    <div class="gx-left" id="gx-levels-wrap"></div>
+
+    <!-- Right column: charts (static) + signals/log (dynamic) -->
+    <div class="gx-right">
+
+      <!-- Charts: static HTML so scripts execute on page load -->
+      <div class="gx-card" style="padding:0;overflow:hidden;flex-shrink:0">
+        <div style="display:flex;height:420px">
+
+          <!-- SPY -->
+          <div class="tradingview-widget-container" style="flex:1;height:100%;border-right:1px solid var(--border)">
+            <div class="tradingview-widget-container__widget" style="height:calc(100% - 32px);width:100%"></div>
+            <div class="tradingview-widget-copyright"><a href="https://www.tradingview.com/symbols/AMEX-SPY/" rel="noopener nofollow" target="_blank"><span class="blue-text">SPY chart</span></a><span class="trademark"> by TradingView</span></div>
+            <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
+            {
+              "autosize": true, "symbol": "AMEX:SPY", "interval": "30",
+              "timezone": "America/New_York", "theme": "light", "style": "1", "locale": "en",
+              "backgroundColor": "#ffffff", "gridColor": "rgba(46,46,46,0.06)",
+              "hide_side_toolbar": true, "allow_symbol_change": false, "save_image": true,
+              "calendar": false, "hotlist": false, "details": false, "withdateranges": false,
+              "compareSymbols": [], "watchlist": [],
+              "studies": [
+                { "id": "MAExp@tv-basicstudies", "inputs": { "length": 5  }, "override": { "MA.color": "#22C55E", "MA.linewidth": 2 } },
+                { "id": "MAExp@tv-basicstudies", "inputs": { "length": 9  }, "override": { "MA.color": "#06B6D4", "MA.linewidth": 2 } },
+                { "id": "MAExp@tv-basicstudies", "inputs": { "length": 21 }, "override": { "MA.color": "#F97316", "MA.linewidth": 2 } },
+                { "id": "MAExp@tv-basicstudies", "inputs": { "length": 50 }, "override": { "MA.color": "#EF4444", "MA.linewidth": 2 } }
+              ]
+            }
+            </script>
+          </div>
+
+          <!-- QQQ -->
+          <div class="tradingview-widget-container" style="flex:1;height:100%">
+            <div class="tradingview-widget-container__widget" style="height:calc(100% - 32px);width:100%"></div>
+            <div class="tradingview-widget-copyright"><a href="https://www.tradingview.com/symbols/NASDAQ-QQQ/" rel="noopener nofollow" target="_blank"><span class="blue-text">QQQ chart</span></a><span class="trademark"> by TradingView</span></div>
+            <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
+            {
+              "autosize": true, "symbol": "NASDAQ:QQQ", "interval": "30",
+              "timezone": "America/New_York", "theme": "light", "style": "1", "locale": "en",
+              "backgroundColor": "#ffffff", "gridColor": "rgba(46,46,46,0.06)",
+              "hide_side_toolbar": true, "allow_symbol_change": false, "save_image": true,
+              "calendar": false, "hotlist": false, "details": false, "withdateranges": false,
+              "compareSymbols": [], "watchlist": [],
+              "studies": [
+                { "id": "MAExp@tv-basicstudies", "inputs": { "length": 5  }, "override": { "MA.color": "#22C55E", "MA.linewidth": 2 } },
+                { "id": "MAExp@tv-basicstudies", "inputs": { "length": 9  }, "override": { "MA.color": "#06B6D4", "MA.linewidth": 2 } },
+                { "id": "MAExp@tv-basicstudies", "inputs": { "length": 21 }, "override": { "MA.color": "#F97316", "MA.linewidth": 2 } },
+                { "id": "MAExp@tv-basicstudies", "inputs": { "length": 50 }, "override": { "MA.color": "#EF4444", "MA.linewidth": 2 } }
+              ]
+            }
+            </script>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Signals + log: filled by renderGraddox() -->
+      <div id="gx-signals-wrap" style="display:contents"></div>
+
     </div>
-
-    <!-- QQQ -->
-    <div class="tradingview-widget-container" style="flex:1;height:100%">
-      <div class="tradingview-widget-container__widget" style="height:calc(100% - 32px);width:100%"></div>
-      <div class="tradingview-widget-copyright"><a href="https://www.tradingview.com/symbols/NASDAQ-QQQ/" rel="noopener nofollow" target="_blank"><span class="blue-text">QQQ chart</span></a><span class="trademark"> by TradingView</span></div>
-      <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
-      {
-        "autosize": true,
-        "symbol": "NASDAQ:QQQ",
-        "interval": "30",
-        "timezone": "America/New_York",
-        "theme": "light",
-        "style": "1",
-        "locale": "en",
-        "backgroundColor": "#ffffff",
-        "gridColor": "rgba(46, 46, 46, 0.06)",
-        "hide_side_toolbar": true,
-        "hide_top_toolbar": false,
-        "hide_legend": false,
-        "hide_volume": false,
-        "allow_symbol_change": false,
-        "save_image": true,
-        "calendar": false,
-        "hotlist": false,
-        "details": false,
-        "withdateranges": false,
-        "compareSymbols": [],
-        "watchlist": [],
-        "studies": [
-          { "id": "MAExp@tv-basicstudies", "inputs": { "length": 5  }, "override": { "MA.color": "#22C55E", "MA.linewidth": 2 } },
-          { "id": "MAExp@tv-basicstudies", "inputs": { "length": 9  }, "override": { "MA.color": "#06B6D4", "MA.linewidth": 2 } },
-          { "id": "MAExp@tv-basicstudies", "inputs": { "length": 21 }, "override": { "MA.color": "#F97316", "MA.linewidth": 2 } },
-          { "id": "MAExp@tv-basicstudies", "inputs": { "length": 50 }, "override": { "MA.color": "#EF4444", "MA.linewidth": 2 } }
-        ]
-      }
-      </script>
-    </div>
-
   </div>
-
-  <!-- Dynamic data: filled by renderGraddox() -->
-  <div id="gx-data" style="flex:1;overflow:hidden;display:flex;flex-direction:column"></div>
-
 </div>
 
 <script>
@@ -866,7 +852,7 @@ const AUTHORIZED_EMAILS = ['cc@claudiachez.com'];
 async function signInWithGoogle() {
   const { error } = await db.auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo: window.location.href }
+    options: { redirectTo: window.location.origin + window.location.pathname }
   });
   if (error) {
     const el = document.getElementById('auth-error');
@@ -1333,11 +1319,12 @@ function renderDetail(h) {
 
 // ── Render Graddox ───────────────────────────────────────
 function renderGraddox() {
-  const mod = document.getElementById('gx-data');
-  const gx  = window.GRADDOX_DATA;
+  const gx = window.GRADDOX_DATA;
 
   if (!gx) {
-    mod.innerHTML = `<div class="placeholder">
+    document.getElementById('gx-subhdr-wrap').innerHTML = '';
+    document.getElementById('gx-levels-wrap').innerHTML = '';
+    document.getElementById('gx-signals-wrap').innerHTML = `<div class="placeholder">
       <div style="font-size:28px">📊</div>
       <h2>Graddox GEX Signals</h2>
       <p>Run the morning skill to pull today's SPX/QQQ levels, GEX analysis, and trade signal table.</p>
@@ -1426,42 +1413,40 @@ function renderGraddox() {
       <span class="gx-log-text">${m.content}</span>
     </div>`).join('');
 
-  mod.innerHTML = `
+  document.getElementById('gx-subhdr-wrap').innerHTML = `
     <div class="gx-subhdr">
       <span class="gx-date">${dateStr}</span>
       <span class="gx-bias ${bm.cls}">${bm.label}</span>
       ${gx.bias_note ? `<span class="gx-bias-note">${gx.bias_note}</span>` : ''}
       <span class="gx-upd">Updated ${updStr}</span>
+    </div>`;
+
+  document.getElementById('gx-levels-wrap').innerHTML = `
+    <div class="gx-card">
+      <div class="gx-card-hdr">📊 SPX Levels</div>
+      ${SPX_ROWS}
     </div>
-    <div class="gx-body">
-      <div class="gx-left">
-        <div class="gx-card">
-          <div class="gx-card-hdr">📊 SPX Levels</div>
-          ${SPX_ROWS}
-        </div>
-        <div class="gx-card">
-          <div class="gx-card-hdr">📊 QQQ Levels</div>
-          ${QQQ_ROWS}
-        </div>
+    <div class="gx-card">
+      <div class="gx-card-hdr">📊 QQQ Levels</div>
+      ${QQQ_ROWS}
+    </div>`;
+
+  document.getElementById('gx-signals-wrap').innerHTML = `
+    ${SIG_ROWS ? `
+    <div class="gx-card">
+      <div class="gx-card-hdr">📋 Trade Signals — IV &amp; flow data not checked today</div>
+      <div class="gx-sig-wrap">
+        <table class="gx-sig-table">
+          <thead><tr>
+            <th>Trade</th><th>Trigger</th><th>Exp</th><th>Logic (GEX)</th><th>Verdict</th>
+          </tr></thead>
+          <tbody>${SIG_ROWS}</tbody>
+        </table>
       </div>
-      <div class="gx-right">
-        ${SIG_ROWS ? `
-        <div class="gx-card">
-          <div class="gx-card-hdr">📋 Trade Signals — IV &amp; flow data not checked today</div>
-          <div class="gx-sig-wrap">
-            <table class="gx-sig-table">
-              <thead><tr>
-                <th>Trade</th><th>Trigger</th><th>Exp</th><th>Logic (GEX)</th><th>Verdict</th>
-              </tr></thead>
-              <tbody>${SIG_ROWS}</tbody>
-            </table>
-          </div>
-        </div>` : ''}
-        <div class="gx-card">
-          <div class="gx-card-hdr">📝 Day Log — May 19, 2026</div>
-          ${LOG_ITEMS}
-        </div>
-      </div>
+    </div>` : ''}
+    <div class="gx-card">
+      <div class="gx-card-hdr">📝 Day Log</div>
+      ${LOG_ITEMS}
     </div>`;
 }
 
