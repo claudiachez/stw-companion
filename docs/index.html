@@ -988,7 +988,7 @@ function bColor(b) { return BASKET_COLORS[b] || "#A8A29E"; }
 let selectedTicker = null;
 let filteredHoldings = [];
 let _priceCache = {};  // { TICKER: { c, pc, dp, h, l, o } } from Finnhub /quote
-let _ibkrCache  = {};  // { TICKER: { unrealizedPnl, mktValue, pnlPct, legs[] } } from IBKR proxy
+let _ibkrCache  = {};  // { TICKER: { legs: [{strike,right,expiry,entry,price,pnl_pct}] } } from IBKR proxy
 
 // ── Helpers ──────────────────────────────────────────────
 function fmtDate(s) {
@@ -1163,19 +1163,19 @@ function renderList() {
           <span class="row-date">${fmtDate(h.action_date)}</span>
           ${(() => {
             if (h.ticker === 'CASH') return '';
-            const pc  = _priceCache[h.ticker];
+            const pc   = _priceCache[h.ticker];
             const ibkr = _ibkrCache[h.ticker];
-            // Price: IBKR first, then Finnhub
-            const price = ibkr?.mktPrice ?? pc?.c;
+            // Price display: always use Finnhub underlying stock price
+            const price = pc?.c;
             if (!price) return '';
             let pctStr = '', pctCls = '';
             if (ibkr?.pnlPct != null) {
-              // IBKR real P&L — most accurate
+              // IBKR real option P&L — most accurate
               pctStr = `${ibkr.pnlPct >= 0 ? '+' : ''}${ibkr.pnlPct.toFixed(1)}%`;
               pctCls = ibkr.pnlPct >= 0 ? 'price-up' : 'price-dn';
             } else {
               const cost = parseCostBasis(h);
-              if (cost && pc?.c) {
+              if (cost) {
                 const pnl = (pc.c - cost) / cost * 100;
                 pctStr = `${pnl >= 0 ? '+' : ''}${pnl.toFixed(1)}%`;
                 pctCls = pnl >= 0 ? 'price-up' : 'price-dn';
@@ -1376,38 +1376,33 @@ function renderDetail(h) {
       const hiloStr = (pc?.h && pc?.l) ? `H $${pc.h.toFixed(2)} · L $${pc.l.toFixed(2)}` : '';
 
       // ── IBKR P&L block (when proxy is connected) ──
-      const ibkrBlock = ibkr ? (() => {
-        const pnl    = ibkr.unrealizedPnl;
-        const pnlPct = ibkr.pnlPct;
-        const pnlClr = pnl >= 0 ? '#16A34A' : '#DC2626';
-
-        // Per-leg rows for options
-        const optLegs = (ibkr.legs || []).filter(l => l.secType === 'OPT');
-        const stkLegs = (ibkr.legs || []).filter(l => l.secType === 'STK');
-
-        const legRows = optLegs.map(l => {
-          const legPct = l.avgCost ? ((l.mktPrice - l.avgCost) / Math.abs(l.avgCost) * 100) : null;
-          const legClr = l.unrealizedPnl >= 0 ? '#16A34A' : '#DC2626';
-          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-top:1px solid var(--border)">
-            <span style="font-size:11px;color:var(--t2);font-family:monospace">
-              ${l.right === 'C' ? '📈' : '📉'} $${l.strike}${l.right} ${l.expiry?.slice(0,6) || ''} × ${l.position}
-            </span>
-            <span style="font-size:11px;font-weight:600;color:${legClr};font-variant-numeric:tabular-nums">
-              ${l.unrealizedPnl >= 0 ? '+' : ''}$${l.unrealizedPnl.toFixed(0)}
-              ${legPct != null ? `<span style="font-size:10px;opacity:0.8">(${legPct >= 0 ? '+' : ''}${legPct.toFixed(1)}%)</span>` : ''}
-            </span>
+      const ibkrBlock = ibkr?.legs?.length ? (() => {
+        const legs    = ibkr.legs;
+        const valid   = legs.filter(l => l.price != null);
+        const legRows = legs.map(l => {
+          const pnlClr = (l.pnl_pct || 0) >= 0 ? '#16A34A' : '#DC2626';
+          const exp    = l.expiry ? `${l.expiry.slice(0,4)}-${l.expiry.slice(4,6)}${l.expiry.length===8?'-'+l.expiry.slice(6):''}` : '';
+          const noData = l.price == null;
+          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-top:1px solid var(--border)">
+            <div>
+              <span style="font-size:11px;font-weight:600;color:var(--text);font-family:monospace">
+                ${l.right==='C'?'📈':'📉'} $${l.strike}${l.right}
+              </span>
+              <span style="font-size:10px;color:var(--t3);margin-left:4px">${exp}</span>
+              ${!noData ? `<div style="font-size:10px;color:var(--t3)">entry $${l.entry} → now $${l.price?.toFixed(2)}${l.bid?` · bid $${l.bid} ask $${l.ask}`:''}</div>` : '<div style="font-size:10px;color:var(--t3)">no market data</div>'}
+            </div>
+            ${!noData ? `<div style="text-align:right">
+              <div style="font-size:13px;font-weight:700;color:${pnlClr};font-variant-numeric:tabular-nums">${(l.pnl_pct||0)>=0?'+':''}${(l.pnl_pct||0).toFixed(1)}%</div>
+              <div style="font-size:10px;color:${pnlClr}">${(l.pnl_dol||0)>=0?'+':''}$${(l.pnl_dol||0).toFixed(2)} / contract</div>
+            </div>` : ''}
           </div>`;
         }).join('');
 
         return `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bsub)">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start">
-            <div>
-              <div style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--t3);margin-bottom:2px">Open P&amp;L — IBKR</div>
-              <div style="font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;color:${pnlClr}">${pnl >= 0 ? '+' : ''}$${pnl.toFixed(0)}</div>
-              ${pnlPct != null ? `<div style="font-size:12px;font-weight:600;color:${pnlClr}">${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(1)}%</div>` : ''}
-            </div>
+          <div style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--t3);margin-bottom:6px">
+            Options P&amp;L — IBKR Live
           </div>
-          ${optLegs.length ? `<div style="margin-top:6px">${legRows}</div>` : ''}
+          ${legRows}
         </div>`;
       })() : (() => {
         // No IBKR — fall back to calculated P&L for shares
@@ -1840,7 +1835,52 @@ async function initCharts() {
 }
 
 // ── Init ─────────────────────────────────────────────────
-// ── IBKR proxy (IB Gateway bridge) ──────────────────────
+// ── Option leg parser ────────────────────────────────────
+const _MONTH = {
+  jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',
+  jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'
+};
+function _toExpiry(monthStr, dayStr, yearStr) {
+  const m = _MONTH[(monthStr||'').toLowerCase().slice(0,3)];
+  if (!m) return null;
+  const yr = yearStr ? `20${yearStr.replace(/'/g,'')}` : '2026';
+  return dayStr ? `${yr}${m}${dayStr.padStart(2,'0')}` : `${yr}${m}`;
+}
+
+function parseOptionLegs(h) {
+  const d = h.position_detail || '';
+  if (!d || h.ticker === 'CASH') return [];
+  const legs = [];
+
+  // Pattern A: $STRIKE[C|P] MONTH [DAY] ['YY] @ $ENTRY
+  // e.g. "$22.5C Oct '26 @ $2.67"  "$6C Sep 18 '26 @ $0.87"
+  const reA = /\$?(\d+\.?\d*)\s*([CP])\s+([A-Za-z]+)\s+(?:(\d{1,2})\s+'?(\d{2})|'?(\d{2}))\s*@\s*\$?(\d+\.?\d*)/gi;
+  let m;
+  while ((m = reA.exec(d)) !== null) {
+    const expiry = _toExpiry(m[3], m[4]||null, m[5]||m[6]);
+    if (expiry) legs.push({ symbol:h.ticker, strike:parseFloat(m[1]),
+      right:m[2].toUpperCase(), expiry, entry:parseFloat(m[7]) });
+  }
+
+  // Pattern B: MONTH ['YY] $STRIKE[C|P] @$ENTRY
+  // e.g. "Aug '26 $4C @$0.90"
+  const reB = /([A-Za-z]+)\s+'?(\d{2})\s+\$?(\d+\.?\d*)\s*([CP])\s*@\$?(\d+\.?\d*)/gi;
+  while ((m = reB.exec(d)) !== null) {
+    const expiry = _toExpiry(m[1], null, m[2]);
+    if (expiry) legs.push({ symbol:h.ticker, strike:parseFloat(m[3]),
+      right:m[4].toUpperCase(), expiry, entry:parseFloat(m[5]) });
+  }
+
+  // Deduplicate (Pattern A may catch what B would catch too)
+  const seen = new Set();
+  return legs.filter(l => {
+    const key = `${l.strike}${l.right}${l.expiry}`;
+    if (seen.has(key)) return false;
+    seen.add(key); return true;
+  });
+}
+
+// ── IBKR proxy — fetch live option prices ───────────────
 async function fetchIBKR() {
   const dot   = document.getElementById('ibkr-dot');
   const label = document.getElementById('ibkr-label');
@@ -1848,36 +1888,47 @@ async function fetchIBKR() {
   label.textContent = 'IBKR…';
 
   try {
-    const res = await fetch('https://localhost:8765/positions');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const positions = await res.json();
-    if (positions.error) throw new Error(positions.error);
-
-    // Aggregate all legs per underlying ticker
-    _ibkrCache = {};
-    positions.forEach(p => {
-      const t = p.ticker;
-      if (!_ibkrCache[t]) {
-        _ibkrCache[t] = { unrealizedPnl: 0, mktValue: 0, costBasis: 0, mktPrice: p.mktPrice, legs: [] };
-      }
-      const entry = _ibkrCache[t];
-      entry.unrealizedPnl += (p.unrealizedPnl || 0);
-      entry.mktValue      += (p.mktValue || 0);
-      // cost basis = mktValue - unrealizedPnl (per leg, then sum)
-      const legCost = (p.mktValue || 0) - (p.unrealizedPnl || 0);
-      entry.costBasis += legCost;
-      entry.legs.push(p);
+    // Collect all option legs across all holdings
+    const allLegs = [];
+    (window.STW_DATA?.holdings || []).forEach(h => {
+      parseOptionLegs(h).forEach(leg => allLegs.push(leg));
     });
 
-    // Calculate aggregate P&L %
-    Object.values(_ibkrCache).forEach(e => {
-      e.pnlPct = e.costBasis !== 0
-        ? (e.unrealizedPnl / Math.abs(e.costBasis)) * 100
-        : null;
+    if (!allLegs.length) {
+      dot.style.background = '#F59E0B';
+      label.textContent = 'IBKR';
+      label.title = 'No parseable option legs found';
+      return;
+    }
+
+    const res = await fetch('https://localhost:8765/option_prices', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(allLegs),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const results = await res.json();
+    if (results.error) throw new Error(results.error);
+
+    // Group by ticker
+    _ibkrCache = {};
+    results.forEach(r => {
+      if (!_ibkrCache[r.symbol]) _ibkrCache[r.symbol] = { legs: [] };
+      _ibkrCache[r.symbol].legs.push(r);
+    });
+
+    // Aggregate P&L per ticker
+    Object.entries(_ibkrCache).forEach(([t, v]) => {
+      const valid = v.legs.filter(l => l.price != null && l.entry != null);
+      if (!valid.length) return;
+      const totalEntry = valid.reduce((s,l) => s + l.entry, 0);
+      const totalPnlPct = valid.reduce((s,l) => s + (l.pnl_pct || 0), 0) / valid.length;
+      v.pnlPct = totalPnlPct;
     });
 
     dot.style.background = '#22C55E';
-    label.textContent = 'IBKR ✓';
+    const priced = results.filter(r => r.price != null).length;
+    label.textContent = `IBKR ✓ (${priced}/${allLegs.length})`;
 
     renderList();
     if (selectedTicker) {
@@ -1887,7 +1938,7 @@ async function fetchIBKR() {
   } catch (e) {
     dot.style.background = '#EF4444';
     label.textContent = 'IBKR';
-    label.title = `${e.message} — Is the proxy running? python ibkr_proxy.py`;
+    label.title = `${e.message} — proxy running? python3 ibkr_proxy.py`;
     console.warn('IBKR proxy:', e.message);
   }
 }

@@ -18,6 +18,7 @@ The dashboard will connect automatically after that.
 from flask import Flask, jsonify
 from flask_cors import CORS
 from ib_insync import IB
+import asyncio
 import logging
 
 # Silence ib_insync INFO spam
@@ -30,66 +31,110 @@ CORS(app, origins=[
     "http://127.0.0.1:*",
 ])
 
-IB_HOST    = '127.0.0.1'
-IB_PORT    = 4001   # 4001 = live, 4002 = paper
-IB_CLIENT  = 10     # any unused client ID
+IB_HOST   = '127.0.0.1'
+IB_PORT   = 4001   # 4001 = live, 4002 = paper
+IB_CLIENT = 10     # any unused client ID
 
 
-def _connect():
+def _serialize(item):
+    c = item.contract
+    return {
+        'ticker':        c.symbol,
+        'secType':       c.secType,
+        'position':      item.position,
+        'mktPrice':      item.marketPrice,
+        'mktValue':      item.marketValue,
+        'unrealizedPnl': item.unrealizedPNL,
+        'realizedPnl':   item.realizedPNL,
+        'avgCost':       item.averageCost,
+        'strike':     c.strike  if c.secType == 'OPT' else None,
+        'right':      c.right   if c.secType == 'OPT' else None,
+        'expiry':     c.lastTradeDateOrContractMonth if c.secType == 'OPT' else None,
+        'multiplier': int(c.multiplier) if c.multiplier else 100,
+    }
+
+
+async def _check_status():
     ib = IB()
-    ib.connect(IB_HOST, IB_PORT, clientId=IB_CLIENT,
-               readonly=True, timeout=8)
-    return ib
+    await ib.connectAsync(IB_HOST, IB_PORT, clientId=IB_CLIENT, readonly=True)
+    accounts = ib.managedAccounts()
+    ib.disconnect()
+    return accounts
+
+
+async def _price_options(specs):
+    """
+    specs: list of {symbol, strike, right, expiry, entry}
+      expiry: 'YYYYMM' (monthly) or 'YYYYMMDD' (weekly/specific)
+    Returns same list with price, bid, ask, pnl_pct added.
+    """
+    from ib_insync import Option
+
+    ib = IB()
+    await ib.connectAsync(IB_HOST, IB_PORT, clientId=IB_CLIENT, readonly=True)
+    # Use delayed-frozen data so this works outside market hours too
+    ib.reqMarketDataType(4)
+
+    results = []
+    for spec in specs:
+        try:
+            contract = Option(
+                spec['symbol'],
+                str(spec['expiry']),
+                float(spec['strike']),
+                spec['right'].upper(),
+                'SMART',
+                currency='USD'
+            )
+            qualified = await ib.qualifyContractsAsync(contract)
+            if not qualified:
+                results.append({**spec, 'price': None, 'error': 'contract not found'})
+                continue
+
+            [ticker] = await ib.reqTickersAsync(qualified[0])
+            # Use last → close → midpoint as fallback chain
+            bid   = ticker.bid   if ticker.bid   and ticker.bid   > 0 else None
+            ask   = ticker.ask   if ticker.ask   and ticker.ask   > 0 else None
+            last  = ticker.last  if ticker.last  and ticker.last  > 0 else None
+            close = ticker.close if ticker.close and ticker.close > 0 else None
+            mid   = round((bid + ask) / 2, 4) if bid and ask else None
+            price = last or mid or close
+
+            entry   = float(spec.get('entry', 0))
+            pnl_pct = round((price - entry) / entry * 100, 2) if price and entry else None
+            pnl_dol = round(price - entry, 4) if price and entry else None
+
+            results.append({**spec, 'price': price, 'bid': bid, 'ask': ask,
+                             'mid': mid, 'pnl_pct': pnl_pct, 'pnl_dol': pnl_dol})
+        except Exception as e:
+            results.append({**spec, 'price': None, 'error': str(e)})
+
+    ib.disconnect()
+    return results
 
 
 @app.route('/status')
 def status():
-    """Health-check — also used to trigger cert acceptance in the browser."""
     try:
-        ib = _connect()
-        accounts = ib.managedAccounts()
-        ib.disconnect()
+        accounts = asyncio.run(_check_status())
         return jsonify({'ok': True, 'accounts': accounts})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 503
 
 
-@app.route('/positions')
-def positions():
+@app.route('/option_prices', methods=['POST'])
+def option_prices():
     """
-    Returns all portfolio positions with market data and P&L.
-    Each item:
-      ticker, secType, position, mktPrice, mktValue,
-      unrealizedPnl, realizedPnl, avgCost,
-      strike, right, expiry  (options only)
+    Body: JSON array of {symbol, strike, right, expiry, entry}
+    Returns same array with price, bid, ask, mid, pnl_pct, pnl_dol.
     """
+    from flask import request
     try:
-        ib = _connect()
-        portfolio = ib.portfolio()
-        ib.disconnect()
-
-        result = []
-        for item in portfolio:
-            c = item.contract
-            entry = {
-                'ticker':        c.symbol,
-                'secType':       c.secType,          # STK, OPT, etc.
-                'position':      item.position,
-                'mktPrice':      item.marketPrice,
-                'mktValue':      item.marketValue,
-                'unrealizedPnl': item.unrealizedPNL,
-                'realizedPnl':   item.realizedPNL,
-                'avgCost':       item.averageCost,
-                # options-only fields
-                'strike':  c.strike  if c.secType == 'OPT' else None,
-                'right':   c.right   if c.secType == 'OPT' else None,
-                'expiry':  c.lastTradeDateOrContractMonth if c.secType == 'OPT' else None,
-                'multiplier': int(c.multiplier) if c.multiplier else 100,
-            }
-            result.append(entry)
-
+        specs = request.get_json()
+        if not specs:
+            return jsonify({'error': 'No specs provided'}), 400
+        result = asyncio.run(_price_options(specs))
         return jsonify(result)
-
     except Exception as e:
         return jsonify({'error': str(e)}), 503
 
