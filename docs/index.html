@@ -6,6 +6,7 @@
   <title>STW Companion</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 
   <!-- ═══════════════════════════════════════════════════════
        DATA BLOCK — auto-updated by stw-morning-run / stw-afternoon-run
@@ -643,11 +644,10 @@ window.GRADDOX_DATA = {
     }
 
     /* Signal table */
-    .gx-sig-wrap { overflow-x: auto; }
+    .gx-sig-wrap { overflow-x: auto; padding-bottom: 9px; }
     .gx-sig-table {
       width: 100%; border-collapse: collapse;
       font-size: 11px; min-width: 480px;
-      margin-bottom: 6px;
     }
     .gx-sig-table th {
       text-align: left; font-size: 10px; font-weight: 700;
@@ -660,7 +660,7 @@ window.GRADDOX_DATA = {
       border-bottom: 1px solid var(--bsub);
       vertical-align: top; line-height: 1.4;
     }
-    .gx-sig-table tr:last-child td { border-bottom-color: transparent; }
+    .gx-sig-table tr:last-child td { border-bottom: none; }
     .gx-sig-trade { font-weight: 700; font-size: 12px; }
     .gx-sig-logic { font-size: 11px; color: var(--t2); }
     .gx-verdict {
@@ -782,53 +782,12 @@ window.GRADDOX_DATA = {
     <!-- Right column: charts (static) + signals/log (dynamic) -->
     <div class="gx-right">
 
-      <!-- Charts: static HTML so scripts execute on page load -->
+      <!-- Charts: filled by initCharts() -->
       <div class="gx-card" style="overflow:hidden;flex-shrink:0;padding:0">
         <div class="gx-card-hdr" style="padding:10px 14px">📈 SPY &amp; QQQ — 30 min</div>
         <div style="display:flex;height:420px">
-
-          <!-- SPY -->
-          <div class="tradingview-widget-container" style="flex:1;height:100%;border-right:1px solid var(--border)">
-            <div class="tradingview-widget-container__widget" style="height:100%;width:100%"></div>
-            <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
-            {
-              "autosize": true, "symbol": "AMEX:SPY", "interval": "30",
-              "timezone": "America/New_York", "theme": "light", "style": "1", "locale": "en",
-              "backgroundColor": "#ffffff", "gridColor": "rgba(46,46,46,0.06)",
-              "hide_side_toolbar": true, "hide_legend": true, "allow_symbol_change": false, "save_image": true,
-              "calendar": false, "hotlist": false, "details": false, "withdateranges": false,
-              "compareSymbols": [], "watchlist": [],
-              "studies": [
-                { "id": "MAExp@tv-basicstudies", "inputs": { "length": 5  }, "override": { "MA.color": "#22C55E", "MA.linewidth": 2 } },
-                { "id": "MAExp@tv-basicstudies", "inputs": { "length": 9  }, "override": { "MA.color": "#06B6D4", "MA.linewidth": 2 } },
-                { "id": "MAExp@tv-basicstudies", "inputs": { "length": 21 }, "override": { "MA.color": "#F97316", "MA.linewidth": 2 } },
-                { "id": "MAExp@tv-basicstudies", "inputs": { "length": 50 }, "override": { "MA.color": "#EF4444", "MA.linewidth": 2 } }
-              ]
-            }
-            </script>
-          </div>
-
-          <!-- QQQ -->
-          <div class="tradingview-widget-container" style="flex:1;height:100%">
-            <div class="tradingview-widget-container__widget" style="height:100%;width:100%"></div>
-            <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
-            {
-              "autosize": true, "symbol": "NASDAQ:QQQ", "interval": "30",
-              "timezone": "America/New_York", "theme": "light", "style": "1", "locale": "en",
-              "backgroundColor": "#ffffff", "gridColor": "rgba(46,46,46,0.06)",
-              "hide_side_toolbar": true, "hide_legend": true, "allow_symbol_change": false, "save_image": true,
-              "calendar": false, "hotlist": false, "details": false, "withdateranges": false,
-              "compareSymbols": [], "watchlist": [],
-              "studies": [
-                { "id": "MAExp@tv-basicstudies", "inputs": { "length": 5  }, "override": { "MA.color": "#22C55E", "MA.linewidth": 2 } },
-                { "id": "MAExp@tv-basicstudies", "inputs": { "length": 9  }, "override": { "MA.color": "#06B6D4", "MA.linewidth": 2 } },
-                { "id": "MAExp@tv-basicstudies", "inputs": { "length": 21 }, "override": { "MA.color": "#F97316", "MA.linewidth": 2 } },
-                { "id": "MAExp@tv-basicstudies", "inputs": { "length": 50 }, "override": { "MA.color": "#EF4444", "MA.linewidth": 2 } }
-              ]
-            }
-            </script>
-          </div>
-
+          <div id="chart-spy" style="flex:1;height:100%;border-right:1px solid var(--border)"></div>
+          <div id="chart-qqq" style="flex:1;height:100%"></div>
         </div>
       </div>
 
@@ -1348,8 +1307,12 @@ function renderGraddox() {
   const bm = biasMap[gx.bias] || { cls:'flat', label:gx.bias||'–' };
 
   // Updated time
+  // gx.last_updated is written by the skill as naive ET (no TZ offset) but Postgres stores it
+  // as UTC, so Supabase returns it with +00:00. Slice to 19 chars strips that suffix so the
+  // browser parses it as local time (ET) — which is what was originally written.
+  function parseGxTS(s) { return s ? new Date(s.slice(0, 19)) : null; }
   const updStr = gx.last_updated
-    ? new Date(gx.last_updated).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',...ET}) + ' ET'
+    ? parseGxTS(gx.last_updated).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',...ET}) + ' ET'
     : '–';
 
   // ── Level row renderer (shared by SPX + QQQ) ─────────────
@@ -1358,11 +1321,11 @@ function renderGraddox() {
       levels.resistance   ? { icon:'🔴', price:levels.resistance,   label:'Resistance',        sub:'',              badge:null,    current:false } : null,
       levels.gex1         ? { icon:'🟡', price:levels.gex1,         label:'GEX1 / Gamma Flat', sub:'',              badge:null,    current:false } : null,
       levels.put_support  ? { icon:'🟢', price:levels.put_support,  label:'Put Support',        sub:(!isQQQ?'':levels.note||''), badge:null, current:false } : null,
-      levels.key_target   ? { icon:'⭐', price:levels.key_target,   label:'Key Target',         sub:'',
+      levels.key_target   ? { icon:'🎯', price:levels.key_target,   label:'Key Target',         sub:'',
                                badge:`<span class="gx-lvl-badge" style="background:#FFF7ED;color:#D97040;border:1px solid #FED7AA">Today's Target</span>`, current:false } : null,
       levels.downside_risk? { icon:'⚠️', price:levels.downside_risk,label:'Downside Risk',      sub:'',
                                badge:`<span class="gx-lvl-badge" style="background:#FEF2F2;color:#B91C1C;border:1px solid #FECACA">Downside Risk</span>`, current:false } : null,
-      currentPrice        ? { icon:'📍', price:currentPrice,        label:'Current Price',      sub:priceTime||'',   badge:null,    current:true  } : null,
+      currentPrice        ? { icon:'💲', price:currentPrice,        label:'Current Price',      sub:priceTime||'',   badge:null,    current:true  } : null,
     ].filter(Boolean);
 
     // Sort high → low so resistance is at top and support at bottom
@@ -1385,7 +1348,7 @@ function renderGraddox() {
   // SPX levels
   const spx = gx.spx || {};
   const priceTime = gx.last_updated
-    ? '@ ' + new Date(gx.last_updated).toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit', ...ET})
+    ? '@ ' + parseGxTS(gx.last_updated).toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit', ...ET})
     : '';
   const SPX_ROWS = buildLevelRows(spx, gx.spx_price || null, false, priceTime);
 
@@ -1450,6 +1413,9 @@ function renderGraddox() {
       <div class="gx-card-hdr">📝 Day Log</div>
       ${LOG_ITEMS}
     </div>`;
+
+  // Load charts after DOM is updated (async — doesn't block the rest of the UI)
+  initCharts();
 }
 
 // ── Module switch ────────────────────────────────────────
@@ -1467,6 +1433,136 @@ function restoreTab() {
     const btn = document.querySelector(`.nav-btn[onclick*="'${saved}'"]`);
     if (btn) showModule(saved, btn);
   }
+}
+
+// ── Charts (Lightweight Charts + Polygon.io) ─────────────
+const POLYGON_KEY = '1z8oU5cKRpuvVHcimIMQ1qZE9xiRcnZE';
+let _lwCharts = {};
+
+async function initCharts() {
+  // Destroy any existing chart instances
+  Object.values(_lwCharts).forEach(c => { try { c.remove(); } catch(e){} });
+  _lwCharts = {};
+
+  // Most recent trading day in ET
+  function getTradingDate() {
+    const etStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    const d = new Date(etStr + 'T12:00:00Z');
+    const day = d.getDay();
+    if (day === 0) d.setDate(d.getDate() - 2); // Sunday → Friday
+    if (day === 6) d.setDate(d.getDate() - 1); // Saturday → Friday
+    return d.toISOString().slice(0, 10);
+  }
+
+  const to   = getTradingDate();
+  const fromD = new Date(to + 'T12:00:00Z');
+  fromD.setDate(fromD.getDate() - 14); // 14 calendar days ≈ 10 trading days (seeds 50 EMA)
+  const from = fromD.toISOString().slice(0, 10);
+
+  async function fetchBars(ticker) {
+    try {
+      const url = `https://api.polygon.io/v2/aggs/ticker/${ticker}/range/30/minute/${from}/${to}`
+                + `?adjusted=true&sort=asc&limit=500&apiKey=${POLYGON_KEY}`;
+      const r = await fetch(url);
+      const j = await r.json();
+      if (!j.results?.length) return [];
+      return j.results.map(b => ({
+        time:  Math.floor(b.t / 1000),
+        open:  b.o, high: b.h, low: b.l, close: b.c
+      }));
+    } catch(e) { return []; }
+  }
+
+  function calcEMA(bars, period) {
+    if (bars.length < 2) return [];
+    const k = 2 / (period + 1);
+    let ema = bars[0].close;
+    return bars.map(b => {
+      ema = b.close * k + ema * (1 - k);
+      return { time: b.time, value: +ema.toFixed(4) };
+    });
+  }
+
+  function buildChart(divId, bars, levels) {
+    const el = document.getElementById(divId);
+    if (!el) return null;
+    el.innerHTML = '';
+
+    if (!bars.length) {
+      el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#9CA3AF;font-size:12px">No data</div>';
+      return null;
+    }
+
+    const chart = LightweightCharts.createChart(el, {
+      autoSize: true,
+      layout: {
+        background: { type: 'solid', color: '#ffffff' },
+        textColor: '#78716C',
+      },
+      grid: {
+        vertLines: { color: 'rgba(229,221,210,0.5)' },
+        horzLines: { color: 'rgba(229,221,210,0.5)' },
+      },
+      rightPriceScale: { borderColor: '#E5DDD2' },
+      timeScale: { borderColor: '#E5DDD2', timeVisible: true, secondsVisible: false },
+      crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+    });
+
+    // Candlesticks
+    const candles = chart.addCandlestickSeries({
+      upColor:         '#22C55E', downColor:         '#EF4444',
+      borderUpColor:   '#16A34A', borderDownColor:   '#DC2626',
+      wickUpColor:     '#16A34A', wickDownColor:     '#DC2626',
+    });
+    candles.setData(bars);
+
+    // 5 / 9 / 21 / 50 EMAs
+    [[5,'#22C55E'],[9,'#06B6D4'],[21,'#F97316'],[50,'#EF4444']].forEach(([period, color]) => {
+      const emaData = calcEMA(bars, period);
+      if (!emaData.length) return;
+      const s = chart.addLineSeries({
+        color, lineWidth: 2,
+        priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+      });
+      s.setData(emaData);
+    });
+
+    // GEX level lines
+    if (levels) {
+      [
+        ['resistance',    '#EF4444', 'Resistance',    1], // Dashed
+        ['gex1',          '#D97706', 'GEX1',          1],
+        ['put_support',   '#22C55E', 'Put Support',   1],
+        ['key_target',    '#6366F1', 'Target',        2], // Dotted
+        ['downside_risk', '#F97316', 'Downside Risk', 2],
+      ].forEach(([key, color, title, style]) => {
+        if (!levels[key]) return;
+        candles.createPriceLine({ price: levels[key], color, lineWidth: 1, lineStyle: style, axisLabelVisible: true, title });
+      });
+    }
+
+    chart.timeScale().fitContent();
+    return chart;
+  }
+
+  // Show loading placeholder while fetching
+  ['chart-spy','chart-qqq'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#9CA3AF;font-size:12px">Loading…</div>';
+  });
+
+  const [spyBars, qqqBars] = await Promise.all([fetchBars('SPY'), fetchBars('QQQ')]);
+
+  const gx = window.GRADDOX_DATA;
+
+  // SPX levels ÷ 10 → SPY price scale
+  const spyLevels = gx?.spx
+    ? Object.fromEntries(Object.entries(gx.spx).map(([k, v]) => [k, v ? +(v / 10).toFixed(2) : null]))
+    : null;
+  const qqqLevels = gx?.qqq || null;
+
+  _lwCharts.spy = buildChart('chart-spy', spyBars, spyLevels);
+  _lwCharts.qqq = buildChart('chart-qqq', qqqBars, qqqLevels);
 }
 
 // ── Init ─────────────────────────────────────────────────
