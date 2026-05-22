@@ -686,6 +686,16 @@ window.GRADDOX_DATA = {
       padding-top: 2px; font-variant-numeric: tabular-nums;
     }
     .gx-log-text { font-size: 12px; color: var(--text); line-height: 1.5; }
+
+    /* Timeframe buttons */
+    .tf-btn {
+      padding: 2px 7px; border-radius: 4px;
+      border: 1px solid var(--border); background: transparent;
+      color: var(--t2); font-size: 10px; font-weight: 600;
+      font-family: inherit; cursor: pointer; transition: all 0.1s;
+    }
+    .tf-btn:hover { border-color: var(--t2); color: var(--text); }
+    .tf-btn.on { background: #FDF4EE; color: #D97040; border-color: #D97040; }
   </style>
 </head>
 
@@ -784,8 +794,15 @@ window.GRADDOX_DATA = {
 
       <!-- Charts: filled by initCharts() -->
       <div class="gx-card" style="overflow:hidden;flex-shrink:0;padding:0">
-        <div class="gx-card-hdr" style="padding:10px 14px">📈 SPY &amp; QQQ — 30 min</div>
-        <div style="display:flex;height:420px">
+        <div class="gx-card-hdr" style="padding:8px 13px;display:flex;align-items:center;gap:10px">
+          <span>📈 SPY &amp; QQQ</span>
+          <div style="display:flex;gap:3px">
+            <button class="tf-btn on"  onclick="switchTF('30m',this)">30m</button>
+            <button class="tf-btn"     onclick="switchTF('1h',this)">1h</button>
+            <button class="tf-btn"     onclick="switchTF('1d',this)">1D</button>
+          </div>
+        </div>
+        <div style="display:flex;height:300px">
           <div id="chart-spy" style="flex:1;height:100%;border-right:1px solid var(--border)"></div>
           <div id="chart-qqq" style="flex:1;height:100%"></div>
         </div>
@@ -1438,39 +1455,58 @@ function restoreTab() {
 // ── Charts (Lightweight Charts + Polygon.io) ─────────────
 const POLYGON_KEY = '1z8oU5cKRpuvVHcimIMQ1qZE9xiRcnZE';
 let _lwCharts = {};
+let _currentTF = '30m';
+
+function switchTF(tf, btn) {
+  document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  _currentTF = tf;
+  initCharts();
+}
 
 async function initCharts() {
+  const tf = _currentTF || '30m';
+
   // Destroy any existing chart instances
   Object.values(_lwCharts).forEach(c => { try { c.remove(); } catch(e){} });
   _lwCharts = {};
 
-  // Most recent trading day in ET
-  function getTradingDate() {
-    const etStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-    const d = new Date(etStr + 'T12:00:00Z');
-    const day = d.getDay();
-    if (day === 0) d.setDate(d.getDate() - 2); // Sunday → Friday
-    if (day === 6) d.setDate(d.getDate() - 1); // Saturday → Friday
-    return d.toISOString().slice(0, 10);
-  }
+  // Per-timeframe config — Yahoo Finance interval + range, visible bars on initial load
+  // Yahoo intervals: '30m', '60m' (not '1h'), '1d'
+  // Yahoo ranges:    '1mo' = ~22 trading days, '3mo' = ~65, '2y' = ~500
+  const TF = {
+    '30m': { interval: '30m', range: '1mo',  visible: 70  }, // ~22 trading days; show last ~5
+    '1h':  { interval: '60m', range: '3mo',  visible: 40  }, // ~65 trading days; show last ~1 week
+    '1d':  { interval: '1d',  range: '2y',   visible: 120 }, // ~500 days; show last ~6 months
+  };
+  const cfg = TF[tf] || TF['30m'];
 
-  const to   = getTradingDate();
-  const fromD = new Date(to + 'T12:00:00Z');
-  fromD.setDate(fromD.getDate() - 14); // 14 calendar days ≈ 10 trading days (seeds 50 EMA)
-  const from = fromD.toISOString().slice(0, 10);
-
+  // Fetch from Yahoo Finance (live data, no API key needed).
+  // Falls back to a CORS proxy if the direct request is blocked.
   async function fetchBars(ticker) {
+    const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}`
+               + `?interval=${cfg.interval}&range=${cfg.range}&includePrePost=false`;
+
+    function parseYahoo(j) {
+      const res = j?.chart?.result?.[0];
+      if (!res?.timestamp) return [];
+      const { open: o, high: h, low: l, close: c } = res.indicators.quote[0];
+      return res.timestamp
+        .map((t, i) => ({ time: t, open: o[i], high: h[i], low: l[i], close: c[i] }))
+        .filter(b => b.open != null && b.close != null);
+    }
+
     try {
-      const url = `https://api.polygon.io/v2/aggs/ticker/${ticker}/range/30/minute/${from}/${to}`
-                + `?adjusted=true&sort=asc&limit=500&apiKey=${POLYGON_KEY}`;
-      const r = await fetch(url);
-      const j = await r.json();
-      if (!j.results?.length) return [];
-      return j.results.map(b => ({
-        time:  Math.floor(b.t / 1000),
-        open:  b.o, high: b.h, low: b.l, close: b.c
-      }));
-    } catch(e) { return []; }
+      const r = await fetch(yUrl);
+      if (!r.ok) throw new Error('direct blocked');
+      return parseYahoo(await r.json());
+    } catch(_) {
+      try {
+        // CORS proxy fallback
+        const proxy = `https://corsproxy.io/?${encodeURIComponent(yUrl)}`;
+        return parseYahoo(await (await fetch(proxy)).json());
+      } catch(e) { return []; }
+    }
   }
 
   function calcEMA(bars, period) {
@@ -1495,24 +1531,21 @@ async function initCharts() {
 
     const chart = LightweightCharts.createChart(el, {
       autoSize: true,
-      layout: {
-        background: { type: 'solid', color: '#ffffff' },
-        textColor: '#78716C',
-      },
+      layout: { background: { type: 'solid', color: '#ffffff' }, textColor: '#78716C' },
       grid: {
         vertLines: { color: 'rgba(229,221,210,0.5)' },
         horzLines: { color: 'rgba(229,221,210,0.5)' },
       },
       rightPriceScale: { borderColor: '#E5DDD2' },
-      timeScale: { borderColor: '#E5DDD2', timeVisible: true, secondsVisible: false },
+      timeScale: { borderColor: '#E5DDD2', timeVisible: tf !== '1d', secondsVisible: false },
       crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
     });
 
     // Candlesticks
     const candles = chart.addCandlestickSeries({
-      upColor:         '#22C55E', downColor:         '#EF4444',
-      borderUpColor:   '#16A34A', borderDownColor:   '#DC2626',
-      wickUpColor:     '#16A34A', wickDownColor:     '#DC2626',
+      upColor: '#22C55E', downColor: '#EF4444',
+      borderUpColor: '#16A34A', borderDownColor: '#DC2626',
+      wickUpColor: '#16A34A', wickDownColor: '#DC2626',
     });
     candles.setData(bars);
 
@@ -1520,20 +1553,19 @@ async function initCharts() {
     [[5,'#22C55E'],[9,'#06B6D4'],[21,'#F97316'],[50,'#EF4444']].forEach(([period, color]) => {
       const emaData = calcEMA(bars, period);
       if (!emaData.length) return;
-      const s = chart.addLineSeries({
+      chart.addLineSeries({
         color, lineWidth: 2,
         priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
-      });
-      s.setData(emaData);
+      }).setData(emaData);
     });
 
     // GEX level lines
     if (levels) {
       [
-        ['resistance',    '#EF4444', 'Resistance',    1], // Dashed
+        ['resistance',    '#EF4444', 'Resistance',    1],
         ['gex1',          '#D97706', 'GEX1',          1],
         ['put_support',   '#22C55E', 'Put Support',   1],
-        ['key_target',    '#6366F1', 'Target',        2], // Dotted
+        ['key_target',    '#6366F1', 'Target',        2],
         ['downside_risk', '#F97316', 'Downside Risk', 2],
       ].forEach(([key, color, title, style]) => {
         if (!levels[key]) return;
@@ -1541,11 +1573,17 @@ async function initCharts() {
       });
     }
 
-    chart.timeScale().fitContent();
+    // Zoom to recent bars (not fitContent which shows all history tiny)
+    const total = bars.length;
+    if (total > cfg.visible) {
+      chart.timeScale().setVisibleLogicalRange({ from: total - cfg.visible - 0.5, to: total + 0.5 });
+    } else {
+      chart.timeScale().fitContent();
+    }
     return chart;
   }
 
-  // Show loading placeholder while fetching
+  // Loading placeholder
   ['chart-spy','chart-qqq'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#9CA3AF;font-size:12px">Loading…</div>';
@@ -1554,8 +1592,6 @@ async function initCharts() {
   const [spyBars, qqqBars] = await Promise.all([fetchBars('SPY'), fetchBars('QQQ')]);
 
   const gx = window.GRADDOX_DATA;
-
-  // SPX levels ÷ 10 → SPY price scale
   const spyLevels = gx?.spx
     ? Object.fromEntries(Object.entries(gx.spx).map(([k, v]) => [k, v ? +(v / 10).toFixed(2) : null]))
     : null;
