@@ -1344,22 +1344,22 @@ function renderDetail(h) {
 
     ${editForm}
 
-    <!-- Badges row: basket · status · rank · tier (all inline) -->
-    <div class="detail-badges">
-      ${basketTag(h.basket)}
-      ${actionBadge(h.last_action)}
-      <span class="tag" style="background:var(--s2);color:var(--t2);border:1px solid var(--bsub)">
-        Rank #${String(h.rank).padStart(2,'0')} / ${window.STW_DATA.holdings.length}
-      </span>
-      <span class="tag" style="background:${t.bg};color:${t.color};border:1px solid ${t.border}">
-        ${t.short}
-      </span>
-    </div>
-
-    <!-- Last action date (single row) -->
-    <div style="margin-bottom:14px">
-      <div class="meta-label">Last Action Date</div>
-      <div class="meta-value">${fmtDate(h.action_date)}</div>
+    <!-- Badges row: basket · status · rank · tier | date (right-aligned) -->
+    <div class="detail-badges" style="justify-content:space-between;align-items:center">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        ${basketTag(h.basket)}
+        ${actionBadge(h.last_action)}
+        <span class="tag" style="background:var(--s2);color:var(--t2);border:1px solid var(--bsub)">
+          Rank #${String(h.rank).padStart(2,'0')} / ${window.STW_DATA.holdings.length}
+        </span>
+        <span class="tag" style="background:${t.bg};color:${t.color};border:1px solid ${t.border}">
+          ${t.short}
+        </span>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div class="meta-label">Last Action</div>
+        <div style="font-size:12px;font-weight:500;color:var(--t2)">${fmtDate(h.action_date)}</div>
+      </div>
     </div>
 
     <!-- 3-column data card: Live Market | Open P&L | Entry / Weight -->

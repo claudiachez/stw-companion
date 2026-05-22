@@ -139,14 +139,42 @@ def option_prices():
         return jsonify({'error': str(e)}), 503
 
 
+def _get_ssl_context():
+    """
+    Generate a self-signed cert once and reuse it on every restart.
+    This avoids the browser blocking the request after each restart
+    because the cert fingerprint changed.
+    """
+    from pathlib import Path
+    cert_file = Path('ibkr_cert.pem')
+    key_file  = Path('ibkr_key.pem')
+
+    if not cert_file.exists() or not key_file.exists():
+        from OpenSSL import crypto
+        k = crypto.PKey()
+        k.generate_key(crypto.TYPE_RSA, 2048)
+        c = crypto.X509()
+        c.get_subject().CN = 'localhost'
+        c.set_serial_number(1)
+        c.gmtime_adj_notBefore(0)
+        c.gmtime_adj_notAfter(5 * 365 * 24 * 60 * 60)   # 5 years
+        c.set_issuer(c.get_subject())
+        c.set_pubkey(k)
+        c.sign(k, 'sha256')
+        cert_file.write_bytes(crypto.dump_certificate(crypto.FILETYPE_PEM, c))
+        key_file.write_bytes(crypto.dump_privatekey(crypto.FILETYPE_PEM, k))
+        print("  Generated new SSL cert — visit https://localhost:8765/status")
+        print("  once in your browser and click Advanced → Proceed.")
+    else:
+        print("  Reusing existing SSL cert (no re-acceptance needed).")
+
+    return (str(cert_file), str(key_file))
+
+
 if __name__ == '__main__':
     print("=" * 55)
     print("  STW Companion — IBKR Proxy")
     print(f"  Connecting to IB Gateway at {IB_HOST}:{IB_PORT}")
-    print()
-    print("  First run: visit https://localhost:8765/status")
-    print("  in your browser and accept the self-signed cert.")
     print("=" * 55)
-    # adhoc = auto-generated self-signed cert (requires pyopenssl)
-    # This lets GitHub Pages (HTTPS) call us without mixed-content errors.
-    app.run(host='localhost', port=8765, ssl_context='adhoc', debug=False)
+    ssl_ctx = _get_ssl_context()
+    app.run(host='localhost', port=8765, ssl_context=ssl_ctx, debug=False)
