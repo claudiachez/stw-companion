@@ -768,7 +768,91 @@ window.GRADDOX_DATA = {
 </div>
 
 <!-- ── Graddox Module ────────────────────────── -->
-<div class="module" id="mod-gradoxx"></div>
+<div class="module" id="mod-gradoxx" style="display:flex;flex-direction:column;overflow:hidden">
+
+  <!-- Charts — static HTML so scripts execute on page load -->
+  <div style="display:flex;height:420px;flex-shrink:0;border-bottom:1px solid var(--border);">
+
+    <!-- SPY -->
+    <div class="tradingview-widget-container" style="flex:1;height:100%;border-right:1px solid var(--border)">
+      <div class="tradingview-widget-container__widget" style="height:calc(100% - 32px);width:100%"></div>
+      <div class="tradingview-widget-copyright"><a href="https://www.tradingview.com/symbols/AMEX-SPY/" rel="noopener nofollow" target="_blank"><span class="blue-text">SPY chart</span></a><span class="trademark"> by TradingView</span></div>
+      <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
+      {
+        "autosize": true,
+        "symbol": "AMEX:SPY",
+        "interval": "30",
+        "timezone": "America/New_York",
+        "theme": "light",
+        "style": "1",
+        "locale": "en",
+        "backgroundColor": "#ffffff",
+        "gridColor": "rgba(46, 46, 46, 0.06)",
+        "hide_side_toolbar": true,
+        "hide_top_toolbar": false,
+        "hide_legend": false,
+        "hide_volume": false,
+        "allow_symbol_change": false,
+        "save_image": true,
+        "calendar": false,
+        "hotlist": false,
+        "details": false,
+        "withdateranges": false,
+        "compareSymbols": [],
+        "watchlist": [],
+        "studies": [
+          { "id": "MAExp@tv-basicstudies", "inputs": { "length": 5  }, "override": { "MA.color": "#22C55E", "MA.linewidth": 2 } },
+          { "id": "MAExp@tv-basicstudies", "inputs": { "length": 9  }, "override": { "MA.color": "#06B6D4", "MA.linewidth": 2 } },
+          { "id": "MAExp@tv-basicstudies", "inputs": { "length": 21 }, "override": { "MA.color": "#F97316", "MA.linewidth": 2 } },
+          { "id": "MAExp@tv-basicstudies", "inputs": { "length": 50 }, "override": { "MA.color": "#EF4444", "MA.linewidth": 2 } }
+        ]
+      }
+      </script>
+    </div>
+
+    <!-- QQQ -->
+    <div class="tradingview-widget-container" style="flex:1;height:100%">
+      <div class="tradingview-widget-container__widget" style="height:calc(100% - 32px);width:100%"></div>
+      <div class="tradingview-widget-copyright"><a href="https://www.tradingview.com/symbols/NASDAQ-QQQ/" rel="noopener nofollow" target="_blank"><span class="blue-text">QQQ chart</span></a><span class="trademark"> by TradingView</span></div>
+      <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
+      {
+        "autosize": true,
+        "symbol": "NASDAQ:QQQ",
+        "interval": "30",
+        "timezone": "America/New_York",
+        "theme": "light",
+        "style": "1",
+        "locale": "en",
+        "backgroundColor": "#ffffff",
+        "gridColor": "rgba(46, 46, 46, 0.06)",
+        "hide_side_toolbar": true,
+        "hide_top_toolbar": false,
+        "hide_legend": false,
+        "hide_volume": false,
+        "allow_symbol_change": false,
+        "save_image": true,
+        "calendar": false,
+        "hotlist": false,
+        "details": false,
+        "withdateranges": false,
+        "compareSymbols": [],
+        "watchlist": [],
+        "studies": [
+          { "id": "MAExp@tv-basicstudies", "inputs": { "length": 5  }, "override": { "MA.color": "#22C55E", "MA.linewidth": 2 } },
+          { "id": "MAExp@tv-basicstudies", "inputs": { "length": 9  }, "override": { "MA.color": "#06B6D4", "MA.linewidth": 2 } },
+          { "id": "MAExp@tv-basicstudies", "inputs": { "length": 21 }, "override": { "MA.color": "#F97316", "MA.linewidth": 2 } },
+          { "id": "MAExp@tv-basicstudies", "inputs": { "length": 50 }, "override": { "MA.color": "#EF4444", "MA.linewidth": 2 } }
+        ]
+      }
+      </script>
+    </div>
+
+  </div>
+
+  <!-- Dynamic data: filled by renderGraddox() -->
+  <div id="gx-data" style="flex:1;overflow:hidden;display:flex;flex-direction:column"></div>
+
+</div>
 
 <script>
 // ── Supabase ─────────────────────────────────────────────
@@ -1249,7 +1333,7 @@ function renderDetail(h) {
 
 // ── Render Graddox ───────────────────────────────────────
 function renderGraddox() {
-  const mod = document.getElementById('mod-gradoxx');
+  const mod = document.getElementById('gx-data');
   const gx  = window.GRADDOX_DATA;
 
   if (!gx) {
@@ -1361,19 +1445,6 @@ function renderGraddox() {
         </div>
       </div>
       <div class="gx-right">
-        <div class="gx-card" style="overflow:visible">
-          <div class="gx-card-hdr" style="border-bottom:1px solid var(--border)">📈 SPY &amp; QQQ — 30 min <span style="font-size:10px;color:var(--t3);font-weight:400;margin-left:6px">via TradingView</span></div>
-          <div style="display:flex;gap:0;height:380px;">
-            <iframe id="tv-spy"
-              src="https://s3.tradingview.com/widgetembed/?frameElementId=tv-spy&symbol=AMEX%3ASPY&interval=30&hidesidetoolbar=0&hidetoptoolbar=0&symboledit=0&saveimage=0&toolbarbg=F7F5F1&theme=light&style=1&timezone=America%2FNew_York&locale=en&allow_symbol_change=0"
-              style="flex:1;border:none;border-right:1px solid var(--border);"
-              allowtransparency="true" scrolling="no" allowfullscreen></iframe>
-            <iframe id="tv-qqq"
-              src="https://s3.tradingview.com/widgetembed/?frameElementId=tv-qqq&symbol=NASDAQ%3AQQQ&interval=30&hidesidetoolbar=0&hidetoptoolbar=0&symboledit=0&saveimage=0&toolbarbg=F7F5F1&theme=light&style=1&timezone=America%2FNew_York&locale=en&allow_symbol_change=0"
-              style="flex:1;border:none;"
-              allowtransparency="true" scrolling="no" allowfullscreen></iframe>
-          </div>
-        </div>
         ${SIG_ROWS ? `
         <div class="gx-card">
           <div class="gx-card-hdr">📋 Trade Signals — IV &amp; flow data not checked today</div>
