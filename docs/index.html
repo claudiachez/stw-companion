@@ -629,7 +629,7 @@ window.GRADDOX_DATA = {
       padding: 8px 13px; gap: 9px;
       border-bottom: 1px solid var(--bsub);
     }
-    .gx-level-row:last-child { border-bottom: none; }
+    .gx-level-row:last-child { border-bottom-color: transparent; }
     .gx-lvl-icon  { font-size: 12px; flex-shrink: 0; width: 16px; text-align: center; }
     .gx-lvl-price {
       font-size: 14px; font-weight: 700;
@@ -660,7 +660,7 @@ window.GRADDOX_DATA = {
       border-bottom: 1px solid var(--bsub);
       vertical-align: top; line-height: 1.4;
     }
-    .gx-sig-table tr:last-child td { border-bottom: none; }
+    .gx-sig-table tr:last-child td { border-bottom-color: transparent; }
     .gx-sig-trade { font-weight: 700; font-size: 12px; }
     .gx-sig-logic { font-size: 11px; color: var(--t2); }
     .gx-verdict {
@@ -679,7 +679,7 @@ window.GRADDOX_DATA = {
       display: flex; gap: 12px;
       padding: 9px 13px; border-bottom: 1px solid var(--bsub);
     }
-    .gx-log-item:last-child { border-bottom: none; }
+    .gx-log-item:last-child { border-bottom-color: transparent; }
     .gx-log-time {
       font-size: 10px; font-weight: 600; color: var(--t3);
       white-space: nowrap; min-width: 54px;
@@ -1353,7 +1353,7 @@ function renderGraddox() {
     : '–';
 
   // ── Level row renderer (shared by SPX + QQQ) ─────────────
-  function buildLevelRows(levels, currentPrice, isQQQ) {
+  function buildLevelRows(levels, currentPrice, isQQQ, priceTime) {
     const rows = [
       levels.resistance   ? { icon:'🔴', price:levels.resistance,   label:'Resistance',        sub:'',              badge:null,    current:false } : null,
       levels.gex1         ? { icon:'🟡', price:levels.gex1,         label:'GEX1 / Gamma Flat', sub:'',              badge:null,    current:false } : null,
@@ -1362,16 +1362,14 @@ function renderGraddox() {
                                badge:`<span class="gx-lvl-badge" style="background:#FFF7ED;color:#D97040;border:1px solid #FED7AA">Today's Target</span>`, current:false } : null,
       levels.downside_risk? { icon:'⚠️', price:levels.downside_risk,label:'Downside Risk',      sub:'',
                                badge:`<span class="gx-lvl-badge" style="background:#FEF2F2;color:#B91C1C;border:1px solid #FECACA">Downside Risk</span>`, current:false } : null,
-      currentPrice        ? { icon:'📍', price:currentPrice,        label:'Current Price',      sub:'at report time',badge:null,    current:true  } : null,
+      currentPrice        ? { icon:'📍', price:currentPrice,        label:'Current Price',      sub:priceTime||'',   badge:null,    current:true  } : null,
     ].filter(Boolean);
 
     // Sort high → low so resistance is at top and support at bottom
     rows.sort((a, b) => b.price - a.price);
 
     return rows.map(r => {
-      const rowStyle = r.current
-        ? 'background:#FEFCE8;border-radius:6px;margin:2px -6px;padding:0 6px;'
-        : '';
+      const rowStyle = r.current ? 'background:#FEFCE8;' : '';
       const priceStyle = r.current ? 'color:#92400E;font-weight:700;' : '';
       const fmt = isQQQ ? r.price.toString() : r.price.toLocaleString();
       return `
@@ -1386,11 +1384,14 @@ function renderGraddox() {
 
   // SPX levels
   const spx = gx.spx || {};
-  const SPX_ROWS = buildLevelRows(spx, gx.spx_price || null, false);
+  const priceTime = gx.last_updated
+    ? '@ ' + new Date(gx.last_updated).toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit', ...ET})
+    : '';
+  const SPX_ROWS = buildLevelRows(spx, gx.spx_price || null, false, priceTime);
 
   // QQQ levels
   const qqq = gx.qqq || {};
-  const QQQ_ROWS = buildLevelRows(qqq, gx.qqq_price || null, true);
+  const QQQ_ROWS = buildLevelRows(qqq, gx.qqq_price || null, true, priceTime);
 
   // Signals table
   const vcols = { green:'#16A34A', yellow:'#D97706', red:'#DC2626', gray:'#9CA3AF' };
