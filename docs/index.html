@@ -796,10 +796,14 @@ window.GRADDOX_DATA = {
       <div class="gx-card" style="overflow:hidden;flex-shrink:0;padding:0">
         <div class="gx-card-hdr" style="padding:8px 13px;display:flex;align-items:center;gap:10px">
           <span>📈 SPY &amp; QQQ</span>
-          <div style="display:flex;gap:3px">
-            <button class="tf-btn on"  onclick="switchTF('30m',this)">30m</button>
-            <button class="tf-btn"     onclick="switchTF('1h',this)">1h</button>
-            <button class="tf-btn"     onclick="switchTF('1d',this)">1D</button>
+          <div style="display:flex;gap:3px" id="tf-btn-group">
+            <button class="tf-btn"    onclick="switchTF('5m',this)">5m</button>
+            <button class="tf-btn"    onclick="switchTF('15m',this)">15m</button>
+            <button class="tf-btn on" onclick="switchTF('30m',this)">30m</button>
+            <button class="tf-btn"    onclick="switchTF('1h',this)">1h</button>
+            <button class="tf-btn"    onclick="switchTF('4h',this)">4h</button>
+            <button class="tf-btn"    onclick="switchTF('1d',this)">1d</button>
+            <button class="tf-btn"    onclick="switchTF('1W',this)">1W</button>
           </div>
         </div>
         <div style="display:flex;height:300px">
@@ -957,7 +961,8 @@ function fmtUpdated(s) {
   if (!s) return '–';
   const d = new Date(s);
   return 'Updated ' + d.toLocaleDateString('en-US',{month:'short',day:'numeric',...ET})
-    + ' · ' + d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',...ET});
+    + ' · ' + d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',...ET})
+    + ' EST';
 }
 
 function basketTag(name) {
@@ -1323,13 +1328,13 @@ function renderGraddox() {
   };
   const bm = biasMap[gx.bias] || { cls:'flat', label:gx.bias||'–' };
 
-  // Updated time
-  // gx.last_updated is written by the skill as naive ET (no TZ offset) but Postgres stores it
-  // as UTC, so Supabase returns it with +00:00. Slice to 19 chars strips that suffix so the
-  // browser parses it as local time (ET) — which is what was originally written.
-  function parseGxTS(s) { return s ? new Date(s.slice(0, 19)) : null; }
-  const updStr = gx.last_updated
-    ? parseGxTS(gx.last_updated).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',...ET}) + ' ET'
+  // Updated time — skills write last_updated with proper ET offset (-04:00 EDT / -05:00 EST)
+  // so new Date(s) parses it correctly without any manual slicing.
+  const _gxD = gx.last_updated ? new Date(gx.last_updated) : null;
+  const updStr = _gxD
+    ? _gxD.toLocaleDateString('en-US',{month:'short',day:'numeric',...ET})
+      + ' · ' + _gxD.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',...ET})
+      + ' EST'
     : '–';
 
   // ── Level row renderer (shared by SPX + QQQ) ─────────────
@@ -1351,7 +1356,7 @@ function renderGraddox() {
     return rows.map(r => {
       const rowStyle = r.current ? 'background:#FEFCE8;' : '';
       const priceStyle = r.current ? 'color:#92400E;font-weight:700;' : '';
-      const fmt = isQQQ ? r.price.toString() : r.price.toLocaleString();
+      const fmt = Number.isInteger(r.price) ? r.price.toString() : r.price.toFixed(2);
       return `
         <div class="gx-level-row" style="${rowStyle}">
           <span class="gx-lvl-icon">${r.icon}</span>
@@ -1362,24 +1367,43 @@ function renderGraddox() {
     }).join('');
   }
 
-  // SPX levels
+  // SPY levels (SPX ÷ 10)
   const spx = gx.spx || {};
-  const priceTime = gx.last_updated
-    ? '@ ' + parseGxTS(gx.last_updated).toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit', ...ET})
+  const spyLvl = {
+    resistance:    spx.resistance    ? +(spx.resistance    / 10).toFixed(2) : null,
+    gex1:          spx.gex1          ? +(spx.gex1          / 10).toFixed(2) : null,
+    put_support:   spx.put_support   ? +(spx.put_support   / 10).toFixed(2) : null,
+    key_target:    spx.key_target    ? +(spx.key_target    / 10).toFixed(2) : null,
+    downside_risk: spx.downside_risk ? +(spx.downside_risk / 10).toFixed(2) : null,
+  };
+  const spyCurrentPrice = gx.spx_price ? +(gx.spx_price / 10).toFixed(2) : null;
+  const priceTime = _gxD
+    ? '@ ' + _gxD.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit', ...ET})
     : '';
-  const SPX_ROWS = buildLevelRows(spx, gx.spx_price || null, false, priceTime);
+  const SPX_ROWS = buildLevelRows(spyLvl, spyCurrentPrice, false, priceTime);
 
   // QQQ levels
   const qqq = gx.qqq || {};
   const QQQ_ROWS = buildLevelRows(qqq, gx.qqq_price || null, true, priceTime);
 
-  // Signals table
+  // Signals table — grouped SPY first, then QQQ, then other
   const vcols = { green:'#16A34A', yellow:'#D97706', red:'#DC2626', gray:'#9CA3AF' };
   const vlbls = { green:'All ✓ — Enter', yellow:'Partial — Half size', red:'Skip', gray:'N/A' };
-  const SIG_ROWS = (gx.signals||[]).map(s => {
+  function sigTicker(s) {
+    const t = (s.trade + ' ' + s.trigger).toUpperCase();
+    if (t.includes('QQQ')) return 'qqq';
+    if (t.includes('SPY') || t.includes('SPX')) return 'spy';
+    return 'other';
+  }
+  const sigsSorted = [...(gx.signals||[])].sort((a,b) => {
+    const order = { spy:0, qqq:1, other:2 };
+    return (order[sigTicker(a)]??2) - (order[sigTicker(b)]??2);
+  });
+  const SIG_ROWS = sigsSorted.map(s => {
     const vc = vcols[s.verdict]||vcols.gray;
     const vl = vlbls[s.verdict]||'N/A';
-    return `<tr>
+    const tk = sigTicker(s);
+    return `<tr data-ticker="${tk}">
       <td><div class="gx-sig-trade">${s.trade}</div></td>
       <td style="color:var(--t2);font-size:11px">${s.trigger}</td>
       <td style="color:var(--t2);font-size:11px;white-space:nowrap">${s.exp}</td>
@@ -1405,7 +1429,7 @@ function renderGraddox() {
 
   document.getElementById('gx-levels-wrap').innerHTML = `
     <div class="gx-card">
-      <div class="gx-card-hdr">📊 SPX Levels</div>
+      <div class="gx-card-hdr">📊 SPY Levels</div>
       ${SPX_ROWS}
     </div>
     <div class="gx-card">
@@ -1416,13 +1440,20 @@ function renderGraddox() {
   document.getElementById('gx-signals-wrap').innerHTML = `
     ${SIG_ROWS ? `
     <div class="gx-card">
-      <div class="gx-card-hdr">📋 Trade Signals — IV &amp; flow data not checked today</div>
+      <div class="gx-card-hdr" style="padding:8px 13px;display:flex;align-items:center;gap:8px">
+        <span>📋 Trade Signals</span>
+        <div style="display:flex;gap:3px;margin-left:auto">
+          <button class="tf-btn sig-filter-btn on" onclick="filterSignals('all',this)">All</button>
+          <button class="tf-btn sig-filter-btn" onclick="filterSignals('spy',this)">SPY</button>
+          <button class="tf-btn sig-filter-btn" onclick="filterSignals('qqq',this)">QQQ</button>
+        </div>
+      </div>
       <div class="gx-sig-wrap">
         <table class="gx-sig-table">
           <thead><tr>
             <th>Trade</th><th>Trigger</th><th>Exp</th><th>Logic (GEX)</th><th>Verdict</th>
           </tr></thead>
-          <tbody>${SIG_ROWS}</tbody>
+          <tbody id="sig-tbody">${SIG_ROWS}</tbody>
         </table>
       </div>
     </div>` : ''}
@@ -1452,61 +1483,84 @@ function restoreTab() {
   }
 }
 
-// ── Charts (Lightweight Charts + Polygon.io) ─────────────
-const POLYGON_KEY = '1z8oU5cKRpuvVHcimIMQ1qZE9xiRcnZE';
+// ── Charts (Lightweight Charts + Finnhub) ────────────────
+const FINNHUB_KEY = 'cuhkqs1r01qva71u3eugcuhkqs1r01qva71u3ev0';
 let _lwCharts = {};
 let _currentTF = '30m';
 
 function switchTF(tf, btn) {
-  document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('on'));
+  document.querySelectorAll('#tf-btn-group .tf-btn').forEach(b => b.classList.remove('on'));
   btn.classList.add('on');
   _currentTF = tf;
   initCharts();
 }
 
+function filterSignals(ticker, btn) {
+  document.querySelectorAll('.sig-filter-btn').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  document.querySelectorAll('#sig-tbody tr[data-ticker]').forEach(tr => {
+    tr.style.display = (ticker === 'all' || tr.dataset.ticker === ticker) ? '' : 'none';
+  });
+}
+
 async function initCharts() {
   const tf = _currentTF || '30m';
 
-  // Destroy any existing chart instances
   Object.values(_lwCharts).forEach(c => { try { c.remove(); } catch(e){} });
   _lwCharts = {};
 
-  // Per-timeframe config — Yahoo Finance interval + range, visible bars on initial load
-  // Yahoo intervals: '30m', '60m' (not '1h'), '1d'
-  // Yahoo ranges:    '1mo' = ~22 trading days, '3mo' = ~65, '2y' = ~500
+  const now  = Math.floor(Date.now() / 1000);
+  const day  = 86400;
+
+  // Per-TF config: Finnhub resolution, lookback window, visible bars on load
   const TF = {
-    '30m': { interval: '30m', range: '1mo',  visible: 70  }, // ~22 trading days; show last ~5
-    '1h':  { interval: '60m', range: '3mo',  visible: 40  }, // ~65 trading days; show last ~1 week
-    '1d':  { interval: '1d',  range: '2y',   visible: 120 }, // ~500 days; show last ~6 months
+    '5m':  { res:'5',  from: now - 7*day,    visible: 80  },
+    '15m': { res:'15', from: now - 30*day,   visible: 80  },
+    '30m': { res:'30', from: now - 30*day,   visible: 70  },
+    '1h':  { res:'60', from: now - 90*day,   visible: 50  },
+    '4h':  { res:'60', from: now - 120*day,  visible: 40, agg4h: true },
+    '1d':  { res:'D',  from: now - 730*day,  visible: 120 },
+    '1W':  { res:'W',  from: now - 1825*day, visible: 104 },
   };
   const cfg = TF[tf] || TF['30m'];
 
-  // Fetch from Yahoo Finance (live data, no API key needed).
-  // Falls back to a CORS proxy if the direct request is blocked.
-  async function fetchBars(ticker) {
-    const yUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}`
-               + `?interval=${cfg.interval}&range=${cfg.range}&includePrePost=false`;
-
-    function parseYahoo(j) {
-      const res = j?.chart?.result?.[0];
-      if (!res?.timestamp) return [];
-      const { open: o, high: h, low: l, close: c } = res.indicators.quote[0];
-      return res.timestamp
-        .map((t, i) => ({ time: t, open: o[i], high: h[i], low: l[i], close: c[i] }))
-        .filter(b => b.open != null && b.close != null);
-    }
-
+  async function fetchBars(symbol) {
+    const url = `https://finnhub.io/api/v1/stock/candle?symbol=${symbol}`
+              + `&resolution=${cfg.res}&from=${cfg.from}&to=${now}&token=${FINNHUB_KEY}`;
+    let data;
     try {
-      const r = await fetch(yUrl);
-      if (!r.ok) throw new Error('direct blocked');
-      return parseYahoo(await r.json());
-    } catch(_) {
-      try {
-        // CORS proxy fallback
-        const proxy = `https://corsproxy.io/?${encodeURIComponent(yUrl)}`;
-        return parseYahoo(await (await fetch(proxy)).json());
-      } catch(e) { return []; }
+      const r = await fetch(url);
+      data = await r.json();
+    } catch(e) { return []; }
+
+    if (data.s !== 'ok' || !data.t?.length) return [];
+
+    let bars = data.t.map((t, i) => ({
+      time:  data.t[i],
+      open:  data.o[i],
+      high:  data.h[i],
+      low:   data.l[i],
+      close: data.c[i],
+    })).filter(b => b.open != null && b.close != null);
+
+    // Aggregate 1h bars → 4h bars
+    if (cfg.agg4h) {
+      const chunks = [];
+      for (let i = 0; i < bars.length; i += 4) {
+        const g = bars.slice(i, i + 4);
+        if (!g.length) break;
+        chunks.push({
+          time:  g[0].time,
+          open:  g[0].open,
+          high:  Math.max(...g.map(b => b.high)),
+          low:   Math.min(...g.map(b => b.low)),
+          close: g[g.length - 1].close,
+        });
+      }
+      bars = chunks;
     }
+
+    return bars;
   }
 
   function calcEMA(bars, period) {
@@ -1529,6 +1583,7 @@ async function initCharts() {
       return null;
     }
 
+    const showTime = !['1d','1W'].includes(tf);
     const chart = LightweightCharts.createChart(el, {
       autoSize: true,
       layout: { background: { type: 'solid', color: '#ffffff' }, textColor: '#78716C' },
@@ -1537,11 +1592,10 @@ async function initCharts() {
         horzLines: { color: 'rgba(229,221,210,0.5)' },
       },
       rightPriceScale: { borderColor: '#E5DDD2' },
-      timeScale: { borderColor: '#E5DDD2', timeVisible: tf !== '1d', secondsVisible: false },
+      timeScale: { borderColor: '#E5DDD2', timeVisible: showTime, secondsVisible: false },
       crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
     });
 
-    // Candlesticks
     const candles = chart.addCandlestickSeries({
       upColor: '#22C55E', downColor: '#EF4444',
       borderUpColor: '#16A34A', borderDownColor: '#DC2626',
@@ -1549,7 +1603,7 @@ async function initCharts() {
     });
     candles.setData(bars);
 
-    // 5 / 9 / 21 / 50 EMAs
+    // EMAs: 5 / 9 / 21 / 50
     [[5,'#22C55E'],[9,'#06B6D4'],[21,'#F97316'],[50,'#EF4444']].forEach(([period, color]) => {
       const emaData = calcEMA(bars, period);
       if (!emaData.length) return;
@@ -1573,7 +1627,7 @@ async function initCharts() {
       });
     }
 
-    // Zoom to recent bars (not fitContent which shows all history tiny)
+    // Zoom to recent bars
     const total = bars.length;
     if (total > cfg.visible) {
       chart.timeScale().setVisibleLogicalRange({ from: total - cfg.visible - 0.5, to: total + 0.5 });
