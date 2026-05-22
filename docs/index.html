@@ -1483,10 +1483,13 @@ function restoreTab() {
   }
 }
 
-// ── Charts (Lightweight Charts + Finnhub) ────────────────
-const FINNHUB_KEY = 'cuhkqs1r01qva71u3eugcuhkqs1r01qva71u3ev0';
-let _lwCharts = {};
-let _currentTF = '30m';
+// ── Charts (Lightweight Charts + TwelveData + Finnhub live) ─
+const TWELVEDATA_KEY = 'e58c2dd556704d3ca5574c0ef597d25c';
+const FINNHUB_KEY    = 'cuhkqs1r01qva71u3eugcuhkqs1r01qva71u3ev0';
+let _lwCharts   = {};
+let _lwSeries   = {}; // { spy: {candles, lastBar}, qqq: {candles, lastBar} }
+let _currentTF  = '30m';
+let _liveTimer  = null;
 
 function switchTF(tf, btn) {
   document.querySelectorAll('#tf-btn-group .tf-btn').forEach(b => b.classList.remove('on'));
@@ -1506,61 +1509,43 @@ function filterSignals(ticker, btn) {
 async function initCharts() {
   const tf = _currentTF || '30m';
 
+  // Stop any running live-price timer
+  if (_liveTimer) { clearInterval(_liveTimer); _liveTimer = null; }
+
+  // Destroy existing chart instances
   Object.values(_lwCharts).forEach(c => { try { c.remove(); } catch(e){} });
   _lwCharts = {};
+  _lwSeries = {};
 
-  const now  = Math.floor(Date.now() / 1000);
-  const day  = 86400;
-
-  // Per-TF config: Finnhub resolution, lookback window, visible bars on load
+  // TwelveData interval names + bar count per timeframe
   const TF = {
-    '5m':  { res:'5',  from: now - 7*day,    visible: 80  },
-    '15m': { res:'15', from: now - 30*day,   visible: 80  },
-    '30m': { res:'30', from: now - 30*day,   visible: 70  },
-    '1h':  { res:'60', from: now - 90*day,   visible: 50  },
-    '4h':  { res:'60', from: now - 120*day,  visible: 40, agg4h: true },
-    '1d':  { res:'D',  from: now - 730*day,  visible: 120 },
-    '1W':  { res:'W',  from: now - 1825*day, visible: 104 },
+    '5m':  { interval: '5min',  outputsize: 390, visible: 80  },
+    '15m': { interval: '15min', outputsize: 300, visible: 80  },
+    '30m': { interval: '30min', outputsize: 200, visible: 70  },
+    '1h':  { interval: '1h',    outputsize: 200, visible: 50  },
+    '4h':  { interval: '4h',    outputsize: 200, visible: 40  },
+    '1d':  { interval: '1day',  outputsize: 500, visible: 120 },
+    '1W':  { interval: '1week', outputsize: 260, visible: 104 },
   };
   const cfg = TF[tf] || TF['30m'];
 
   async function fetchBars(symbol) {
-    const url = `https://finnhub.io/api/v1/stock/candle?symbol=${symbol}`
-              + `&resolution=${cfg.res}&from=${cfg.from}&to=${now}&token=${FINNHUB_KEY}`;
-    let data;
+    const url = `https://api.twelvedata.com/time_series`
+              + `?symbol=${symbol}&interval=${cfg.interval}`
+              + `&outputsize=${cfg.outputsize}&timezone=UTC`
+              + `&apikey=${TWELVEDATA_KEY}`;
     try {
-      const r = await fetch(url);
-      data = await r.json();
+      const data = await (await fetch(url)).json();
+      if (data.status !== 'ok' || !data.values?.length) return [];
+      // TwelveData returns newest-first — reverse so chart gets oldest→newest
+      return [...data.values].reverse().map(v => ({
+        time:  Math.floor(new Date(v.datetime.replace(' ', 'T') + 'Z').getTime() / 1000),
+        open:  parseFloat(v.open),
+        high:  parseFloat(v.high),
+        low:   parseFloat(v.low),
+        close: parseFloat(v.close),
+      }));
     } catch(e) { return []; }
-
-    if (data.s !== 'ok' || !data.t?.length) return [];
-
-    let bars = data.t.map((t, i) => ({
-      time:  data.t[i],
-      open:  data.o[i],
-      high:  data.h[i],
-      low:   data.l[i],
-      close: data.c[i],
-    })).filter(b => b.open != null && b.close != null);
-
-    // Aggregate 1h bars → 4h bars
-    if (cfg.agg4h) {
-      const chunks = [];
-      for (let i = 0; i < bars.length; i += 4) {
-        const g = bars.slice(i, i + 4);
-        if (!g.length) break;
-        chunks.push({
-          time:  g[0].time,
-          open:  g[0].open,
-          high:  Math.max(...g.map(b => b.high)),
-          low:   Math.min(...g.map(b => b.low)),
-          close: g[g.length - 1].close,
-        });
-      }
-      bars = chunks;
-    }
-
-    return bars;
   }
 
   function calcEMA(bars, period) {
@@ -1575,12 +1560,12 @@ async function initCharts() {
 
   function buildChart(divId, bars, levels) {
     const el = document.getElementById(divId);
-    if (!el) return null;
+    if (!el) return { chart: null, candles: null };
     el.innerHTML = '';
 
     if (!bars.length) {
       el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#9CA3AF;font-size:12px">No data</div>';
-      return null;
+      return { chart: null, candles: null };
     }
 
     const showTime = !['1d','1W'].includes(tf);
@@ -1627,17 +1612,18 @@ async function initCharts() {
       });
     }
 
-    // Zoom to recent bars
+    // Zoom to most recent bars
     const total = bars.length;
     if (total > cfg.visible) {
       chart.timeScale().setVisibleLogicalRange({ from: total - cfg.visible - 0.5, to: total + 0.5 });
     } else {
       chart.timeScale().fitContent();
     }
-    return chart;
+
+    return { chart, candles };
   }
 
-  // Loading placeholder
+  // Loading placeholders
   ['chart-spy','chart-qqq'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#9CA3AF;font-size:12px">Loading…</div>';
@@ -1651,8 +1637,38 @@ async function initCharts() {
     : null;
   const qqqLevels = gx?.qqq || null;
 
-  _lwCharts.spy = buildChart('chart-spy', spyBars, spyLevels);
-  _lwCharts.qqq = buildChart('chart-qqq', qqqBars, qqqLevels);
+  const spy = buildChart('chart-spy', spyBars, spyLevels);
+  const qqq = buildChart('chart-qqq', qqqBars, qqqLevels);
+  _lwCharts.spy = spy.chart;
+  _lwCharts.qqq = qqq.chart;
+  _lwSeries.spy  = { candles: spy.candles, lastBar: spyBars[spyBars.length - 1] };
+  _lwSeries.qqq  = { candles: qqq.candles, lastBar: qqqBars[qqqBars.length - 1] };
+
+  // Live price via Finnhub quote — updates the current candle every 30s
+  // Only run during intraday timeframes (no point on 1d/1W)
+  if (['5m','15m','30m','1h','4h'].includes(tf)) {
+    async function updateLive() {
+      try {
+        const [sq, qq] = await Promise.all([
+          fetch(`https://finnhub.io/api/v1/quote?symbol=SPY&token=${FINNHUB_KEY}`).then(r=>r.json()),
+          fetch(`https://finnhub.io/api/v1/quote?symbol=QQQ&token=${FINNHUB_KEY}`).then(r=>r.json()),
+        ]);
+        [['spy', sq], ['qqq', qq]].forEach(([key, q]) => {
+          const s = _lwSeries[key];
+          if (!s?.candles || !s?.lastBar || !q.c) return;
+          s.candles.update({
+            time:  s.lastBar.time,
+            open:  s.lastBar.open,
+            high:  Math.max(s.lastBar.high, q.c),
+            low:   Math.min(s.lastBar.low,  q.c),
+            close: q.c,
+          });
+        });
+      } catch(e) {}
+    }
+    updateLive();
+    _liveTimer = setInterval(updateLive, 30000);
+  }
 }
 
 // ── Init ─────────────────────────────────────────────────
