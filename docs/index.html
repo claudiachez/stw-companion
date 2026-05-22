@@ -57,6 +57,8 @@ window.GRADDOX_DATA = {
   last_updated: "2026-05-19T13:23:00",
   bias: "flat-to-down",
   bias_note: "Conflicted — total GEX bearish, MQ differential mixed. Holding pattern into NVDA ER.",
+  spx_price: null,
+  qqq_price: null,
   spx: {
     resistance:   7500,
     gex1:         7400,
@@ -1276,41 +1278,45 @@ function renderGraddox() {
     ? new Date(gx.last_updated).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) + ' ET'
     : '–';
 
+  // ── Level row renderer (shared by SPX + QQQ) ─────────────
+  function buildLevelRows(levels, currentPrice, isQQQ) {
+    const rows = [
+      levels.resistance   ? { icon:'🔴', price:levels.resistance,   label:'Resistance',        sub:'',              badge:null,    current:false } : null,
+      levels.gex1         ? { icon:'🟡', price:levels.gex1,         label:'GEX1 / Gamma Flat', sub:'',              badge:null,    current:false } : null,
+      levels.put_support  ? { icon:'🟢', price:levels.put_support,  label:'Put Support',        sub:(!isQQQ?'':levels.note||''), badge:null, current:false } : null,
+      levels.key_target   ? { icon:'⭐', price:levels.key_target,   label:'Key Target',         sub:'',
+                               badge:`<span class="gx-lvl-badge" style="background:#FFF7ED;color:#D97040;border:1px solid #FED7AA">Today's Target</span>`, current:false } : null,
+      levels.downside_risk? { icon:'⚠️', price:levels.downside_risk,label:'Downside Risk',      sub:'',
+                               badge:`<span class="gx-lvl-badge" style="background:#FEF2F2;color:#B91C1C;border:1px solid #FECACA">Downside Risk</span>`, current:false } : null,
+      currentPrice        ? { icon:'📍', price:currentPrice,        label:'Current Price',      sub:'at report time',badge:null,    current:true  } : null,
+    ].filter(Boolean);
+
+    // Sort high → low so resistance is at top and support at bottom
+    rows.sort((a, b) => b.price - a.price);
+
+    return rows.map(r => {
+      const rowStyle = r.current
+        ? 'background:#FEFCE8;border-radius:6px;margin:2px -6px;padding:0 6px;'
+        : '';
+      const priceStyle = r.current ? 'color:#92400E;font-weight:700;' : '';
+      const fmt = isQQQ ? r.price.toString() : r.price.toLocaleString();
+      return `
+        <div class="gx-level-row" style="${rowStyle}">
+          <span class="gx-lvl-icon">${r.icon}</span>
+          <span class="gx-lvl-price" style="${priceStyle}">${fmt}</span>
+          <span class="gx-lvl-label">${r.label}${r.sub?`<br><span style="font-size:10px;color:var(--t3)">${r.sub}</span>`:''}</span>
+          ${r.badge||''}
+        </div>`;
+    }).join('');
+  }
+
   // SPX levels
   const spx = gx.spx || {};
-  const SPX_ROWS = [
-    spx.resistance   ? { icon:'🔴', price:spx.resistance,   label:'Resistance',       badge:null } : null,
-    spx.gex1         ? { icon:'🟡', price:spx.gex1,         label:'GEX1 / Gamma Flat',badge:null } : null,
-    spx.put_support  ? { icon:'🟢', price:spx.put_support,  label:'Put Support',       badge:null } : null,
-    spx.key_target   ? { icon:'⭐', price:spx.key_target,   label:'Key Target',
-                         badge:`<span class="gx-lvl-badge" style="background:#FFF7ED;color:#D97040;border:1px solid #FED7AA">Today's Target</span>` } : null,
-    spx.downside_risk? { icon:'⚠️', price:spx.downside_risk,label:'Downside Risk',
-                         badge:`<span class="gx-lvl-badge" style="background:#FEF2F2;color:#B91C1C;border:1px solid #FECACA">Downside Risk</span>` } : null,
-  ].filter(Boolean).map(r => `
-    <div class="gx-level-row">
-      <span class="gx-lvl-icon">${r.icon}</span>
-      <span class="gx-lvl-price">${r.price.toLocaleString()}</span>
-      <span class="gx-lvl-label">${r.label}</span>
-      ${r.badge||''}
-    </div>`).join('');
+  const SPX_ROWS = buildLevelRows(spx, gx.spx_price || null, false);
 
   // QQQ levels
   const qqq = gx.qqq || {};
-  const QQQ_ROWS = [
-    qqq.resistance    ? { icon:'🔴', price:qqq.resistance,    label:'Resistance',       sub:'',         badge:null } : null,
-    qqq.gex1          ? { icon:'🟡', price:qqq.gex1,          label:'GEX1 / Gamma Flat',sub:'',         badge:null } : null,
-    qqq.put_support   ? { icon:'🟢', price:qqq.put_support,   label:'Put Support',      sub:qqq.note||'',badge:null } : null,
-    qqq.key_target    ? { icon:'⭐', price:qqq.key_target,    label:'Key Target',       sub:'',
-                          badge:`<span class="gx-lvl-badge" style="background:#FFF7ED;color:#D97040;border:1px solid #FED7AA">Today's Target</span>` } : null,
-    qqq.downside_risk ? { icon:'⚠️', price:qqq.downside_risk, label:'Downside Risk',    sub:'',
-                          badge:`<span class="gx-lvl-badge" style="background:#FEF2F2;color:#B91C1C;border:1px solid #FECACA">Downside Risk</span>` } : null,
-  ].filter(Boolean).map(r => `
-    <div class="gx-level-row">
-      <span class="gx-lvl-icon">${r.icon}</span>
-      <span class="gx-lvl-price">${r.price}</span>
-      <span class="gx-lvl-label">${r.label}${r.sub?`<br><span style="font-size:10px;color:var(--t3)">${r.sub}</span>`:''}</span>
-      ${r.badge||''}
-    </div>`).join('');
+  const QQQ_ROWS = buildLevelRows(qqq, gx.qqq_price || null, true);
 
   // Signals table
   const vcols = { green:'#16A34A', yellow:'#D97706', red:'#DC2626', gray:'#9CA3AF' };
