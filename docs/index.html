@@ -1860,8 +1860,21 @@ const _MONTH = {
 function _toExpiry(monthStr, dayStr, yearStr) {
   const m = _MONTH[(monthStr||'').toLowerCase().slice(0,3)];
   if (!m) return null;
-  const yr = yearStr ? `20${yearStr.replace(/'/g,'')}` : '2026';
-  return dayStr ? `${yr}${m}${dayStr.padStart(2,'0')}` : `${yr}${m}`;
+  let day = dayStr;
+  let yr  = '2026';
+  if (yearStr) {
+    const n = parseInt(yearStr.replace(/'/g,''));
+    if (n >= 25) {
+      // Looks like a 2-digit year (25, 26, 27…)
+      yr = `20${String(n).padStart(2,'0')}`;
+    } else {
+      // Small number (e.g. 17, 18) — it's a day, not year 2017/2018
+      // e.g. "$22.5C July 17 @ $3.35" → day=17, yr=2026
+      day = day || String(n);
+      yr  = '2026';
+    }
+  }
+  return day ? `${yr}${m}${day.padStart(2,'0')}` : `${yr}${m}`;
 }
 
 function parseOptionLegs(h) {
@@ -1942,6 +1955,16 @@ async function fetchIBKR() {
       const totalPnlPct = valid.reduce((s,l) => s + (l.pnl_pct || 0), 0) / valid.length;
       v.pnlPct = totalPnlPct;
     });
+
+    // Surface ambiguous contracts as a visible alert
+    const ambiguous = results.filter(r => r.error === 'ambiguous');
+    if (ambiguous.length) {
+      const lines = ambiguous.map(r => {
+        const opts = (r.possibles||[]).map(p => p.expiry).join(', ');
+        return `• ${r.symbol} $${r.strike}${r.right} — possible dates: ${opts}\n  → fix position_detail to include exact date`;
+      }).join('\n\n');
+      alert(`⚠️ Ambiguous option contracts — please update position_detail with a specific expiry date:\n\n${lines}`);
+    }
 
     dot.style.background = '#22C55E';
     const priced = results.filter(r => r.price != null).length;

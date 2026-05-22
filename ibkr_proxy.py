@@ -79,11 +79,22 @@ async def _price_options(specs):
                     currency='USD'
                 )
                 qualified = await ib.qualifyContractsAsync(contract)
-                if not qualified:
-                    results.append({**spec, 'price': None, 'error': 'contract not found'})
+                valid = [c for c in qualified if c.conId and c.conId > 0]
+                if not valid:
+                    # Ambiguous — fetch all possible contracts and return them for the user to fix
+                    details = await ib.reqContractDetailsAsync(contract)
+                    possibles = [
+                        {'expiry': d.contract.lastTradeDateOrContractMonth,
+                         'strike': d.contract.strike,
+                         'right':  d.contract.right}
+                        for d in details
+                    ]
+                    results.append({**spec, 'price': None,
+                                    'error': 'ambiguous',
+                                    'possibles': possibles})
                     continue
 
-                [ticker] = await ib.reqTickersAsync(qualified[0])
+                [ticker] = await ib.reqTickersAsync(valid[0])
                 bid   = ticker.bid   if ticker.bid   and ticker.bid   > 0 else None
                 ask   = ticker.ask   if ticker.ask   and ticker.ask   > 0 else None
                 last  = ticker.last  if ticker.last  and ticker.last  > 0 else None
