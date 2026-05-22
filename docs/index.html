@@ -1344,108 +1344,125 @@ function renderDetail(h) {
 
     ${editForm}
 
+    <!-- Badges row: basket · status · rank · tier (all inline) -->
     <div class="detail-badges">
       ${basketTag(h.basket)}
       ${actionBadge(h.last_action)}
       <span class="tag" style="background:var(--s2);color:var(--t2);border:1px solid var(--bsub)">
         Rank #${String(h.rank).padStart(2,'0')} / ${window.STW_DATA.holdings.length}
       </span>
+      <span class="tag" style="background:${t.bg};color:${t.color};border:1px solid ${t.border}">
+        ${t.short}
+      </span>
     </div>
 
-    <div class="detail-meta-grid">
-      <div class="meta-item">
-        <div class="meta-label">Last Action Date</div>
-        <div class="meta-value">${fmtDate(h.action_date)}</div>
-      </div>
-      <div class="meta-item">
-        <div class="meta-label">Tier</div>
-        <div class="meta-value" style="color:${t.color}">${t.short}</div>
-      </div>
+    <!-- Last action date (single row) -->
+    <div style="margin-bottom:14px">
+      <div class="meta-label">Last Action Date</div>
+      <div class="meta-value">${fmtDate(h.action_date)}</div>
     </div>
 
-    <!-- Live Market block -->
+    <!-- 3-column data card: Live Market | Open P&L | Entry / Weight -->
     ${(() => {
       if (h.ticker === 'CASH') return '';
       const pc   = _priceCache[h.ticker];
       const ibkr = _ibkrCache[h.ticker];
-      if (!pc?.c && !ibkr) return '';
 
-      const price   = ibkr?.mktPrice ?? pc?.c;
+      // ── Col 1: Live Market ──
+      const price   = pc?.c;
       const dpStr   = pc?.dp != null ? `${pc.dp >= 0 ? '+' : ''}${pc.dp.toFixed(2)}%` : '';
-      const dpColor = pc?.dp >= 0 ? '#16A34A' : '#DC2626';
+      const dpColor = (pc?.dp ?? 0) >= 0 ? '#16A34A' : '#DC2626';
       const hiloStr = (pc?.h && pc?.l) ? `H $${pc.h.toFixed(2)} · L $${pc.l.toFixed(2)}` : '';
+      // Source + fetch timestamp
+      const srcTime = pc?.t ? (() => {
+        const d = new Date(pc.t * 1000);
+        return d.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit', ...ET});
+      })() : null;
+      const srcLabel = srcTime ? `Finnhub · ${srcTime}` : 'Finnhub';
 
-      // ── IBKR P&L block (when proxy is connected) ──
-      const ibkrBlock = ibkr?.legs?.length ? (() => {
-        const legs    = ibkr.legs;
-        const valid   = legs.filter(l => l.price != null);
-        const legRows = legs.map(l => {
-          const pnlClr = (l.pnl_pct || 0) >= 0 ? '#16A34A' : '#DC2626';
+      const col1 = `<div style="flex:1;min-width:90px">
+        <div class="meta-label">Live Market</div>
+        ${price ? `<div style="font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--text);line-height:1.1">$${price.toFixed(2)}</div>
+        ${dpStr ? `<div style="font-size:11px;font-weight:600;color:${dpColor};margin-top:2px">${dpStr} today</div>` : ''}
+        ${hiloStr ? `<div style="font-size:10px;color:var(--t3);margin-top:1px">${hiloStr}</div>` : ''}
+        <div style="font-size:9px;color:var(--t3);margin-top:4px;opacity:0.8">${srcLabel}</div>` : '<div style="font-size:13px;color:var(--t3)">—</div>'}
+      </div>`;
+
+      // ── Col 2: Open P&L ──
+      let col2 = '';
+      if (ibkr?.legs?.length) {
+        const valid = ibkr.legs.filter(l => l.price != null);
+        if (valid.length) {
+          const avgPct = valid.reduce((s,l) => s + (l.pnl_pct||0), 0) / valid.length;
+          const pnlClr = avgPct >= 0 ? '#16A34A' : '#DC2626';
+          col2 = `<div style="flex:1;min-width:90px;border-left:1px solid var(--border);padding-left:12px">
+            <div class="meta-label">Open P&amp;L <span style="color:#16A34A;font-weight:700">● IBKR</span></div>
+            <div style="font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;color:${pnlClr};line-height:1.1">${avgPct>=0?'+':''}${avgPct.toFixed(1)}%</div>
+            <div style="font-size:10px;color:var(--t3);margin-top:2px">${valid.length} leg${valid.length>1?'s':''} priced</div>
+          </div>`;
+        }
+      }
+      if (!col2) {
+        const cost = parseCostBasis(h);
+        if (cost && pc?.c) {
+          const pnl    = (pc.c - cost) / cost * 100;
+          const pnlClr = pnl >= 0 ? '#16A34A' : '#DC2626';
+          col2 = `<div style="flex:1;min-width:90px;border-left:1px solid var(--border);padding-left:12px">
+            <div class="meta-label">Open P&amp;L (shares)</div>
+            <div style="font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;color:${pnlClr};line-height:1.1">${pnl>=0?'+':''}${pnl.toFixed(1)}%</div>
+            <div style="font-size:10px;color:var(--t3);margin-top:2px">from $${cost.toFixed(2)}</div>
+          </div>`;
+        } else {
+          col2 = `<div style="flex:1;min-width:90px;border-left:1px solid var(--border);padding-left:12px">
+            <div class="meta-label">Open P&amp;L</div>
+            <div style="font-size:13px;color:var(--t3)">—</div>
+          </div>`;
+        }
+      }
+
+      // ── Col 3: Entry / Weight ──
+      const col3 = `<div style="flex:1;min-width:90px;border-left:1px solid var(--border);padding-left:12px">
+        <div class="meta-label">Entry · Current Weight</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums">
+          ${h.initial_weight != null ? h.initial_weight.toFixed(1)+'%' : '—'}
+          <span style="color:var(--t3);font-weight:400;margin:0 4px">→</span>
+          ${h.current_weight != null ? h.current_weight.toFixed(1)+'%' : '—'}
+        </div>
+        ${h.position_detail
+          ? `<div style="font-size:10px;color:var(--t2);margin-top:4px;line-height:1.5">${h.position_detail}</div>`
+          : '<div style="font-size:10px;color:var(--t3);margin-top:4px">detail pending</div>'}
+      </div>`;
+
+      // ── IBKR per-leg options detail (below the 3-col card) ──
+      const legDetail = ibkr?.legs?.length ? (() => {
+        const rows = ibkr.legs.map(l => {
+          const pnlClr = (l.pnl_pct||0) >= 0 ? '#16A34A' : '#DC2626';
           const exp    = l.expiry ? `${l.expiry.slice(0,4)}-${l.expiry.slice(4,6)}${l.expiry.length===8?'-'+l.expiry.slice(6):''}` : '';
-          const noData = l.price == null;
           return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-top:1px solid var(--border)">
             <div>
-              <span style="font-size:11px;font-weight:600;color:var(--text);font-family:monospace">
-                ${l.right==='C'?'📈':'📉'} $${l.strike}${l.right}
-              </span>
-              <span style="font-size:10px;color:var(--t3);margin-left:4px">${exp}</span>
-              ${!noData ? `<div style="font-size:10px;color:var(--t3)">entry $${l.entry} → now $${l.price?.toFixed(2)}${l.bid?` · bid $${l.bid} ask $${l.ask}`:''}</div>` : '<div style="font-size:10px;color:var(--t3)">no market data</div>'}
+              <span style="font-size:11px;font-weight:600;color:var(--text);font-family:monospace">${l.right==='C'?'📈':'📉'} $${l.strike}${l.right}</span>
+              <span style="font-size:10px;color:var(--t3);margin-left:5px">${exp}</span>
+              ${l.price != null
+                ? `<div style="font-size:10px;color:var(--t3)">entry $${l.entry} → $${l.price.toFixed(2)}${l.bid?` · bid $${l.bid} ask $${l.ask}`:''}</div>`
+                : '<div style="font-size:10px;color:var(--t3)">no market data</div>'}
             </div>
-            ${!noData ? `<div style="text-align:right">
+            ${l.price != null ? `<div style="text-align:right">
               <div style="font-size:13px;font-weight:700;color:${pnlClr};font-variant-numeric:tabular-nums">${(l.pnl_pct||0)>=0?'+':''}${(l.pnl_pct||0).toFixed(1)}%</div>
-              <div style="font-size:10px;color:${pnlClr}">${(l.pnl_dol||0)>=0?'+':''}$${(l.pnl_dol||0).toFixed(2)} / contract</div>
+              <div style="font-size:10px;color:${pnlClr}">${(l.pnl_dol||0)>=0?'+':''}$${(l.pnl_dol||0).toFixed(2)}/contract</div>
             </div>` : ''}
           </div>`;
         }).join('');
-
-        return `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bsub)">
-          <div style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--t3);margin-bottom:6px">
-            Options P&amp;L — IBKR Live
-          </div>
-          ${legRows}
+        return `<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--bsub)">
+          <div class="meta-label" style="margin-bottom:4px">Options Legs</div>
+          ${rows}
         </div>`;
-      })() : (() => {
-        // No IBKR — fall back to calculated P&L for shares
-        const cost = parseCostBasis(h);
-        if (!cost || !pc?.c) return '';
-        const pnl    = (pc.c - cost) / cost * 100;
-        const pnlClr = pnl >= 0 ? '#16A34A' : '#DC2626';
-        return `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bsub)">
-          <div style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--t3);margin-bottom:2px">Open P&amp;L (shares, est.)</div>
-          <div style="font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;color:${pnlClr}">${pnl >= 0 ? '+' : ''}${pnl.toFixed(1)}%</div>
-          <div style="font-size:10px;color:var(--t3)">from $${cost.toFixed(2)} · connect IBKR for exact $</div>
-        </div>`;
-      })();
+      })() : '';
 
       return `<div style="margin-bottom:14px;background:var(--s2);border:1px solid var(--bsub);border-radius:var(--rsm);padding:12px 14px;">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
-          <div>
-            <div style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--t3);margin-bottom:4px">
-              Live Market${ibkr ? ' <span style="color:#16A34A">● IBKR</span>' : ''}
-            </div>
-            <div style="font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--text);line-height:1">$${price.toFixed(2)}</div>
-            ${dpStr ? `<div style="font-size:12px;font-weight:600;color:${dpColor};margin-top:3px">${dpStr} today</div>` : ''}
-            ${hiloStr ? `<div style="font-size:10px;color:var(--t3);margin-top:2px">${hiloStr}</div>` : ''}
-          </div>
-        </div>
-        ${ibkrBlock}
+        <div style="display:flex;gap:0;align-items:flex-start">${col1}${col2}${col3}</div>
+        ${legDetail}
       </div>`;
     })()}
-
-    <!-- Position block: full detail + weights side by side -->
-    <div style="margin-bottom:16px;background:var(--s2);border:1px solid var(--bsub);border-radius:var(--rsm);padding:12px 14px;">
-      <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap">
-        <div style="flex:1;min-width:120px">
-          <div class="meta-label" style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--t3);margin-bottom:4px">Initial Entry</div>
-          <div style="font-size:15px;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums">${h.initial_weight != null ? h.initial_weight.toFixed(1)+'%' : '—'}</div>
-          ${h.position_detail ? `<div style="font-size:11px;color:var(--t2);margin-top:5px;line-height:1.5">${h.position_detail}</div>` : '<div style="font-size:11px;color:var(--t3);margin-top:4px">Position detail pending</div>'}
-        </div>
-        <div style="flex:0 0 auto;text-align:right">
-          <div class="meta-label" style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:var(--t3);margin-bottom:4px">Current Weight <span style="font-weight:400;text-transform:none;letter-spacing:0">(Fri)</span></div>
-          <div style="font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--text)">${h.current_weight != null ? h.current_weight.toFixed(1)+'%' : '—'}</div>
-        </div>
-      </div>
-    </div>
 
     <div class="conv-meter">
       <div class="conv-label">Conviction</div>
