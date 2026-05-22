@@ -1954,9 +1954,9 @@ async function fetchIBKR() {
     }
   } catch (e) {
     dot.style.background = '#EF4444';
-    label.textContent = 'IBKR';
-    label.title = `${e.message} — proxy running? python3 ibkr_proxy.py`;
-    console.warn('IBKR proxy:', e.message);
+    label.textContent = 'IBKR ✗';
+    label.title = e.message;
+    console.error('IBKR proxy error:', e.message, e);
   }
 }
 

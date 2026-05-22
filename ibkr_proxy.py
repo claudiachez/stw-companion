@@ -25,11 +25,9 @@ import logging
 logging.getLogger('ib_insync').setLevel(logging.WARNING)
 
 app = Flask(__name__)
-CORS(app, origins=[
-    "https://claudiachez.github.io",
-    "http://localhost:*",
-    "http://127.0.0.1:*",
-])
+# Allow all origins — this is a local-only proxy, nothing sensitive is exposed
+CORS(app, resources={r"/*": {"origins": "*"}},
+     allow_headers=["Content-Type"], methods=["GET", "POST", "OPTIONS"])
 
 IB_HOST   = '127.0.0.1'
 IB_PORT   = 4001   # 4001 = live, 4002 = paper
