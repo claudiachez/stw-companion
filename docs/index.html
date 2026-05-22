@@ -999,7 +999,28 @@ let selectedTicker = null;
 let filteredHoldings = [];
 let _sortMode   = 'conviction';
 let _priceCache = {};  // { TICKER: { c, pc, dp, h, l, o } } from Finnhub /quote
-let _ibkrCache  = {};  // { TICKER: { legs: [{strike,right,expiry,entry,price,pnl_pct}] } } from IBKR proxy
+let _ibkrCache  = {};  // { TICKER: { legs, pnlPct, ts } } — ts: Date.now() when fetched
+let _ibkrLive   = false;  // true only during current session's successful fetch
+
+// ── IBKR localStorage helpers ────────────────────────────
+function _saveIBKRCache() {
+  try { localStorage.setItem('ibkrCache', JSON.stringify(_ibkrCache)); } catch(e) {}
+}
+function _loadIBKRCache() {
+  try {
+    const raw = localStorage.getItem('ibkrCache');
+    if (raw) _ibkrCache = JSON.parse(raw);
+  } catch(e) {}
+}
+function _ibkrCacheDateStr(ticker) {
+  const ts = _ibkrCache[ticker]?.ts;
+  if (!ts) return null;
+  const d   = new Date(ts);
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  if (isToday) return d.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit', ...ET});
+  return d.toLocaleDateString('en-US', {month:'short', day:'numeric', ...ET});
+}
 
 // ── Helpers ──────────────────────────────────────────────
 function fmtDate(s) {
@@ -1451,10 +1472,15 @@ function renderDetail(h) {
       if (ibkr?.legs?.length) {
         const valid = ibkr.legs.filter(l => l.price != null);
         if (valid.length) {
-          const avgPct = valid.reduce((s,l) => s + (l.pnl_pct||0), 0) / valid.length;
-          const pnlClr = avgPct >= 0 ? '#16A34A' : '#DC2626';
+          const avgPct  = valid.reduce((s,l) => s + (l.pnl_pct||0), 0) / valid.length;
+          const pnlClr  = avgPct >= 0 ? '#16A34A' : '#DC2626';
+          const dateStr = _ibkrCacheDateStr(h.ticker);
+          const isLive  = _ibkrLive && ibkr.ts && (Date.now() - ibkr.ts < 3600000);
+          const srcDot  = isLive
+            ? `<span style="color:#16A34A;font-weight:700">● IBKR live</span>`
+            : `<span style="color:#F59E0B;font-weight:700">● IBKR</span>${dateStr ? ` <span style="opacity:0.7">· ${dateStr}</span>` : ''}`;
           col2 = `<div style="flex:1;min-width:90px;border-left:1px solid var(--border);padding-left:12px">
-            <div class="meta-label">Open P&amp;L <span style="color:#16A34A;font-weight:700">● IBKR</span></div>
+            <div class="meta-label">Open P&amp;L ${srcDot}</div>
             <div style="font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;color:${pnlClr};line-height:1.1">${avgPct>=0?'+':''}${avgPct.toFixed(1)}%</div>
             <div style="font-size:10px;color:var(--t3);margin-top:2px">${valid.length} leg${valid.length>1?'s':''} priced</div>
           </div>`;
@@ -1999,9 +2025,10 @@ async function fetchIBKR() {
     if (results.error) throw new Error(results.error);
 
     // Group by ticker
+    const fetchedAt = Date.now();
     _ibkrCache = {};
     results.forEach(r => {
-      if (!_ibkrCache[r.symbol]) _ibkrCache[r.symbol] = { legs: [] };
+      if (!_ibkrCache[r.symbol]) _ibkrCache[r.symbol] = { legs: [], ts: fetchedAt };
       _ibkrCache[r.symbol].legs.push(r);
     });
 
@@ -2009,10 +2036,12 @@ async function fetchIBKR() {
     Object.entries(_ibkrCache).forEach(([t, v]) => {
       const valid = v.legs.filter(l => l.price != null && l.entry != null);
       if (!valid.length) return;
-      const totalEntry = valid.reduce((s,l) => s + l.entry, 0);
       const totalPnlPct = valid.reduce((s,l) => s + (l.pnl_pct || 0), 0) / valid.length;
       v.pnlPct = totalPnlPct;
     });
+
+    _ibkrLive = true;
+    _saveIBKRCache();
 
     // Surface ambiguous contracts as a visible alert
     const ambiguous = results.filter(r => r.error === 'ambiguous');
@@ -2076,6 +2105,16 @@ function renderAll() {
   filteredHoldings = [...data.holdings];
   document.getElementById('f-count').textContent = `${data.holdings.length} positions`;
   renderBasketBar();
+  // Restore IBKR cache from localStorage so last-known option prices show immediately
+  _loadIBKRCache();
+  // Reflect cached state in IBKR button
+  const cachedTickers = Object.keys(_ibkrCache).filter(t => _ibkrCache[t]?.pnlPct != null);
+  if (cachedTickers.length) {
+    const dot = document.getElementById('ibkr-dot');
+    const lbl = document.getElementById('ibkr-label');
+    if (dot) dot.style.background = '#F59E0B';  // amber = cached, not live
+    if (lbl) lbl.textContent = `IBKR (cached)`;
+  }
   renderList();
   renderGraddox();
   restoreTab();
