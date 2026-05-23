@@ -171,6 +171,7 @@ window.GRADDOX_DATA = {
       border: none; background: transparent;
       color: var(--t2); font-size: 12px; font-weight: 500;
       cursor: pointer; font-family: inherit; transition: all 0.12s;
+      white-space: nowrap;
     }
     .nav-btn:hover { background: var(--s2); color: var(--text); }
     .nav-btn.on { background: #FDF4EE; color: #D97040; }
@@ -713,6 +714,191 @@ window.GRADDOX_DATA = {
     }
     .tf-btn:hover { border-color: var(--t2); color: var(--text); }
     .tf-btn.on { background: #FDF4EE; color: #D97040; border-color: #D97040; }
+
+    /* ══════════════════════════════════════════
+       TABLET — 769px–1024px
+    ══════════════════════════════════════════ */
+    @media (max-width: 1024px) {
+      /* Give detail panel more breathing room; list panel narrows accordingly */
+      .list-panel.narrow { flex: 0 0 35%; }
+
+      /* Graddox sidebar: shrink fixed width so right column has more chart space */
+      .gx-left { flex: 0 0 260px; }
+    }
+
+    /* ══════════════════════════════════════════
+       MOBILE — ≤768px
+    ══════════════════════════════════════════ */
+    @media (max-width: 768px) {
+
+      /* ── Header: logo + controls row 1, nav full-width row 2 ── */
+      .hdr {
+        flex-wrap: wrap;
+        height: auto;
+        padding: 10px 14px 8px;
+        gap: 0;
+      }
+      .logo      { order: 1; }
+      .hdr-right { order: 2; margin-left: auto; }
+      .hdr-meta  { display: none; }
+      .nav {
+        order: 3;
+        flex: 0 0 100%;
+        margin-top: 8px;
+        gap: 4px;
+      }
+      .nav-btn {
+        flex: 1;
+        text-align: center;
+        padding: 9px 6px;
+        font-size: 12px;
+        min-height: 40px;
+      }
+
+      /* ── Subheader: collapse legend, horizontal-scroll filters ── */
+      .subhdr { padding: 8px 12px 10px; }
+
+      /* Hide the text legend — the colour bar is enough on mobile */
+      .basket-legend { display: none; }
+
+      /* Filters: single horizontal scrollable strip */
+      .filters {
+        display: flex;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        gap: 6px;
+        padding-bottom: 2px;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+      }
+      .filters::-webkit-scrollbar { display: none; }
+      .filter-input  { flex-shrink: 0; width: 148px; min-height: 38px; font-size: 13px; }
+      .filter-select { flex-shrink: 0; min-width: 130px; min-height: 38px; font-size: 12px; }
+      .filter-clear  { flex-shrink: 0; min-height: 38px; white-space: nowrap; }
+      .filter-count  { flex-shrink: 0; white-space: nowrap; align-self: center; margin-left: 0; }
+
+      /* ── Ticker rows: 2-line vertical card ── */
+      .ticker-row {
+        flex-wrap: wrap;
+        padding: 11px 14px;
+        gap: 0;
+        align-items: flex-start;
+        min-height: 66px;
+      }
+
+      /* Rank: vertically centred in the card */
+      .row-rank { align-self: center; padding-right: 6px; min-width: 22px; }
+
+      /* Bar: stretch full card height */
+      .row-bar  { align-self: stretch; height: auto; min-height: 44px; margin-right: 8px; }
+
+      /* Main (line 1): ticker symbol + basket tag */
+      .row-main { flex: 1; min-width: 0; }
+      .row-sym  { font-size: 15px; font-weight: 800; letter-spacing: 0.02em; }
+
+      /* Always show basket tag; always hide snippet */
+      .row-info                { display: flex !important; margin-top: 3px; }
+      .row-snippet             { display: none  !important; }
+      .narrow .row-info        { display: flex !important; }
+      .narrow .row-snippet     { display: none  !important; }
+      .narrow .row-wbar-bg     { display: none; }
+      .narrow .row-sym         { font-size: 15px; }
+
+      /* Row-right: pushed to a SECOND LINE, full card width */
+      .row-right {
+        flex: 0 0 100%;
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        padding-left: 38px;   /* indent to align with ticker text */
+        margin-top: 7px;
+        gap: 6px;
+      }
+
+      /* Second line: price left · date centre · weight right */
+      .row-price   { order: 1; }
+      .row-date    { order: 2; font-size: 10px; }
+      .row-weight  { order: 3; }
+      .row-price-num { font-size: 13px; font-weight: 700; }
+      .row-price-chg { font-size: 11px; }
+      .row-wnum      { font-size: 12px; font-weight: 600; color: var(--text); }
+      .row-wbar-bg   { display: none; }   /* no mini-bar needed on second line */
+
+      /* ── Detail panel: fixed full-screen overlay ── */
+      .list-panel.narrow { flex: 1; }
+
+      .detail-panel {
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        background: var(--bg);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 0 16px 32px;
+      }
+
+      /* Sticky back bar */
+      .detail-close {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        width: calc(100% + 32px);
+        margin-left: -16px;
+        padding: 14px 16px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        border-left: none; border-right: none; border-top: none;
+        border-radius: 0;
+        font-size: 13px;
+        min-height: 48px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+      }
+
+      /* ── Detail 3-col card: stack vertically ── */
+      .data-card-cols { flex-direction: column !important; }
+      .data-card-cols > div {
+        border-left: none !important;
+        padding-left: 0 !important;
+        min-width: auto !important;
+        border-top: 1px solid var(--bsub);
+        padding-top: 10px;
+        margin-top: 10px;
+      }
+      .data-card-cols > div:first-child {
+        border-top: none; padding-top: 0; margin-top: 0;
+      }
+
+      /* ── Graddox: stack columns vertically ── */
+      .gx-body  { flex-direction: column; overflow-y: auto; }
+      .gx-left  { flex: none; width: 100%; overflow-y: visible; padding: 10px; }
+      .gx-right { flex: none; width: 100%; overflow-y: visible; padding: 10px; }
+
+      /* Charts: SPY above QQQ */
+      #chart-container {
+        flex-direction: column !important;
+        height: 400px !important;
+      }
+      #chart-spy {
+        flex: 1;
+        border-right: none !important;
+        border-bottom: 1px solid var(--border);
+      }
+      #chart-qqq { flex: 1; }
+
+      /* Graddox subheader */
+      .gx-subhdr { flex-wrap: wrap; gap: 4px 8px; }
+      .gx-upd    { margin-left: 0; width: 100%; }
+
+      /* ── Touch targets ── */
+      .tf-btn   { padding: 6px 10px; min-height: 36px; }
+      #ibkr-btn { min-height: 36px; }
+
+      /* ── Press feedback ── */
+      .ticker-row:active { background: #F5EDE3; }
+      .nav-btn:active    { background: var(--s2); }
+    }
   </style>
 </head>
 
@@ -853,7 +1039,7 @@ window.GRADDOX_DATA = {
             <button class="tf-btn"    onclick="switchTF('1W',this)">1W</button>
           </div>
         </div>
-        <div style="display:flex;height:300px">
+        <div id="chart-container" style="display:flex;height:300px">
           <div id="chart-spy" style="flex:1;height:100%;border-right:1px solid var(--border)"></div>
           <div id="chart-qqq" style="flex:1;height:100%"></div>
         </div>
@@ -1543,7 +1729,7 @@ function renderDetail(h) {
       })() : '';
 
       return `<div style="margin-bottom:14px;background:var(--s2);border:1px solid var(--bsub);border-radius:var(--rsm);padding:12px 14px;">
-        <div style="display:flex;gap:0;align-items:flex-start">${col1}${col2}${col3}</div>
+        <div class="data-card-cols" style="display:flex;gap:0;align-items:flex-start">${col1}${col2}${col3}</div>
         ${legDetail}
       </div>`;
     })()}
