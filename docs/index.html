@@ -421,6 +421,7 @@ window.GRADDOX_DATA = {
     }
     .detail-close:hover { color: var(--text); border-color: var(--t2); }
     .close-label-mobile { display: none; }
+    .detail-date-mobile { display: none; }
 
     /* Graddox note toggle — desktop hidden, mobile shown */
     .gx-note-toggle {
@@ -904,7 +905,8 @@ window.GRADDOX_DATA = {
 
       /* ── Header controls: normalize heights, hide db-dot ── */
       #db-dot { display: none; }
-      #ibkr-btn, #signout-btn { height: 34px; padding: 0 10px; }
+      #ibkr-btn { height: 34px; padding: 0 10px; min-width: 80px; justify-content: center; flex-shrink: 0; }
+      #signout-btn { height: 34px; padding: 0 10px; flex-shrink: 0; }
 
       /* ── Filters: normalize heights ── */
       .filter-input, .filter-select, .filter-clear { height: 40px; }
@@ -913,18 +915,37 @@ window.GRADDOX_DATA = {
       .close-label-desktop { display: none; }
       .close-label-mobile  { display: inline; }
 
-      /* ── Detail badges: hide "Last Action" label, keep date ── */
+      /* ── Detail badges: hide entire date col (moved above Edit) ── */
       .detail-badges .meta-label { display: none; }
+      .detail-date-col { display: none; }
+
+      /* ── Date above Edit button ── */
+      .detail-date-mobile { display: block; font-size: 10px; color: var(--t3); text-align: right; margin-bottom: 3px; }
 
       /* ── Edit form: single column ── */
       .edit-grid { grid-template-columns: 1fr !important; }
 
       /* ── Signal table: card layout ── */
       .gx-sig-wrap { overflow-x: visible; }
+      .gx-sig-table { min-width: auto; width: 100%; }
       .gx-sig-table thead { display: none; }
       .gx-sig-table tr { display: block; border: 1px solid var(--border); border-radius: var(--rsm); margin-bottom: 8px; padding: 10px 12px; }
-      .gx-sig-table td { display: block; padding: 3px 0; border: none; font-size: 13px; white-space: normal; }
-      .gx-sig-table td::before { content: attr(data-label); font-size: 10px; color: var(--t3); display: block; margin-bottom: 1px; }
+      .gx-sig-table td { display: block; padding: 3px 0; border: none; font-size: 14px; white-space: normal; word-break: break-word; }
+      .gx-sig-table td::before { content: attr(data-label); font-size: 11px; color: var(--t3); display: block; margin-bottom: 1px; }
+
+      /* ── Hide "SPY & QQQ" chart header label (charts have labels via ::before) ── */
+      .gx-chart-title { display: none; }
+
+      /* ── Legibility: increase key font sizes ── */
+      .row-price-chg { font-size: 13px; }
+      .row-date      { font-size: 12px; }
+      .row-wnum      { font-size: 13px; }
+      .nav-btn       { font-size: 14px; }
+      .gx-lvl-price  { font-size: 17px; }
+      .gx-lvl-label  { font-size: 13px; }
+      .gx-lvl-badge  { font-size: 12px; }
+      .gx-date       { font-size: 14px; }
+      .gx-bias       { font-size: 13px; }
 
       /* ── Chart labels ── */
       #chart-spy { position: relative; }
@@ -1090,7 +1111,7 @@ window.GRADDOX_DATA = {
       <!-- Charts: filled by initCharts() -->
       <div class="gx-card" style="overflow:hidden;flex-shrink:0;padding:0">
         <div class="gx-card-hdr" style="padding:8px 13px;display:flex;align-items:center;gap:10px">
-          <span>📈 SPY &amp; QQQ</span>
+          <span class="gx-chart-title">📈 SPY &amp; QQQ</span>
           <div style="display:flex;gap:3px" id="tf-btn-group">
             <button class="tf-btn"    onclick="switchTF('5m',this)">5m</button>
             <button class="tf-btn"    onclick="switchTF('15m',this)">15m</button>
@@ -1666,7 +1687,10 @@ function renderDetail(h) {
           <div class="detail-name">${h.name}</div>
         </div>
       </div>
-      <button class="edit-btn${detailEditMode?' active':''}" onclick="toggleEditMode('${h.ticker}')">✎ Edit</button>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+        ${h.action_date ? `<span class="detail-date-mobile">${fmtDate(h.action_date)}</span>` : ''}
+        <button class="edit-btn${detailEditMode?' active':''}" onclick="toggleEditMode('${h.ticker}')">✎ Edit</button>
+      </div>
     </div>
 
     ${editForm}
@@ -1683,7 +1707,7 @@ function renderDetail(h) {
           ${t.short}
         </span>
       </div>
-      <div style="text-align:right;flex-shrink:0">
+      <div class="detail-date-col" style="text-align:right;flex-shrink:0">
         <div class="meta-label">Last Action</div>
         <div style="font-size:12px;font-weight:500;color:var(--t2)">${fmtDate(h.action_date)}</div>
       </div>
