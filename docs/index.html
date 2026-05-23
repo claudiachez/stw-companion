@@ -420,6 +420,17 @@ window.GRADDOX_DATA = {
       transition: all 0.12s;
     }
     .detail-close:hover { color: var(--text); border-color: var(--t2); }
+    .close-label-mobile { display: none; }
+
+    /* Graddox note toggle — desktop hidden, mobile shown */
+    .gx-note-toggle {
+      display: none;
+      align-items: center; justify-content: center;
+      width: 24px; height: 24px; flex-shrink: 0;
+      border-radius: 4px; border: 1px solid var(--border);
+      background: transparent; color: var(--t3);
+      font-size: 10px; cursor: pointer; font-family: inherit;
+    }
 
     .detail-hdr {
       display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px;
@@ -891,6 +902,54 @@ window.GRADDOX_DATA = {
       .gx-subhdr { flex-wrap: wrap; gap: 4px 8px; }
       .gx-upd    { margin-left: 0; width: 100%; }
 
+      /* ── Header controls: normalize heights, hide db-dot ── */
+      #db-dot { display: none; }
+      #ibkr-btn, #signout-btn { height: 34px; padding: 0 10px; }
+
+      /* ── Filters: normalize heights ── */
+      .filter-input, .filter-select, .filter-clear { height: 40px; }
+
+      /* ── Close button: flip label direction ── */
+      .close-label-desktop { display: none; }
+      .close-label-mobile  { display: inline; }
+
+      /* ── Detail badges: hide "Last Action" label, keep date ── */
+      .detail-badges .meta-label { display: none; }
+
+      /* ── Edit form: single column ── */
+      .edit-grid { grid-template-columns: 1fr !important; }
+
+      /* ── Signal table: card layout ── */
+      .gx-sig-wrap { overflow-x: visible; }
+      .gx-sig-table thead { display: none; }
+      .gx-sig-table tr { display: block; border: 1px solid var(--border); border-radius: var(--rsm); margin-bottom: 8px; padding: 10px 12px; }
+      .gx-sig-table td { display: block; padding: 3px 0; border: none; font-size: 13px; white-space: normal; }
+      .gx-sig-table td::before { content: attr(data-label); font-size: 10px; color: var(--t3); display: block; margin-bottom: 1px; }
+
+      /* ── Chart labels ── */
+      #chart-spy { position: relative; }
+      #chart-spy::before {
+        content: 'SPY';
+        position: absolute; top: 6px; left: 8px; z-index: 10;
+        font-size: 11px; font-weight: 700; color: var(--t2);
+        background: var(--bg); padding: 1px 5px; border-radius: 3px;
+        pointer-events: none;
+      }
+      #chart-qqq { position: relative; }
+      #chart-qqq::before {
+        content: 'QQQ';
+        position: absolute; top: 6px; left: 8px; z-index: 10;
+        font-size: 11px; font-weight: 700; color: var(--t2);
+        background: var(--bg); padding: 1px 5px; border-radius: 3px;
+        pointer-events: none;
+      }
+
+      /* ── Chart gap ── */
+      #chart-spy { border-bottom: 6px solid var(--border) !important; }
+
+      /* ── Graddox bias note toggle ── */
+      .gx-note-toggle { display: flex; }
+
       /* ── Touch targets ── */
       .tf-btn   { padding: 6px 10px; min-height: 36px; }
       #ibkr-btn { min-height: 36px; }
@@ -1003,7 +1062,10 @@ window.GRADDOX_DATA = {
   <div class="workspace">
     <div class="list-panel" id="list-panel"></div>
     <div class="detail-panel" id="detail-panel">
-      <button class="detail-close" onclick="closeDetail()">Close →</button>
+      <button class="detail-close" onclick="closeDetail()">
+        <span class="close-label-mobile">← Back</span>
+        <span class="close-label-desktop">Close →</span>
+      </button>
       <div id="detail-content"></div>
     </div>
   </div>
@@ -1854,11 +1916,11 @@ function renderGraddox() {
     const vl = vlbls[s.verdict]||'N/A';
     const tk = sigTicker(s);
     return `<tr data-ticker="${tk}">
-      <td><div class="gx-sig-trade">${s.trade}</div></td>
-      <td style="color:var(--t2);font-size:11px">${s.trigger}</td>
-      <td style="color:var(--t2);font-size:11px;white-space:nowrap">${s.exp}</td>
-      <td><div class="gx-sig-logic">${s.logic}</div></td>
-      <td><div class="gx-verdict"><span class="gx-vdot" style="background:${vc}"></span><span style="color:${vc}">${vl}</span></div></td>
+      <td data-label="Trade"><div class="gx-sig-trade">${s.trade}</div></td>
+      <td data-label="Trigger" style="color:var(--t2);font-size:11px">${s.trigger}</td>
+      <td data-label="Exp" style="color:var(--t2);font-size:11px">${s.exp}</td>
+      <td data-label="Logic (GEX)"><div class="gx-sig-logic">${s.logic}</div></td>
+      <td data-label="Verdict"><div class="gx-verdict"><span class="gx-vdot" style="background:${vc}"></span><span style="color:${vc}">${vl}</span></div></td>
     </tr>`;
   }).join('');
 
@@ -1873,7 +1935,7 @@ function renderGraddox() {
     <div class="gx-subhdr">
       <span class="gx-date">${dateStr}</span>
       <span class="gx-bias ${bm.cls}">${bm.label}</span>
-      ${gx.bias_note ? `<span class="gx-bias-note">${gx.bias_note}</span>` : ''}
+      ${gx.bias_note ? `<span id="gx-note-text" class="gx-bias-note">${gx.bias_note}</span><button class="gx-note-toggle" onclick="(function(){var n=document.getElementById('gx-note-text');var b=document.querySelector('.gx-note-toggle');if(n.style.display==='none'){n.style.display='';b.textContent='▲';}else{n.style.display='none';b.textContent='▼';}})()" >▲</button>` : ''}
       <span class="gx-upd">Updated ${updStr}</span>
     </div>`;
 
