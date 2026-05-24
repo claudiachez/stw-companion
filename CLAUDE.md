@@ -13,8 +13,9 @@ All HTML, CSS, and JS lives in `docs/index.html`. No build step.
 1. Create a feature branch from `staging`: `git checkout -b claude/feature-name origin/staging`
 2. Do all work on that branch
 3. Push feature branch directly to `staging` for Netlify testing: `git push origin claude/feature-name:staging`
-4. When approved, open a PR from `staging` → `main` (production)
-5. Never push directly to `main`
+4. Also push to the remote feature branch to keep it in sync: `git push origin claude/feature-name`
+5. When approved, open a PR from `staging` → `main` (production)
+6. Never push directly to `main`
 
 ## Project Structure
 ```
@@ -28,6 +29,14 @@ CLAUDE.md         — this file
 - Do not rename or remove CSS classes/IDs — only change property values
 - All changes must be in `docs/index.html` only
 - Portfolio data lives in `<script id="stw-data-block">` — do not edit manually
+
+## Theme System
+- **Default:** Dark mode
+- **Toggle:** Hamburger menu → sun/moon icon switches between Light and Dark Mode
+- Theme is persisted to `localStorage` (`stwTheme` key) and restored on `init()`
+- Light theme is applied via `[data-theme="light"]` on `<html>` — all color vars and hardcoded overrides live in that block in the CSS
+- Charts (LightweightCharts) are re-themed live via `chart.applyOptions()` on toggle
+- Do not hardcode colors outside of `:root` or `[data-theme="light"]` — always use CSS variables
 
 ## Design System
 - **Font:** Barlow Condensed (700/800) for logo, headers, and login page; system sans-serif for body
