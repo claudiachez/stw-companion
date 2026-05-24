@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>STW Companion</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2322c55e'/%3E%3Cline x1='5' y1='27' x2='20' y2='7' stroke='%230a0a0a' stroke-width='3' stroke-linecap='round'/%3E%3Cpolyline points='17,5 24,5 24,12' stroke='%230a0a0a' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3Crect x='10' y='7' width='9' height='15' rx='4.5' fill='%230a0a0a'/%3E%3Cpath d='M7 19 Q7 24 14.5 24 Q22 24 22 19' stroke='%230a0a0a' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3Cline x1='14.5' y1='24' x2='14.5' y2='28' stroke='%230a0a0a' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='10' y1='28' x2='19' y2='28' stroke='%230a0a0a' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
@@ -160,14 +161,14 @@ window.GRADDOX_DATA = {
     }
 
     .logo-mark {
-      width: 22px; height: 22px;
+      width: 26px; height: 26px;
       background: #22c55e;
-      border-radius: 5px;
+      border-radius: 6px;
       display: flex; align-items: center; justify-content: center;
       flex-shrink: 0;
     }
 
-    .logo-mark svg { width: 10px; height: 10px; }
+    .logo-mark svg { width: 16px; height: 16px; }
 
     .nav { display: flex; gap: 2px; }
 
@@ -1051,21 +1052,49 @@ window.GRADDOX_DATA = {
 <body>
 
 <!-- ── Auth Gate ─────────────────────────────── -->
-<div id="auth-gate" style="display:flex; position:fixed; inset:0; background:#0a0a0a; z-index:9999; align-items:center; justify-content:center;">
-  <div id="auth-box" style="background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:48px 40px; text-align:center; max-width:380px; width:90%; box-shadow:0 25px 50px rgba(0,0,0,0.7);">
-    <div style="width:48px;height:48px;background:#22c55e;border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
-      <svg viewBox="0 0 10 10" fill="none" width="22" height="22"><path d="M5 1L9 8H1L5 1Z" fill="#0a0a0a"/></svg>
+<!-- ── Auth Gate ─────────────────────────────── -->
+<div id="auth-gate" style="display:flex;position:fixed;inset:0;z-index:9999;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 20%,#0c1e0d 0%,#060c06 45%,#0a0a0a 100%);overflow:hidden;">
+  <!-- Grid overlay -->
+  <div style="position:absolute;inset:0;background-image:linear-gradient(rgba(34,197,94,0.05) 1px,transparent 1px),linear-gradient(90deg,rgba(34,197,94,0.05) 1px,transparent 1px);background-size:52px 52px;pointer-events:none;"></div>
+  <!-- Ticker tape -->
+  <div style="position:absolute;inset:0;overflow:hidden;pointer-events:none;user-select:none;padding:18px 22px;font-family:'Barlow Condensed',monospace;font-size:13px;color:rgba(34,197,94,0.07);letter-spacing:0.06em;line-height:2.1;word-break:break-all;">VIAV +0.8% 14.63 &nbsp; OSS +60.1% 7.52 &nbsp; CXDO +1.7% 22.41 &nbsp; SYNA +2.3% 86.14 &nbsp; VPG +5.1% 18.20 &nbsp; AMKR +0.9% 26.35 &nbsp; ENS +1.4% 116.63 &nbsp; BLDP +3.8% 4.71 &nbsp; IRDM +2.1% 28.90 &nbsp; RDCM +0.6% 12.91 &nbsp; NBIS +1.2% 47.82 &nbsp; BB +3.4% 6.12 &nbsp; LUMN +0.3% 8.74 &nbsp; FIVN +4.7% 22.15 &nbsp; SHLS +2.9% 8.44 &nbsp; SPY -0.4% 524.37 &nbsp; QQQ +0.8% 448.82 &nbsp; NVDA +2.9% 875.65 &nbsp; AMZN +1.1% 186.90 &nbsp; META +1.8% 497.23 &nbsp; VIAV +0.8% 14.63 &nbsp; OSS +60.1% 7.52 &nbsp; CXDO +1.7% 22.41 &nbsp; SYNA +2.3% 86.14 &nbsp; VPG +5.1% 18.20 &nbsp; AMKR +0.9% 26.35 &nbsp; ENS +1.4% 116.63 &nbsp; BLDP +3.8% 4.71 &nbsp; IRDM +2.1% 28.90 &nbsp; RDCM +0.6% 12.91 &nbsp; NBIS +1.2% 47.82 &nbsp; BB +3.4% 6.12 &nbsp; LUMN +0.3% 8.74 &nbsp; FIVN +4.7% 22.15 &nbsp; SHLS +2.9% 8.44 &nbsp; SPY -0.4% 524.37 &nbsp; QQQ +0.8% 448.82 &nbsp; NVDA +2.9% 875.65 &nbsp; AMZN +1.1% 186.90 &nbsp; META +1.8% 497.23</div>
+  <!-- Center vignette (readability) -->
+  <div style="position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(6,14,6,0.88) 25%,transparent 70%);pointer-events:none;"></div>
+
+  <div id="auth-box" style="position:relative;z-index:1;text-align:center;max-width:300px;width:90%;">
+    <!-- STW Logo -->
+    <div style="width:90px;height:90px;margin:0 auto 22px;">
+      <svg viewBox="0 0 90 90" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- Green arrow: lower-left to upper-right (behind mic) -->
+        <line x1="8" y1="80" x2="58" y2="18" stroke="#22c55e" stroke-width="6" stroke-linecap="round"/>
+        <polyline points="53,12 68,10 66,25" stroke="#22c55e" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+        <!-- Mic base + stand (in front) -->
+        <line x1="31" y1="78" x2="55" y2="78" stroke="#c8c8c8" stroke-width="3.5" stroke-linecap="round"/>
+        <line x1="43" y1="68" x2="43" y2="78" stroke="#c8c8c8" stroke-width="3" stroke-linecap="round"/>
+        <path d="M27 56 Q27 68 43 68 Q59 68 59 56" stroke="#c8c8c8" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+        <!-- Mic capsule -->
+        <rect x="33" y="16" width="20" height="42" rx="10" fill="#e2e2e2"/>
+        <rect x="33" y="16" width="20" height="42" rx="10" fill="none" stroke="#b4b4b4" stroke-width="1.5"/>
+        <!-- Grille lines -->
+        <line x1="35" y1="26" x2="51" y2="26" stroke="#aaaaaa" stroke-width="0.9"/>
+        <line x1="35" y1="32" x2="51" y2="32" stroke="#aaaaaa" stroke-width="0.9"/>
+        <line x1="35" y1="38" x2="51" y2="38" stroke="#aaaaaa" stroke-width="0.9"/>
+        <line x1="35" y1="44" x2="51" y2="44" stroke="#aaaaaa" stroke-width="0.9"/>
+        <line x1="35" y1="50" x2="51" y2="50" stroke="#aaaaaa" stroke-width="0.9"/>
+      </svg>
     </div>
-    <h2 style="color:#f0f0f0;font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;margin:0 0 6px;">STW Companion</h2>
-    <p style="color:#525252;font-size:13px;margin:0 0 32px;">Private portfolio dashboard</p>
-    <button onclick="signInWithGoogle()" style="width:100%;background:#22c55e;color:#0a0a0a;border:none;border-radius:8px;padding:11px 20px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;">
+    <!-- Brand title -->
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:54px;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;color:#f0f0f0;line-height:0.92;margin-bottom:8px;">STW<br>COMPANION</div>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:0.28em;text-transform:uppercase;color:#2d5c35;margin-bottom:40px;">AHEAD OF THE HERD ™</div>
+    <!-- Sign in button -->
+    <button onclick="signInWithGoogle()" style="width:100%;background:#22c55e;color:#040a04;border:none;border-radius:8px;padding:14px 20px;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;">
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z" fill="#4285F4"/>
         <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z" fill="#34A853"/>
         <path d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707s.102-1.167.282-1.707V4.961H.957C.347 6.175 0 7.548 0 9s.347 2.825.957 4.039l3.007-2.332z" fill="#FBBC05"/>
         <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.961L3.964 7.293C4.672 5.166 6.656 3.58 9 3.58z" fill="#EA4335"/>
       </svg>
-      Sign in with Google
+      Sign In with Google
     </button>
     <p id="auth-error" style="color:#ef4444;font-size:12px;margin-top:14px;display:none;"></p>
   </div>
@@ -1075,7 +1104,18 @@ window.GRADDOX_DATA = {
 <header class="hdr">
   <div class="logo">
     <div class="logo-mark">
-      <svg viewBox="0 0 10 10" fill="none"><path d="M5 1L9 8H1L5 1Z" fill="white"/></svg>
+      <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- Arrow: lower-left to upper-right -->
+        <line x1="2" y1="14" x2="11" y2="3" stroke="#0a0a0a" stroke-width="1.8" stroke-linecap="round"/>
+        <polyline points="9.5,2 13,2 13,5.5" stroke="#0a0a0a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <!-- Mic capsule (front) -->
+        <rect x="5" y="2.5" width="5.5" height="8" rx="2.75" fill="#0a0a0a"/>
+        <!-- Stand arc -->
+        <path d="M3 9 Q3 12.5 7.5 12.5 Q12 12.5 12 9" stroke="#0a0a0a" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+        <!-- Vertical stand + base -->
+        <line x1="7.5" y1="12.5" x2="7.5" y2="14.5" stroke="#0a0a0a" stroke-width="1.4" stroke-linecap="round"/>
+        <line x1="5.5" y1="14.5" x2="9.5" y2="14.5" stroke="#0a0a0a" stroke-width="1.4" stroke-linecap="round"/>
+      </svg>
     </div>
     STW Companion
   </div>
@@ -1257,19 +1297,32 @@ async function signOut() {
 
 function showAuthBox() {
   document.getElementById('auth-box').innerHTML = `
-    <div style="width:48px;height:48px;background:#22c55e;border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
-      <svg viewBox="0 0 10 10" fill="none" width="22" height="22"><path d="M5 1L9 8H1L5 1Z" fill="#0a0a0a"/></svg>
+    <div style="width:90px;height:90px;margin:0 auto 22px;">
+      <svg viewBox="0 0 90 90" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <line x1="8" y1="80" x2="58" y2="18" stroke="#22c55e" stroke-width="6" stroke-linecap="round"/>
+        <polyline points="53,12 68,10 66,25" stroke="#22c55e" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+        <line x1="31" y1="78" x2="55" y2="78" stroke="#c8c8c8" stroke-width="3.5" stroke-linecap="round"/>
+        <line x1="43" y1="68" x2="43" y2="78" stroke="#c8c8c8" stroke-width="3" stroke-linecap="round"/>
+        <path d="M27 56 Q27 68 43 68 Q59 68 59 56" stroke="#c8c8c8" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+        <rect x="33" y="16" width="20" height="42" rx="10" fill="#e2e2e2"/>
+        <rect x="33" y="16" width="20" height="42" rx="10" fill="none" stroke="#b4b4b4" stroke-width="1.5"/>
+        <line x1="35" y1="26" x2="51" y2="26" stroke="#aaaaaa" stroke-width="0.9"/>
+        <line x1="35" y1="32" x2="51" y2="32" stroke="#aaaaaa" stroke-width="0.9"/>
+        <line x1="35" y1="38" x2="51" y2="38" stroke="#aaaaaa" stroke-width="0.9"/>
+        <line x1="35" y1="44" x2="51" y2="44" stroke="#aaaaaa" stroke-width="0.9"/>
+        <line x1="35" y1="50" x2="51" y2="50" stroke="#aaaaaa" stroke-width="0.9"/>
+      </svg>
     </div>
-    <h2 style="color:#f0f0f0;font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;margin:0 0 6px;">STW Companion</h2>
-    <p style="color:#525252;font-size:13px;margin:0 0 32px;">Private portfolio dashboard</p>
-    <button onclick="signInWithGoogle()" style="width:100%;background:#22c55e;color:#0a0a0a;border:none;border-radius:8px;padding:11px 20px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;">
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:54px;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;color:#f0f0f0;line-height:0.92;margin-bottom:8px;">STW<br>COMPANION</div>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:0.28em;text-transform:uppercase;color:#2d5c35;margin-bottom:40px;">AHEAD OF THE HERD ™</div>
+    <button onclick="signInWithGoogle()" style="width:100%;background:#22c55e;color:#040a04;border:none;border-radius:8px;padding:14px 20px;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;">
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
         <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z" fill="#4285F4"/>
         <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z" fill="#34A853"/>
         <path d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707s.102-1.167.282-1.707V4.961H.957C.347 6.175 0 7.548 0 9s.347 2.825.957 4.039l3.007-2.332z" fill="#FBBC05"/>
         <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.961L3.964 7.293C4.672 5.166 6.656 3.58 9 3.58z" fill="#EA4335"/>
       </svg>
-      Sign in with Google
+      Sign In with Google
     </button>
     <p id="auth-error" style="color:#ef4444;font-size:12px;margin-top:14px;display:none;"></p>
   `;
@@ -1277,13 +1330,13 @@ function showAuthBox() {
 
 function showUnauthorized(email) {
   document.getElementById('auth-box').innerHTML = `
-    <div style="width:48px;height:48px;background:#2d0c0c;border-radius:12px;border:1px solid #7f1d1d;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+    <div style="width:48px;height:48px;background:#2d0c0c;border-radius:12px;border:1px solid #7f1d1d;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="#ef4444" stroke-width="2" stroke-linecap="round"/></svg>
     </div>
-    <h2 style="color:#f0f0f0;font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;margin:0 0 6px;">Access Denied</h2>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-size:36px;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;color:#f0f0f0;line-height:1;margin-bottom:10px;">Access Denied</div>
     <p style="color:#a0a0a0;font-size:13px;margin:0 0 6px;">${email}</p>
-    <p style="color:#525252;font-size:12px;margin:0 0 28px;">This account is not authorized to view this dashboard.</p>
-    <button onclick="db.auth.signOut().then(showAuthBox)" style="width:100%;background:#1a1a1a;color:#a0a0a0;border:1px solid #2a2a2a;border-radius:8px;padding:10px 20px;font-size:13px;cursor:pointer;">Sign in with a different account</button>
+    <p style="color:#525252;font-size:12px;margin:0 0 32px;">This account is not authorized to view this dashboard.</p>
+    <button onclick="db.auth.signOut().then(showAuthBox)" style="width:100%;background:#1a1a1a;color:#a0a0a0;border:1px solid #2a2a2a;border-radius:8px;padding:12px 20px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;">Sign In with a Different Account</button>
   `;
 }
 
