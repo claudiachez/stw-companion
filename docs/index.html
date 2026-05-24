@@ -180,6 +180,16 @@ window.GRADDOX_DATA = {
       margin-left: auto; display: flex; align-items: center; gap: 8px;
     }
 
+    .hdr-btn {
+      display: flex; align-items: center; justify-content: center; gap: 5px;
+      padding: 5px 11px; border-radius: 6px;
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--t2); font-size: 12px; font-weight: 500;
+      cursor: pointer; font-family: inherit; transition: all 0.15s;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .hdr-btn.hidden { display: none !important; }
+
     .live-dot {
       width: 6px; height: 6px; border-radius: 50%; background: #16A34A;
     }
@@ -922,23 +932,8 @@ window.GRADDOX_DATA = {
 
       /* ── Header controls: normalize heights, hide db-dot ── */
       #db-dot { display: none; }
-      #ibkr-btn {
-        box-sizing: border-box !important;
-        height: 36px !important;
-        padding: 0 12px !important;
-        min-width: 82px;
-        justify-content: center;
-        flex-shrink: 0;
-      }
-      #signout-btn {
-        box-sizing: border-box !important;
-        height: 36px !important;
-        padding: 0 12px !important;
-        margin-left: 0 !important;
-        flex-shrink: 0;
-        display: flex !important;
-        align-items: center !important;
-      }
+      .hdr-btn { height: 36px; padding: 0 12px; box-sizing: border-box; }
+      #ibkr-btn { min-width: 82px; }
 
       /* ── Filters: normalize heights ── */
       .filter-input, .filter-select, .filter-clear { height: 40px; }
@@ -1004,8 +999,7 @@ window.GRADDOX_DATA = {
       .gx-note-toggle { display: flex; }
 
       /* ── Touch targets ── */
-      .tf-btn   { padding: 6px 10px; min-height: 36px; }
-      #ibkr-btn { min-height: 36px; }
+      .tf-btn { padding: 6px 10px; min-height: 36px; }
 
       /* ── Press feedback ── */
       .ticker-row:active { background: #F5EDE3; }
@@ -1053,12 +1047,11 @@ window.GRADDOX_DATA = {
     <div class="live-dot" id="db-dot"></div>
     <span class="hdr-meta" id="hdr-meta">–</span>
     <!-- IBKR live P&L indicator -->
-    <button id="ibkr-btn" onclick="fetchIBKR()" title="Connect to IB Gateway for live P&L"
-      style="display:flex;align-items:center;gap:5px;padding:4px 9px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--t2);font-size:11px;font-weight:500;cursor:pointer;font-family:inherit;transition:all 0.15s;">
+    <button id="ibkr-btn" class="hdr-btn" onclick="fetchIBKR()" title="Connect to IB Gateway for live P&L">
       <div id="ibkr-dot" style="width:6px;height:6px;border-radius:50%;background:var(--t3);flex-shrink:0"></div>
       <span id="ibkr-label">IBKR</span>
     </button>
-    <button id="signout-btn" onclick="signOut()" style="display:none; margin-left:10px; padding:4px 10px; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--t2); font-size:12px; cursor:pointer;">Sign out</button>
+    <button id="signout-btn" class="hdr-btn hidden" onclick="signOut()">Sign out</button>
   </div>
 </header>
 
@@ -1193,7 +1186,7 @@ async function signInWithGoogle() {
 async function signOut() {
   await db.auth.signOut();
   document.getElementById('auth-gate').style.display = 'flex';
-  document.getElementById('signout-btn').style.display = 'none';
+  document.getElementById('signout-btn').classList.add('hidden');
   showAuthBox();
 }
 
@@ -1236,7 +1229,7 @@ db.auth.onAuthStateChange((event, session) => {
     const email = session.user.email;
     if (AUTHORIZED_EMAILS.includes(email)) {
       document.getElementById('auth-gate').style.display = 'none';
-      document.getElementById('signout-btn').style.display = 'inline-block';
+      document.getElementById('signout-btn').classList.remove('hidden');
       if (!window._dashboardLoaded) {
         window._dashboardLoaded = true;
         init();
@@ -1247,7 +1240,7 @@ db.auth.onAuthStateChange((event, session) => {
   } else if (event === 'SIGNED_OUT') {
     window._dashboardLoaded = false;
     document.getElementById('auth-gate').style.display = 'flex';
-    document.getElementById('signout-btn').style.display = 'none';
+    document.getElementById('signout-btn').classList.add('hidden');
     showAuthBox();
   }
 });
