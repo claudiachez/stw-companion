@@ -868,18 +868,35 @@ window.GRADDOX_DATA = {
         align-items: center;
       }
 
-      /* ── Detail 3-col card: stack vertically ── */
-      .data-card-cols { flex-direction: column !important; }
+      /* ── Detail 3-col card: cols 1+2 side by side, col 3 full-width below ── */
+      .data-card-cols {
+        flex-direction: row !important;
+        flex-wrap: wrap !important;
+      }
       .data-card-cols > div {
+        min-width: auto !important;
+        border-top: none !important;
+        padding-top: 0 !important;
+        margin-top: 0 !important;
+      }
+      .data-card-cols > div:nth-child(1) {
+        flex: 1 1 0 !important;
         border-left: none !important;
         padding-left: 0 !important;
-        min-width: auto !important;
-        border-top: 1px solid var(--bsub);
-        padding-top: 10px;
-        margin-top: 10px;
+        padding-right: 10px;
       }
-      .data-card-cols > div:first-child {
-        border-top: none; padding-top: 0; margin-top: 0;
+      .data-card-cols > div:nth-child(2) {
+        flex: 1 1 0 !important;
+        border-left: 1px solid var(--bsub) !important;
+        padding-left: 12px !important;
+      }
+      .data-card-cols > div:nth-child(3) {
+        flex: 0 0 100% !important;
+        border-left: none !important;
+        padding-left: 0 !important;
+        border-top: 1px solid var(--bsub) !important;
+        padding-top: 10px !important;
+        margin-top: 10px !important;
       }
 
       /* ── Graddox: stack columns vertically ── */
@@ -905,8 +922,23 @@ window.GRADDOX_DATA = {
 
       /* ── Header controls: normalize heights, hide db-dot ── */
       #db-dot { display: none; }
-      #ibkr-btn { height: 34px; padding: 0 10px; min-width: 80px; justify-content: center; flex-shrink: 0; }
-      #signout-btn { height: 34px; padding: 0 10px; flex-shrink: 0; }
+      #ibkr-btn {
+        box-sizing: border-box !important;
+        height: 36px !important;
+        padding: 0 12px !important;
+        min-width: 82px;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+      #signout-btn {
+        box-sizing: border-box !important;
+        height: 36px !important;
+        padding: 0 12px !important;
+        margin-left: 0 !important;
+        flex-shrink: 0;
+        display: flex !important;
+        align-items: center !important;
+      }
 
       /* ── Filters: normalize heights ── */
       .filter-input, .filter-select, .filter-clear { height: 40px; }
