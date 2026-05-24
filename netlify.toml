@@ -1,0 +1,11 @@
+[build]
+  command = "cd mobile && npm ci && npm run build:web"
+  publish = "mobile/dist"
+
+[build.environment]
+  EXPO_NO_TELEMETRY = "1"
+
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
