@@ -190,6 +190,35 @@ window.GRADDOX_DATA = {
     }
     .hdr-btn.hidden { display: none !important; }
 
+    /* ── Hamburger menu ── */
+    .hdr-menu-wrap { position: relative; }
+    .hdr-hamburger {
+      display: flex; align-items: center; justify-content: center;
+      width: 32px; height: 32px; padding: 0; flex-shrink: 0;
+      border: 1px solid var(--border); border-radius: 6px;
+      background: var(--surface); color: var(--t2);
+      cursor: pointer; transition: all 0.12s;
+    }
+    .hdr-hamburger:hover { color: var(--text); border-color: var(--t2); }
+    .hdr-menu {
+      display: none;
+      position: absolute; top: calc(100% + 6px); right: 0;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+      min-width: 160px; z-index: 200; overflow: hidden;
+    }
+    .hdr-menu.open { display: block; }
+    .hdr-menu-item {
+      display: flex; align-items: center; gap: 8px;
+      width: 100%; padding: 12px 16px;
+      border: none; background: transparent;
+      color: var(--text); font-size: 13px; font-weight: 500;
+      cursor: pointer; font-family: inherit; text-align: left;
+      transition: background 0.1s;
+    }
+    .hdr-menu-item:hover { background: var(--s2); }
+    .hdr-menu-item.hidden { display: none !important; }
+
     .live-dot {
       width: 6px; height: 6px; border-radius: 50%; background: #16A34A;
     }
@@ -932,8 +961,13 @@ window.GRADDOX_DATA = {
 
       /* ── Header controls: normalize heights, hide db-dot ── */
       #db-dot { display: none; }
-      .hdr-btn { height: 36px; padding: 0 12px; box-sizing: border-box; }
-      #ibkr-btn { min-width: 82px; }
+      /* IBKR: borderless pill on mobile */
+      #ibkr-btn {
+        border: none; background: transparent;
+        padding: 4px 6px; font-size: 13px; min-width: auto;
+      }
+      /* Hamburger: bigger touch target on mobile */
+      .hdr-hamburger { width: 36px; height: 36px; }
 
       /* ── Filters: normalize heights ── */
       .filter-input, .filter-select, .filter-clear { height: 40px; }
@@ -1051,7 +1085,21 @@ window.GRADDOX_DATA = {
       <div id="ibkr-dot" style="width:6px;height:6px;border-radius:50%;background:var(--t3);flex-shrink:0"></div>
       <span id="ibkr-label">IBKR</span>
     </button>
-    <button id="signout-btn" class="hdr-btn hidden" onclick="signOut()">Sign out</button>
+    <div class="hdr-menu-wrap" id="hdr-menu-wrap">
+      <button class="hdr-hamburger" id="hdr-hamburger" onclick="toggleHdrMenu()" aria-label="Menu">
+        <svg width="16" height="12" viewBox="0 0 16 12" fill="none">
+          <rect width="16" height="2" rx="1" fill="currentColor"/>
+          <rect y="5" width="16" height="2" rx="1" fill="currentColor"/>
+          <rect y="10" width="16" height="2" rx="1" fill="currentColor"/>
+        </svg>
+      </button>
+      <div class="hdr-menu" id="hdr-menu">
+        <button id="signout-btn" class="hdr-menu-item hidden" onclick="signOut()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+          Sign out
+        </button>
+      </div>
+    </div>
   </div>
 </header>
 
@@ -1183,7 +1231,18 @@ async function signInWithGoogle() {
   }
 }
 
+function toggleHdrMenu() {
+  document.getElementById('hdr-menu').classList.toggle('open');
+}
+document.addEventListener('click', function(e) {
+  const wrap = document.getElementById('hdr-menu-wrap');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('hdr-menu').classList.remove('open');
+  }
+});
+
 async function signOut() {
+  document.getElementById('hdr-menu').classList.remove('open');
   await db.auth.signOut();
   document.getElementById('auth-gate').style.display = 'flex';
   document.getElementById('signout-btn').classList.add('hidden');
