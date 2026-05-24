@@ -1,0 +1,30 @@
+{
+  "expo": {
+    "name": "STW Companion",
+    "slug": "stw-companion",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "stw-companion",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0a0a0a"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.claudiachez.stwcompanion"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0a0a0a"
+      },
+      "package": "com.claudiachez.stwcompanion"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-web-browser"
+    ]
+  }
+}
