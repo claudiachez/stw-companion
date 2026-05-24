@@ -7,6 +7,9 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
 
   <!-- ═══════════════════════════════════════════════════════
        DATA BLOCK — auto-updated by stw-morning-run / stw-afternoon-run
@@ -92,39 +95,40 @@ window.GRADDOX_DATA = {
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:       #F7F5F1;
-      --surface:  #FFFFFF;
-      --s2:       #F3EFE8;
-      --border:   #E5DDD2;
-      --bsub:     #EDE8DF;
-      --text:     #1C1917;
-      --t2:       #57534E;
-      --t3:       #A8A29E;
+      --bg:       #0a0a0a;
+      --surface:  #111111;
+      --s2:       #1a1a1a;
+      --border:   #2a2a2a;
+      --bsub:     #1f1f1f;
+      --text:     #f0f0f0;
+      --t2:       #a0a0a0;
+      --t3:       #525252;
 
       /* Tier colors */
-      --c5:  #C2410C; --c5bg: #FFF7ED; --c5b: #FED7AA; --c5l: #EA580C;
-      --c4:  #1D4ED8; --c4bg: #EFF6FF; --c4b: #BFDBFE; --c4l: #3B82F6;
-      --c3:  #B45309; --c3bg: #FFFBEB; --c3b: #FDE68A; --c3l: #D97706;
-      --c2:  #6B7280; --c2bg: #F9FAFB; --c2b: #D1D5DB; --c2l: #9CA3AF;
-      --c1:  #B91C1C; --c1bg: #FFF5F5; --c1b: #FECACA; --c1l: #EF4444;
-      --c0:  #71717A; --c0bg: #F4F4F5; --c0b: #D4D4D8; --c0l: #A1A1AA;
+      --c5:  #22c55e; --c5bg: #052e16; --c5b: #166534; --c5l: #4ade80;
+      --c4:  #3b82f6; --c4bg: #0c1a3b; --c4b: #1e3a8a; --c4l: #60a5fa;
+      --c3:  #f59e0b; --c3bg: #2d1a00; --c3b: #78350f; --c3l: #fbbf24;
+      --c2:  #6b7280; --c2bg: #111827; --c2b: #374151; --c2l: #9ca3af;
+      --c1:  #ef4444; --c1bg: #2d0c0c; --c1b: #7f1d1d; --c1l: #f87171;
+      --c0:  #52525b; --c0bg: #0f0f11; --c0b: #27272a; --c0l: #71717a;
 
       /* Action badges */
-      --new:     #15803D; --new-bg:     #DCFCE7;
-      --closed:  #DC2626; --closed-bg:  #FEE2E2;
-      --upsized: #1D4ED8; --upsized-bg: #DBEAFE;
-      --trimmed: #D97706; --trimmed-bg: #FEF3C7;
-      --hold:    #57534E; --hold-bg:    #F3F4F6;
+      --new:     #22c55e; --new-bg:     #052e16;
+      --closed:  #ef4444; --closed-bg:  #2d0c0c;
+      --upsized: #3b82f6; --upsized-bg: #0c1a3b;
+      --trimmed: #f59e0b; --trimmed-bg: #2d1a00;
+      --hold:    #71717a; --hold-bg:    #1a1a1a;
 
-      --acc: #D97040;
+      --acc: #22c55e;
 
       --r: 10px; --rsm: 6px;
-      --shadow: 0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow: 0 1px 3px rgba(0,0,0,0.5), 0 1px 2px rgba(0,0,0,0.4);
     }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
       background: var(--bg);
+      -webkit-font-smoothing: antialiased;
       color: var(--text);
       font-size: 13px;
       line-height: 1.5;
@@ -149,14 +153,15 @@ window.GRADDOX_DATA = {
     }
 
     .logo {
-      display: flex; align-items: center; gap: 7px;
-      font-weight: 600; font-size: 14px; letter-spacing: -0.01em;
+      display: flex; align-items: center; gap: 8px;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-weight: 700; font-size: 16px; letter-spacing: 0.06em; text-transform: uppercase;
       white-space: nowrap;
     }
 
     .logo-mark {
-      width: 20px; height: 20px;
-      background: #D97040;
+      width: 22px; height: 22px;
+      background: #22c55e;
       border-radius: 5px;
       display: flex; align-items: center; justify-content: center;
       flex-shrink: 0;
@@ -174,7 +179,7 @@ window.GRADDOX_DATA = {
       white-space: nowrap;
     }
     .nav-btn:hover { background: var(--s2); color: var(--text); }
-    .nav-btn.on { background: #FDF4EE; color: #D97040; }
+    .nav-btn.on { background: #0d2618; color: #22c55e; }
 
     .hdr-right {
       margin-left: auto; display: flex; align-items: center; gap: 8px;
@@ -281,7 +286,7 @@ window.GRADDOX_DATA = {
     }
 
     .filter-input { width: 160px; }
-    .filter-input:focus, .filter-select:focus { border-color: #D97040; }
+    .filter-input:focus, .filter-select:focus { border-color: #22c55e; }
 
     .filter-clear {
       padding: 5px 10px; border-radius: var(--rsm);
@@ -333,8 +338,8 @@ window.GRADDOX_DATA = {
       position: relative;
     }
 
-    .ticker-row:hover { background: #FAFAF7; }
-    .ticker-row.selected { background: #FDF4EE; }
+    .ticker-row:hover { background: #1a1a1a; }
+    .ticker-row.selected { background: #0d2618; }
 
     .row-rank {
       font-size: 10px; color: var(--t3);
@@ -396,7 +401,7 @@ window.GRADDOX_DATA = {
     .narrow .row-wbar-bg { display: none; }
 
     .row-wbar-fill {
-      height: 3px; border-radius: 2px; background: #D97040;
+      height: 3px; border-radius: 2px; background: #22c55e;
     }
 
     .row-date {
@@ -483,8 +488,9 @@ window.GRADDOX_DATA = {
     }
 
     .detail-sym {
-      font-size: 26px; font-weight: 700;
-      letter-spacing: 0.02em; line-height: 1;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 30px; font-weight: 800;
+      letter-spacing: 0.04em; line-height: 1;
     }
 
     .detail-name {
@@ -571,7 +577,7 @@ window.GRADDOX_DATA = {
       transition: all 0.12s;
     }
     .edit-btn:hover { color: var(--text); border-color: var(--t2); }
-    .edit-btn.active { color: var(--acc); border-color: var(--acc); background: rgba(99,102,241,0.06); }
+    .edit-btn.active { color: var(--acc); border-color: var(--acc); background: rgba(34,197,94,0.08); }
 
     .edit-form {
       background: var(--s2); border: 1px solid var(--border);
@@ -660,9 +666,9 @@ window.GRADDOX_DATA = {
       padding: 2px 8px; border-radius: 4px;
       letter-spacing: 0.02em; flex-shrink: 0;
     }
-    .gx-bias.bullish   { background:#DCFCE7; color:#15803D; }
-    .gx-bias.bearish   { background:#FEE2E2; color:#DC2626; }
-    .gx-bias.flat-down { background:#FEF3C7; color:#B45309; }
+    .gx-bias.bullish   { background:#052e16; color:#22c55e; }
+    .gx-bias.bearish   { background:#2d0c0c; color:#ef4444; }
+    .gx-bias.flat-down { background:#2d1a00; color:#f59e0b; }
     .gx-bias.flat      { background:var(--s2); color:var(--t2); }
     .gx-bias-note { font-size: 11px; color: var(--t2); }
     .gx-upd { margin-left:auto; font-size:11px; color:var(--t3); white-space:nowrap; }
@@ -764,7 +770,7 @@ window.GRADDOX_DATA = {
       font-family: inherit; cursor: pointer; transition: all 0.1s;
     }
     .tf-btn:hover { border-color: var(--t2); color: var(--text); }
-    .tf-btn.on { background: #FDF4EE; color: #D97040; border-color: #D97040; }
+    .tf-btn.on { background: #0d2618; color: #22c55e; border-color: #22c55e; }
 
     /* ══════════════════════════════════════════
        TABLET — 769px–1024px
@@ -1036,7 +1042,7 @@ window.GRADDOX_DATA = {
       .tf-btn { padding: 6px 10px; min-height: 36px; }
 
       /* ── Press feedback ── */
-      .ticker-row:active { background: #F5EDE3; }
+      .ticker-row:active { background: #0d2618; }
       .nav-btn:active    { background: var(--s2); }
     }
   </style>
@@ -1045,14 +1051,14 @@ window.GRADDOX_DATA = {
 <body>
 
 <!-- ── Auth Gate ─────────────────────────────── -->
-<div id="auth-gate" style="display:flex; position:fixed; inset:0; background:#1C1917; z-index:9999; align-items:center; justify-content:center;">
-  <div id="auth-box" style="background:#292524; border:1px solid #44403C; border-radius:16px; padding:48px 40px; text-align:center; max-width:380px; width:90%; box-shadow:0 25px 50px rgba(0,0,0,0.5);">
-    <div style="width:48px;height:48px;background:#C2410C;border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
-      <svg viewBox="0 0 10 10" fill="none" width="22" height="22"><path d="M5 1L9 8H1L5 1Z" fill="white"/></svg>
+<div id="auth-gate" style="display:flex; position:fixed; inset:0; background:#0a0a0a; z-index:9999; align-items:center; justify-content:center;">
+  <div id="auth-box" style="background:#111111; border:1px solid #2a2a2a; border-radius:16px; padding:48px 40px; text-align:center; max-width:380px; width:90%; box-shadow:0 25px 50px rgba(0,0,0,0.7);">
+    <div style="width:48px;height:48px;background:#22c55e;border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+      <svg viewBox="0 0 10 10" fill="none" width="22" height="22"><path d="M5 1L9 8H1L5 1Z" fill="#0a0a0a"/></svg>
     </div>
-    <h2 style="color:#F5F5F4;font-size:18px;font-weight:600;margin:0 0 6px;">STW Companion</h2>
-    <p style="color:#78716C;font-size:13px;margin:0 0 32px;">Private portfolio dashboard</p>
-    <button onclick="signInWithGoogle()" style="width:100%;background:#4F46E5;color:white;border:none;border-radius:8px;padding:11px 20px;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;">
+    <h2 style="color:#f0f0f0;font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;margin:0 0 6px;">STW Companion</h2>
+    <p style="color:#525252;font-size:13px;margin:0 0 32px;">Private portfolio dashboard</p>
+    <button onclick="signInWithGoogle()" style="width:100%;background:#22c55e;color:#0a0a0a;border:none;border-radius:8px;padding:11px 20px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;">
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z" fill="#4285F4"/>
         <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z" fill="#34A853"/>
@@ -1061,7 +1067,7 @@ window.GRADDOX_DATA = {
       </svg>
       Sign in with Google
     </button>
-    <p id="auth-error" style="color:#EF4444;font-size:12px;margin-top:14px;display:none;"></p>
+    <p id="auth-error" style="color:#ef4444;font-size:12px;margin-top:14px;display:none;"></p>
   </div>
 </div>
 
@@ -1251,12 +1257,12 @@ async function signOut() {
 
 function showAuthBox() {
   document.getElementById('auth-box').innerHTML = `
-    <div style="width:48px;height:48px;background:#C2410C;border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
-      <svg viewBox="0 0 10 10" fill="none" width="22" height="22"><path d="M5 1L9 8H1L5 1Z" fill="white"/></svg>
+    <div style="width:48px;height:48px;background:#22c55e;border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+      <svg viewBox="0 0 10 10" fill="none" width="22" height="22"><path d="M5 1L9 8H1L5 1Z" fill="#0a0a0a"/></svg>
     </div>
-    <h2 style="color:#F5F5F4;font-size:18px;font-weight:600;margin:0 0 6px;">STW Companion</h2>
-    <p style="color:#78716C;font-size:13px;margin:0 0 32px;">Private portfolio dashboard</p>
-    <button onclick="signInWithGoogle()" style="width:100%;background:#4F46E5;color:white;border:none;border-radius:8px;padding:11px 20px;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;">
+    <h2 style="color:#f0f0f0;font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;margin:0 0 6px;">STW Companion</h2>
+    <p style="color:#525252;font-size:13px;margin:0 0 32px;">Private portfolio dashboard</p>
+    <button onclick="signInWithGoogle()" style="width:100%;background:#22c55e;color:#0a0a0a;border:none;border-radius:8px;padding:11px 20px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;">
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
         <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z" fill="#4285F4"/>
         <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z" fill="#34A853"/>
@@ -1265,19 +1271,19 @@ function showAuthBox() {
       </svg>
       Sign in with Google
     </button>
-    <p id="auth-error" style="color:#EF4444;font-size:12px;margin-top:14px;display:none;"></p>
+    <p id="auth-error" style="color:#ef4444;font-size:12px;margin-top:14px;display:none;"></p>
   `;
 }
 
 function showUnauthorized(email) {
   document.getElementById('auth-box').innerHTML = `
-    <div style="width:48px;height:48px;background:#B91C1C;border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
+    <div style="width:48px;height:48px;background:#2d0c0c;border-radius:12px;border:1px solid #7f1d1d;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="#ef4444" stroke-width="2" stroke-linecap="round"/></svg>
     </div>
-    <h2 style="color:#F5F5F4;font-size:18px;font-weight:600;margin:0 0 6px;">Access Denied</h2>
-    <p style="color:#78716C;font-size:13px;margin:0 0 6px;">${email}</p>
-    <p style="color:#57534E;font-size:12px;margin:0 0 28px;">This account is not authorized to view this dashboard.</p>
-    <button onclick="db.auth.signOut().then(showAuthBox)" style="width:100%;background:#292524;color:#A8A29E;border:1px solid #44403C;border-radius:8px;padding:10px 20px;font-size:13px;cursor:pointer;">Sign in with a different account</button>
+    <h2 style="color:#f0f0f0;font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;margin:0 0 6px;">Access Denied</h2>
+    <p style="color:#a0a0a0;font-size:13px;margin:0 0 6px;">${email}</p>
+    <p style="color:#525252;font-size:12px;margin:0 0 28px;">This account is not authorized to view this dashboard.</p>
+    <button onclick="db.auth.signOut().then(showAuthBox)" style="width:100%;background:#1a1a1a;color:#a0a0a0;border:1px solid #2a2a2a;border-radius:8px;padding:10px 20px;font-size:13px;cursor:pointer;">Sign in with a different account</button>
   `;
 }
 
@@ -1339,13 +1345,13 @@ const BASKET_COLORS = {
   "Datacenter + AI Infrastructure":"#2563EB",
   "Telecom + Voice AI":           "#D97706",
   "U.S. Chips Supply Chain":      "#DC2626",
-  "Defense":                      "#D97040",
-  "AI Fraud / Verified Identity": "#0891B2",
-  "Nuclear":                      "#CA8A04",
-  "Legacy Positions":             "#A8A29E",
+  "Defense":                      "#a78bfa",
+  "AI Fraud / Verified Identity": "#22d3ee",
+  "Nuclear":                      "#fbbf24",
+  "Legacy Positions":             "#6b7280",
 };
 
-function bColor(b) { return BASKET_COLORS[b] || "#A8A29E"; }
+function bColor(b) { return BASKET_COLORS[b] || "#6b7280"; }
 
 // ── State ────────────────────────────────────────────────
 let selectedTicker = null;
@@ -1964,9 +1970,9 @@ function renderGraddox() {
       levels.gex1         ? { icon:'🟡', price:levels.gex1,         label:'GEX1 / Gamma Flat', sub:'',              badge:null,    current:false } : null,
       levels.put_support  ? { icon:'🟢', price:levels.put_support,  label:'Put Support',        sub:(!isQQQ?'':levels.note||''), badge:null, current:false } : null,
       levels.key_target   ? { icon:'🎯', price:levels.key_target,   label:'Key Target',         sub:'',
-                               badge:`<span class="gx-lvl-badge" style="background:#FFF7ED;color:#D97040;border:1px solid #FED7AA">Today's Target</span>`, current:false } : null,
+                               badge:`<span class="gx-lvl-badge" style="background:#2d1a00;color:#f59e0b;border:1px solid #78350f">Today's Target</span>`, current:false } : null,
       levels.downside_risk? { icon:'⚠️', price:levels.downside_risk,label:'Downside Risk',      sub:'',
-                               badge:`<span class="gx-lvl-badge" style="background:#FEF2F2;color:#B91C1C;border:1px solid #FECACA">Downside Risk</span>`, current:false } : null,
+                               badge:`<span class="gx-lvl-badge" style="background:#2d0c0c;color:#ef4444;border:1px solid #7f1d1d">Downside Risk</span>`, current:false } : null,
       currentPrice        ? { icon:'💲', price:currentPrice,        label:'Current Price',      sub:priceTime||'',   badge:null,    current:true  } : null,
     ].filter(Boolean);
 
@@ -1974,8 +1980,8 @@ function renderGraddox() {
     rows.sort((a, b) => b.price - a.price);
 
     return rows.map(r => {
-      const rowStyle = r.current ? 'background:#FEFCE8;' : '';
-      const priceStyle = r.current ? 'color:#92400E;font-weight:700;' : '';
+      const rowStyle = r.current ? 'background:#0d2618;' : '';
+      const priceStyle = r.current ? 'color:#4ade80;font-weight:700;' : '';
       const fmt = Number.isInteger(r.price) ? r.price.toString() : r.price.toFixed(2);
       return `
         <div class="gx-level-row" style="${rowStyle}">
@@ -2191,13 +2197,13 @@ async function initCharts() {
     const showTime = !['1d','1W'].includes(tf);
     const chart = LightweightCharts.createChart(el, {
       autoSize: true,
-      layout: { background: { type: 'solid', color: '#ffffff' }, textColor: '#78716C' },
+      layout: { background: { type: 'solid', color: '#111111' }, textColor: '#a0a0a0' },
       grid: {
-        vertLines: { color: 'rgba(229,221,210,0.5)' },
-        horzLines: { color: 'rgba(229,221,210,0.5)' },
+        vertLines: { color: 'rgba(42,42,42,0.8)' },
+        horzLines: { color: 'rgba(42,42,42,0.8)' },
       },
-      rightPriceScale: { borderColor: '#E5DDD2' },
-      timeScale: { borderColor: '#E5DDD2', timeVisible: showTime, secondsVisible: false },
+      rightPriceScale: { borderColor: '#2a2a2a' },
+      timeScale: { borderColor: '#2a2a2a', timeVisible: showTime, secondsVisible: false },
       crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
     });
 
