@@ -12,9 +12,9 @@ All HTML, CSS, and JS lives in `docs/index.html`. No build step.
 ## Git Workflow
 1. Create a feature branch from `staging`: `git checkout -b claude/feature-name origin/staging`
 2. Do all work on that branch
-3. Push to the feature branch only: `git push origin claude/feature-name`
-4. Open a PR into `staging` for review
-5. Never push directly to `main` or `staging`
+3. Push feature branch directly to `staging` for Netlify testing: `git push origin claude/feature-name:staging`
+4. When approved, open a PR from `staging` → `main` (production)
+5. Never push directly to `main`
 
 ## Project Structure
 ```
