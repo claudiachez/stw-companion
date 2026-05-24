@@ -171,6 +171,7 @@ window.GRADDOX_DATA = {
       border: none; background: transparent;
       color: var(--t2); font-size: 12px; font-weight: 500;
       cursor: pointer; font-family: inherit; transition: all 0.12s;
+      white-space: nowrap;
     }
     .nav-btn:hover { background: var(--s2); color: var(--text); }
     .nav-btn.on { background: #FDF4EE; color: #D97040; }
@@ -178,6 +179,45 @@ window.GRADDOX_DATA = {
     .hdr-right {
       margin-left: auto; display: flex; align-items: center; gap: 8px;
     }
+
+    .hdr-btn {
+      display: flex; align-items: center; justify-content: center; gap: 5px;
+      padding: 5px 11px; border-radius: 6px;
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--t2); font-size: 12px; font-weight: 500;
+      cursor: pointer; font-family: inherit; transition: all 0.15s;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .hdr-btn.hidden { display: none !important; }
+
+    /* ── Hamburger menu ── */
+    .hdr-menu-wrap { position: relative; }
+    .hdr-hamburger {
+      display: flex; align-items: center; justify-content: center;
+      width: 32px; height: 32px; padding: 0; flex-shrink: 0;
+      border: 1px solid var(--border); border-radius: 6px;
+      background: var(--surface); color: var(--t2);
+      cursor: pointer; transition: all 0.12s;
+    }
+    .hdr-hamburger:hover { color: var(--text); border-color: var(--t2); }
+    .hdr-menu {
+      display: none;
+      position: absolute; top: calc(100% + 6px); right: 0;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+      min-width: 160px; z-index: 200; overflow: hidden;
+    }
+    .hdr-menu.open { display: block; }
+    .hdr-menu-item {
+      display: flex; align-items: center; gap: 8px;
+      width: 100%; padding: 12px 16px;
+      border: none; background: transparent;
+      color: var(--text); font-size: 13px; font-weight: 500;
+      cursor: pointer; font-family: inherit; text-align: left;
+      transition: background 0.1s;
+    }
+    .hdr-menu-item:hover { background: var(--s2); }
+    .hdr-menu-item.hidden { display: none !important; }
 
     .live-dot {
       width: 6px; height: 6px; border-radius: 50%; background: #16A34A;
@@ -419,6 +459,18 @@ window.GRADDOX_DATA = {
       transition: all 0.12s;
     }
     .detail-close:hover { color: var(--text); border-color: var(--t2); }
+    .close-label-mobile { display: none; }
+    .detail-date-mobile { display: none; }
+
+    /* Graddox note toggle — desktop hidden, mobile shown */
+    .gx-note-toggle {
+      display: none;
+      align-items: center; justify-content: center;
+      width: 24px; height: 24px; flex-shrink: 0;
+      border-radius: 4px; border: 1px solid var(--border);
+      background: transparent; color: var(--t3);
+      font-size: 10px; cursor: pointer; font-family: inherit;
+    }
 
     .detail-hdr {
       display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px;
@@ -713,6 +765,280 @@ window.GRADDOX_DATA = {
     }
     .tf-btn:hover { border-color: var(--t2); color: var(--text); }
     .tf-btn.on { background: #FDF4EE; color: #D97040; border-color: #D97040; }
+
+    /* ══════════════════════════════════════════
+       TABLET — 769px–1024px
+    ══════════════════════════════════════════ */
+    @media (max-width: 1024px) {
+      /* Give detail panel more breathing room; list panel narrows accordingly */
+      .list-panel.narrow { flex: 0 0 35%; }
+
+      /* Graddox sidebar: shrink fixed width so right column has more chart space */
+      .gx-left { flex: 0 0 260px; }
+    }
+
+    /* ══════════════════════════════════════════
+       MOBILE — ≤768px
+    ══════════════════════════════════════════ */
+    @media (max-width: 768px) {
+
+      /* ── Header: logo + controls row 1, nav full-width row 2 ── */
+      .hdr {
+        flex-wrap: wrap;
+        height: auto;
+        padding: 10px 14px 8px;
+        gap: 0;
+      }
+      .logo      { order: 1; }
+      .hdr-right { order: 2; margin-left: auto; }
+      .hdr-meta  { display: none; }
+      .nav {
+        order: 3;
+        flex: 0 0 100%;
+        margin-top: 8px;
+        gap: 4px;
+      }
+      .nav-btn {
+        flex: 1;
+        text-align: center;
+        padding: 9px 6px;
+        font-size: 12px;
+        min-height: 40px;
+      }
+
+      /* ── Subheader: collapse legend, horizontal-scroll filters ── */
+      .subhdr { padding: 8px 12px 10px; }
+
+      /* Hide the text legend — the colour bar is enough on mobile */
+      .basket-legend { display: none; }
+
+      /* Filters: single horizontal scrollable strip */
+      .filters {
+        display: flex;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        gap: 6px;
+        padding-bottom: 2px;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+      }
+      .filters::-webkit-scrollbar { display: none; }
+      .filter-input  { flex-shrink: 0; width: 148px; min-height: 38px; font-size: 13px; }
+      .filter-select { flex-shrink: 0; min-width: 130px; min-height: 38px; font-size: 12px; }
+      .filter-clear  { flex-shrink: 0; min-height: 38px; white-space: nowrap; }
+      .filter-count  { flex-shrink: 0; white-space: nowrap; align-self: center; margin-left: 0; }
+
+      /* ── Ticker rows: 2-line vertical card ── */
+      .ticker-row {
+        flex-wrap: wrap;
+        padding: 11px 14px;
+        gap: 0;
+        align-items: flex-start;
+        min-height: 66px;
+      }
+
+      /* Rank: vertically centred in the card */
+      .row-rank { align-self: center; padding-right: 6px; min-width: 22px; }
+
+      /* Bar: stretch full card height */
+      .row-bar  { align-self: stretch; height: auto; min-height: 44px; margin-right: 8px; }
+
+      /* Main (line 1): ticker symbol + basket tag */
+      .row-main { flex: 1; min-width: 0; }
+      .row-sym  { font-size: 15px; font-weight: 800; letter-spacing: 0.02em; }
+
+      /* Always show basket tag; always hide snippet */
+      .row-info                { display: flex !important; margin-top: 3px; }
+      .row-snippet             { display: none  !important; }
+      .narrow .row-info        { display: flex !important; }
+      .narrow .row-snippet     { display: none  !important; }
+      .narrow .row-wbar-bg     { display: none; }
+      .narrow .row-sym         { font-size: 15px; }
+
+      /* Row-right: pushed to a SECOND LINE, full card width */
+      .row-right {
+        flex: 0 0 100%;
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        padding-left: 38px;   /* indent to align with ticker text */
+        margin-top: 7px;
+        gap: 6px;
+      }
+
+      /* Second line: price left · date centre · weight right */
+      .row-price   { order: 1; }
+      .row-date    { order: 2; font-size: 10px; }
+      .row-weight  { order: 3; }
+      .row-price-num { font-size: 13px; font-weight: 700; }
+      .row-price-chg { font-size: 11px; }
+      .row-wnum      { font-size: 12px; font-weight: 600; color: var(--text); }
+      .row-wbar-bg   { display: none; }   /* no mini-bar needed on second line */
+
+      /* ── Detail panel: fixed full-screen overlay ── */
+      .list-panel.narrow { flex: 1; }
+
+      .detail-panel {
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        background: var(--bg);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 0 16px 32px;
+      }
+
+      /* Sticky back bar */
+      .detail-close {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        width: calc(100% + 32px);
+        margin-left: -16px;
+        padding: 14px 16px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        border-left: none; border-right: none; border-top: none;
+        border-radius: 0;
+        font-size: 13px;
+        min-height: 48px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+      }
+
+      /* ── Detail 3-col card: cols 1+2 side by side, col 3 full-width below ── */
+      .data-card-cols {
+        flex-direction: row !important;
+        flex-wrap: wrap !important;
+      }
+      .data-card-cols > div {
+        min-width: auto !important;
+        border-top: none !important;
+        padding-top: 0 !important;
+        margin-top: 0 !important;
+      }
+      .data-card-cols > div:nth-child(1) {
+        flex: 1 1 0 !important;
+        border-left: none !important;
+        padding-left: 0 !important;
+        padding-right: 10px;
+      }
+      .data-card-cols > div:nth-child(2) {
+        flex: 1 1 0 !important;
+        border-left: 1px solid var(--bsub) !important;
+        padding-left: 12px !important;
+      }
+      .data-card-cols > div:nth-child(3) {
+        flex: 0 0 100% !important;
+        border-left: none !important;
+        padding-left: 0 !important;
+        border-top: 1px solid var(--bsub) !important;
+        padding-top: 10px !important;
+        margin-top: 10px !important;
+      }
+
+      /* ── Graddox: stack columns vertically ── */
+      .gx-body  { flex-direction: column; overflow-y: auto; }
+      .gx-left  { flex: none; width: 100%; overflow-y: visible; padding: 10px; }
+      .gx-right { flex: none; width: 100%; overflow-y: visible; padding: 10px; }
+
+      /* Charts: SPY above QQQ */
+      #chart-container {
+        flex-direction: column !important;
+        height: 400px !important;
+      }
+      #chart-spy {
+        flex: 1;
+        border-right: none !important;
+        border-bottom: 1px solid var(--border);
+      }
+      #chart-qqq { flex: 1; }
+
+      /* Graddox subheader */
+      .gx-subhdr { flex-wrap: wrap; gap: 4px 8px; }
+      .gx-upd    { margin-left: 0; width: 100%; }
+
+      /* ── Header controls: normalize heights, hide db-dot ── */
+      #db-dot { display: none; }
+      /* IBKR: borderless pill on mobile */
+      #ibkr-btn {
+        border: none; background: transparent;
+        padding: 4px 6px; font-size: 13px; min-width: auto;
+      }
+      /* Hamburger: bigger touch target on mobile */
+      .hdr-hamburger { width: 36px; height: 36px; }
+
+      /* ── Filters: normalize heights ── */
+      .filter-input, .filter-select, .filter-clear { height: 40px; }
+
+      /* ── Close button: flip label direction ── */
+      .close-label-desktop { display: none; }
+      .close-label-mobile  { display: inline; }
+
+      /* ── Detail badges: hide entire date col (moved above Edit) ── */
+      .detail-badges .meta-label { display: none; }
+      .detail-date-col { display: none; }
+
+      /* ── Date above Edit button ── */
+      .detail-date-mobile { display: block; font-size: 10px; color: var(--t3); text-align: right; margin-bottom: 3px; }
+
+      /* ── Edit form: single column ── */
+      .edit-grid { grid-template-columns: 1fr !important; }
+
+      /* ── Signal table: card layout ── */
+      .gx-sig-wrap { overflow-x: visible; }
+      .gx-sig-table { min-width: auto; width: 100%; }
+      .gx-sig-table thead { display: none; }
+      .gx-sig-table tr { display: block; border: 1px solid var(--border); border-radius: var(--rsm); margin-bottom: 8px; padding: 10px 12px; }
+      .gx-sig-table td { display: block; padding: 3px 0; border: none; font-size: 14px; white-space: normal; word-break: break-word; }
+      .gx-sig-table td::before { content: attr(data-label); font-size: 11px; color: var(--t3); display: block; margin-bottom: 1px; }
+
+      /* ── Hide "SPY & QQQ" chart header label (charts have labels via ::before) ── */
+      .gx-chart-title { display: none; }
+
+      /* ── Legibility: increase key font sizes ── */
+      .row-price-chg { font-size: 13px; }
+      .row-date      { font-size: 12px; }
+      .row-wnum      { font-size: 13px; }
+      .nav-btn       { font-size: 14px; }
+      .gx-lvl-price  { font-size: 17px; }
+      .gx-lvl-label  { font-size: 13px; }
+      .gx-lvl-badge  { font-size: 12px; }
+      .gx-date       { font-size: 14px; }
+      .gx-bias       { font-size: 13px; }
+
+      /* ── Chart labels ── */
+      #chart-spy { position: relative; }
+      #chart-spy::before {
+        content: 'SPY';
+        position: absolute; top: 6px; left: 8px; z-index: 10;
+        font-size: 11px; font-weight: 700; color: var(--t2);
+        background: var(--bg); padding: 1px 5px; border-radius: 3px;
+        pointer-events: none;
+      }
+      #chart-qqq { position: relative; }
+      #chart-qqq::before {
+        content: 'QQQ';
+        position: absolute; top: 6px; left: 8px; z-index: 10;
+        font-size: 11px; font-weight: 700; color: var(--t2);
+        background: var(--bg); padding: 1px 5px; border-radius: 3px;
+        pointer-events: none;
+      }
+
+      /* ── Chart gap ── */
+      #chart-spy { border-bottom: 6px solid var(--border) !important; }
+
+      /* ── Graddox bias note toggle ── */
+      .gx-note-toggle { display: flex; }
+
+      /* ── Touch targets ── */
+      .tf-btn { padding: 6px 10px; min-height: 36px; }
+
+      /* ── Press feedback ── */
+      .ticker-row:active { background: #F5EDE3; }
+      .nav-btn:active    { background: var(--s2); }
+    }
   </style>
 </head>
 
@@ -755,12 +1081,25 @@ window.GRADDOX_DATA = {
     <div class="live-dot" id="db-dot"></div>
     <span class="hdr-meta" id="hdr-meta">–</span>
     <!-- IBKR live P&L indicator -->
-    <button id="ibkr-btn" onclick="fetchIBKR()" title="Connect to IB Gateway for live P&L"
-      style="display:flex;align-items:center;gap:5px;padding:4px 9px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--t2);font-size:11px;font-weight:500;cursor:pointer;font-family:inherit;transition:all 0.15s;">
+    <button id="ibkr-btn" class="hdr-btn" onclick="fetchIBKR()" title="Connect to IB Gateway for live P&L">
       <div id="ibkr-dot" style="width:6px;height:6px;border-radius:50%;background:var(--t3);flex-shrink:0"></div>
       <span id="ibkr-label">IBKR</span>
     </button>
-    <button id="signout-btn" onclick="signOut()" style="display:none; margin-left:10px; padding:4px 10px; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--t2); font-size:12px; cursor:pointer;">Sign out</button>
+    <div class="hdr-menu-wrap" id="hdr-menu-wrap">
+      <button class="hdr-hamburger" id="hdr-hamburger" onclick="toggleHdrMenu()" aria-label="Menu">
+        <svg width="16" height="12" viewBox="0 0 16 12" fill="none">
+          <rect width="16" height="2" rx="1" fill="currentColor"/>
+          <rect y="5" width="16" height="2" rx="1" fill="currentColor"/>
+          <rect y="10" width="16" height="2" rx="1" fill="currentColor"/>
+        </svg>
+      </button>
+      <div class="hdr-menu" id="hdr-menu">
+        <button id="signout-btn" class="hdr-menu-item hidden" onclick="signOut()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+          Sign out
+        </button>
+      </div>
+    </div>
   </div>
 </header>
 
@@ -817,7 +1156,10 @@ window.GRADDOX_DATA = {
   <div class="workspace">
     <div class="list-panel" id="list-panel"></div>
     <div class="detail-panel" id="detail-panel">
-      <button class="detail-close" onclick="closeDetail()">Close →</button>
+      <button class="detail-close" onclick="closeDetail()">
+        <span class="close-label-mobile">← Back</span>
+        <span class="close-label-desktop">Close →</span>
+      </button>
       <div id="detail-content"></div>
     </div>
   </div>
@@ -842,7 +1184,7 @@ window.GRADDOX_DATA = {
       <!-- Charts: filled by initCharts() -->
       <div class="gx-card" style="overflow:hidden;flex-shrink:0;padding:0">
         <div class="gx-card-hdr" style="padding:8px 13px;display:flex;align-items:center;gap:10px">
-          <span>📈 SPY &amp; QQQ</span>
+          <span class="gx-chart-title">📈 SPY &amp; QQQ</span>
           <div style="display:flex;gap:3px" id="tf-btn-group">
             <button class="tf-btn"    onclick="switchTF('5m',this)">5m</button>
             <button class="tf-btn"    onclick="switchTF('15m',this)">15m</button>
@@ -853,7 +1195,7 @@ window.GRADDOX_DATA = {
             <button class="tf-btn"    onclick="switchTF('1W',this)">1W</button>
           </div>
         </div>
-        <div style="display:flex;height:300px">
+        <div id="chart-container" style="display:flex;height:300px">
           <div id="chart-spy" style="flex:1;height:100%;border-right:1px solid var(--border)"></div>
           <div id="chart-qqq" style="flex:1;height:100%"></div>
         </div>
@@ -889,10 +1231,21 @@ async function signInWithGoogle() {
   }
 }
 
+function toggleHdrMenu() {
+  document.getElementById('hdr-menu').classList.toggle('open');
+}
+document.addEventListener('click', function(e) {
+  const wrap = document.getElementById('hdr-menu-wrap');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('hdr-menu').classList.remove('open');
+  }
+});
+
 async function signOut() {
+  document.getElementById('hdr-menu').classList.remove('open');
   await db.auth.signOut();
   document.getElementById('auth-gate').style.display = 'flex';
-  document.getElementById('signout-btn').style.display = 'none';
+  document.getElementById('signout-btn').classList.add('hidden');
   showAuthBox();
 }
 
@@ -935,7 +1288,7 @@ db.auth.onAuthStateChange((event, session) => {
     const email = session.user.email;
     if (AUTHORIZED_EMAILS.includes(email)) {
       document.getElementById('auth-gate').style.display = 'none';
-      document.getElementById('signout-btn').style.display = 'inline-block';
+      document.getElementById('signout-btn').classList.remove('hidden');
       if (!window._dashboardLoaded) {
         window._dashboardLoaded = true;
         init();
@@ -946,7 +1299,7 @@ db.auth.onAuthStateChange((event, session) => {
   } else if (event === 'SIGNED_OUT') {
     window._dashboardLoaded = false;
     document.getElementById('auth-gate').style.display = 'flex';
-    document.getElementById('signout-btn').style.display = 'none';
+    document.getElementById('signout-btn').classList.add('hidden');
     showAuthBox();
   }
 });
@@ -1418,7 +1771,10 @@ function renderDetail(h) {
           <div class="detail-name">${h.name}</div>
         </div>
       </div>
-      <button class="edit-btn${detailEditMode?' active':''}" onclick="toggleEditMode('${h.ticker}')">✎ Edit</button>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+        ${h.action_date ? `<span class="detail-date-mobile">${fmtDate(h.action_date)}</span>` : ''}
+        <button class="edit-btn${detailEditMode?' active':''}" onclick="toggleEditMode('${h.ticker}')">✎ Edit</button>
+      </div>
     </div>
 
     ${editForm}
@@ -1435,7 +1791,7 @@ function renderDetail(h) {
           ${t.short}
         </span>
       </div>
-      <div style="text-align:right;flex-shrink:0">
+      <div class="detail-date-col" style="text-align:right;flex-shrink:0">
         <div class="meta-label">Last Action</div>
         <div style="font-size:12px;font-weight:500;color:var(--t2)">${fmtDate(h.action_date)}</div>
       </div>
@@ -1543,7 +1899,7 @@ function renderDetail(h) {
       })() : '';
 
       return `<div style="margin-bottom:14px;background:var(--s2);border:1px solid var(--bsub);border-radius:var(--rsm);padding:12px 14px;">
-        <div style="display:flex;gap:0;align-items:flex-start">${col1}${col2}${col3}</div>
+        <div class="data-card-cols" style="display:flex;gap:0;align-items:flex-start">${col1}${col2}${col3}</div>
         ${legDetail}
       </div>`;
     })()}
@@ -1668,11 +2024,11 @@ function renderGraddox() {
     const vl = vlbls[s.verdict]||'N/A';
     const tk = sigTicker(s);
     return `<tr data-ticker="${tk}">
-      <td><div class="gx-sig-trade">${s.trade}</div></td>
-      <td style="color:var(--t2);font-size:11px">${s.trigger}</td>
-      <td style="color:var(--t2);font-size:11px;white-space:nowrap">${s.exp}</td>
-      <td><div class="gx-sig-logic">${s.logic}</div></td>
-      <td><div class="gx-verdict"><span class="gx-vdot" style="background:${vc}"></span><span style="color:${vc}">${vl}</span></div></td>
+      <td data-label="Trade"><div class="gx-sig-trade">${s.trade}</div></td>
+      <td data-label="Trigger" style="color:var(--t2);font-size:11px">${s.trigger}</td>
+      <td data-label="Exp" style="color:var(--t2);font-size:11px">${s.exp}</td>
+      <td data-label="Logic (GEX)"><div class="gx-sig-logic">${s.logic}</div></td>
+      <td data-label="Verdict"><div class="gx-verdict"><span class="gx-vdot" style="background:${vc}"></span><span style="color:${vc}">${vl}</span></div></td>
     </tr>`;
   }).join('');
 
@@ -1687,7 +2043,7 @@ function renderGraddox() {
     <div class="gx-subhdr">
       <span class="gx-date">${dateStr}</span>
       <span class="gx-bias ${bm.cls}">${bm.label}</span>
-      ${gx.bias_note ? `<span class="gx-bias-note">${gx.bias_note}</span>` : ''}
+      ${gx.bias_note ? `<span id="gx-note-text" class="gx-bias-note">${gx.bias_note}</span><button class="gx-note-toggle" onclick="(function(){var n=document.getElementById('gx-note-text');var b=document.querySelector('.gx-note-toggle');if(n.style.display==='none'){n.style.display='';b.textContent='▲';}else{n.style.display='none';b.textContent='▼';}})()" >▲</button>` : ''}
       <span class="gx-upd">Updated ${updStr}</span>
     </div>`;
 
