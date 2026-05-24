@@ -1045,6 +1045,49 @@ window.GRADDOX_DATA = {
       .ticker-row:active { background: #0d2618; }
       .nav-btn:active    { background: var(--s2); }
     }
+
+    /* ══════════════════════════════════════════
+       LIGHT THEME
+    ══════════════════════════════════════════ */
+    [data-theme="light"] {
+      --bg:       #f5faf5;
+      --surface:  #ffffff;
+      --s2:       #edf6ed;
+      --border:   #cce5cc;
+      --bsub:     #e0f0e0;
+      --text:     #0a0a0a;
+      --t2:       #2d4a2d;
+      --t3:       #6b916b;
+
+      --c5:  #16a34a; --c5bg: #dcfce7; --c5b: #86efac; --c5l: #15803d;
+      --c4:  #2563eb; --c4bg: #dbeafe; --c4b: #93c5fd; --c4l: #1d4ed8;
+      --c3:  #d97706; --c3bg: #fef3c7; --c3b: #fcd34d; --c3l: #b45309;
+      --c2:  #4b5563; --c2bg: #f3f4f6; --c2b: #d1d5db; --c2l: #6b7280;
+      --c1:  #dc2626; --c1bg: #fee2e2; --c1b: #fca5a5; --c1l: #b91c1c;
+      --c0:  #52525b; --c0bg: #f4f4f5; --c0b: #d4d4d8; --c0l: #71717a;
+
+      --new:     #15803d; --new-bg:     #dcfce7;
+      --closed:  #dc2626; --closed-bg:  #fee2e2;
+      --upsized: #1d4ed8; --upsized-bg: #dbeafe;
+      --trimmed: #d97706; --trimmed-bg: #fef3c7;
+      --hold:    #4b5563; --hold-bg:    #f3f4f6;
+
+      --acc: #16a34a;
+      --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.05);
+    }
+
+    [data-theme="light"] .nav-btn.on          { background: #dcfce7; color: #15803d; }
+    [data-theme="light"] .ticker-row:hover    { background: #edf6ed; }
+    [data-theme="light"] .ticker-row.selected { background: #dcfce7; }
+    [data-theme="light"] .ticker-row:active   { background: #dcfce7; }
+    [data-theme="light"] .tf-btn.on           { background: #dcfce7; color: #15803d; border-color: #16a34a; }
+    [data-theme="light"] .row-wbar-fill       { background: #16a34a; }
+    [data-theme="light"] .edit-btn.active     { color: #16a34a; border-color: #16a34a; background: rgba(22,163,74,0.08); }
+    [data-theme="light"] .filter-input:focus,
+    [data-theme="light"] .filter-select:focus { border-color: #16a34a; }
+    [data-theme="light"] .gx-bias.bullish     { background: #dcfce7; color: #15803d; }
+    [data-theme="light"] .gx-bias.bearish     { background: #fee2e2; color: #dc2626; }
+    [data-theme="light"] .gx-bias.flat-down   { background: #fef3c7; color: #b45309; }
   </style>
 </head>
 
@@ -1141,6 +1184,10 @@ window.GRADDOX_DATA = {
         </svg>
       </button>
       <div class="hdr-menu" id="hdr-menu">
+        <button id="theme-btn" class="hdr-menu-item" onclick="toggleTheme()">
+          <svg id="theme-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          <span id="theme-label">Light Mode</span>
+        </button>
         <button id="signout-btn" class="hdr-menu-item hidden" onclick="signOut()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
           Sign out
@@ -1280,6 +1327,38 @@ async function signInWithGoogle() {
 
 function toggleHdrMenu() {
   document.getElementById('hdr-menu').classList.toggle('open');
+}
+
+// ── Theme ─────────────────────────────────────────────────
+const MOON_SVG = `<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>`;
+const SUN_SVG  = `<path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>`;
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  const isLight = theme === 'light';
+  const icon  = document.getElementById('theme-icon');
+  const label = document.getElementById('theme-label');
+  if (icon)  icon.innerHTML  = isLight ? SUN_SVG : MOON_SVG;
+  if (label) label.textContent = isLight ? 'Dark Mode' : 'Light Mode';
+  // Re-theme charts if they exist
+  const chartOpts = isLight
+    ? { layout: { background: { type: 'solid', color: '#ffffff' }, textColor: '#2d4a2d' },
+        grid: { vertLines: { color: 'rgba(204,229,204,0.8)' }, horzLines: { color: 'rgba(204,229,204,0.8)' } },
+        rightPriceScale: { borderColor: '#cce5cc' },
+        timeScale: { borderColor: '#cce5cc' } }
+    : { layout: { background: { type: 'solid', color: '#111111' }, textColor: '#a0a0a0' },
+        grid: { vertLines: { color: 'rgba(42,42,42,0.8)' }, horzLines: { color: 'rgba(42,42,42,0.8)' } },
+        rightPriceScale: { borderColor: '#2a2a2a' },
+        timeScale: { borderColor: '#2a2a2a' } };
+  Object.values(_lwCharts).forEach(c => { try { c.applyOptions(chartOpts); } catch(e){} });
+}
+
+function toggleTheme() {
+  document.getElementById('hdr-menu').classList.remove('open');
+  const current = document.documentElement.getAttribute('data-theme') || 'dark';
+  const next = current === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('stwTheme', next);
+  applyTheme(next);
 }
 document.addEventListener('click', function(e) {
   const wrap = document.getElementById('hdr-menu-wrap');
@@ -2539,6 +2618,7 @@ function renderAll() {
 }
 
 async function init() {
+  applyTheme(localStorage.getItem('stwTheme') || 'dark');
   const meta = document.getElementById('hdr-meta');
   const dot  = document.getElementById('db-dot');
   meta.textContent = 'Connecting…';
