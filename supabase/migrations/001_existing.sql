@@ -1,0 +1,6 @@
+-- Documentation of existing tables (already created, do not re-run)
+-- holdings: rank, ticker (pk), name, conviction, basket, last_action,
+--           action_date, initial_weight, current_weight, position_detail,
+--           summary, bullets (jsonb), updated_at
+-- graddox:  id (pk), date, last_updated, bias, bias_note, spx (jsonb),
+--           qqq (jsonb), signals (jsonb), log (jsonb)
