@@ -2,8 +2,8 @@
 
 ## Ground Rules
 - If instructions seem to conflict, **always ask before doing anything**
-- Never force-push or reset `admin-staging`, `admin-main`, `mobile-staging`, or `mobile-main`
-- Never push to `admin-main` or `mobile-main` without explicit approval — those are production
+- Never force-push or reset `admin-staging`, `admin-main`, `web-staging`, or `web-main`
+- Never push to `admin-main` or `web-main` without explicit approval — those are production
 
 ---
 
@@ -12,7 +12,7 @@
 | App | Audience | Folder | Staging URL | Production URL |
 |---|---|---|---|---|
 | Admin dashboard | STW editor | `admin/` | `stw-admin-staging.netlify.app` | `stw-admin.netlify.app` |
-| Mobile web app | Subscribers | `mobile/` | `stw-mobile-staging.netlify.app` | `stw-mobile.netlify.app` |
+| Subscriber web app | Subscribers | `web/` | `stw-app-staging.netlify.app` | `stw-app.netlify.app` |
 
 Changes to one app never affect the other. Each has its own Netlify site, staging branch, and production branch.
 
@@ -26,18 +26,47 @@ admin/
   ibkr_proxy.py           — IBKR local proxy (admin use only)
   migrate.js              — data migration helper
   requirements-ibkr.txt
-mobile/
-  app/                    — screens and routes (expo-router)
-  components/             — shared UI components
-  lib/                    — supabase client, theme, types
-  store/                  — Zustand auth store
-  assets/                 — icon and images
-  app.json  package.json  babel.config.js  metro.config.js
-  tailwind.config.js  tsconfig.json  global.css
+web/                      — subscriber web app (React + Vite + TypeScript)
+  index.html
+  vite.config.ts
+  tsconfig.json
+  package.json
+  tailwind.config.ts
+  postcss.config.js
+  .env.example
+  src/
+    main.tsx
+    App.tsx
+    index.css
+    lib/
+      supabase.ts         — Supabase client (anon key, env vars)
+      query-client.ts     — TanStack QueryClient
+    store/
+      auth.ts             — Zustand: session, user, isLoading
+    features/
+      auth/               — LoginPage, AuthGuard, useSession
+      picks/              — PicksPage, api, useHoldings, useFilters, components
+      signals/            — SignalsPage, api, useGraddox, components
+    shared/
+      components/         — Layout, LoadingSpinner, EmptyState
+      hooks/              — useTierAccess, useLivePrice
+    pages/
+      ProfilePage.tsx
+packages/
+  shared/                 — canonical TypeScript types + constants (shared package)
+    src/
+      types/              — Holding, GraddoxData, Profile, Tier
+      constants/          — TIERS, BASKET_COLORS
+      utils/              — format.ts, options.ts
+supabase/
+  migrations/
+    001_existing.sql      — document existing holdings + graddox tables
+    002_user_access.sql   — tiers + profiles tables with RLS + trigger
 plans/
-  mobile-transition.md    — architecture decisions and phased roadmap
+  clean-architecture.md   — architecture decisions and phased roadmap
 CLAUDE.md                 — this file (common)
-netlify.toml              — Netlify build config for mobile only
+netlify.toml              — Netlify build config for subscriber web app
+pnpm-workspace.yaml       — pnpm monorepo config
 .gitignore
 ```
 
@@ -49,12 +78,12 @@ netlify.toml              — Netlify build config for mobile only
 |---|---|---|
 | `admin-main` | `admin/` + root | Netlify "STW Admin" — prod |
 | `admin-staging` | `admin/` + root | Netlify "STW Admin" — staging |
-| `mobile-main` | `mobile/` + root | Netlify "STW Mobile" — prod |
-| `mobile-staging` | `mobile/` + root | Netlify "STW Mobile" — staging |
+| `web-main` | `web/` + root | Netlify "STW App" — prod |
+| `web-staging` | `web/` + root | Netlify "STW App" — staging |
 
 Feature branches:
 - `claude/admin-*` → branch from `admin-staging` → PR to `admin-staging` → PR to `admin-main`
-- `claude/mobile-*` → branch from `mobile-staging` → PR to `mobile-staging` → PR to `mobile-main`
+- `claude/web-*` → branch from `web-staging` → PR to `web-staging` → PR to `web-main`
 
 ---
 
@@ -68,12 +97,12 @@ git push -u origin claude/admin-my-feature
 # PR → admin-staging for review, then admin-staging → admin-main when approved
 ```
 
-### Mobile changes
+### Web app changes
 ```bash
-git checkout -b claude/mobile-my-feature origin/mobile-staging
-# make changes inside mobile/ only
-git push -u origin claude/mobile-my-feature
-# PR → mobile-staging for review, then mobile-staging → mobile-main when approved
+git checkout -b claude/web-my-feature origin/web-staging
+# make changes inside web/ only
+git push -u origin claude/web-my-feature
+# PR → web-staging for review, then web-staging → web-main when approved
 ```
 
 ---
@@ -86,18 +115,21 @@ git push -u origin claude/mobile-my-feature
 - Staging: auto-deploys on push to `admin-staging`
 - Production: auto-deploys on push to `admin-main` (requires approval)
 
+### Tabs
+- **STW Stock Picks** — inline-editable holdings table (rank, ticker, name, conviction, basket, status, date, weight, price, position detail)
+- **Users** — manage subscriber profiles (approve/reject, change tier); reads `profiles` table
+- **Permissions** — define which modules each tier unlocks; reads/writes `tiers` table
+
 ### Code Rules
-- Do not change any JS logic, data structures, or API calls
-- Do not restructure the HTML
-- Do not rename or remove CSS classes/IDs — only change property values
-- Portfolio data lives in `<script id="stw-data-block">` — do not edit manually
+- Static HTML/JS/CSS — no build step, no framework
+- All Supabase access uses the **anon key** + RLS (admin full access granted via `auth.email() = 'cc@claudiachez.com'`)
+- Never put the service role key in admin/index.html
 
 ### Theme System
 - **Default:** Dark mode
 - **Toggle:** Hamburger menu → sun/moon icon switches between Light and Dark Mode
 - Theme persisted to `localStorage` (`stwTheme` key), restored on `init()`
 - Light theme applied via `[data-theme="light"]` on `<html>`
-- Charts (LightweightCharts) re-themed live via `chart.applyOptions()` on toggle
 - Do not hardcode colors outside of `:root` or `[data-theme="light"]` — always use CSS variables
 
 ### Design System
@@ -130,61 +162,62 @@ git push -u origin claude/mobile-my-feature
 
 ---
 
-## Mobile App (`mobile/`)
+## Subscriber Web App (`web/`)
 
 ### Deployment
-- Built with Expo for web; served by Netlify
-- Netlify "STW Mobile": publish dir = `mobile/dist`, build = `cd mobile && npm ci && npm run build:web`
-- Staging: auto-deploys on push to `mobile-staging`
-- Production: auto-deploys on push to `mobile-main` (requires approval)
+- Built with Vite; served by Netlify
+- Netlify "STW App": base = `web`, build = `npm ci && npm run build`, publish = `web/dist`
+- Staging: auto-deploys on push to `web-staging`
+- Production: auto-deploys on push to `web-main` (requires approval)
 
 ### Running locally
 ```bash
-cd mobile
-npx expo start          # scan QR with Expo Go on your phone
+cd web
+cp .env.example .env      # fill in Supabase + Finnhub keys
+npm install
+npm run dev               # http://localhost:5173
 ```
 
-### Building for web locally
+### Building locally
 ```bash
-cd mobile
-EXPO_NO_TELEMETRY=1 EXPO_OFFLINE=1 npm run build:web   # outputs to mobile/dist
-npx serve dist                                          # preview at localhost:3000
+cd web
+npm run build             # outputs to web/dist
+npm run preview           # preview at localhost:4173
 ```
-`EXPO_OFFLINE=1` is needed in this cloud environment. Remove it on a local machine.
 
 ### Key Constraints
-- All npm commands must `cd mobile` first — `package.json` lives inside `mobile/`
-- `metro.config.js` must NOT use `withNativeWind` — crashes on Node 20+ with TS stripping error
-- `mobile/dist/` is gitignored — built by Netlify, never committed
+- `web/dist/` is gitignored — built by Netlify, never committed
+- All env vars must be prefixed `VITE_` to be exposed to the browser
+- Supabase anon key only — never a service role key in web/
 
 ### Auth (Supabase)
 - Supabase project: `usmqbohcjcyszjxxvnqu.supabase.co`
-- Credentials in `mobile/lib/supabase.ts`
-- **Web:** `localStorage` + `detectSessionInUrl: true` (PKCE auto-exchanged on redirect)
-- **Native:** `AsyncStorage` + manual code exchange via `WebBrowser`
-- Google OAuth on web does a full-page redirect — add each Netlify URL to Supabase Auth → URL Configuration → Redirect URLs
+- Credentials via `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` env vars
+- `detectSessionInUrl: true` — PKCE auto-exchanged on OAuth redirect
+- Google OAuth does a full-page redirect — add each Netlify URL to Supabase Auth → URL Configuration → Redirect URLs
 
-### Routes (expo-router)
+### Routes (React Router v6)
 ```
-app/index.tsx             — root route; auth guard in _layout.tsx handles redirect
-app/_layout.tsx           — root layout; redirects to login or picks based on session
-app/(auth)/login.tsx      — login screen (email + Google OAuth)
-app/(tabs)/_layout.tsx    — tab bar (Picks, Signals, Profile, Settings)
-app/(tabs)/picks.tsx
-app/(tabs)/signals.tsx
-app/(tabs)/profile.tsx
-app/(tabs)/settings.tsx
-app/pick/[ticker].tsx     — individual pick detail screen
+/login        — LoginPage (email + Google OAuth)
+/picks        — PicksPage (gated: approved users only, all tiers)
+/signals      — SignalsPage (gated: basic/premium tier)
+/profile      — ProfilePage (shows status + subscription tier)
 ```
 
 ### Tech Stack
 | Concern | Choice |
 |---|---|
-| Framework | Expo (React Native) + TypeScript |
-| Navigation | expo-router (file-based) |
-| Styling | NativeWind v4 (Tailwind for RN) |
-| Backend | Supabase (extend existing) |
+| Framework | React 18 + TypeScript |
+| Build | Vite |
+| Navigation | React Router v6 |
+| Styling | Tailwind CSS v3 |
+| Server state | TanStack Query v5 |
+| UI state | Zustand v5 |
+| Backend | Supabase JS v2 |
 | Auth | Supabase Auth + Google OAuth |
-| State | Zustand + TanStack Query |
-| Subscriptions | RevenueCat (Phase 3) |
-| Broker | Alpaca OAuth (Phase 4) |
+| Live prices | Finnhub WebSocket (VITE_FINNHUB_KEY) |
+
+### Tier Access
+- `useTierAccess(module)` hook checks `profiles.status === 'approved'` and `tiers.modules.includes(module)`
+- Tiers defined in Supabase `tiers` table (managed by admin Permissions tab)
+- Default tiers: `free` → picks only; `basic` → picks + signals; `premium` → picks + signals + portfolio + journal

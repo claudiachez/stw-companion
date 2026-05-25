@@ -2,3 +2,7 @@
 data/
 node_modules/
 *.log
+web/dist/
+web/.env
+.env
+
