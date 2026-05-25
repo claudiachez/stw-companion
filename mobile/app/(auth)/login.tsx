@@ -64,40 +64,51 @@ export default function LoginScreen() {
     setGoogleLoading(true)
     setError(null)
     try {
-      const redirectUrl = Linking.createURL('auth/callback')
-      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: redirectUrl,
-          skipBrowserRedirect: true,
-        },
-      })
-
-      if (oauthError || !data?.url) {
-        setError(oauthError?.message ?? 'Could not start Google sign-in.')
-        return
-      }
-
-      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl)
-
-      if (result.type === 'success' && result.url) {
-        const parsedUrl = Linking.parse(result.url)
-        const code = parsedUrl.queryParams?.['code'] as string | undefined
-
-        if (code) {
-          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
-          if (exchangeError) {
-            setError(exchangeError.message)
-          }
-        } else {
-          setError('Authentication failed. Please try again.')
+      if (Platform.OS === 'web') {
+        // Full-page redirect: Google → back to origin → Supabase detects code in URL
+        const origin = typeof window !== 'undefined' ? window.location.origin : ''
+        const { error: oauthError } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: { redirectTo: origin },
+        })
+        if (oauthError) {
+          setError(oauthError.message)
+          setGoogleLoading(false)
         }
-      } else if (result.type === 'cancel') {
-        // User cancelled — no error shown
+        // On success the page navigates away — no cleanup needed
+      } else {
+        // Native: in-app browser with deep link callback
+        const redirectUrl = Linking.createURL('auth/callback')
+        const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: redirectUrl,
+            skipBrowserRedirect: true,
+          },
+        })
+
+        if (oauthError || !data?.url) {
+          setError(oauthError?.message ?? 'Could not start Google sign-in.')
+          setGoogleLoading(false)
+          return
+        }
+
+        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl)
+
+        if (result.type === 'success' && result.url) {
+          const parsedUrl = Linking.parse(result.url)
+          const code = parsedUrl.queryParams?.['code'] as string | undefined
+          if (code) {
+            const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+            if (exchangeError) setError(exchangeError.message)
+          } else {
+            setError('Authentication failed. Please try again.')
+          }
+        }
+        setGoogleLoading(false)
       }
     } catch {
       setError('An unexpected error occurred. Please try again.')
-    } finally {
       setGoogleLoading(false)
     }
   }

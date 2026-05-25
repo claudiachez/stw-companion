@@ -1,17 +1,20 @@
 import 'react-native-url-polyfill/auto'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { createClient } from '@supabase/supabase-js'
+import { Platform } from 'react-native'
 import { Holding, GraddoxData, Profile } from './types'
 
 const SUPABASE_URL = 'https://usmqbohcjcyszjxxvnqu.supabase.co'
 const SUPABASE_ANON_KEY = 'sb_publishable_aPliJhMtRvi3kUST45VeTA_4rIjNfrR'
 
+// On web: use localStorage (default) and detect OAuth code in URL.
+// On native: use AsyncStorage and handle the code exchange manually.
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
-    storage: AsyncStorage,
+    storage: Platform.OS === 'web' ? undefined : AsyncStorage,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false,
+    detectSessionInUrl: Platform.OS === 'web',
     flowType: 'pkce',
   },
 })
