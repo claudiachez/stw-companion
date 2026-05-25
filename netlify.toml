@@ -1,3 +1,6 @@
+# Mobile app — used by Netlify Site "STW Mobile"
+# Admin app — Netlify Site "STW Admin" uses publish dir "admin", no build command
+
 [build]
   command = "cd mobile && npm ci && npm run build:web"
   publish = "mobile/dist"
@@ -10,11 +13,11 @@
   to     = "/index.html"
   status = 200
 
-[context.staging]
+[context.mobile-main]
+  command = "cd mobile && npm ci && npm run build:web"
+
+[context.mobile-staging]
   command = "cd mobile && npm ci && npm run build:web"
 
 [context.deploy-preview]
   command = "cd mobile && npm ci && npm run build:web"
-
-[context.production]
-  command = "echo 'Production deploys disabled'"
