@@ -9,3 +9,12 @@
   from   = "/*"
   to     = "/index.html"
   status = 200
+
+[context.staging]
+  command = "cd mobile && npm ci && npm run build:web"
+
+[context.deploy-preview]
+  command = "cd mobile && npm ci && npm run build:web"
+
+[context.production]
+  command = "echo 'Production deploys disabled'"

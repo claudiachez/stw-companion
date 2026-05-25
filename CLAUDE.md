@@ -5,21 +5,25 @@ Single-file portfolio dashboard for Stock Talk Weekly (@stocktalkweekly).
 All HTML, CSS, and JS lives in `docs/index.html`. No build step.
 
 ## Deployment
-- **Live URL:** https://stw-companion.netlify.app
-- Netlify auto-deploys from the `staging` branch
-- `main` is production — only updated via PR from `staging`
+- **Staging URL:** https://staging--stwcompanion.netlify.app
+- **Production URL:** https://stwcompanion.netlify.app (locked — do not touch)
+- Netlify auto-deploys from the `staging` branch to the staging URL
+- `main` is production — Netlify's production branch is set to a nonexistent branch so it never auto-deploys
+- Feature branches get temporary Deploy Preview URLs via PRs
 
 ## Git Workflow
 1. Create a feature branch from `staging`: `git checkout -b claude/feature-name origin/staging`
-2. Do all work on that branch
-3. Push feature branch directly to `staging` for Netlify testing: `git push origin claude/feature-name:staging`
+2. Do all work on that branch — push only to the feature branch during iteration
+3. To test on Netlify staging: push to staging once the work is ready: `git push origin claude/feature-name:staging`
 4. Also push to the remote feature branch to keep it in sync: `git push origin claude/feature-name`
-5. When approved, open a PR from `staging` → `main` (production)
+5. Do NOT push to staging on every commit — only when you want a staging deploy
 6. Never push directly to `main`
 
 ## Project Structure
 ```
-docs/index.html   — entire app (HTML + CSS + JS, all inline)
+docs/index.html   — web admin dashboard (HTML + CSS + JS, all inline)
+mobile/           — Expo React Native app (iOS, Android, web)
+netlify.toml      — Netlify build config (serves mobile web export)
 CLAUDE.md         — this file
 ```
 
