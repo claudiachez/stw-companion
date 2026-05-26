@@ -155,9 +155,15 @@ window.GRADDOX_DATA = {
 
     .logo {
       display: flex; align-items: center; gap: 8px;
-      font-family: 'Barlow Condensed', sans-serif;
-      font-weight: 700; font-size: 16px; letter-spacing: 0.06em; text-transform: uppercase;
+      font-weight: 700; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--text);
       white-space: nowrap;
+    }
+    .logo-admin-badge {
+      font-size: 9px; font-weight: 600; letter-spacing: 0.1em;
+      padding: 2px 5px; border-radius: 3px;
+      background: var(--acc); color: #000;
+      margin-left: 2px; text-transform: uppercase;
     }
 
     .logo-mark {
@@ -1161,7 +1167,7 @@ window.GRADDOX_DATA = {
         <line x1="35" y1="50" x2="51" y2="50" stroke="#aaaaaa" stroke-width="0.9"/>
       </svg>
     </div>
-    STW Companion
+    STW Companion<span class="logo-admin-badge">Admin</span>
   </div>
   <nav class="nav">
     <button class="nav-btn on" onclick="showModule('stw',this)">STW Stock Picks</button>
