@@ -1806,6 +1806,7 @@ async function commitEdit(ticker) {
   const iw   = document.getElementById('edit-initial-weight')?.value;
   const wt   = document.getElementById('edit-current-weight')?.value;
   const pos  = document.getElementById('edit-position-detail')?.value;
+  const lp   = document.getElementById('edit-last-price')?.value;
 
   const updates = {};
   if (conv !== '' && conv !== undefined) updates.conviction      = Number(conv);
@@ -1814,6 +1815,10 @@ async function commitEdit(ticker) {
   if (iw   !== '')                       updates.initial_weight  = iw ? parseFloat(iw) : null;
   if (wt   !== '' && wt   !== undefined) updates.current_weight  = parseFloat(wt);
   if (pos  !== undefined)                updates.position_detail = pos.trim() || null;
+  if (lp   !== '' && lp   !== undefined) {
+    updates.last_price    = lp ? parseFloat(lp) : null;
+    updates.last_price_at = lp ? new Date().toISOString() : null;
+  }
 
   // Optimistic update
   Object.assign(h, updates);
@@ -1889,6 +1894,10 @@ function renderDetail(h) {
         <div class="edit-row">
           <label class="edit-label">Current Weight %</label>
           <input id="edit-current-weight" type="number" step="0.1" min="0" class="edit-input" value="${h.current_weight!=null?h.current_weight:''}">
+        </div>
+        <div class="edit-row">
+          <label class="edit-label">Last Price $</label>
+          <input id="edit-last-price" type="number" step="0.01" min="0" class="edit-input" value="${h.last_price!=null?h.last_price:''}" placeholder="—">
         </div>
         <div class="edit-row full">
           <label class="edit-label">Position Detail</label>

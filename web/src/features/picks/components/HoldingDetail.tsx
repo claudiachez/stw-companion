@@ -30,13 +30,19 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
   const action = ACTION_VARS[h.last_action];
   const basketColor = bColor(h.basket);
 
-  // Live market col
-  const price = quote?.c;
+  // Live market col — Finnhub first, fall back to last_price stored by admin
+  const livePrice = quote?.c ?? null;
+  const price = livePrice ?? h.last_price ?? null;
+  const isLive = livePrice != null;
+
   const dpStr = quote?.dp != null ? `${quote.dp >= 0 ? '+' : ''}${quote.dp.toFixed(2)}%` : null;
   const dpColor = (quote?.dp ?? 0) >= 0 ? '#16A34A' : '#DC2626';
   const hiloStr = (quote?.h && quote?.l) ? `H $${quote.h.toFixed(2)} · L $${quote.l.toFixed(2)}` : null;
   const srcTime = quote?.t
     ? new Date(quote.t * 1000).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', ...ET })
+    : null;
+  const lastPriceDate = h.last_price_at
+    ? new Date(h.last_price_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...ET })
     : null;
 
   // P&L col
@@ -131,16 +137,20 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
                 {/* Row 1: Live Market + P&L side by side */}
                 <div style={{ display: 'flex', gap: 0 }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>Live Market</div>
+                    <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>
+                      {isLive ? 'Live Market' : 'Last Price'}
+                    </div>
                     {price ? (
                       <>
                         <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
                           ${price.toFixed(2)}
                         </div>
-                        {dpStr && <div style={{ fontSize: 11, fontWeight: 600, color: dpColor, marginTop: 2 }}>{dpStr}</div>}
-                        {hiloStr && <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 1 }}>{hiloStr}</div>}
+                        {isLive && dpStr && <div style={{ fontSize: 11, fontWeight: 600, color: dpColor, marginTop: 2 }}>{dpStr}</div>}
+                        {isLive && hiloStr && <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 1 }}>{hiloStr}</div>}
                         <div style={{ fontSize: 9, color: 'var(--t3)', marginTop: 4, opacity: 0.8 }}>
-                          {srcTime ? `Finnhub · ${srcTime}` : 'Finnhub'}
+                          {isLive
+                            ? (srcTime ? `Finnhub · ${srcTime}` : 'Finnhub')
+                            : (lastPriceDate ? `Last sync · ${lastPriceDate}` : 'Last sync')}
                         </div>
                       </>
                     ) : (
@@ -186,16 +196,20 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
               /* Desktop layout: 3 equal columns */
               <div style={{ display: 'flex', gap: 0, alignItems: 'flex-start' }}>
                 <div style={{ flex: 1, minWidth: 90 }}>
-                  <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>Live Market</div>
+                  <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>
+                    {isLive ? 'Live Market' : 'Last Price'}
+                  </div>
                   {price ? (
                     <>
                       <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
                         ${price.toFixed(2)}
                       </div>
-                      {dpStr && <div style={{ fontSize: 11, fontWeight: 600, color: dpColor, marginTop: 2 }}>{dpStr} today</div>}
-                      {hiloStr && <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 1 }}>{hiloStr}</div>}
+                      {isLive && dpStr && <div style={{ fontSize: 11, fontWeight: 600, color: dpColor, marginTop: 2 }}>{dpStr} today</div>}
+                      {isLive && hiloStr && <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 1 }}>{hiloStr}</div>}
                       <div style={{ fontSize: 9, color: 'var(--t3)', marginTop: 4, opacity: 0.8 }}>
-                        {srcTime ? `Finnhub · ${srcTime}` : 'Finnhub'}
+                        {isLive
+                          ? (srcTime ? `Finnhub · ${srcTime}` : 'Finnhub')
+                          : (lastPriceDate ? `Last sync · ${lastPriceDate}` : 'Last sync')}
                       </div>
                     </>
                   ) : (

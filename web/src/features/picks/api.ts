@@ -14,6 +14,8 @@ export interface Holding {
   summary: string | null;
   bullets: string[] | null;
   updated_at: string | null;
+  last_price: number | null;
+  last_price_at: string | null;
 }
 
 export async function fetchHoldings(): Promise<Holding[]> {
