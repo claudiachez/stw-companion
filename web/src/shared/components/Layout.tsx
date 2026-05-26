@@ -60,18 +60,26 @@ function MenuIcon() {
   );
 }
 
-// ── STW mic logo ─────────────────────────────────────────────
+// ── STW logo (mic + green arrow) ─────────────────────────────
 function STWLogo() {
   return (
-    <svg width="26" height="26" viewBox="0 0 32 32" fill="none">
-      <rect width="32" height="32" rx="7" fill="#0d1f0d" />
-      {/* Mic body */}
-      <rect x="10" y="4" width="12" height="16" rx="6" stroke="#22c55e" strokeWidth="2" />
-      {/* Mic stand arc */}
-      <path d="M6 15 Q6 26 16 26 Q26 26 26 15" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" fill="none" />
-      {/* Stand + base */}
-      <line x1="16" y1="26" x2="16" y2="29" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" />
-      <line x1="11" y1="29" x2="21" y2="29" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" />
+    <svg width="30" height="30" viewBox="0 0 90 90" fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* Green arrow: lower-left to upper-right (behind mic) */}
+      <line x1="8" y1="80" x2="58" y2="18" stroke="#22c55e" strokeWidth="6" strokeLinecap="round"/>
+      <polyline points="53,12 68,10 66,25" stroke="#22c55e" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round"/>
+      {/* Mic base + stand */}
+      <line x1="31" y1="78" x2="55" y2="78" stroke="#c8c8c8" strokeWidth="3.5" strokeLinecap="round"/>
+      <line x1="43" y1="68" x2="43" y2="78" stroke="#c8c8c8" strokeWidth="3" strokeLinecap="round"/>
+      <path d="M27 56 Q27 68 43 68 Q59 68 59 56" stroke="#c8c8c8" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
+      {/* Mic capsule */}
+      <rect x="33" y="16" width="20" height="42" rx="10" fill="#e2e2e2"/>
+      <rect x="33" y="16" width="20" height="42" rx="10" fill="none" stroke="#b4b4b4" strokeWidth="1.5"/>
+      {/* Grille lines */}
+      <line x1="35" y1="26" x2="51" y2="26" stroke="#aaaaaa" strokeWidth="0.9"/>
+      <line x1="35" y1="32" x2="51" y2="32" stroke="#aaaaaa" strokeWidth="0.9"/>
+      <line x1="35" y1="38" x2="51" y2="38" stroke="#aaaaaa" strokeWidth="0.9"/>
+      <line x1="35" y1="44" x2="51" y2="44" stroke="#aaaaaa" strokeWidth="0.9"/>
+      <line x1="35" y1="50" x2="51" y2="50" stroke="#aaaaaa" strokeWidth="0.9"/>
     </svg>
   );
 }
@@ -190,13 +198,13 @@ export function Layout() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1, minWidth: 0 }}>
           <STWLogo />
           <span style={{
-            fontWeight: 800, fontSize: 13, letterSpacing: '0.1em',
+            fontWeight: 700, fontSize: 13, letterSpacing: '0.06em',
             color: 'var(--text)', textTransform: 'uppercase',
             marginLeft: 6, marginRight: 10, flexShrink: 0,
           }}
             className="hidden sm:block"
           >
-            STW
+            STW Companion
           </span>
 
           {/* Separator */}
