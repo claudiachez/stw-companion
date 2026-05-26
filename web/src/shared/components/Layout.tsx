@@ -124,8 +124,8 @@ function IbkrBadge() {
 
 // ── Nav ──────────────────────────────────────────────────────
 const NAV = [
-  { to: '/picks',   label: 'Stock Picks' },
-  { to: '/signals', label: 'GEX Signals' },
+  { to: '/picks',   label: 'Stock Picks', short: 'Picks'   },
+  { to: '/signals', label: 'GEX Signals', short: 'Signals' },
 ];
 
 // ── Layout ───────────────────────────────────────────────────
@@ -188,7 +188,7 @@ export function Layout() {
 
           {/* Nav tabs */}
           <nav style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            {NAV.map(({ to, label }) => (
+            {NAV.map(({ to, label, short }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -202,6 +202,9 @@ export function Layout() {
                   background: isActive ? 'var(--s2)' : 'none',
                   transition: 'color 0.15s, background 0.15s',
                   whiteSpace: 'nowrap',
+                  minHeight: 36,
+                  display: 'flex',
+                  alignItems: 'center',
                 })}
                 onMouseEnter={(e) => {
                   const el = e.currentTarget as HTMLElement;
@@ -210,12 +213,13 @@ export function Layout() {
                 }}
                 onMouseLeave={(e) => {
                   const el = e.currentTarget as HTMLElement;
-                  const isActive = el.getAttribute('aria-current') === 'page';
-                  el.style.color = isActive ? 'var(--acc)' : 'var(--t2)';
-                  el.style.background = isActive ? 'var(--s2)' : 'none';
+                  const active = el.getAttribute('aria-current') === 'page';
+                  el.style.color = active ? 'var(--acc)' : 'var(--t2)';
+                  el.style.background = active ? 'var(--s2)' : 'none';
                 }}
               >
-                {label}
+                <span className="hidden sm:inline">{label}</span>
+                <span className="sm:hidden">{short}</span>
               </NavLink>
             ))}
           </nav>
@@ -228,8 +232,9 @@ export function Layout() {
           <div ref={menuRef} style={{ position: 'relative' }}>
             <button
               onClick={() => setMenuOpen((v) => !v)}
+              className="hdr-btn"
               style={{
-                width: 32, height: 32,
+                width: 36, height: 36,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 borderRadius: 6, border: '1px solid var(--border)',
                 background: menuOpen ? 'var(--s2)' : 'none',

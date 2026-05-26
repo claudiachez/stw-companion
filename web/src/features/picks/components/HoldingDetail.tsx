@@ -14,9 +14,10 @@ interface Props {
   holding: Holding;
   totalCount: number;
   onClose: () => void;
+  isMobile?: boolean;
 }
 
-export function HoldingDetail({ holding: h, totalCount, onClose }: Props) {
+export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = false }: Props) {
   const quote = useQuote(h.ticker);
   const tier = TIERS[h.conviction] ?? TIERS[0];
   const action = ACTION_VARS[h.last_action];
@@ -31,7 +32,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose }: Props) {
     ? new Date(quote.t * 1000).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', ...ET })
     : null;
 
-  // P&L col (shares only for subscribers — no IBKR)
+  // P&L col
   const cost = parseCostBasis(h.position_detail);
   const pnlPct = cost && price ? (price - cost) / cost * 100 : null;
   const pnlColor = pnlPct != null ? (pnlPct >= 0 ? '#16A34A' : '#DC2626') : undefined;
@@ -49,18 +50,29 @@ export function HoldingDetail({ holding: h, totalCount, onClose }: Props) {
 
   return (
     <div style={{ height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-      {/* Close button */}
-      <div style={{ padding: '10px 16px 0', display: 'flex', justifyContent: 'flex-end' }}>
+      {/* Back / Close button */}
+      <div style={{
+        padding: '10px 16px 0',
+        display: 'flex',
+        justifyContent: isMobile ? 'flex-start' : 'flex-end',
+      }}>
         <button
           onClick={onClose}
           style={{
-            fontSize: 11, color: 'var(--t3)', background: 'none', border: 'none',
-            cursor: 'pointer', padding: '4px 8px',
+            fontSize: 12,
+            color: 'var(--t3)',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: isMobile ? '8px 0' : '4px 8px',
+            minHeight: isMobile ? 44 : 'auto',
+            display: 'flex',
+            alignItems: 'center',
           }}
-          onMouseEnter={(e) => ((e.target as HTMLElement).style.color = 'var(--text)')}
-          onMouseLeave={(e) => ((e.target as HTMLElement).style.color = 'var(--t3)')}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--text)'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--t3)'; }}
         >
-          Close →
+          {isMobile ? '← Back' : 'Close →'}
         </button>
       </div>
 
@@ -68,13 +80,15 @@ export function HoldingDetail({ holding: h, totalCount, onClose }: Props) {
         {/* Header: ticker + name */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
           <div style={{ width: 4, height: 44, borderRadius: 2, background: tier.color, flexShrink: 0, marginTop: 2 }} />
-          <div>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 26, fontWeight: 700, color: tier.color, lineHeight: 1.1 }}>{h.ticker}</div>
             <div style={{ fontSize: 12, color: 'var(--t2)', marginTop: 1 }}>{h.name}</div>
           </div>
           {h.action_date && (
-            <div style={{ marginLeft: 'auto', textAlign: 'right', flexShrink: 0 }}>
-              <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Last Action</div>
+            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+              <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                {isMobile ? '' : 'Last Action'}
+              </div>
               <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--t2)' }}>{fmtDate(h.action_date)}</div>
             </div>
           )}
@@ -82,87 +96,139 @@ export function HoldingDetail({ holding: h, totalCount, onClose }: Props) {
 
         {/* Badges row */}
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
-          {/* Basket tag */}
           <span style={{
             fontSize: 10, padding: '2px 6px', borderRadius: 4,
             background: basketColor + '18', color: basketColor, border: `1px solid ${basketColor}28`,
           }}>
             ● {h.basket}
           </span>
-          {/* Action badge */}
           {action && (
             <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4, color: action.color, background: action.bg }}>
               {h.last_action}
             </span>
           )}
-          {/* Rank */}
           <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, color: 'var(--t2)', background: 'var(--s2)', border: '1px solid var(--bsub)' }}>
             Rank #{String(h.rank).padStart(2, '0')} / {totalCount}
           </span>
-          {/* Tier chip */}
           <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4, color: tier.color, background: tier.bg, border: `1px solid ${tier.border}` }}>
             {tier.short}
           </span>
         </div>
 
-        {/* 3-column data card */}
+        {/* Data card — mobile: 2-col top row + full-width bottom; desktop: 3-col */}
         {h.ticker !== 'CASH' && (
           <div style={{ background: 'var(--s2)', border: '1px solid var(--bsub)', borderRadius: 6, padding: '10px 12px', marginBottom: 12 }}>
-            <div style={{ display: 'flex', gap: 0, alignItems: 'flex-start' }}>
+            {isMobile ? (
+              /* Mobile layout */
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {/* Row 1: Live Market + P&L side by side */}
+                <div style={{ display: 'flex', gap: 0 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>Live Market</div>
+                    {price ? (
+                      <>
+                        <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
+                          ${price.toFixed(2)}
+                        </div>
+                        {dpStr && <div style={{ fontSize: 11, fontWeight: 600, color: dpColor, marginTop: 2 }}>{dpStr}</div>}
+                        {hiloStr && <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 1 }}>{hiloStr}</div>}
+                        <div style={{ fontSize: 9, color: 'var(--t3)', marginTop: 4, opacity: 0.8 }}>
+                          {srcTime ? `Finnhub · ${srcTime}` : 'Finnhub'}
+                        </div>
+                      </>
+                    ) : (
+                      <div style={{ fontSize: 13, color: 'var(--t3)' }}>—</div>
+                    )}
+                  </div>
 
-              {/* Col 1: Live Market */}
-              <div style={{ flex: 1, minWidth: 90 }}>
-                <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>Live Market</div>
-                {price ? (
-                  <>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
-                      ${price.toFixed(2)}
+                  <div style={{ flex: 1, borderLeft: '1px solid var(--border)', paddingLeft: 12 }}>
+                    <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>
+                      {pnlPct != null ? 'Open P&L' : 'Open P&L'}
                     </div>
-                    {dpStr && <div style={{ fontSize: 11, fontWeight: 600, color: dpColor, marginTop: 2 }}>{dpStr} today</div>}
-                    {hiloStr && <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 1 }}>{hiloStr}</div>}
-                    <div style={{ fontSize: 9, color: 'var(--t3)', marginTop: 4, opacity: 0.8 }}>
-                      {srcTime ? `Finnhub · ${srcTime}` : 'Finnhub'}
-                    </div>
-                  </>
-                ) : (
-                  <div style={{ fontSize: 13, color: 'var(--t3)' }}>—</div>
-                )}
-              </div>
-
-              {/* Col 2: Open P&L */}
-              <div style={{ flex: 1, minWidth: 90, borderLeft: '1px solid var(--border)', paddingLeft: 12 }}>
-                <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>
-                  {pnlPct != null ? 'Open P&L (Shares)' : 'Open P&L'}
+                    {pnlPct != null ? (
+                      <>
+                        <div style={{ fontSize: 20, fontWeight: 700, color: pnlColor, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
+                          {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%
+                        </div>
+                        <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>
+                          from ${cost!.toFixed(2)}
+                        </div>
+                      </>
+                    ) : (
+                      <div style={{ fontSize: 13, color: 'var(--t3)' }}>—</div>
+                    )}
+                  </div>
                 </div>
-                {pnlPct != null ? (
-                  <>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: pnlColor, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
-                      {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%
-                    </div>
-                    <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>
-                      from ${cost!.toFixed(2)}
-                    </div>
-                  </>
-                ) : (
-                  <div style={{ fontSize: 13, color: 'var(--t3)' }}>—</div>
-                )}
-              </div>
 
-              {/* Col 3: Entry → Weight */}
-              <div style={{ flex: 1, minWidth: 90, borderLeft: '1px solid var(--border)', paddingLeft: 12 }}>
-                <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>Entry · Current Weight</div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
-                  {h.initial_weight != null ? `${h.initial_weight.toFixed(1)}%` : '—'}
-                  <span style={{ color: 'var(--t3)', fontWeight: 400, margin: '0 4px' }}>→</span>
-                  {h.current_weight != null ? `${h.current_weight.toFixed(1)}%` : '—'}
+                {/* Row 2: Entry → Weight full width */}
+                <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+                  <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>Entry · Current Weight</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
+                    {h.initial_weight != null ? `${h.initial_weight.toFixed(1)}%` : '—'}
+                    <span style={{ color: 'var(--t3)', fontWeight: 400, margin: '0 4px' }}>→</span>
+                    {h.current_weight != null ? `${h.current_weight.toFixed(1)}%` : '—'}
+                  </div>
+                  {h.position_detail ? (
+                    <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 4, lineHeight: 1.5 }}>{h.position_detail}</div>
+                  ) : (
+                    <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 4 }}>detail pending</div>
+                  )}
                 </div>
-                {h.position_detail ? (
-                  <div style={{ fontSize: 10, color: 'var(--t2)', marginTop: 4, lineHeight: 1.5 }}>{h.position_detail}</div>
-                ) : (
-                  <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 4 }}>detail pending</div>
-                )}
               </div>
-            </div>
+            ) : (
+              /* Desktop layout: 3 equal columns */
+              <div style={{ display: 'flex', gap: 0, alignItems: 'flex-start' }}>
+                <div style={{ flex: 1, minWidth: 90 }}>
+                  <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>Live Market</div>
+                  {price ? (
+                    <>
+                      <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
+                        ${price.toFixed(2)}
+                      </div>
+                      {dpStr && <div style={{ fontSize: 11, fontWeight: 600, color: dpColor, marginTop: 2 }}>{dpStr} today</div>}
+                      {hiloStr && <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 1 }}>{hiloStr}</div>}
+                      <div style={{ fontSize: 9, color: 'var(--t3)', marginTop: 4, opacity: 0.8 }}>
+                        {srcTime ? `Finnhub · ${srcTime}` : 'Finnhub'}
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ fontSize: 13, color: 'var(--t3)' }}>—</div>
+                  )}
+                </div>
+
+                <div style={{ flex: 1, minWidth: 90, borderLeft: '1px solid var(--border)', paddingLeft: 12 }}>
+                  <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>
+                    {pnlPct != null ? 'Open P&L (Shares)' : 'Open P&L'}
+                  </div>
+                  {pnlPct != null ? (
+                    <>
+                      <div style={{ fontSize: 20, fontWeight: 700, color: pnlColor, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
+                        {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%
+                      </div>
+                      <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>
+                        from ${cost!.toFixed(2)}
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ fontSize: 13, color: 'var(--t3)' }}>—</div>
+                  )}
+                </div>
+
+                <div style={{ flex: 1, minWidth: 90, borderLeft: '1px solid var(--border)', paddingLeft: 12 }}>
+                  <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>Entry · Current Weight</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
+                    {h.initial_weight != null ? `${h.initial_weight.toFixed(1)}%` : '—'}
+                    <span style={{ color: 'var(--t3)', fontWeight: 400, margin: '0 4px' }}>→</span>
+                    {h.current_weight != null ? `${h.current_weight.toFixed(1)}%` : '—'}
+                  </div>
+                  {h.position_detail ? (
+                    <div style={{ fontSize: 10, color: 'var(--t2)', marginTop: 4, lineHeight: 1.5 }}>{h.position_detail}</div>
+                  ) : (
+                    <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 4 }}>detail pending</div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -186,10 +252,10 @@ export function HoldingDetail({ holding: h, totalCount, onClose }: Props) {
         {h.bullets && h.bullets.length > 0 && (
           <div>
             <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Key Points from Stream</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {h.bullets.map((b, i) => (
-                <div key={i} style={{ display: 'flex', gap: 6, fontSize: 12, color: 'var(--t2)' }}>
-                  <span style={{ color: tier.color, flexShrink: 0 }}>◆</span>
+                <div key={i} style={{ display: 'flex', gap: 8, fontSize: 13, color: 'var(--t2)', lineHeight: 1.5 }}>
+                  <span style={{ color: tier.color, flexShrink: 0, marginTop: 2 }}>◆</span>
                   <span>{b}</span>
                 </div>
               ))}

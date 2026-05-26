@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useHoldings } from './useHoldings';
 import { useFiltersStore, applyFilters, sortFlat } from './useFilters';
 import { FilterBar } from './components/FilterBar';
@@ -8,8 +8,8 @@ import { LoadingSpinner } from '../../shared/components/LoadingSpinner';
 import { EmptyState } from '../../shared/components/EmptyState';
 import { TIERS, bColor, positionType, parseCostBasis } from './constants';
 import { usePriceCacheStore } from '../../store/priceCache';
+import { useIsMobile } from '../../shared/hooks/useIsMobile';
 import type { Holding } from './api';
-import { useState } from 'react';
 
 const FINNHUB_KEY = import.meta.env.VITE_FINNHUB_KEY as string | undefined;
 
@@ -139,6 +139,7 @@ export function PicksPage() {
   const filters = useFiltersStore();
   const setPrice = usePriceCacheStore((s) => s.setPrice);
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     if (!FINNHUB_KEY || holdings.length === 0) return;
@@ -206,6 +207,32 @@ export function PicksPage() {
         />
       ));
 
+  // ── Mobile: full-screen list ↔ detail (no side-by-side) ─────
+  if (isMobile) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+        <FilterBar holdings={holdings} filtered={filtered.length} />
+        {selected ? (
+          <div style={{ flex: 1, overflow: 'hidden', background: 'var(--bg)' }}>
+            <HoldingDetail
+              holding={selected}
+              totalCount={holdings.length}
+              onClose={() => setSelectedTicker(null)}
+              isMobile
+            />
+          </div>
+        ) : (
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            {sorted.length === 0
+              ? <EmptyState message="No positions match your filters." />
+              : listContent}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── Desktop: split panel ──────────────────────────────────────
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <FilterBar holdings={holdings} filtered={filtered.length} />
