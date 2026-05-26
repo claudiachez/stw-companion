@@ -1,8 +1,14 @@
 import type { Holding } from '../api';
 import { TIERS, ACTION_VARS, bColor, parseCostBasis } from '../constants';
 import { useQuote } from '../../../shared/hooks/useLivePrice';
+import { usePriceCacheStore } from '../../../store/priceCache';
 
 const ET = { timeZone: 'America/New_York' };
+
+function PriceEmptyState({ fetchStatus }: { fetchStatus: string }) {
+  if (fetchStatus === 'fetching') return <div style={{ fontSize: 12, color: 'var(--t3)', fontStyle: 'italic' }}>Loading…</div>;
+  return <div style={{ fontSize: 12, color: 'var(--t3)' }}>Unavailable</div>;
+}
 
 function fmtDate(s: string | null): string {
   if (!s) return '–';
@@ -19,6 +25,7 @@ interface Props {
 
 export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = false }: Props) {
   const quote = useQuote(h.ticker);
+  const fetchStatus = usePriceCacheStore((s) => s.fetchStatus);
   const tier = TIERS[h.conviction] ?? TIERS[0];
   const action = ACTION_VARS[h.last_action];
   const basketColor = bColor(h.basket);
@@ -137,13 +144,13 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
                         </div>
                       </>
                     ) : (
-                      <div style={{ fontSize: 13, color: 'var(--t3)' }}>—</div>
+                      <PriceEmptyState fetchStatus={fetchStatus} />
                     )}
                   </div>
 
                   <div style={{ flex: 1, borderLeft: '1px solid var(--border)', paddingLeft: 12 }}>
                     <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>
-                      {pnlPct != null ? 'Open P&L' : 'Open P&L'}
+                      Open P&L
                     </div>
                     {pnlPct != null ? (
                       <>
@@ -155,7 +162,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
                         </div>
                       </>
                     ) : (
-                      <div style={{ fontSize: 13, color: 'var(--t3)' }}>—</div>
+                      <PriceEmptyState fetchStatus={fetchStatus} />
                     )}
                   </div>
                 </div>
@@ -192,13 +199,13 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
                       </div>
                     </>
                   ) : (
-                    <div style={{ fontSize: 13, color: 'var(--t3)' }}>—</div>
+                    <PriceEmptyState fetchStatus={fetchStatus} />
                   )}
                 </div>
 
                 <div style={{ flex: 1, minWidth: 90, borderLeft: '1px solid var(--border)', paddingLeft: 12 }}>
                   <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>
-                    {pnlPct != null ? 'Open P&L (Shares)' : 'Open P&L'}
+                    Open P&L (Shares)
                   </div>
                   {pnlPct != null ? (
                     <>
@@ -210,7 +217,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
                       </div>
                     </>
                   ) : (
-                    <div style={{ fontSize: 13, color: 'var(--t3)' }}>—</div>
+                    <PriceEmptyState fetchStatus={fetchStatus} />
                   )}
                 </div>
 

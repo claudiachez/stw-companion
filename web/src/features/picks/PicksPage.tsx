@@ -149,6 +149,7 @@ export function PicksPage() {
   const { data: holdings = [], isLoading, error } = useHoldings();
   const filters = useFiltersStore();
   const setPrice = usePriceCacheStore((s) => s.setPrice);
+  const setFetchStatus = usePriceCacheStore((s) => s.setFetchStatus);
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
   const [mobileView, setMobileView] = useState<'list' | 'overview'>('list');
   const isMobile = useIsMobile();
@@ -156,13 +157,27 @@ export function PicksPage() {
   useEffect(() => {
     if (!FINNHUB_KEY || holdings.length === 0) return;
     const tickers = holdings.map((h) => h.ticker).filter((t) => t !== 'CASH');
-    tickers.forEach((ticker) => {
-      fetch(`https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${FINNHUB_KEY}`)
-        .then((r) => r.json())
-        .then((d) => { if (d.c) setPrice(ticker, d); })
-        .catch(() => {});
+    setFetchStatus('fetching');
+    let completed = 0;
+    const total = tickers.length;
+
+    tickers.forEach((ticker, i) => {
+      // Stagger 120ms apart — keeps burst well under Finnhub's free-tier 60/min limit
+      setTimeout(() => {
+        fetch(`https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${FINNHUB_KEY}`)
+          .then((r) => r.json())
+          .then((d) => {
+            if (d.c) setPrice(ticker, d);
+            else if (d.error) console.warn(`Finnhub [${ticker}]:`, d.error);
+          })
+          .catch((err) => console.error(`Finnhub fetch failed [${ticker}]:`, err))
+          .finally(() => {
+            completed++;
+            if (completed === total) setFetchStatus('done');
+          });
+      }, i * 120);
     });
-  }, [holdings.length, setPrice]);
+  }, [holdings.length, setPrice, setFetchStatus]);
 
   if (isLoading) return <LoadingSpinner className="mt-16" />;
   if (error) return <EmptyState message="Failed to load holdings." />;
