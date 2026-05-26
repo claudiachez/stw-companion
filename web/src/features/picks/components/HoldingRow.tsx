@@ -1,71 +1,100 @@
 import type { Holding } from '../api';
-import { ConvictionBadge } from './ConvictionBadge';
-import { useLivePrice } from '../../../shared/hooks/useLivePrice';
+import { TIERS, ACTION_VARS, bColor, parseCostBasis } from '../constants';
+import { useQuote } from '../../../shared/hooks/useLivePrice';
 
-const BASKET_COLORS: Record<string, string> = {
-  'Robotics & Edge AI': '#7C3AED',
-  'Power Infrastructure': '#16A34A',
-  'Data Center': '#2563EB',
-  'Telecom & Voice AI': '#D97706',
-  'Chips': '#DC2626',
-  'Defense': '#a78bfa',
-  'Other': '#6b7280',
-};
-
-const ACTION_COLORS: Record<string, string> = {
-  New: '#22c55e',
-  Upsized: '#3b82f6',
-  Hold: '#6b7280',
-  Trimmed: '#f59e0b',
-  Closed: '#ef4444',
-};
+function fmtDate(s: string | null): string {
+  if (!s) return '–';
+  const d = new Date(s + 'T12:00:00');
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
+}
 
 interface Props {
   holding: Holding;
   isSelected: boolean;
+  maxWeight: number;
   onClick: () => void;
 }
 
-export function HoldingRow({ holding: h, isSelected, onClick }: Props) {
-  const livePrice = useLivePrice(h.ticker);
-  const basketColor = BASKET_COLORS[h.basket] ?? '#6b7280';
-  const actionColor = ACTION_COLORS[h.last_action] ?? '#6b7280';
+export function HoldingRow({ holding: h, isSelected, maxWeight, onClick }: Props) {
+  const quote = useQuote(h.ticker);
+  const tier = TIERS[h.conviction] ?? TIERS[0];
+  const basketColor = bColor(h.basket);
+  const action = ACTION_VARS[h.last_action];
+
+  const cost = parseCostBasis(h.position_detail);
+  const pnlPct = cost && quote?.c ? (quote.c - cost) / cost * 100 : null;
+  const pnlColor = pnlPct != null ? (pnlPct >= 0 ? '#16A34A' : '#DC2626') : undefined;
+
+  const w = h.current_weight ?? h.initial_weight ?? 0;
+  const wPct = maxWeight > 0 ? (w / maxWeight) * 100 : 0;
 
   return (
     <button
       onClick={onClick}
-      className={`w-full text-left px-4 py-3 border-b border-bsub hover:bg-s2 transition-colors flex items-center gap-3 ${
-        isSelected ? 'bg-s2 border-l-2 border-l-acc' : ''
-      }`}
+      className="w-full text-left flex items-center gap-2 border-b transition-colors"
+      style={{
+        padding: '10px 14px',
+        borderColor: 'var(--bsub)',
+        background: isSelected ? 'var(--c5bg)' : undefined,
+      }}
+      onMouseEnter={(e) => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
+      onMouseLeave={(e) => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = ''; }}
     >
-      <span className="text-t3 text-xs w-5 text-right shrink-0">{h.rank}</span>
+      {/* Rank */}
+      <span style={{ color: 'var(--t3)', fontSize: 10, minWidth: 16, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+        {h.rank}
+      </span>
 
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="font-bold text-text text-sm">{h.ticker}</span>
-          <span
-            className="w-2 h-2 rounded-full shrink-0"
-            style={{ background: basketColor }}
-            title={h.basket}
-          />
-          <span
-            className="text-xs font-medium shrink-0"
-            style={{ color: actionColor }}
-          >
-            {h.last_action}
+      {/* Tier color bar */}
+      <div style={{ width: 3, height: 32, borderRadius: 2, flexShrink: 0, background: tier.color }} />
+
+      {/* Main content */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 1 }}>
+          <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text)' }}>{h.ticker}</span>
+          {/* Basket tag */}
+          <span style={{
+            fontSize: 10, padding: '1px 5px', borderRadius: 4,
+            background: basketColor + '18', color: basketColor, border: `1px solid ${basketColor}28`,
+          }}>
+            {h.basket}
           </span>
+          {/* Action badge */}
+          {action && (
+            <span style={{
+              fontSize: 10, fontWeight: 600, padding: '1px 5px', borderRadius: 4,
+              color: action.color, background: action.bg,
+            }}>
+              {h.last_action}
+            </span>
+          )}
         </div>
-        <div className="text-t2 text-xs truncate">{h.name}</div>
+        <div style={{ fontSize: 11, color: 'var(--t2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {h.name}
+        </div>
       </div>
 
-      <div className="flex flex-col items-end gap-0.5 shrink-0">
-        <ConvictionBadge level={h.conviction} />
-        {livePrice !== null && (
-          <span className="text-xs text-t2">${livePrice.toFixed(2)}</span>
+      {/* Right side: weight bar + P&L + weight */}
+      <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, minWidth: 60 }}>
+        {/* Weight bar */}
+        <div style={{ width: 48, height: 3, borderRadius: 2, background: 'var(--border)' }}>
+          <div style={{ width: `${wPct}%`, height: '100%', borderRadius: 2, background: tier.color }} />
+        </div>
+
+        {pnlPct != null && (
+          <span style={{ fontSize: 11, fontWeight: 600, color: pnlColor, fontVariantNumeric: 'tabular-nums' }}>
+            {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%
+          </span>
         )}
-        {h.current_weight != null && (
-          <span className="text-xs text-t3">{h.current_weight.toFixed(1)}%</span>
+        {quote?.c != null && (
+          <span style={{ fontSize: 10, color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>
+            ${quote.c.toFixed(2)}
+          </span>
         )}
+        {!quote && w > 0 && (
+          <span style={{ fontSize: 10, color: 'var(--t3)' }}>{w.toFixed(1)}%</span>
+        )}
+        <span style={{ fontSize: 9, color: 'var(--t3)' }}>{fmtDate(h.action_date)}</span>
       </div>
     </button>
   );
