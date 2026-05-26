@@ -12,6 +12,19 @@ import { useIsMobile } from '../../shared/hooks/useIsMobile';
 import type { Holding } from './api';
 
 const FINNHUB_KEY = import.meta.env.VITE_FINNHUB_KEY as string | undefined;
+const PRICE_CACHE_KEY = 'finnhub_prices';
+const PRICE_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
+
+import type { Quote } from '../../store/priceCache';
+type PriceEntry = { data: Quote; ts: number };
+type LocalPriceCache = Record<string, PriceEntry>;
+
+function loadLocalPrices(): LocalPriceCache {
+  try { return JSON.parse(localStorage.getItem(PRICE_CACHE_KEY) ?? '{}'); } catch { return {}; }
+}
+function saveLocalPrices(c: LocalPriceCache) {
+  try { localStorage.setItem(PRICE_CACHE_KEY, JSON.stringify(c)); } catch { /* storage full */ }
+}
 
 const ET = { timeZone: 'America/New_York' };
 
@@ -156,26 +169,45 @@ export function PicksPage() {
 
   useEffect(() => {
     if (!FINNHUB_KEY || holdings.length === 0) return;
+
     const tickers = holdings.map((h) => h.ticker).filter((t) => t !== 'CASH');
+    const now = Date.now();
+    const local = loadLocalPrices();
+
+    // Seed Zustand from cache immediately — UI shows prices before any fetch
+    tickers.forEach((ticker) => {
+      const entry = local[ticker];
+      if (entry && now - entry.ts < PRICE_CACHE_TTL) setPrice(ticker, entry.data);
+    });
+
+    // Only fetch tickers whose cache has expired or is missing
+    const stale = tickers.filter((t) => {
+      const e = local[t];
+      return !e || now - e.ts >= PRICE_CACHE_TTL;
+    });
+
+    if (stale.length === 0) { setFetchStatus('done'); return; }
+
     setFetchStatus('fetching');
     let completed = 0;
-    const total = tickers.length;
 
-    tickers.forEach((ticker, i) => {
-      // Stagger 120ms apart — keeps burst well under Finnhub's free-tier 60/min limit
+    stale.forEach((ticker, i) => {
+      // 1 100ms stagger → ~54 req/min, safely under Finnhub free-tier 60/min
       setTimeout(() => {
         fetch(`https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${FINNHUB_KEY}`)
           .then((r) => r.json())
           .then((d) => {
-            if (d.c) setPrice(ticker, d);
-            else if (d.error) console.warn(`Finnhub [${ticker}]:`, d.error);
+            if (d.c) {
+              setPrice(ticker, d);
+              local[ticker] = { data: d, ts: now };
+              saveLocalPrices(local);
+            } else if (d.error) {
+              console.warn(`Finnhub [${ticker}]:`, d.error);
+            }
           })
           .catch((err) => console.error(`Finnhub fetch failed [${ticker}]:`, err))
-          .finally(() => {
-            completed++;
-            if (completed === total) setFetchStatus('done');
-          });
-      }, i * 120);
+          .finally(() => { if (++completed === stale.length) setFetchStatus('done'); });
+      }, i * 1100);
     });
   }, [holdings.length, setPrice, setFetchStatus]);
 
