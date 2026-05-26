@@ -150,6 +150,7 @@ export function PicksPage() {
   const filters = useFiltersStore();
   const setPrice = usePriceCacheStore((s) => s.setPrice);
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
+  const [mobileView, setMobileView] = useState<'list' | 'overview'>('list');
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -218,19 +219,59 @@ export function PicksPage() {
         />
       ));
 
-  // ── Mobile: full-screen list ↔ detail (no side-by-side) ─────
+  // ── Mobile: tab bar + full-screen views ─────────────────────
   if (isMobile) {
+    const tabBase: React.CSSProperties = {
+      flex: 1, padding: '10px 0', fontSize: 13,
+      background: 'none', border: 'none', borderBottom: '2px solid transparent',
+      cursor: 'pointer', marginBottom: -1, transition: 'color 0.15s',
+    };
+
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
         <FilterBar holdings={holdings} filtered={filtered.length} />
+
+        {/* Tab bar — hidden while viewing a detail */}
+        {!selected && (
+          <div style={{ display: 'flex', background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', flexShrink: 0 }}>
+            <button
+              style={{
+                ...tabBase,
+                fontWeight: mobileView === 'list' ? 600 : 400,
+                color: mobileView === 'list' ? 'var(--acc)' : 'var(--t2)',
+                borderBottomColor: mobileView === 'list' ? 'var(--acc)' : 'transparent',
+              }}
+              onClick={() => setMobileView('list')}
+            >
+              Positions ({sorted.length})
+            </button>
+            <button
+              style={{
+                ...tabBase,
+                fontWeight: mobileView === 'overview' ? 600 : 400,
+                color: mobileView === 'overview' ? 'var(--acc)' : 'var(--t2)',
+                borderBottomColor: mobileView === 'overview' ? 'var(--acc)' : 'transparent',
+              }}
+              onClick={() => setMobileView('overview')}
+            >
+              Overview
+            </button>
+          </div>
+        )}
+
+        {/* Content area */}
         {selected ? (
           <div style={{ flex: 1, overflow: 'hidden', background: 'var(--bg)' }}>
             <HoldingDetail
               holding={selected}
               totalCount={holdings.length}
-              onClose={() => setSelectedTicker(null)}
+              onClose={() => { setSelectedTicker(null); setMobileView('list'); }}
               isMobile
             />
+          </div>
+        ) : mobileView === 'overview' ? (
+          <div style={{ flex: 1, overflow: 'hidden', background: 'var(--bg)' }}>
+            <PortfolioDashboard holdings={holdings} />
           </div>
         ) : (
           <div style={{ flex: 1, overflowY: 'auto' }}>
