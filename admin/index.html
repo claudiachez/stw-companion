@@ -2547,6 +2547,21 @@ async function fetchIBKR() {
     _ibkrLive = true;
     _saveIBKRCache();
 
+    // Persist P&L to Supabase so subscribers see it (don't touch updated_at)
+    const syncResults = await Promise.allSettled(
+      Object.entries(_ibkrCache)
+        .filter(([, v]) => v.pnlPct != null)
+        .map(([ticker, v]) =>
+          db.from('holdings').update({
+            last_pnl_pct: v.pnlPct,
+            last_pnl_at:  new Date(v.ts).toISOString(),
+            ibkr_legs:    v.legs,
+          }).eq('ticker', ticker)
+        )
+    );
+    const failed = syncResults.filter(r => r.status === 'rejected');
+    if (failed.length) console.warn(`IBKR→Supabase: ${failed.length} ticker(s) failed to sync`);
+
     // Surface ambiguous contracts as a visible alert
     const ambiguous = results.filter(r => r.error === 'ambiguous');
     if (ambiguous.length) {

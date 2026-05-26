@@ -1,5 +1,15 @@
 import { supabase } from '../../lib/supabase';
 
+export interface IbkrLeg {
+  symbol: string;
+  strike: number;
+  right: 'C' | 'P';
+  expiry: string;
+  entry: number;
+  price: number | null;
+  pnl_pct: number | null;
+}
+
 export interface Holding {
   rank: number;
   ticker: string;
@@ -16,6 +26,9 @@ export interface Holding {
   updated_at: string | null;
   last_price: number | null;
   last_price_at: string | null;
+  last_pnl_pct: number | null;
+  last_pnl_at: string | null;
+  ibkr_legs: IbkrLeg[] | null;
 }
 
 export async function fetchHoldings(): Promise<Holding[]> {
