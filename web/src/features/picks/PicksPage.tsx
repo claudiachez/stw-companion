@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useHoldings } from './useHoldings';
 import { useFiltersStore, applyFilters, sortFlat } from './useFilters';
 import { FilterBar } from './components/FilterBar';
@@ -6,44 +6,134 @@ import { HoldingRow } from './components/HoldingRow';
 import { HoldingDetail } from './components/HoldingDetail';
 import { LoadingSpinner } from '../../shared/components/LoadingSpinner';
 import { EmptyState } from '../../shared/components/EmptyState';
-import { TIERS, bColor } from './constants';
+import { TIERS, bColor, positionType, parseCostBasis } from './constants';
 import { usePriceCacheStore } from '../../store/priceCache';
+import type { Holding } from './api';
+import { useState } from 'react';
 
 const FINNHUB_KEY = import.meta.env.VITE_FINNHUB_KEY as string | undefined;
 
-function BasketBar({ holdings }: { holdings: { basket: string; current_weight?: number | null; initial_weight?: number | null }[] }) {
-  const map: Record<string, number> = {};
-  holdings.forEach((h) => {
+const ET = { timeZone: 'America/New_York' };
+
+// ── Portfolio dashboard (shown when no ticker selected) ───────
+function PortfolioDashboard({ holdings }: { holdings: Holding[] }) {
+  const cache = usePriceCacheStore((s) => s.cache);
+
+  const active = holdings.filter((h) => h.ticker !== 'CASH' && h.last_action !== 'Closed');
+
+  // Avg P&L across positions that have cost basis + live price
+  const pnlValues = active
+    .map((h) => {
+      const cost = parseCostBasis(h.position_detail);
+      const price = cache[h.ticker]?.c;
+      return cost && price ? (price - cost) / cost * 100 : null;
+    })
+    .filter((v): v is number => v !== null);
+  const avgPnl = pnlValues.length > 0
+    ? pnlValues.reduce((s, v) => s + v, 0) / pnlValues.length
+    : null;
+
+  // Position type counts
+  const equityCount  = active.filter((h) => positionType(h.position_detail) === 'shares').length;
+  const optionsCount = active.filter((h) => positionType(h.position_detail) === 'options').length;
+  const mixedCount   = active.filter((h) => positionType(h.position_detail) === 'mixed').length;
+
+  // Sector distribution by weight
+  const sectorMap: Record<string, number> = {};
+  active.forEach((h) => {
     const w = h.current_weight ?? h.initial_weight ?? 0;
-    map[h.basket] = (map[h.basket] ?? 0) + w;
+    sectorMap[h.basket] = (sectorMap[h.basket] ?? 0) + w;
   });
-  const total = Object.values(map).reduce((s, v) => s + v, 0);
-  const entries = Object.entries(map).sort((a, b) => b[1] - a[1]);
+  const totalWeight = Object.values(sectorMap).reduce((s, v) => s + v, 0);
+  const sectors = Object.entries(sectorMap).sort((a, b) => b[1] - a[1]);
+
+  // Last updated across all holdings
+  const lastUpdated = holdings.reduce<Date | null>((acc, h) => {
+    if (!h.updated_at) return acc;
+    const d = new Date(h.updated_at);
+    return !acc || d > acc ? d : acc;
+  }, null);
+
+  const pnlColor = avgPnl != null ? (avgPnl >= 0 ? '#22c55e' : '#ef4444') : 'var(--t3)';
 
   return (
-    <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', padding: '8px 16px', flexShrink: 0 }}>
-      <div style={{ display: 'flex', height: 4, borderRadius: 3, overflow: 'hidden', marginBottom: 6, gap: 2 }}>
-        {entries.map(([name, w]) => (
-          <div key={name} style={{ flex: w, height: '100%', borderRadius: 2, background: bColor(name), opacity: 0.85 }} />
-        ))}
+    <div style={{ height: '100%', overflowY: 'auto', padding: '20px 24px' }}>
+      <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 16 }}>
+        Portfolio Overview
       </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 12px' }}>
-        {entries.map(([name, w]) => {
-          const pct = total > 0 ? (w / total * 100).toFixed(0) : '0';
+
+      {/* Stat cards */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 24 }}>
+        {/* Holdings */}
+        <div style={{ flex: 1, padding: '14px 16px', borderRadius: 8, background: 'var(--s2)', border: '1px solid var(--bsub)' }}>
+          <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--text)', lineHeight: 1 }}>{active.length}</div>
+          <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>Active Holdings</div>
+        </div>
+
+        {/* Avg P&L */}
+        <div style={{ flex: 1, padding: '14px 16px', borderRadius: 8, background: 'var(--s2)', border: '1px solid var(--bsub)' }}>
+          <div style={{ fontSize: 28, fontWeight: 700, color: pnlColor, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+            {avgPnl != null ? `${avgPnl >= 0 ? '+' : ''}${avgPnl.toFixed(1)}%` : '—'}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>
+            Avg Return{pnlValues.length > 0 ? ` (${pnlValues.length} positions)` : ''}
+          </div>
+        </div>
+
+        {/* Position types */}
+        <div style={{ flex: 1, padding: '14px 16px', borderRadius: 8, background: 'var(--s2)', border: '1px solid var(--bsub)' }}>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end', lineHeight: 1 }}>
+            <span style={{ fontSize: 28, fontWeight: 700, color: 'var(--text)' }}>{equityCount}</span>
+            <span style={{ fontSize: 16, color: 'var(--t3)', marginBottom: 2 }}>/</span>
+            <span style={{ fontSize: 28, fontWeight: 700, color: 'var(--t2)' }}>{optionsCount}</span>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>
+            Equity / Options{mixedCount > 0 ? ` · ${mixedCount} mixed` : ''}
+          </div>
+        </div>
+      </div>
+
+      {/* Sector distribution */}
+      <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 10 }}>
+        Sector Distribution
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+        {sectors.map(([name, w]) => {
+          const pct = totalWeight > 0 ? (w / totalWeight) * 100 : 0;
           const c = bColor(name);
           return (
-            <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--t2)' }}>
-              <div style={{ width: 6, height: 6, borderRadius: 2, background: c, flexShrink: 0 }} />
-              <span>{name}</span>
-              <span style={{ fontWeight: 600, color: 'var(--text)' }}>{pct}%</span>
+            <div key={name}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--t2)', minWidth: 0 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: 2, background: c, flexShrink: 0 }} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', marginLeft: 8, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+                  {pct.toFixed(0)}%
+                </span>
+              </div>
+              <div style={{ height: 4, borderRadius: 2, background: 'var(--border)' }}>
+                <div style={{ width: `${pct}%`, height: '100%', borderRadius: 2, background: c, opacity: 0.85 }} />
+              </div>
             </div>
           );
         })}
       </div>
+
+      {/* Last updated */}
+      {lastUpdated && (
+        <div style={{ marginTop: 24, fontSize: 11, color: 'var(--t3)' }}>
+          Last synced:{' '}
+          <span style={{ color: 'var(--t2)' }}>
+            {lastUpdated.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', ...ET })} ET
+          </span>
+        </div>
+      )}
     </div>
   );
 }
 
+// ── Main page ─────────────────────────────────────────────────
 export function PicksPage() {
   const { data: holdings = [], isLoading, error } = useHoldings();
   const filters = useFiltersStore();
@@ -118,10 +208,10 @@ export function PicksPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      <BasketBar holdings={holdings} />
       <FilterBar holdings={holdings} filtered={filtered.length} />
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        {/* Position list */}
         <div
           style={{
             overflowY: 'auto',
@@ -135,19 +225,18 @@ export function PicksPage() {
             : listContent}
         </div>
 
-        {selected ? (
-          <div style={{ flex: 1, overflow: 'hidden', background: 'var(--bg)' }}>
+        {/* Right panel: detail or dashboard */}
+        <div style={{ flex: 1, overflow: 'hidden', background: 'var(--bg)' }}>
+          {selected ? (
             <HoldingDetail
               holding={selected}
               totalCount={holdings.length}
               onClose={() => setSelectedTicker(null)}
             />
-          </div>
-        ) : (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t3)', fontSize: 12 }}>
-            Select a position to view details
-          </div>
-        )}
+          ) : (
+            <PortfolioDashboard holdings={holdings} />
+          )}
+        </div>
       </div>
     </div>
   );
