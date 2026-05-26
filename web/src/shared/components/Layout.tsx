@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/auth';
 import { useThemeStore } from '../../store/theme';
@@ -93,32 +94,47 @@ function fmtAge(d: Date): string {
 }
 
 function IbkrBadge() {
-  const { data: lastUpdated } = useDataStatus();
+  const { data: lastUpdated, isFetching, refetch } = useDataStatus();
+  const queryClient = useQueryClient();
   const freshness = getFreshness(lastUpdated ?? null);
   const color = freshnessColor(freshness);
-  const label = lastUpdated ? fmtAge(lastUpdated) : '—';
-  const tooltip = lastUpdated
-    ? lastUpdated.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', ...ET })
-    : 'No sync data';
+  const syncing = isFetching;
+  const clickable = !syncing && freshness !== 'fresh';
+  const label = syncing ? 'Syncing…' : (lastUpdated ? fmtAge(lastUpdated) : '—');
+  const tooltip = syncing
+    ? 'Refreshing data…'
+    : lastUpdated
+      ? `Last sync: ${lastUpdated.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', ...ET })}${clickable ? ' — click to re-sync' : ''}`
+      : 'No sync data';
+
+  async function handleSync() {
+    if (!clickable) return;
+    await queryClient.invalidateQueries({ queryKey: ['holdings'] });
+    await refetch();
+  }
 
   return (
-    <div
+    <button
+      onClick={handleSync}
       title={tooltip}
       style={{
         display: 'flex', alignItems: 'center', gap: 5,
-        padding: '3px 8px', borderRadius: 5,
-        border: `1px solid ${color}28`, background: `${color}0f`,
-        cursor: 'default',
+        padding: '4px 9px', borderRadius: 5,
+        border: `1px solid ${color}${clickable ? '50' : '28'}`,
+        background: `${color}${clickable ? '18' : '0f'}`,
+        cursor: clickable ? 'pointer' : 'default',
+        transition: 'background 0.2s, border-color 0.2s',
       }}
+      onMouseEnter={(e) => { if (clickable) (e.currentTarget as HTMLElement).style.background = `${color}28`; }}
+      onMouseLeave={(e) => { if (clickable) (e.currentTarget as HTMLElement).style.background = `${color}18`; }}
     >
-      <div style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0 }} />
-      <span style={{ fontSize: 11, color: 'var(--t2)', whiteSpace: 'nowrap' }}>
-        IBKR
-      </span>
-      <span style={{ fontSize: 11, color, fontWeight: 600, whiteSpace: 'nowrap' }}>
-        {label}
-      </span>
-    </div>
+      <div style={{
+        width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0,
+        animation: syncing ? 'ibkr-pulse 1s ease-in-out infinite' : 'none',
+      }} />
+      <span style={{ fontSize: 11, color: 'var(--t2)', whiteSpace: 'nowrap' }}>IBKR</span>
+      <span style={{ fontSize: 11, color, fontWeight: 600, whiteSpace: 'nowrap' }}>{label}</span>
+    </button>
   );
 }
 

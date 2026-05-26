@@ -33,10 +33,19 @@ function PortfolioDashboard({ holdings }: { holdings: Holding[] }) {
     ? pnlValues.reduce((s, v) => s + v, 0) / pnlValues.length
     : null;
 
-  // Position type counts
-  const equityCount  = active.filter((h) => positionType(h.position_detail) === 'shares').length;
-  const optionsCount = active.filter((h) => positionType(h.position_detail) === 'options').length;
-  const mixedCount   = active.filter((h) => positionType(h.position_detail) === 'mixed').length;
+  // Equity : Options ratio by portfolio weight (matches the host's Friday update)
+  // Mixed positions (shares + options overlay) count as equity weight
+  let equityWeight = 0;
+  let optionsWeight = 0;
+  active.forEach((h) => {
+    const w = h.current_weight ?? h.initial_weight ?? 0;
+    const t = positionType(h.position_detail);
+    if (t === 'options') optionsWeight += w;
+    else if (w > 0) equityWeight += w; // shares, mixed, or unclassified
+  });
+  const typeTotal = equityWeight + optionsWeight;
+  const equityPct  = typeTotal > 0 ? Math.round(equityWeight  / typeTotal * 100) : null;
+  const optionsPct = typeTotal > 0 ? Math.round(optionsWeight / typeTotal * 100) : null;
 
   // Sector distribution by weight
   const sectorMap: Record<string, number> = {};
@@ -80,16 +89,18 @@ function PortfolioDashboard({ holdings }: { holdings: Holding[] }) {
           </div>
         </div>
 
-        {/* Position types */}
+        {/* Equity : Options weight ratio */}
         <div style={{ flex: 1, padding: '14px 16px', borderRadius: 8, background: 'var(--s2)', border: '1px solid var(--bsub)' }}>
-          <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end', lineHeight: 1 }}>
-            <span style={{ fontSize: 28, fontWeight: 700, color: 'var(--text)' }}>{equityCount}</span>
-            <span style={{ fontSize: 16, color: 'var(--t3)', marginBottom: 2 }}>/</span>
-            <span style={{ fontSize: 28, fontWeight: 700, color: 'var(--t2)' }}>{optionsCount}</span>
+          <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', lineHeight: 1 }}>
+            <span style={{ fontSize: 28, fontWeight: 700, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
+              {equityPct ?? '—'}
+            </span>
+            <span style={{ fontSize: 18, color: 'var(--t3)', marginBottom: 1 }}>:</span>
+            <span style={{ fontSize: 28, fontWeight: 700, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>
+              {optionsPct ?? '—'}
+            </span>
           </div>
-          <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>
-            Equity / Options{mixedCount > 0 ? ` · ${mixedCount} mixed` : ''}
-          </div>
+          <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>Equity : Options (by weight)</div>
         </div>
       </div>
 

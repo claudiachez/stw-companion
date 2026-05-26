@@ -61,7 +61,7 @@
     background: var(--bg);
     color: var(--text);
     font-family: system-ui, -apple-system, sans-serif;
-    font-size: 14px;
+    font-size: 16px;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
   }
@@ -72,4 +72,9 @@
   ::-webkit-scrollbar-track { background: var(--bg); }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
   ::-webkit-scrollbar-thumb:hover { background: var(--t3); }
+}
+
+@keyframes ibkr-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
 }
