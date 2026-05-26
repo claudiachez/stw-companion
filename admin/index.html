@@ -2551,16 +2551,17 @@ async function fetchIBKR() {
     const syncResults = await Promise.allSettled(
       Object.entries(_ibkrCache)
         .filter(([, v]) => v.pnlPct != null)
-        .map(([ticker, v]) =>
-          db.from('holdings').update({
+        .map(async ([ticker, v]) => {
+          const { error } = await db.from('holdings').update({
             last_pnl_pct: v.pnlPct,
             last_pnl_at:  new Date(v.ts).toISOString(),
             ibkr_legs:    v.legs,
-          }).eq('ticker', ticker)
-        )
+          }).eq('ticker', ticker);
+          if (error) throw error;
+        })
     );
     const failed = syncResults.filter(r => r.status === 'rejected');
-    if (failed.length) console.warn(`IBKR→Supabase: ${failed.length} ticker(s) failed to sync`);
+    if (failed.length) console.warn(`IBKR→Supabase: ${failed.length} ticker(s) failed`, failed.map(r => r.reason));
 
     // Surface ambiguous contracts as a visible alert
     const ambiguous = results.filter(r => r.error === 'ambiguous');
