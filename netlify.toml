@@ -1,7 +1,6 @@
 # STW App (subscriber web app) — web-staging / web-main branches
 [build]
-  base    = "web"
-  command = "npm ci && npm run build"
+  command = "cd web && npm install && npm run build"
   publish = "web/dist"
 
 [build.environment]
