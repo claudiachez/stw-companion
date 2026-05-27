@@ -100,7 +100,11 @@ async def _price_options(specs):
                 last  = ticker.last  if ticker.last  and ticker.last  > 0 else None
                 close = ticker.close if ticker.close and ticker.close > 0 else None
                 mid   = round((bid + ask) / 2, 4) if bid and ask else None
-                price = last or mid or close
+                # Priority: mid (current fair value) → close (official day close) → last (most recent trade)
+                # "last" is intentionally last: it reflects an actual trade that may be hours old,
+                # while mid/close better represent the current mark. After market hours, IBKR's
+                # delayed-frozen data often returns null bid/ask but a valid close.
+                price = mid or close or last
 
                 entry   = float(spec.get('entry', 0))
                 pnl_pct = round((price - entry) / entry * 100, 2) if price and entry else None
