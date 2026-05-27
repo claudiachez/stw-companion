@@ -3,7 +3,6 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../store/auth';
 import { useThemeStore } from '../../store/theme';
-import { useDataStatus, getFreshness } from '../hooks/useDataStatus';
 
 // ── SVG icon set ────────────────────────────────────────────
 function SunIcon() {
@@ -80,53 +79,6 @@ function STWLogo() {
       <line x1="35" y1="44" x2="51" y2="44" stroke="#aaaaaa" strokeWidth="0.9"/>
       <line x1="35" y1="50" x2="51" y2="50" stroke="#aaaaaa" strokeWidth="0.9"/>
     </svg>
-  );
-}
-
-// ── IBKR / data freshness badge ──────────────────────────────
-const ET = { timeZone: 'America/New_York' };
-
-function freshnessColor(f: string) {
-  if (f === 'fresh') return '#22c55e';
-  if (f === 'aging') return '#f59e0b';
-  return '#ef4444';
-}
-
-function fmtAge(d: Date): string {
-  const mins = Math.floor((Date.now() - d.getTime()) / 60_000);
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
-}
-
-function IbkrBadge() {
-  const { data: lastUpdated, isFetching } = useDataStatus();
-  const freshness = getFreshness(lastUpdated ?? null);
-  const color = freshnessColor(freshness);
-  const syncing = isFetching;
-  const label = syncing ? 'Syncing…' : (lastUpdated ? fmtAge(lastUpdated) : '—');
-  const tooltip = lastUpdated
-    ? `Last sync: ${lastUpdated.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', ...ET })} ET`
-    : 'No sync data';
-
-  return (
-    <div
-      title={tooltip}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 5,
-        padding: '4px 9px', borderRadius: 5,
-        border: `1px solid ${color}28`,
-        background: `${color}0f`,
-      }}
-    >
-      <div style={{
-        width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0,
-        animation: syncing ? 'ibkr-pulse 1s ease-in-out infinite' : 'none',
-      }} />
-      <span style={{ fontSize: 11, color: 'var(--t2)', whiteSpace: 'nowrap' }}>IBKR</span>
-      <span style={{ fontSize: 11, color, fontWeight: 600, whiteSpace: 'nowrap' }}>{label}</span>
-    </div>
   );
 }
 
@@ -233,10 +185,8 @@ export function Layout() {
           </nav>
         </div>
 
-        {/* Right: IBKR badge + hamburger */}
+        {/* Right: hamburger */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          <IbkrBadge />
-
           <div ref={menuRef} style={{ position: 'relative' }}>
             <button
               onClick={() => setMenuOpen((v) => !v)}
