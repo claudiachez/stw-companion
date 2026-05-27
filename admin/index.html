@@ -2552,12 +2552,13 @@ async function fetchIBKR() {
       Object.entries(_ibkrCache)
         .filter(([, v]) => v.pnlPct != null)
         .map(async ([ticker, v]) => {
-          const { error } = await db.from('holdings').update({
+          const { data, error } = await db.from('holdings').update({
             last_pnl_pct: v.pnlPct,
             last_pnl_at:  new Date(v.ts).toISOString(),
             ibkr_legs:    v.legs,
-          }).eq('ticker', ticker);
+          }).eq('ticker', ticker).select('ticker');
           if (error) throw error;
+          if (!data?.length) console.warn(`IBKR→Supabase: ${ticker} — 0 rows updated (RLS block or ticker mismatch)`);
         })
     );
     const failed = syncResults.filter(r => r.status === 'rejected');
