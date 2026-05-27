@@ -162,7 +162,7 @@ window.GRADDOX_DATA = {
     .logo-admin-badge {
       font-size: 9px; font-weight: 600; letter-spacing: 0.1em;
       padding: 2px 5px; border-radius: 3px;
-      background: var(--acc); color: #000;
+      background: var(--acc); color: #fff;
       margin-left: 2px; text-transform: uppercase;
     }
 
@@ -244,35 +244,39 @@ window.GRADDOX_DATA = {
       flex-shrink: 0;
     }
 
-    .basket-bar {
-      display: flex; height: 5px; border-radius: 3px; overflow: hidden;
-      margin-bottom: 8px; gap: 2px;
+    /* ── Portfolio dashboard strip ── */
+    .port-dash {
+      display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+      margin-bottom: 10px; padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
     }
-
-    .basket-seg {
-      height: 100%; border-radius: 2px;
-      transition: flex 0.3s;
+    .pd-stat {
+      display: flex; flex-direction: column; gap: 1px;
+      padding: 5px 10px; border-radius: var(--rsm);
+      background: var(--s2); border: 1px solid var(--bsub);
+      min-width: 60px;
     }
-
-    .basket-legend {
-      display: flex; flex-wrap: wrap; gap: 4px 14px;
-      margin-bottom: 10px;
+    .pd-stat-label {
+      font-size: 9px; color: var(--t3); text-transform: uppercase;
+      letter-spacing: 0.07em; font-weight: 600;
     }
-
-    .bl-item {
-      display: flex; align-items: center; gap: 5px;
-      font-size: 11px; color: var(--t2); cursor: default;
+    .pd-stat-val {
+      font-size: 14px; font-weight: 700; color: var(--text);
+      font-variant-numeric: tabular-nums; line-height: 1.2;
     }
-
-    .bl-pip {
-      width: 7px; height: 7px; border-radius: 2px; flex-shrink: 0;
+    .pd-stat-sub {
+      font-size: 10px; color: var(--t2);
     }
-
-    .bl-name { }
-
-    .bl-pct {
-      font-weight: 600; color: var(--text);
-      font-variant-numeric: tabular-nums;
+    .pd-tiers {
+      display: flex; gap: 4px; align-items: center;
+    }
+    .pd-tier-pip {
+      display: flex; align-items: center; gap: 3px;
+      font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums;
+      padding: 3px 6px; border-radius: 4px;
+    }
+    .pd-divider {
+      width: 1px; height: 28px; background: var(--border); flex-shrink: 0;
     }
 
     .filters {
@@ -821,8 +825,9 @@ window.GRADDOX_DATA = {
       /* ── Subheader: collapse legend, horizontal-scroll filters ── */
       .subhdr { padding: 8px 12px 10px; }
 
-      /* Hide the text legend — the colour bar is enough on mobile */
-      .basket-legend { display: none; }
+      /* Compact dashboard on mobile */
+      .port-dash { gap: 6px; }
+      .pd-stat { padding: 4px 8px; }
 
       /* Filters: single horizontal scrollable strip */
       .filters {
@@ -1170,8 +1175,8 @@ window.GRADDOX_DATA = {
     STW Companion<span class="logo-admin-badge">Admin</span>
   </div>
   <nav class="nav">
-    <button class="nav-btn on" onclick="showModule('stw',this)">STW Stock Picks</button>
-    <button class="nav-btn" onclick="showModule('gradoxx',this)">Graddox GEX Signals</button>
+    <button class="nav-btn on" onclick="showModule('stw',this)">Stock Picks</button>
+    <button class="nav-btn" onclick="showModule('gradoxx',this)">GEX Signals</button>
   </nav>
   <div class="hdr-right">
     <div class="live-dot" id="db-dot"></div>
@@ -1206,10 +1211,9 @@ window.GRADDOX_DATA = {
 <!-- ── STW Module ────────────────────────────── -->
 <div class="module on" id="mod-stw">
 
-  <!-- Subheader: basket bar + filters -->
+  <!-- Subheader: portfolio dashboard + filters -->
   <div class="subhdr">
-    <div class="basket-bar" id="basket-bar"></div>
-    <div class="basket-legend" id="basket-legend"></div>
+    <div class="port-dash" id="portfolio-dash"></div>
     <div class="filters">
       <input class="filter-input" id="f-search" placeholder="Search ticker…" oninput="applyFilters()">
       <select class="filter-select" id="f-basket" onchange="applyFilters()">
@@ -1287,12 +1291,8 @@ window.GRADDOX_DATA = {
           <span class="gx-chart-title">📈 SPY &amp; QQQ</span>
           <div style="display:flex;gap:3px" id="tf-btn-group">
             <button class="tf-btn"    onclick="switchTF('5m',this)">5m</button>
-            <button class="tf-btn"    onclick="switchTF('15m',this)">15m</button>
-            <button class="tf-btn on" onclick="switchTF('30m',this)">30m</button>
-            <button class="tf-btn"    onclick="switchTF('1h',this)">1h</button>
-            <button class="tf-btn"    onclick="switchTF('4h',this)">4h</button>
-            <button class="tf-btn"    onclick="switchTF('1d',this)">1d</button>
-            <button class="tf-btn"    onclick="switchTF('1W',this)">1W</button>
+            <button class="tf-btn on" onclick="switchTF('15m',this)">15m</button>
+            <button class="tf-btn"    onclick="switchTF('30m',this)">30m</button>
           </div>
         </div>
         <div id="chart-container" style="display:flex;height:300px">
@@ -1510,14 +1510,25 @@ function _loadIBKRCache() {
     if (raw) _ibkrCache = JSON.parse(raw);
   } catch(e) {}
 }
-function _ibkrCacheDateStr(ticker) {
-  const ts = _ibkrCache[ticker]?.ts;
+function _ibkrCacheDateStr(ticker, fallbackTs) {
+  const ts = _ibkrCache[ticker]?.ts || fallbackTs;
   if (!ts) return null;
-  const d   = new Date(ts);
+  const d   = new Date(typeof ts === 'string' ? ts : ts);
   const now = new Date();
   const isToday = d.toDateString() === now.toDateString();
   if (isToday) return d.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit', ...ET});
   return d.toLocaleDateString('en-US', {month:'short', day:'numeric', ...ET});
+}
+
+// Returns merged IBKR data: live cache first, then Supabase-stored legs as fallback.
+function _getIbkrData(h) {
+  if (_ibkrCache[h.ticker]?.legs?.length) return _ibkrCache[h.ticker];
+  if (h.ibkr_legs?.length) return {
+    legs:   h.ibkr_legs,
+    ts:     h.last_pnl_at || null,
+    pnlPct: h.last_pnl_pct ?? null,
+  };
+  return null;
 }
 
 // ── Helpers ──────────────────────────────────────────────
@@ -1569,34 +1580,74 @@ function parseCostBasis(h) {
   return m ? parseFloat(m[1]) : null;
 }
 
-// ── Basket bar + legend ──────────────────────────────────
-function renderBasketBar() {
+// ── Portfolio dashboard ──────────────────────────────────
+function renderPortfolioDashboard() {
   const data = window.STW_DATA;
-  if (!data) return;
-  const map = {};
-  data.holdings.forEach(h => {
-    const w = h.current_weight ?? h.initial_weight ?? 0;
-    map[h.basket] = (map[h.basket]||0) + w;
-  });
-  const total = Object.values(map).reduce((s,v)=>s+v, 0);
-  const entries = Object.entries(map).sort((a,b)=>b[1]-a[1]);
+  const el = document.getElementById('portfolio-dash');
+  if (!data || !el) return;
 
-  // Bar segments
-  document.getElementById('basket-bar').innerHTML = entries.map(([name, w]) => {
-    const c = bColor(name);
-    return `<div class="basket-seg" style="flex:${w};background:${c};opacity:0.85"></div>`;
-  }).join('');
+  const holdings = data.holdings.filter(h => h.ticker !== 'CASH');
+  const total = holdings.length;
 
-  // Legend
-  document.getElementById('basket-legend').innerHTML = entries.map(([name, w]) => {
-    const pct = (w/total*100).toFixed(0);
-    const c = bColor(name);
-    return `<div class="bl-item">
-      <div class="bl-pip" style="background:${c}"></div>
-      <span class="bl-name">${name}</span>
-      <span class="bl-pct">${pct}%</span>
+  // Tier counts
+  const tierCounts = {};
+  holdings.forEach(h => { tierCounts[h.conviction] = (tierCounts[h.conviction]||0) + 1; });
+  const tierHtml = [5,4,3,2,1].map(conv => {
+    const cnt = tierCounts[conv];
+    if (!cnt) return '';
+    const t = TIERS[conv];
+    return `<div class="pd-tier-pip" style="background:${t.bg};color:${t.color};border:1px solid ${t.border}">
+      <span style="font-size:9px;opacity:0.75">T${conv}</span>&nbsp;${cnt}
     </div>`;
   }).join('');
+
+  // IBKR coverage + avg P&L
+  let ibkrHtml = '';
+  const withPnl = holdings.filter(h => {
+    const ibkr = _getIbkrData(h);
+    return ibkr?.pnlPct != null;
+  });
+  if (withPnl.length) {
+    const avg = withPnl.reduce((s,h) => s + _getIbkrData(h).pnlPct, 0) / withPnl.length;
+    const avgClr = avg >= 0 ? 'var(--c5)' : 'var(--c1)';
+    const isLive = _ibkrLive;
+    ibkrHtml = `
+    <div class="pd-divider"></div>
+    <div class="pd-stat">
+      <span class="pd-stat-label">IBKR P&amp;L${isLive ? ' ●' : ''}</span>
+      <span class="pd-stat-val" style="color:${avgClr}">${avg>=0?'+':''}${avg.toFixed(1)}%</span>
+      <span class="pd-stat-sub">${withPnl.length}/${total} positions</span>
+    </div>`;
+  }
+
+  // Recent actions
+  const recentActions = [...holdings]
+    .filter(h => h.action_date && h.last_action)
+    .sort((a,b) => new Date(b.action_date) - new Date(a.action_date))
+    .slice(0, 3);
+  const actionsHtml = recentActions.length ? `
+    <div class="pd-divider"></div>
+    <div style="display:flex;gap:6px;align-items:center">
+      ${recentActions.map(h => {
+        const t = TIERS[h.conviction];
+        return `<div style="display:flex;flex-direction:column;gap:1px">
+          <span style="font-size:11px;font-weight:700;color:${t.color}">${h.ticker}</span>
+          <span style="font-size:9px;color:var(--t3)">${fmtDate(h.action_date)}</span>
+        </div>`;
+      }).join('')}
+    </div>` : '';
+
+  el.innerHTML = `
+    <div class="pd-stat">
+      <span class="pd-stat-label">Positions</span>
+      <span class="pd-stat-val">${total}</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div class="pd-tiers">${tierHtml}</div>
+    </div>
+    ${ibkrHtml}
+    ${actionsHtml}
+  `;
 }
 
 // ── Populate basket filter ───────────────────────────────
@@ -1657,9 +1708,9 @@ function applySort(mode) {
   renderList();
 }
 
-// Best available P&L % for a holding (IBKR → calculated → null)
+// Best available P&L % for a holding (live IBKR → Supabase cached IBKR → calculated → null)
 function _getPnlPct(h) {
-  const ibkr = _ibkrCache[h.ticker];
+  const ibkr = _getIbkrData(h);
   if (ibkr?.pnlPct != null) return ibkr.pnlPct;
   const cost = parseCostBasis(h);
   const pc   = _priceCache[h.ticker];
@@ -1726,9 +1777,9 @@ function renderList() {
         ${(() => {
           if (h.ticker === 'CASH') return '';
           const pc   = _priceCache[h.ticker];
-          const ibkr = _ibkrCache[h.ticker];
+          const ibkr = _getIbkrData(h);
           const price = pc?.c;
-          if (!price) return '';
+          if (!price && ibkr?.pnlPct == null) return '';
           let pctStr = '', pctCls = '';
           if (ibkr?.pnlPct != null) {
             pctStr = `${ibkr.pnlPct >= 0 ? '+' : ''}${ibkr.pnlPct.toFixed(1)}%`;
@@ -1745,7 +1796,7 @@ function renderList() {
             }
           }
           return `<div class="row-price">
-            <span class="row-price-num">$${price.toFixed(2)}</span>
+            ${price ? `<span class="row-price-num">$${price.toFixed(2)}</span>` : ''}
             ${pctStr ? `<span class="row-price-chg ${pctCls}">${pctStr}</span>` : ''}
           </div>`;
         })()}
@@ -1831,7 +1882,7 @@ async function commitEdit(ticker) {
   detailEditMode = false;
   renderDetail(h);
   renderList();
-  renderBasketBar();
+  renderPortfolioDashboard();
 
   // Persist to Supabase
   try {
@@ -1955,7 +2006,7 @@ function renderDetail(h) {
     ${(() => {
       if (h.ticker === 'CASH') return '';
       const pc   = _priceCache[h.ticker];
-      const ibkr = _ibkrCache[h.ticker];
+      const ibkr = _getIbkrData(h);  // live cache → Supabase fallback
 
       // ── Col 1: Live Market ──
       const price   = pc?.c;
@@ -1984,8 +2035,9 @@ function renderDetail(h) {
         if (valid.length) {
           const avgPct  = valid.reduce((s,l) => s + (l.pnl_pct||0), 0) / valid.length;
           const pnlClr  = avgPct >= 0 ? '#16A34A' : '#DC2626';
-          const dateStr = _ibkrCacheDateStr(h.ticker);
-          const isLive  = _ibkrLive && ibkr.ts && (Date.now() - ibkr.ts < 3600000);
+          const dateStr = _ibkrCacheDateStr(h.ticker, h.last_pnl_at);
+          const ibkrTsMs = ibkr.ts ? (typeof ibkr.ts === 'number' ? ibkr.ts : new Date(ibkr.ts).getTime()) : 0;
+          const isLive  = _ibkrLive && ibkrTsMs && (Date.now() - ibkrTsMs < 3600000);
           const srcDot  = isLive
             ? `<span style="color:#16A34A;font-weight:700">● IBKR live</span>`
             : `<span style="color:#F59E0B;font-weight:700">● IBKR</span>${dateStr ? ` <span style="opacity:0.7">· ${dateStr}</span>` : ''}`;
@@ -2262,7 +2314,7 @@ const TWELVEDATA_KEY = 'e58c2dd556704d3ca5574c0ef597d25c';
 const FINNHUB_KEY    = 'cuhkqs1r01qva71u3eugcuhkqs1r01qva71u3ev0';
 let _lwCharts   = {};
 let _lwSeries   = {}; // { spy: {candles, lastBar}, qqq: {candles, lastBar} }
-let _currentTF  = '30m';
+let _currentTF  = '15m';
 let _liveTimer  = null;
 
 function switchTF(tf, btn) {
@@ -2281,7 +2333,7 @@ function filterSignals(ticker, btn) {
 }
 
 async function initCharts() {
-  const tf = _currentTF || '30m';
+  const tf = _currentTF || '15m';
 
   // Stop any running live-price timer
   if (_liveTimer) { clearInterval(_liveTimer); _liveTimer = null; }
@@ -2296,12 +2348,8 @@ async function initCharts() {
     '5m':  { interval: '5min',  outputsize: 390, visible: 80  },
     '15m': { interval: '15min', outputsize: 300, visible: 80  },
     '30m': { interval: '30min', outputsize: 200, visible: 70  },
-    '1h':  { interval: '1h',    outputsize: 200, visible: 50  },
-    '4h':  { interval: '4h',    outputsize: 200, visible: 40  },
-    '1d':  { interval: '1day',  outputsize: 500, visible: 120 },
-    '1W':  { interval: '1week', outputsize: 260, visible: 104 },
   };
-  const cfg = TF[tf] || TF['30m'];
+  const cfg = TF[tf] || TF['15m'];
 
   async function fetchBars(symbol) {
     const url = `https://api.twelvedata.com/time_series`
@@ -2342,7 +2390,7 @@ async function initCharts() {
       return { chart: null, candles: null };
     }
 
-    const showTime = !['1d','1W'].includes(tf);
+    const showTime = true; // all supported TFs are intraday
     const chart = LightweightCharts.createChart(el, {
       autoSize: true,
       layout: { background: { type: 'solid', color: '#111111' }, textColor: '#a0a0a0' },
@@ -2418,9 +2466,11 @@ async function initCharts() {
   _lwSeries.spy  = { candles: spy.candles, lastBar: spyBars[spyBars.length - 1] };
   _lwSeries.qqq  = { candles: qqq.candles, lastBar: qqqBars[qqqBars.length - 1] };
 
+  // Apply current theme so charts match light/dark mode on init (not just on toggle)
+  applyTheme(document.documentElement.getAttribute('data-theme') || 'dark');
+
   // Live price via Finnhub quote — updates the current candle every 30s
-  // Only run during intraday timeframes (no point on 1d/1W)
-  if (['5m','15m','30m','1h','4h'].includes(tf)) {
+  if (['5m','15m','30m'].includes(tf)) {
     async function updateLive() {
       try {
         const [sq, qq] = await Promise.all([
@@ -2585,6 +2635,7 @@ async function fetchIBKR() {
     label.textContent = `IBKR ✓ (${priced}/${allLegs.length})`;
 
     renderList();
+    renderPortfolioDashboard();
     if (selectedTicker) {
       const h = window.STW_DATA?.holdings?.find(x => x.ticker === selectedTicker);
       if (h) renderDetail(h);
@@ -2631,7 +2682,6 @@ function renderAll() {
   populateFilters();
   filteredHoldings = [...data.holdings];
   document.getElementById('f-count').textContent = `${data.holdings.length} positions`;
-  renderBasketBar();
   // Restore IBKR cache from localStorage so last-known option prices show immediately
   _loadIBKRCache();
   // Reflect cached state in IBKR button
@@ -2643,6 +2693,7 @@ function renderAll() {
     if (lbl) lbl.textContent = `IBKR (cached)`;
   }
   renderList();
+  renderPortfolioDashboard();  // after _loadIBKRCache so cached P&L appears in dashboard
   renderGraddox();
   restoreTab();
   // Fetch live prices in the background — re-renders list/detail when done
