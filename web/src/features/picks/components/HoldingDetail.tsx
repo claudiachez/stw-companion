@@ -62,7 +62,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
   // ── P&L — options (IBKR, stored in Supabase) ──────────────
   const optionsPnl = h.last_pnl_pct ?? null;
   const ibkrDate   = h.last_pnl_at
-    ? new Date(h.last_pnl_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...ET })
+    ? new Date(h.last_pnl_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', ...ET })
     : null;
 
   // ── P&L — resolved main card value ────────────────────────
