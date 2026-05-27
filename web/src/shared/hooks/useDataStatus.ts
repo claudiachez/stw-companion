@@ -15,13 +15,18 @@ export function useDataStatus() {
   return useQuery({
     queryKey: ['data-status'],
     queryFn: async () => {
+      // Prefer last_pnl_at (IBKR sync time) over updated_at (manual edit time)
       const { data } = await supabase
         .from('holdings')
-        .select('updated_at')
-        .order('updated_at', { ascending: false })
+        .select('last_pnl_at, updated_at')
+        .order('last_pnl_at', { ascending: false, nullsFirst: false })
         .limit(1)
         .single();
-      return data?.updated_at ? new Date(data.updated_at) : null;
+      return data?.last_pnl_at
+        ? new Date(data.last_pnl_at)
+        : data?.updated_at
+        ? new Date(data.updated_at)
+        : null;
     },
     staleTime: 5 * 60 * 1000,
   });
