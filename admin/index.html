@@ -1099,6 +1099,17 @@ window.GRADDOX_DATA = {
     [data-theme="light"] .gx-bias.bullish     { background: #dcfce7; color: #15803d; }
     [data-theme="light"] .gx-bias.bearish     { background: #fee2e2; color: #dc2626; }
     [data-theme="light"] .gx-bias.flat-down   { background: #fef3c7; color: #b45309; }
+
+    /* GEX level row: theme-aware classes (replacing hardcoded inline styles in JS) */
+    .gx-lvl-badge-target { background: #2d1a00; color: #f59e0b; border: 1px solid #78350f; }
+    .gx-lvl-badge-risk   { background: #2d0c0c; color: #ef4444; border: 1px solid #7f1d1d; }
+    .gx-level-row-current { background: #0d2618; }
+    .gx-lvl-price-current { color: #4ade80; font-weight: 700; }
+
+    [data-theme="light"] .gx-lvl-badge-target { background: #fef3c7; color: #b45309; border-color: #fcd34d; }
+    [data-theme="light"] .gx-lvl-badge-risk   { background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
+    [data-theme="light"] .gx-level-row-current { background: #dcfce7; }
+    [data-theme="light"] .gx-lvl-price-current { color: #15803d; }
   </style>
 </head>
 
@@ -2170,9 +2181,9 @@ function renderGraddox() {
       levels.gex1         ? { icon:'🟡', price:levels.gex1,         label:'GEX1 / Gamma Flat', sub:'',              badge:null,    current:false } : null,
       levels.put_support  ? { icon:'🟢', price:levels.put_support,  label:'Put Support',        sub:(!isQQQ?'':levels.note||''), badge:null, current:false } : null,
       levels.key_target   ? { icon:'🎯', price:levels.key_target,   label:'Key Target',         sub:'',
-                               badge:`<span class="gx-lvl-badge" style="background:#2d1a00;color:#f59e0b;border:1px solid #78350f">Today's Target</span>`, current:false } : null,
+                               badge:`<span class="gx-lvl-badge gx-lvl-badge-target">Today's Target</span>`, current:false } : null,
       levels.downside_risk? { icon:'⚠️', price:levels.downside_risk,label:'Downside Risk',      sub:'',
-                               badge:`<span class="gx-lvl-badge" style="background:#2d0c0c;color:#ef4444;border:1px solid #7f1d1d">Downside Risk</span>`, current:false } : null,
+                               badge:`<span class="gx-lvl-badge gx-lvl-badge-risk">Downside Risk</span>`, current:false } : null,
       currentPrice        ? { icon:'💲', price:currentPrice,        label:'Current Price',      sub:priceTime||'',   badge:null,    current:true  } : null,
     ].filter(Boolean);
 
@@ -2180,13 +2191,13 @@ function renderGraddox() {
     rows.sort((a, b) => b.price - a.price);
 
     return rows.map(r => {
-      const rowStyle = r.current ? 'background:#0d2618;' : '';
-      const priceStyle = r.current ? 'color:#4ade80;font-weight:700;' : '';
+      const rowCls   = r.current ? ' gx-level-row-current' : '';
+      const priceCls = r.current ? ' gx-lvl-price-current' : '';
       const fmt = Number.isInteger(r.price) ? r.price.toString() : r.price.toFixed(2);
       return `
-        <div class="gx-level-row" style="${rowStyle}">
+        <div class="gx-level-row${rowCls}">
           <span class="gx-lvl-icon">${r.icon}</span>
-          <span class="gx-lvl-price" style="${priceStyle}">${fmt}</span>
+          <span class="gx-lvl-price${priceCls}">${fmt}</span>
           <span class="gx-lvl-label">${r.label}${r.sub?`<br><span style="font-size:10px;color:var(--t3)">${r.sub}</span>`:''}</span>
           ${r.badge||''}
         </div>`;
