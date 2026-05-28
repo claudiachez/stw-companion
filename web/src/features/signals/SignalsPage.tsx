@@ -3,19 +3,24 @@ import { LevelCard } from './components/LevelCard';
 import { SignalsTable } from './components/SignalsTable';
 import { LoadingSpinner } from '../../shared/components/LoadingSpinner';
 import { EmptyState } from '../../shared/components/EmptyState';
+import { AccessGate } from '../../shared/components/AccessGate';
 import { useTierAccess } from '../../shared/hooks/useTierAccess';
+import { useProfile } from '../../shared/hooks/useProfile';
 
 export function SignalsPage() {
+  const { data: profile, isLoading: profileLoading } = useProfile();
   const canAccess = useTierAccess('signals');
   const { data, isLoading, error } = useGraddox();
 
+  if (profileLoading) return <LoadingSpinner className="mt-16" />;
   if (!canAccess) {
     return (
-      <div className="flex flex-col items-center justify-center gap-4 mt-24 px-4 text-center">
-        <div className="w-12 h-12 bg-s2 rounded-full flex items-center justify-center text-t2 text-xl">🔒</div>
-        <h2 className="text-text font-semibold">Signals require a Basic or Premium subscription</h2>
-        <p className="text-t2 text-sm max-w-xs">Upgrade your plan or wait for your account to be approved to access GEX signals.</p>
-      </div>
+      <AccessGate
+        profile={profile}
+        module="signals"
+        moduleLabel="GEX Signals"
+        tierRequired="Premium"
+      />
     );
   }
 
