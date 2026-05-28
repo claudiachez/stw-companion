@@ -244,40 +244,46 @@ window.GRADDOX_DATA = {
       flex-shrink: 0;
     }
 
-    /* ── Portfolio dashboard strip ── */
-    .port-dash {
-      display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
-      margin-bottom: 10px; padding-bottom: 10px;
-      border-bottom: 1px solid var(--border);
+    /* ── Portfolio Overview (right panel default) ── */
+    .port-overview { padding: 4px 0 20px; }
+    .port-overview-title {
+      font-size: 9px; font-weight: 700; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--t3); margin-bottom: 16px;
     }
-    .pd-stat {
-      display: flex; flex-direction: column; gap: 1px;
-      padding: 5px 10px; border-radius: var(--rsm);
+    .port-stats-row {
+      display: flex; gap: 0; margin-bottom: 20px;
       background: var(--s2); border: 1px solid var(--bsub);
-      min-width: 60px;
+      border-radius: var(--rsm); overflow: hidden;
     }
-    .pd-stat-label {
-      font-size: 9px; color: var(--t3); text-transform: uppercase;
-      letter-spacing: 0.07em; font-weight: 600;
+    .port-stat {
+      flex: 1; padding: 14px 16px;
+      border-right: 1px solid var(--bsub);
     }
-    .pd-stat-val {
-      font-size: 14px; font-weight: 700; color: var(--text);
-      font-variant-numeric: tabular-nums; line-height: 1.2;
+    .port-stat:last-child { border-right: none; }
+    .port-stat-val {
+      font-size: 24px; font-weight: 700; color: var(--text);
+      font-variant-numeric: tabular-nums; line-height: 1.1; margin-bottom: 3px;
     }
-    .pd-stat-sub {
-      font-size: 10px; color: var(--t2);
+    .port-stat-label { font-size: 10px; color: var(--t3); }
+    .port-sector-title {
+      font-size: 9px; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--t3); margin-bottom: 12px;
     }
-    .pd-tiers {
-      display: flex; gap: 4px; align-items: center;
+    .port-sector-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .port-sector-name {
+      font-size: 11px; color: var(--t2); width: 200px; flex-shrink: 0;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    .pd-tier-pip {
-      display: flex; align-items: center; gap: 3px;
-      font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums;
-      padding: 3px 6px; border-radius: 4px;
+    .port-sector-bar-bg {
+      flex: 1; height: 4px; background: var(--s2); border-radius: 2px; overflow: hidden;
     }
-    .pd-divider {
-      width: 1px; height: 28px; background: var(--border); flex-shrink: 0;
+    .port-sector-bar-fill { height: 100%; border-radius: 2px; transition: width 0.4s ease; }
+    .port-sector-pct {
+      font-size: 11px; font-weight: 600; color: var(--text);
+      font-variant-numeric: tabular-nums; width: 30px; text-align: right; flex-shrink: 0;
     }
+    .port-sync-label { margin-top: 16px; font-size: 10px; color: var(--t3); }
+    .detail-close.hidden { display: none; }
 
     .filters {
       display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
@@ -460,10 +466,8 @@ window.GRADDOX_DATA = {
       flex: 1;
       overflow-y: auto;
       padding: 20px;
-      display: none;
+      display: block;   /* always visible on desktop — shows overview or ticker detail */
     }
-
-    .detail-panel.open { display: block; }
 
     .detail-close {
       display: inline-flex; align-items: center; gap: 5px;
@@ -772,6 +776,75 @@ window.GRADDOX_DATA = {
     }
     .gx-log-text { font-size: 12px; color: var(--text); line-height: 1.5; }
 
+    /* ── Users module ── */
+    .users-module { padding: 20px 24px; max-width: 900px; }
+    .users-stats {
+      display: flex; gap: 10px; margin-bottom: 20px;
+    }
+    .users-stat {
+      flex: 1; padding: 12px 16px; border-radius: var(--rsm);
+      background: var(--s2); border: 1px solid var(--bsub);
+    }
+    .users-stat-val { font-size: 22px; font-weight: 700; color: var(--text); }
+    .users-stat-label { font-size: 10px; color: var(--t3); margin-top: 2px; }
+    .users-table-wrap { overflow-x: auto; }
+    .users-table {
+      width: 100%; border-collapse: collapse;
+      font-size: 13px;
+    }
+    .users-table th {
+      text-align: left; font-size: 10px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--t3); background: var(--s2);
+      padding: 7px 12px; border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .users-table td {
+      padding: 10px 12px; border-bottom: 1px solid var(--bsub);
+      vertical-align: middle;
+    }
+    .users-table tr:last-child td { border-bottom: none; }
+    .users-table tr:hover td { background: var(--s2); }
+    .users-name { font-weight: 600; color: var(--text); }
+    .users-email { font-size: 11px; color: var(--t3); margin-top: 1px; }
+    .u-status {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 11px; font-weight: 600; padding: 2px 8px;
+      border-radius: 10px; white-space: nowrap;
+    }
+    .u-status.pending  { background: #2d1a00; color: #f59e0b; }
+    .u-status.approved { background: #052e16; color: #22c55e; }
+    .u-status.rejected { background: #2d0c0c; color: #ef4444; }
+    [data-theme="light"] .u-status.pending  { background: #fef3c7; color: #b45309; }
+    [data-theme="light"] .u-status.approved { background: #dcfce7; color: #15803d; }
+    [data-theme="light"] .u-status.rejected { background: #fee2e2; color: #dc2626; }
+    .u-tier-select {
+      font-size: 12px; font-family: inherit; font-weight: 500;
+      background: var(--s2); border: 1px solid var(--border);
+      color: var(--text); border-radius: var(--rsm);
+      padding: 3px 6px; cursor: pointer;
+    }
+    .u-action-btn {
+      font-size: 11px; font-weight: 600; font-family: inherit;
+      padding: 3px 10px; border-radius: var(--rsm);
+      border: 1px solid var(--border); cursor: pointer;
+      transition: all 0.12s; background: transparent; color: var(--t2);
+    }
+    .u-action-btn:hover { color: var(--text); border-color: var(--t2); }
+    .u-action-btn.approve { color: var(--acc); border-color: var(--acc); }
+    .u-action-btn.approve:hover { background: #052e16; }
+    .u-action-btn.reject { color: #ef4444; border-color: #7f1d1d; }
+    .u-action-btn.reject:hover { background: #2d0c0c; }
+    [data-theme="light"] .u-action-btn.approve:hover { background: #dcfce7; }
+    [data-theme="light"] .u-action-btn.reject:hover  { background: #fee2e2; }
+    .users-empty { padding: 40px; text-align: center; color: var(--t3); font-size: 13px; }
+    .nav-pending-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      background: #f59e0b; color: #000; border-radius: 8px;
+      font-size: 9px; font-weight: 700; padding: 0 5px; min-width: 16px; height: 16px;
+      margin-left: 4px; vertical-align: middle;
+    }
+
     /* Timeframe buttons */
     .tf-btn {
       padding: 2px 7px; border-radius: 4px;
@@ -826,8 +899,9 @@ window.GRADDOX_DATA = {
       .subhdr { padding: 8px 12px 10px; }
 
       /* Compact dashboard on mobile */
-      .port-dash { gap: 6px; }
-      .pd-stat { padding: 4px 8px; }
+      .port-sector-name { width: 140px; }
+      .port-stat { padding: 10px 12px; }
+      .port-stat-val { font-size: 18px; }
 
       /* Filters: single horizontal scrollable strip */
       .filters {
@@ -892,10 +966,11 @@ window.GRADDOX_DATA = {
       .row-wnum      { font-size: 12px; font-weight: 600; color: var(--text); }
       .row-wbar-bg   { display: none; }   /* no mini-bar needed on second line */
 
-      /* ── Detail panel: fixed full-screen overlay ── */
+      /* ── Detail panel: hidden on mobile until ticker selected ── */
       .list-panel.narrow { flex: 1; }
 
       .detail-panel {
+        display: none;   /* hidden on mobile by default */
         position: fixed;
         inset: 0;
         z-index: 50;
@@ -904,6 +979,7 @@ window.GRADDOX_DATA = {
         -webkit-overflow-scrolling: touch;
         padding: 0 16px 32px;
       }
+      .detail-panel.open { display: block; }
 
       /* Sticky back bar */
       .detail-close {
@@ -1188,6 +1264,7 @@ window.GRADDOX_DATA = {
   <nav class="nav">
     <button class="nav-btn on" onclick="showModule('stw',this)">Stock Picks</button>
     <button class="nav-btn" onclick="showModule('gradoxx',this)">GEX Signals</button>
+    <button class="nav-btn" id="nav-users" onclick="showModule('users',this)">Users<span class="nav-pending-badge" id="pending-badge" style="display:none">0</span></button>
   </nav>
   <div class="hdr-right">
     <div class="live-dot" id="db-dot"></div>
@@ -1222,9 +1299,8 @@ window.GRADDOX_DATA = {
 <!-- ── STW Module ────────────────────────────── -->
 <div class="module on" id="mod-stw">
 
-  <!-- Subheader: portfolio dashboard + filters -->
+  <!-- Subheader: filters -->
   <div class="subhdr">
-    <div class="port-dash" id="portfolio-dash"></div>
     <div class="filters">
       <input class="filter-input" id="f-search" placeholder="Search ticker…" oninput="applyFilters()">
       <select class="filter-select" id="f-basket" onchange="applyFilters()">
@@ -1315,6 +1391,27 @@ window.GRADDOX_DATA = {
       <!-- Signals + log: filled by renderGraddox() -->
       <div id="gx-signals-wrap" style="display:contents"></div>
 
+    </div>
+  </div>
+</div>
+
+<!-- ── Users Module ──────────────────────────── -->
+<div class="module" id="mod-users">
+  <div class="users-module">
+    <div class="users-stats" id="users-stats"></div>
+    <div class="users-table-wrap">
+      <table class="users-table">
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Status</th>
+            <th>Tier</th>
+            <th>Joined</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="users-tbody"></tbody>
+      </table>
     </div>
   </div>
 </div>
@@ -1592,72 +1689,95 @@ function parseCostBasis(h) {
 }
 
 // ── Portfolio dashboard ──────────────────────────────────
-function renderPortfolioDashboard() {
+// ── Portfolio Overview (right-panel default state) ────────
+function renderPortfolioOverview() {
   const data = window.STW_DATA;
-  const el = document.getElementById('portfolio-dash');
-  if (!data || !el) return;
+  if (!data) return;
+
+  // Hide close button in overview mode
+  const closeBtn = document.querySelector('.detail-close');
+  if (closeBtn) closeBtn.classList.add('hidden');
 
   const holdings = data.holdings.filter(h => h.ticker !== 'CASH');
   const total = holdings.length;
 
-  // Tier counts
-  const tierCounts = {};
-  holdings.forEach(h => { tierCounts[h.conviction] = (tierCounts[h.conviction]||0) + 1; });
-  const tierHtml = [5,4,3,2,1].map(conv => {
-    const cnt = tierCounts[conv];
-    if (!cnt) return '';
-    const t = TIERS[conv];
-    return `<div class="pd-tier-pip" style="background:${t.bg};color:${t.color};border:1px solid ${t.border}">
-      <span style="font-size:9px;opacity:0.75">T${conv}</span>&nbsp;${cnt}
+  // Avg P&L from IBKR/Supabase data
+  const withPnl = holdings.filter(h => _getIbkrData(h)?.pnlPct != null);
+  const avgPnl = withPnl.length
+    ? withPnl.reduce((s,h) => s + _getIbkrData(h).pnlPct, 0) / withPnl.length
+    : null;
+  const avgPnlClr = avgPnl == null ? 'var(--text)' : avgPnl >= 0 ? 'var(--c5)' : 'var(--c1)';
+  const avgPnlStr = avgPnl == null ? '—'
+    : `${avgPnl >= 0 ? '+' : ''}${avgPnl.toFixed(1)}%`;
+
+  // Equity : Options ratio by weight
+  let eqW = 0, optW = 0;
+  holdings.forEach(h => {
+    const w = h.current_weight ?? h.initial_weight ?? 0;
+    const pt = positionType(h);
+    if (pt === 'options') optW += w;
+    else if (pt === 'mixed') { eqW += w * 0.5; optW += w * 0.5; }
+    else eqW += w;
+  });
+  const totalW = eqW + optW;
+  const eqPct  = totalW > 0 ? Math.round(eqW  / totalW * 100) : 50;
+  const optPct = totalW > 0 ? Math.round(optW / totalW * 100) : 50;
+
+  // Sector distribution
+  const sectorMap = {};
+  let sectorTotal = 0;
+  holdings.forEach(h => {
+    const w = h.current_weight ?? h.initial_weight ?? 0;
+    sectorMap[h.basket] = (sectorMap[h.basket]||0) + w;
+    sectorTotal += w;
+  });
+  const sectors = Object.entries(sectorMap).sort((a,b) => b[1]-a[1]);
+  const maxSectorW = sectors[0]?.[1] || 1;
+
+  const sectorRows = sectors.map(([name, w]) => {
+    const pct = sectorTotal > 0 ? Math.round(w / sectorTotal * 100) : 0;
+    const barW = Math.round(w / maxSectorW * 100);
+    const c = bColor(name);
+    return `<div class="port-sector-row">
+      <div class="port-sector-name">${name}</div>
+      <div class="port-sector-bar-bg">
+        <div class="port-sector-bar-fill" style="width:${barW}%;background:${c}"></div>
+      </div>
+      <div class="port-sector-pct">${pct}%</div>
     </div>`;
   }).join('');
 
-  // IBKR coverage + avg P&L
-  let ibkrHtml = '';
-  const withPnl = holdings.filter(h => {
-    const ibkr = _getIbkrData(h);
-    return ibkr?.pnlPct != null;
-  });
-  if (withPnl.length) {
-    const avg = withPnl.reduce((s,h) => s + _getIbkrData(h).pnlPct, 0) / withPnl.length;
-    const avgClr = avg >= 0 ? 'var(--c5)' : 'var(--c1)';
-    const isLive = _ibkrLive;
-    ibkrHtml = `
-    <div class="pd-divider"></div>
-    <div class="pd-stat">
-      <span class="pd-stat-label">IBKR P&amp;L${isLive ? ' ●' : ''}</span>
-      <span class="pd-stat-val" style="color:${avgClr}">${avg>=0?'+':''}${avg.toFixed(1)}%</span>
-      <span class="pd-stat-sub">${withPnl.length}/${total} positions</span>
-    </div>`;
-  }
+  // Last synced
+  const syncTimes = holdings.map(h => h.last_pnl_at ? new Date(h.last_pnl_at).getTime() : 0).filter(t => t > 0);
+  const latestSync = syncTimes.length ? new Date(Math.max(...syncTimes)) : null;
+  const syncStr = latestSync
+    ? latestSync.toLocaleString('en-US', {month:'short', day:'numeric', hour:'numeric', minute:'2-digit', ...ET})
+    : null;
 
-  // Recent actions
-  const recentActions = [...holdings]
-    .filter(h => h.action_date && h.last_action)
-    .sort((a,b) => new Date(b.action_date) - new Date(a.action_date))
-    .slice(0, 3);
-  const actionsHtml = recentActions.length ? `
-    <div class="pd-divider"></div>
-    <div style="display:flex;gap:6px;align-items:center">
-      ${recentActions.map(h => {
-        const t = TIERS[h.conviction];
-        return `<div style="display:flex;flex-direction:column;gap:1px">
-          <span style="font-size:11px;font-weight:700;color:${t.color}">${h.ticker}</span>
-          <span style="font-size:9px;color:var(--t3)">${fmtDate(h.action_date)}</span>
-        </div>`;
-      }).join('')}
-    </div>` : '';
+  document.getElementById('detail-content').innerHTML = `
+    <div class="port-overview">
+      <div class="port-overview-title">Portfolio Overview</div>
 
-  el.innerHTML = `
-    <div class="pd-stat">
-      <span class="pd-stat-label">Positions</span>
-      <span class="pd-stat-val">${total}</span>
+      <div class="port-stats-row">
+        <div class="port-stat">
+          <div class="port-stat-val">${total}</div>
+          <div class="port-stat-label">Active Holdings</div>
+        </div>
+        <div class="port-stat">
+          <div class="port-stat-val" style="color:${avgPnlClr}">${avgPnlStr}</div>
+          <div class="port-stat-label">Avg Return${withPnl.length ? ` (${withPnl.length} positions)` : ''}</div>
+        </div>
+        <div class="port-stat">
+          <div class="port-stat-val">${eqPct}&thinsp;:&thinsp;${optPct}</div>
+          <div class="port-stat-label">Equity&thinsp;:&thinsp;Options (by weight)</div>
+        </div>
+      </div>
+
+      <div class="port-sector-title">Sector Distribution</div>
+      ${sectorRows}
+
+      ${syncStr ? `<div class="port-sync-label">Last synced: ${syncStr} ET${_ibkrLive ? ' · <span style="color:var(--c5)">● live</span>' : ''}</div>` : ''}
     </div>
-    <div style="display:flex;align-items:center;gap:4px">
-      <div class="pd-tiers">${tierHtml}</div>
-    </div>
-    ${ibkrHtml}
-    ${actionsHtml}
   `;
 }
 
@@ -1848,6 +1968,10 @@ function selectTicker(ticker) {
   const h = window.STW_DATA?.holdings?.find(x=>x.ticker===ticker);
   if (!h) return;
 
+  // Show close button — entering ticker-detail mode
+  const closeBtn = document.querySelector('.detail-close');
+  if (closeBtn) closeBtn.classList.remove('hidden');
+
   renderList();
   renderDetail(h);
 
@@ -1859,6 +1983,7 @@ function closeDetail() {
   selectedTicker = null;
   document.getElementById('detail-panel').classList.remove('open');
   renderList();
+  renderPortfolioOverview();  // restore overview in right panel
 }
 
 // ── Inline edit (Supabase-backed) ────────────────────────
@@ -1893,7 +2018,7 @@ async function commitEdit(ticker) {
   detailEditMode = false;
   renderDetail(h);
   renderList();
-  renderPortfolioDashboard();
+  renderPortfolioOverview();
 
   // Persist to Supabase
   try {
@@ -2310,6 +2435,135 @@ function showModule(id, btn) {
   document.getElementById('mod-'+id).classList.add('on');
   btn.classList.add('on');
   localStorage.setItem('activeTab', id);
+  if (id === 'users') fetchUsers();
+}
+
+// ── User management ──────────────────────────────────────
+let _usersData = [];
+
+async function fetchUsers() {
+  try {
+    const { data, error } = await db.from('profiles')
+      .select('user_id, display_name, email, status, subscription_tier, created_at')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    _usersData = data || [];
+    renderUsers();
+    updatePendingBadge();
+  } catch(e) {
+    console.error('fetchUsers:', e.message);
+    document.getElementById('users-tbody').innerHTML =
+      `<tr><td colspan="5" class="users-empty">⚠️ Failed to load users: ${e.message}</td></tr>`;
+  }
+}
+
+function updatePendingBadge() {
+  const pending = _usersData.filter(u => u.status === 'pending').length;
+  const badge = document.getElementById('pending-badge');
+  if (!badge) return;
+  if (pending > 0) {
+    badge.textContent = pending;
+    badge.style.display = '';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function renderUsers() {
+  const total    = _usersData.length;
+  const pending  = _usersData.filter(u => u.status === 'pending').length;
+  const approved = _usersData.filter(u => u.status === 'approved').length;
+
+  // Stats strip
+  document.getElementById('users-stats').innerHTML = `
+    <div class="users-stat">
+      <div class="users-stat-val">${total}</div>
+      <div class="users-stat-label">Total Users</div>
+    </div>
+    <div class="users-stat">
+      <div class="users-stat-val" style="color:#f59e0b">${pending}</div>
+      <div class="users-stat-label">Pending Approval</div>
+    </div>
+    <div class="users-stat">
+      <div class="users-stat-val" style="color:var(--acc)">${approved}</div>
+      <div class="users-stat-label">Approved</div>
+    </div>
+  `;
+
+  if (!_usersData.length) {
+    document.getElementById('users-tbody').innerHTML =
+      `<tr><td colspan="5" class="users-empty">No users yet. Share the app link to start getting signups.</td></tr>`;
+    return;
+  }
+
+  const TIER_LABELS = { free: 'Free', basic: 'Basic', premium: 'Premium' };
+
+  document.getElementById('users-tbody').innerHTML = _usersData.map(u => {
+    const name    = u.display_name || '—';
+    const email   = u.email || u.user_id.slice(0, 8) + '…';
+    const status  = u.status || 'pending';
+    const tier    = u.subscription_tier || 'free';
+    const joined  = u.created_at
+      ? new Date(u.created_at).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'2-digit' })
+      : '—';
+
+    const approveBtn = status !== 'approved'
+      ? `<button class="u-action-btn approve" onclick="updateUserStatus('${u.user_id}','approved')">Approve</button>`
+      : '';
+    const rejectBtn = status !== 'rejected'
+      ? `<button class="u-action-btn reject" onclick="updateUserStatus('${u.user_id}','rejected')">Reject</button>`
+      : '';
+
+    return `<tr>
+      <td>
+        <div class="users-name">${name}</div>
+        <div class="users-email">${email}</div>
+      </td>
+      <td><span class="u-status ${status}">${status}</span></td>
+      <td>
+        <select class="u-tier-select" onchange="updateUserTier('${u.user_id}', this.value)">
+          <option value="free"    ${tier==='free'    ?'selected':''}>Free</option>
+          <option value="basic"   ${tier==='basic'   ?'selected':''}>Basic</option>
+          <option value="premium" ${tier==='premium' ?'selected':''}>Premium</option>
+        </select>
+      </td>
+      <td style="color:var(--t3);font-size:12px">${joined}</td>
+      <td style="display:flex;gap:5px;flex-wrap:wrap">
+        ${approveBtn}${rejectBtn}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function updateUserStatus(userId, status) {
+  try {
+    const { error } = await db.from('profiles')
+      .update({ status })
+      .eq('user_id', userId);
+    if (error) throw error;
+    // Optimistic update
+    const u = _usersData.find(x => x.user_id === userId);
+    if (u) u.status = status;
+    renderUsers();
+    updatePendingBadge();
+  } catch(e) {
+    console.error('updateUserStatus:', e.message);
+    alert(`Failed to update status: ${e.message}`);
+  }
+}
+
+async function updateUserTier(userId, tier) {
+  try {
+    const { error } = await db.from('profiles')
+      .update({ subscription_tier: tier })
+      .eq('user_id', userId);
+    if (error) throw error;
+    const u = _usersData.find(x => x.user_id === userId);
+    if (u) u.subscription_tier = tier;
+  } catch(e) {
+    console.error('updateUserTier:', e.message);
+    alert(`Failed to update tier: ${e.message}`);
+  }
 }
 
 function restoreTab() {
@@ -2646,10 +2900,12 @@ async function fetchIBKR() {
     label.textContent = `IBKR ✓ (${priced}/${allLegs.length})`;
 
     renderList();
-    renderPortfolioDashboard();
     if (selectedTicker) {
       const h = window.STW_DATA?.holdings?.find(x => x.ticker === selectedTicker);
       if (h) renderDetail(h);
+      else renderPortfolioOverview();
+    } else {
+      renderPortfolioOverview();  // refresh avg P&L in overview with fresh data
     }
   } catch (e) {
     dot.style.background = '#EF4444';
@@ -2704,8 +2960,9 @@ function renderAll() {
     if (lbl) lbl.textContent = `IBKR (cached)`;
   }
   renderList();
-  renderPortfolioDashboard();  // after _loadIBKRCache so cached P&L appears in dashboard
+  renderPortfolioOverview();  // after _loadIBKRCache so cached P&L appears
   renderGraddox();
+  fetchUsers();               // background — updates pending badge in nav
   restoreTab();
   // Fetch live prices in the background — re-renders list/detail when done
   fetchLivePrices();
