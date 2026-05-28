@@ -6,9 +6,12 @@ import { HoldingRow } from './components/HoldingRow';
 import { HoldingDetail } from './components/HoldingDetail';
 import { LoadingSpinner } from '../../shared/components/LoadingSpinner';
 import { EmptyState } from '../../shared/components/EmptyState';
+import { AccessGate } from '../../shared/components/AccessGate';
 import { TIERS, bColor, positionType, parseCostBasis } from './constants';
 import { usePriceCacheStore } from '../../store/priceCache';
 import { useIsMobile } from '../../shared/hooks/useIsMobile';
+import { useProfile } from '../../shared/hooks/useProfile';
+import { useTierAccess } from '../../shared/hooks/useTierAccess';
 import type { Holding } from './api';
 
 const FINNHUB_KEY = import.meta.env.VITE_FINNHUB_KEY as string | undefined;
@@ -159,6 +162,8 @@ function PortfolioDashboard({ holdings }: { holdings: Holding[] }) {
 
 // ── Main page ─────────────────────────────────────────────────
 export function PicksPage() {
+  const { data: profile, isLoading: profileLoading } = useProfile();
+  const canAccess = useTierAccess('picks');
   const { data: holdings = [], isLoading, error } = useHoldings();
   const filters = useFiltersStore();
   const setPrice = usePriceCacheStore((s) => s.setPrice);
@@ -210,6 +215,19 @@ export function PicksPage() {
       }, i * 1100);
     });
   }, [holdings.length, setPrice, setFetchStatus]);
+
+  // Access gate: show spinner while profile loads, gate screen if no access
+  if (profileLoading) return <LoadingSpinner className="mt-16" />;
+  if (!canAccess) {
+    return (
+      <AccessGate
+        profile={profile}
+        module="picks"
+        moduleLabel="Stock Picks"
+        tierRequired="Basic"
+      />
+    );
+  }
 
   if (isLoading) return <LoadingSpinner className="mt-16" />;
   if (error) return <EmptyState message="Failed to load holdings." />;
