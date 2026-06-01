@@ -87,10 +87,14 @@ git push -u origin claude/mobile-my-feature
 - Production: auto-deploys on push to `admin-main` (requires approval)
 
 ### Code Rules
-- Do not change any JS logic, data structures, or API calls
-- Do not restructure the HTML
-- Do not rename or remove CSS classes/IDs — only change property values
-- Portfolio data lives in `<script id="stw-data-block">` — do not edit manually
+Feature and display changes to the dashboard (filter behavior, render logic, new
+panels, data-shape additions) are allowed **when the user explicitly requests them**.
+The defaults below protect the dashboard from incidental breakage — don't make these
+changes gratuitously or as drive-by cleanup, but do implement them when asked:
+- Don't change JS logic, data structures, or API calls *unless the change is the requested task*. Keep the diff scoped to what was asked.
+- Don't restructure the HTML or rename/remove CSS classes/IDs for cosmetic reasons — change property values, and add new markup/classes rather than reworking existing ones.
+- Live portfolio data is read from Supabase at runtime. The `<script id="stw-data-block">` block is only a static fallback — never hand-edit it to change portfolio numbers; update Supabase instead.
+- Keep colors in `:root` / `[data-theme="light"]` (CSS variables) — don't hardcode theme colors inline.
 
 ### Theme System
 - **Default:** Dark mode

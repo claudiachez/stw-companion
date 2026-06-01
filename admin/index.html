@@ -1315,7 +1315,7 @@ window.GRADDOX_DATA = {
         <option value="1">Tier 5 — Concern</option>
       </select>
       <select class="filter-select" id="f-status" onchange="applyFilters()">
-        <option value="">All Status</option>
+        <option value="">All Open</option>
         <option value="New">New</option>
         <option value="Upsized">Upsized</option>
         <option value="Hold">Hold</option>
@@ -1630,15 +1630,28 @@ function _ibkrCacheDateStr(ticker, fallbackTs) {
   return d.toLocaleDateString('en-US', {month:'short', day:'numeric', ...ET});
 }
 
-// Returns merged IBKR data: live cache first, then Supabase-stored legs as fallback.
+// Returns IBKR data with every leg from position_detail always represented.
+// Live IBKR cache (or Supabase-stored legs) supplies prices; a freshly-added leg
+// that the proxy hasn't priced yet still shows up ("no market data") instead of
+// waiting for the next IBKR sync.
 function _getIbkrData(h) {
-  if (_ibkrCache[h.ticker]?.legs?.length) return _ibkrCache[h.ticker];
-  if (h.ibkr_legs?.length) return {
-    legs:   h.ibkr_legs,
-    ts:     h.last_pnl_at || null,
-    pnlPct: h.last_pnl_pct ?? null,
-  };
-  return null;
+  const live = _ibkrCache[h.ticker];
+  const src  = (live?.legs?.length) ? live
+             : (h.ibkr_legs?.length ? { legs:h.ibkr_legs, ts:h.last_pnl_at||null, pnlPct:h.last_pnl_pct??null } : null);
+
+  const parsed = parseOptionLegs(h);
+  if (!parsed.length) return src;  // no parseable legs → preserve prior behavior
+
+  const srcLegs = src?.legs || [];
+  const legs = parsed.map(p => {
+    const s = srcLegs.find(l =>
+      parseFloat(l.strike) === p.strike &&
+      (l.right||'').toUpperCase() === p.right &&
+      String(l.expiry||'').startsWith(p.expiry));
+    return s ? { ...p, ...s } : p;
+  });
+
+  return { legs, ts: src?.ts || null, pnlPct: src?.pnlPct ?? null };
 }
 
 // ── Helpers ──────────────────────────────────────────────
@@ -1700,7 +1713,7 @@ function renderPortfolioOverview() {
   const closeBtn = document.querySelector('.detail-close');
   if (closeBtn) closeBtn.classList.add('hidden');
 
-  const holdings = data.holdings.filter(h => h.ticker !== 'CASH');
+  const holdings = data.holdings.filter(h => h.ticker !== 'CASH' && h.last_action !== 'Closed');
   const total = holdings.length;
 
   // Avg P&L from IBKR/Supabase data
@@ -1831,9 +1844,10 @@ function applyFilters() {
   document.getElementById('f-clear').style.display = hasFilter ? 'block' : 'none';
 
   filteredHoldings = data.holdings.filter(h => {
+    if (status) { if (h.last_action !== status) return false; }
+    else if (h.last_action === 'Closed') return false;  // hide closed unless explicitly selected
     if (basket && h.basket !== basket) return false;
     if (tier   && h.conviction !== Number(tier)) return false;
-    if (status && h.last_action !== status) return false;
     if (type   && positionType(h) !== type) return false;
     if (search && !h.ticker.toLowerCase().includes(search) &&
         !h.basket.toLowerCase().includes(search) &&
@@ -1842,7 +1856,7 @@ function applyFilters() {
   });
 
   document.getElementById('f-count').textContent =
-    hasFilter ? `${filteredHoldings.length} of ${data.holdings.length}` : `${data.holdings.length} positions`;
+    hasFilter ? `${filteredHoldings.length} of ${data.holdings.length}` : `${filteredHoldings.length} positions`;
 
   renderList();
 }
