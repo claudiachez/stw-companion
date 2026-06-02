@@ -1,6 +1,6 @@
 import type { Holding } from '../api';
 import { TIERS, ACTION_VARS, bColor, parseCostBasis, positionType, resolvePnl } from '@stw/shared';
-import { useQuote } from '../../../shared/hooks/useLivePrice';
+import { useQuote } from '../../../hooks/useLivePrice';
 import { usePriceCacheStore } from '../../../store/priceCache';
 
 const ET = { timeZone: 'America/New_York' };

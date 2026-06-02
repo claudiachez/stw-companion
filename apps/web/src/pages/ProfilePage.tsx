@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/auth';
-import { LoadingSpinner } from '../shared/components/LoadingSpinner';
+import { LoadingSpinner } from '@stw/ui';
 
 const TIER_LABELS: Record<string, string> = {
   free: 'Free',

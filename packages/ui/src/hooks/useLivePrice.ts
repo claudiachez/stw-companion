@@ -1,4 +1,4 @@
-import { usePriceCacheStore, type Quote } from '../../store/priceCache';
+import { usePriceCacheStore, type Quote } from '../store/priceCache';
 
 export function useQuote(ticker: string): Quote | null {
   return usePriceCacheStore((s) => s.cache[ticker] ?? null);

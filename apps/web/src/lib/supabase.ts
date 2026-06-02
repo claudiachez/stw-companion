@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { setSupabaseClient } from '@stw/ui';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
@@ -13,3 +14,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: true,
   },
 });
+
+// Inject the web client into @stw/ui so shared data hooks use this app's
+// credentials. This module is imported at startup (via main.tsx) before any
+// shared query runs.
+setSupabaseClient(supabase);

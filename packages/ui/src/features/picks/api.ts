@@ -1,4 +1,4 @@
-import { supabase } from '../../lib/supabase';
+import { getSupabase } from '../../lib/supabase';
 
 export interface IbkrLeg {
   symbol: string;
@@ -32,7 +32,7 @@ export interface Holding {
 }
 
 export async function fetchHoldings(): Promise<Holding[]> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('holdings')
     .select('*')
     .order('rank', { ascending: true });

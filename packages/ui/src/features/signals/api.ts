@@ -1,4 +1,4 @@
-import { supabase } from '../../lib/supabase';
+import { getSupabase } from '../../lib/supabase';
 
 export interface Signal {
   id: number;
@@ -25,13 +25,14 @@ export interface GraddoxData {
 }
 
 export async function fetchGraddox(): Promise<GraddoxData> {
+  const sb = getSupabase();
   const [signalsRes, levelsRes] = await Promise.all([
-    supabase
+    sb
       .from('graddox')
       .select('*')
       .order('date', { ascending: false })
       .limit(50),
-    supabase
+    sb
       .from('graddox_levels')
       .select('*')
       .order('ticker', { ascending: true }),

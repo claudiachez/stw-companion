@@ -1,28 +1,13 @@
 import { useGraddox } from './useGraddox';
 import { LevelCard } from './components/LevelCard';
 import { SignalsTable } from './components/SignalsTable';
-import { LoadingSpinner } from '../../shared/components/LoadingSpinner';
-import { EmptyState } from '../../shared/components/EmptyState';
-import { AccessGate } from '../../shared/components/AccessGate';
-import { useTierAccess } from '../../shared/hooks/useTierAccess';
-import { useProfile } from '../../shared/hooks/useProfile';
+import { LoadingSpinner } from '../../primitives/LoadingSpinner';
+import { EmptyState } from '../../primitives/EmptyState';
 
-export function SignalsPage() {
-  const { data: profile, isLoading: profileLoading } = useProfile();
-  const canAccess = useTierAccess('signals');
+// ── Signals content (shared by web + admin) ───────────────────
+// Paywall/tier gating lives in each app shell, not here.
+export function SignalsView() {
   const { data, isLoading, error } = useGraddox();
-
-  if (profileLoading) return <LoadingSpinner className="mt-16" />;
-  if (!canAccess) {
-    return (
-      <AccessGate
-        profile={profile}
-        module="signals"
-        moduleLabel="GEX Signals"
-        tierRequired="Premium"
-      />
-    );
-  }
 
   if (isLoading) return <LoadingSpinner className="mt-16" />;
   if (error) return <EmptyState message="Failed to load signals data." />;

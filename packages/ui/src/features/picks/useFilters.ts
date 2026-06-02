@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { type SortMode } from '@stw/shared';
 
-// Pure filter/sort logic now lives in @stw/shared (shared by web + admin).
-// Re-exported here so existing call sites keep importing from './useFilters'.
+// Pure filter/sort logic lives in @stw/shared (shared by web + admin).
+// Re-exported here so call sites can import from one feature module.
 export { applyFilters, sortFlat } from '@stw/shared';
 export type { SortMode };
 
