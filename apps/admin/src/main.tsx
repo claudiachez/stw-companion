@@ -15,6 +15,7 @@ const capabilities: AppCapabilities = {
   canEdit: true,
   showIbkrBadge: true,
   finnhubKey: import.meta.env.VITE_FINNHUB_KEY as string | undefined,
+  twelveDataKey: import.meta.env.VITE_TWELVEDATA_KEY as string | undefined,
 };
 
 createRoot(document.getElementById('root')!).render(

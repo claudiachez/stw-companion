@@ -3,7 +3,7 @@ import { type SortMode } from '@stw/shared';
 
 // Pure filter/sort logic lives in @stw/shared (shared by web + admin).
 // Re-exported here so call sites can import from one feature module.
-export { applyFilters, sortFlat } from '@stw/shared';
+export { applyFilters, sortFlat, sortByPnl } from '@stw/shared';
 export type { SortMode };
 
 interface FiltersState {

@@ -17,6 +17,8 @@ export interface AppCapabilities {
   onEditHolding?: (holding: Holding) => void;
   /** Finnhub API key for live prices — injected from each app's env. */
   finnhubKey?: string;
+  /** TwelveData API key for GEX-signal candlestick charts — injected per-app. */
+  twelveDataKey?: string;
 }
 
 const DEFAULTS: AppCapabilities = {

@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@stw/shared": "workspace:*"
+    "@stw/shared": "workspace:*",
+    "lightweight-charts": "^4.2.3"
   },
   "peerDependencies": {
     "@supabase/supabase-js": "^2.45.4",

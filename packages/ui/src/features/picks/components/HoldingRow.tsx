@@ -84,7 +84,7 @@ export function HoldingRow({ holding: h, isSelected, maxWeight, onClick }: Props
       <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, minWidth: 60 }}>
         {/* Weight bar */}
         <div style={{ width: 48, height: 3, borderRadius: 2, background: 'var(--border)' }}>
-          <div style={{ width: `${wPct}%`, height: '100%', borderRadius: 2, background: tier.color }} />
+          <div style={{ width: `${Math.max(0, wPct)}%`, height: '100%', borderRadius: 2, background: tier.color }} />
         </div>
 
         {pnlPct != null && (
@@ -97,8 +97,11 @@ export function HoldingRow({ holding: h, isSelected, maxWeight, onClick }: Props
             ${quote.c.toFixed(2)}
           </span>
         )}
-        {!quote && w > 0 && (
-          <span style={{ fontSize: 10, color: 'var(--t3)' }}>{w.toFixed(1)}%</span>
+        {/* Weight readout — always shown for CASH (incl. negative = margin/leverage) */}
+        {!quote && (h.ticker === 'CASH' || w !== 0) && (
+          <span style={{ fontSize: 10, color: w < 0 ? '#DC2626' : 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>
+            {w.toFixed(1)}%
+          </span>
         )}
         <span style={{ fontSize: 9, color: 'var(--t3)' }}>{fmtDate(h.action_date)}</span>
       </div>

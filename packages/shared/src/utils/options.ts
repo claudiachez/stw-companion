@@ -45,6 +45,15 @@ export function parseOptionLegs(positionDetail: string, ticker: string): OptionL
     if (expiry) legs.push({ symbol: ticker, strike: parseFloat(m[3]), right: m[4].toUpperCase() as 'C' | 'P', expiry, entry: parseFloat(m[5]) });
   }
 
+  // Pattern C: month-only, no year/day — "$120C Sep @ $8.68". toExpiry defaults the
+  // year, giving a YYYYMM expiry. Requires MONTH immediately before "@", so it never
+  // collides with the dated forms above (those have a day/'YY between month and @).
+  const reC = /\$?(\d+\.?\d*)\s*([CP])\s+([A-Za-z]+)\s*@\s*\$?(\d+\.?\d*)/gi;
+  while ((m = reC.exec(positionDetail)) !== null) {
+    const expiry = toExpiry(m[3], null, null);
+    if (expiry) legs.push({ symbol: ticker, strike: parseFloat(m[1]), right: m[2].toUpperCase() as 'C' | 'P', expiry, entry: parseFloat(m[4]) });
+  }
+
   const seen = new Set<string>();
   return legs.filter(l => {
     const key = `${l.strike}${l.right}${l.expiry}`;

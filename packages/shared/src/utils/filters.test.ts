@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applyFilters, sortFlat, type FilterCriteria, type FilterableHolding } from './filters';
+import { applyFilters, sortFlat, sortByPnl, type FilterCriteria, type FilterableHolding } from './filters';
 
 const blank: FilterCriteria = { search: '', basket: '', tier: '', status: '', type: '' };
 
@@ -88,6 +88,39 @@ describe('sortFlat', () => {
   it('does not mutate the input array', () => {
     const copy = [...rows];
     sortFlat(rows, 'az');
+    expect(rows).toEqual(copy);
+  });
+
+  it('pnl modes fall back to conviction ordering (no price map available)', () => {
+    expect(sortFlat(rows, 'pnl_desc').map(r => r.ticker)).toEqual(['AAA', 'BBB', 'CCC']);
+    expect(sortFlat(rows, 'pnl_asc').map(r => r.ticker)).toEqual(['AAA', 'BBB', 'CCC']);
+  });
+});
+
+describe('sortByPnl', () => {
+  const rows = [
+    h({ ticker: 'AAA' }),
+    h({ ticker: 'BBB' }),
+    h({ ticker: 'CCC' }),
+    h({ ticker: 'DDD' }),
+  ];
+  const pnl = { AAA: 12, BBB: -5, CCC: 0, DDD: null };
+
+  it('desc: highest P&L first, nulls last', () => {
+    expect(sortByPnl(rows, pnl, 'desc').map(r => r.ticker)).toEqual(['AAA', 'CCC', 'BBB', 'DDD']);
+  });
+
+  it('asc: lowest P&L first, nulls last', () => {
+    expect(sortByPnl(rows, pnl, 'asc').map(r => r.ticker)).toEqual(['BBB', 'CCC', 'AAA', 'DDD']);
+  });
+
+  it('missing ticker is treated as null (sorts last)', () => {
+    expect(sortByPnl(rows, { AAA: 1, BBB: 2 }, 'desc').slice(0, 2).map(r => r.ticker)).toEqual(['BBB', 'AAA']);
+  });
+
+  it('does not mutate the input array', () => {
+    const copy = [...rows];
+    sortByPnl(rows, pnl, 'desc');
     expect(rows).toEqual(copy);
   });
 });

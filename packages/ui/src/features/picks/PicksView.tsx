@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useHoldings } from './useHoldings';
-import { useFiltersStore, applyFilters, sortFlat } from './useFilters';
+import { useFiltersStore, applyFilters, sortFlat, sortByPnl } from './useFilters';
 import { FilterBar } from './components/FilterBar';
 import { HoldingRow } from './components/HoldingRow';
 import { HoldingDetail } from './components/HoldingDetail';
 import { PortfolioDashboard } from './components/PortfolioDashboard';
 import { LoadingSpinner } from '../../primitives/LoadingSpinner';
 import { EmptyState } from '../../primitives/EmptyState';
-import { TIERS } from '@stw/shared';
+import { TIERS, resolvePnl, positionType, parseCostBasis } from '@stw/shared';
 import { usePriceCacheStore, type Quote } from '../../store/priceCache';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useCapabilities } from '../../context/AppCapabilities';
@@ -33,6 +33,7 @@ export function PicksView() {
   const filters = useFiltersStore();
   const setPrice = usePriceCacheStore((s) => s.setPrice);
   const setFetchStatus = usePriceCacheStore((s) => s.setFetchStatus);
+  const priceCache = usePriceCacheStore((s) => s.cache);
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
   const [mobileView, setMobileView] = useState<'list' | 'overview'>('list');
   const isMobile = useIsMobile();
@@ -85,7 +86,23 @@ export function PicksView() {
   if (error) return <EmptyState message="Failed to load holdings." />;
 
   const filtered = applyFilters(holdings, filters);
-  const sorted = sortFlat(filtered, filters.sort);
+  // P&L sorts need a live-price-derived map (built here, sorted in @stw/shared via
+  // the same resolver the rows use). All other sorts are pure data-only.
+  const sorted = (filters.sort === 'pnl_desc' || filters.sort === 'pnl_asc')
+    ? sortByPnl(
+        filtered,
+        Object.fromEntries(filtered.map((h) => [
+          h.ticker,
+          resolvePnl({
+            positionType: positionType(h.position_detail),
+            price: priceCache[h.ticker]?.c ?? null,
+            costBasis: parseCostBasis(h.position_detail),
+            optionsPnlPct: h.last_pnl_pct,
+          }).pnlPct,
+        ])),
+        filters.sort === 'pnl_desc' ? 'desc' : 'asc',
+      )
+    : sortFlat(filtered, filters.sort);
   const selected = sorted.find((h) => h.ticker === selectedTicker) ?? null;
   const maxWeight = Math.max(...holdings.map((h) => h.current_weight ?? h.initial_weight ?? 0), 0);
 

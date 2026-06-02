@@ -9,6 +9,8 @@ const SORT_OPTIONS: { value: SortMode; label: string }[] = [
   { value: 'oldest',      label: 'Sort: Oldest' },
   { value: 'weight_desc', label: 'Sort: Weight ↓' },
   { value: 'weight_asc',  label: 'Sort: Weight ↑' },
+  { value: 'pnl_desc',    label: 'Sort: P&L ↓' },
+  { value: 'pnl_asc',     label: 'Sort: P&L ↑' },
 ];
 
 const ctrlStyle: React.CSSProperties = {
@@ -67,7 +69,6 @@ export function FilterBar({ holdings, filtered }: Props) {
           <option value="">All Status</option>
           <option value="New">New</option>
           <option value="Upsized">Upsized</option>
-          <option value="Hold">Hold</option>
           <option value="Trimmed">Trimmed</option>
           <option value="Closed">Closed</option>
         </select>

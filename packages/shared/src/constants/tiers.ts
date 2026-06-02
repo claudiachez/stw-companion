@@ -22,10 +22,11 @@ export const TIERS: Record<number, TierMeta> = {
   0: { label: 'Tier 6 — Legacy Positions',   short: 'LEGACY',   color: 'var(--c0)', bg: 'var(--c0bg)', border: 'var(--c0b)', light: 'var(--c0l)' },
 };
 
+// "Hold" is intentionally omitted — holding is the implicit default state, so it
+// gets no action badge in the row or detail pane (both gate rendering on a hit here).
 export const ACTION_VARS: Record<string, { color: string; bg: string }> = {
   New:     { color: 'var(--new)',     bg: 'var(--new-bg)' },
   Upsized: { color: 'var(--upsized)', bg: 'var(--upsized-bg)' },
-  Hold:    { color: 'var(--hold)',    bg: 'var(--hold-bg)' },
   Trimmed: { color: 'var(--trimmed)', bg: 'var(--trimmed-bg)' },
   Closed:  { color: 'var(--closed)',  bg: 'var(--closed-bg)' },
 };

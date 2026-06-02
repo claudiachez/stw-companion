@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { Holding } from '../api';
-import { TIERS, ACTION_VARS, bColor, parseCostBasis, positionType, resolvePnl } from '@stw/shared';
+import type { Holding, IbkrLeg } from '../api';
+import { TIERS, ACTION_VARS, bColor, parseCostBasis, positionType, resolvePnl, parseOptionLegs } from '@stw/shared';
 import { useQuote } from '../../../hooks/useLivePrice';
 import { usePriceCacheStore } from '../../../store/priceCache';
 import { useCapabilities } from '../../../context/AppCapabilities';
@@ -74,7 +74,20 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
   const pnlColor = pnlPct != null ? (pnlPct >= 0 ? '#16A34A' : '#DC2626') : undefined;
 
   // ── Options legs ─────────────────────────────────────────
-  const legs      = h.ibkr_legs ?? [];
+  // Show EVERY leg parsed from position_detail, overlaying IBKR price/P&L where
+  // the proxy could price it (matched by strike + right + year-month). Legs the
+  // proxy couldn't resolve — e.g. a month-only expiry like "Oct '26" — still
+  // appear, just unpriced, so a multi-leg position never silently hides a leg.
+  const ibkrLegs  = h.ibkr_legs ?? [];
+  const parsedLegs = parseOptionLegs(h.position_detail ?? '', h.ticker);
+  const legs: IbkrLeg[] = parsedLegs.length > 0
+    ? parsedLegs.map((p) => {
+        const match = ibkrLegs.find(
+          (l) => l.strike === p.strike && l.right === p.right && l.expiry.slice(0, 6) === p.expiry.slice(0, 6),
+        );
+        return { ...p, price: match?.price ?? null, pnl_pct: match?.pnl_pct ?? null };
+      })
+    : ibkrLegs;
   const validLegs = legs.filter((l) => l.price != null);
 
   // ── P&L source label ─────────────────────────────────────
@@ -159,9 +172,9 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
             <div style={{ fontSize: 20, fontWeight: 700, color: pnlColor, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
               {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%
             </div>
-            {pType === 'options' && validLegs.length > 0 && (
+            {pType === 'options' && legs.length > 0 && (
               <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>
-                {validLegs.length} leg{validLegs.length > 1 ? 's' : ''} priced
+                {validLegs.length} of {legs.length} leg{legs.length > 1 ? 's' : ''} priced
               </div>
             )}
             {src && <div style={{ fontSize: 9, color: 'var(--t3)', marginTop: 4, opacity: 0.8 }}>{src}</div>}
@@ -379,6 +392,24 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
             )}
           </div>
         )}
+
+        {/* CASH: show portfolio weight (can be negative = margin / leverage) */}
+        {h.ticker === 'CASH' && (() => {
+          const cw = h.current_weight ?? h.initial_weight ?? 0;
+          return (
+            <div style={{ background: 'var(--s2)', border: '1px solid var(--bsub)', borderRadius: 6, padding: '10px 12px', marginBottom: 12 }}>
+              <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>
+                Portfolio Weight
+              </div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: cw < 0 ? '#DC2626' : 'var(--text)', lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
+                {cw.toFixed(1)}%
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 4 }}>
+                {cw < 0 ? 'Negative — margin / leverage in use' : 'Cash position'}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Mixed: P&L breakdown (shares / options) */}
         {renderPnlBreakdown()}

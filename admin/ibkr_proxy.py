@@ -15,6 +15,7 @@ click Advanced → Proceed to accept the self-signed cert (one-time only).
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from ib_insync import IB, Option
+from datetime import date, timedelta
 import asyncio
 import logging
 import random
@@ -33,6 +34,21 @@ IB_PORT = 4001   # 4001 = live, 4002 = paper
 def _new_client_id():
     """Random clientId so concurrent requests never collide."""
     return random.randint(20, 200)
+
+
+def _third_friday(yyyymm: str) -> str:
+    """Standard monthly equity-option expiration: the 3rd Friday of the month.
+
+    IB stores monthly options as the dated 3rd-Friday contract (YYYYMMDD), so a
+    bare YYYYMM ('Oct 26' with no day) usually fails to qualify. Resolving it to
+    the 3rd Friday lets us price legs whose detail string omits the expiry day.
+    Returns 'YYYYMMDD'.
+    """
+    y, m = int(yyyymm[:4]), int(yyyymm[4:6])
+    first = date(y, m, 1)
+    # weekday(): Mon=0 .. Fri=4 — offset from the 1st to the first Friday.
+    first_friday = first + timedelta(days=(4 - first.weekday()) % 7)
+    return (first_friday + timedelta(days=14)).strftime('%Y%m%d')
 
 
 # ── Status ───────────────────────────────────────────────
@@ -70,19 +86,44 @@ async def _price_options(specs):
         results = []
         for spec in specs:
             try:
-                contract = Option(
-                    spec['symbol'],
-                    str(spec['expiry']),
-                    float(spec['strike']),
-                    spec['right'].upper(),
-                    'SMART',
-                    currency='USD'
-                )
+                raw_expiry = str(spec['expiry'])
+                is_month_only = len(raw_expiry) == 6 and raw_expiry.isdigit()
+
+                def _make(exp):
+                    return Option(
+                        spec['symbol'], str(exp), float(spec['strike']),
+                        spec['right'].upper(), 'SMART', currency='USD'
+                    )
+
+                # Month-only expiry (YYYYMM) → resolve to the standard monthly
+                # (3rd Friday, YYYYMMDD) so IB can qualify a single contract.
+                resolved_expiry = _third_friday(raw_expiry) if is_month_only else raw_expiry
+
+                contract = _make(resolved_expiry)
                 qualified = await ib.qualifyContractsAsync(contract)
                 valid = [c for c in qualified if c.conId and c.conId > 0]
+
+                # Fallback for a holiday-shifted monthly: list every dated contract
+                # in that month and pick the one matching (or closest to) the 3rd Friday.
+                if not valid and is_month_only:
+                    details = await ib.reqContractDetailsAsync(_make(raw_expiry))
+                    dates = sorted({
+                        d.contract.lastTradeDateOrContractMonth
+                        for d in details
+                        if len(d.contract.lastTradeDateOrContractMonth) == 8
+                    })
+                    if dates:
+                        resolved_expiry = (
+                            resolved_expiry if resolved_expiry in dates
+                            else min(dates, key=lambda x: abs(int(x) - int(resolved_expiry)))
+                        )
+                        contract = _make(resolved_expiry)
+                        qualified = await ib.qualifyContractsAsync(contract)
+                        valid = [c for c in qualified if c.conId and c.conId > 0]
+
                 if not valid:
                     # Ambiguous — fetch all possible contracts and return them for the user to fix
-                    details = await ib.reqContractDetailsAsync(contract)
+                    details = await ib.reqContractDetailsAsync(_make(raw_expiry))
                     possibles = [
                         {'expiry': d.contract.lastTradeDateOrContractMonth,
                          'strike': d.contract.strike,
@@ -93,6 +134,9 @@ async def _price_options(specs):
                                     'error': 'ambiguous',
                                     'possibles': possibles})
                     continue
+
+                # Echo back the resolved dated expiry so stored legs carry YYYYMMDD.
+                spec = {**spec, 'expiry': resolved_expiry}
 
                 [ticker] = await ib.reqTickersAsync(valid[0])
                 bid   = ticker.bid   if ticker.bid   and ticker.bid   > 0 else None
