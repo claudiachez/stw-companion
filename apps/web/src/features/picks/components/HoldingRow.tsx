@@ -1,5 +1,5 @@
 import type { Holding } from '../api';
-import { TIERS, ACTION_VARS, bColor, parseCostBasis, positionType } from '../constants';
+import { TIERS, ACTION_VARS, bColor, parseCostBasis, positionType, resolvePnl } from '@stw/shared';
 import { useQuote } from '../../../shared/hooks/useLivePrice';
 
 function fmtDate(s: string | null): string {
@@ -21,16 +21,14 @@ export function HoldingRow({ holding: h, isSelected, maxWeight, onClick }: Props
   const basketColor = bColor(h.basket);
   const action = ACTION_VARS[h.last_action];
 
-  const pType    = positionType(h.position_detail);
-  const cost     = parseCostBasis(h.position_detail);
-  const equityPnl = cost && quote?.c ? (quote.c - cost) / cost * 100 : null;
-  // Options: use IBKR P&L from DB; mixed: average of both; shares: calculated
-  const pnlPct =
-    pType === 'options' ? (h.last_pnl_pct ?? null) :
-    pType === 'mixed'   ? (equityPnl != null && h.last_pnl_pct != null
-                            ? (equityPnl + h.last_pnl_pct) / 2
-                            : equityPnl ?? h.last_pnl_pct ?? null) :
-    equityPnl;
+  // Row P&L: live quote only (no last_price fallback). Shared resolver keeps the
+  // shares/options/mixed math identical to the detail pane.
+  const { pnlPct } = resolvePnl({
+    positionType: positionType(h.position_detail),
+    price: quote?.c ?? null,
+    costBasis: parseCostBasis(h.position_detail),
+    optionsPnlPct: h.last_pnl_pct,
+  });
   const pnlColor = pnlPct != null ? (pnlPct >= 0 ? '#16A34A' : '#DC2626') : undefined;
 
   const w = h.current_weight ?? h.initial_weight ?? 0;

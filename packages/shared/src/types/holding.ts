@@ -1,13 +1,15 @@
 export type ConvictionLevel = 0 | 1 | 2 | 3 | 4 | 5;
 
 export type BasketName =
-  | 'Robotics & Edge AI'
+  | 'Robotics + Edge AI'
   | 'Power Infrastructure'
-  | 'Data Center'
-  | 'Telecom & Voice AI'
-  | 'Chips'
+  | 'Datacenter + AI Infrastructure'
+  | 'Telecom + Voice AI'
+  | 'U.S. Chips Supply Chain'
   | 'Defense'
-  | 'Other';
+  | 'AI Fraud / Verified Identity'
+  | 'Nuclear'
+  | 'Legacy Positions';
 
 export type ActionType = 'New' | 'Upsized' | 'Hold' | 'Trimmed' | 'Closed';
 

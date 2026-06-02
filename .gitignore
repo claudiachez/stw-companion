@@ -2,7 +2,11 @@
 data/
 node_modules/
 *.log
-web/dist/
-web/.env
+dist/
+apps/web/dist/
+apps/admin/dist/
 .env
+**/.env
 
+# IBKR proxy local TLS material (never commit)
+*.pem

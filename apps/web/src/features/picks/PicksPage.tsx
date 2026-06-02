@@ -7,7 +7,7 @@ import { HoldingDetail } from './components/HoldingDetail';
 import { LoadingSpinner } from '../../shared/components/LoadingSpinner';
 import { EmptyState } from '../../shared/components/EmptyState';
 import { AccessGate } from '../../shared/components/AccessGate';
-import { TIERS, bColor, positionType, parseCostBasis } from './constants';
+import { TIERS, bColor, positionType, parseCostBasis } from '@stw/shared';
 import { usePriceCacheStore } from '../../store/priceCache';
 import { useIsMobile } from '../../shared/hooks/useIsMobile';
 import { useProfile } from '../../shared/hooks/useProfile';

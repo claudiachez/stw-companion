@@ -2,44 +2,54 @@
 
 ## Ground Rules
 - If instructions seem to conflict, **always ask before doing anything**
-- Never force-push or reset `admin-staging`, `admin-main`, `mobile-staging`, or `mobile-main`
-- Never push to `admin-main` or `mobile-main` without explicit approval — those are production
+- Never force-push or reset `staging` or `main`
+- Never push to `main` without explicit approval — that is production
+- Write shared styling/logic/data **once** in the shared packages, never twice across apps
 
 ---
 
-## Two Apps, One Repo
+## One Monorepo, Two App Shells
 
-| App | Audience | Folder | Staging URL | Production URL |
-|---|---|---|---|---|
-| Admin dashboard | STW editor | `admin/` | `stw-admin-staging.netlify.app` | `stw-admin.netlify.app` |
-| Mobile web app | Subscribers | `mobile/` | `stw-mobile-staging.netlify.app` | `stwcompanion.netlify.app` |
+This is a single pnpm workspace. Two thin app shells consume the same shared
+packages and differ only by **capability**, never by forked components.
 
-Changes to one app never affect the other. Each has its own Netlify site, staging branch, and production branch.
+| App | Audience | Folder | Capabilities |
+|---|---|---|---|
+| Subscriber web | Subscribers | `apps/web` | Supabase auth + tier paywall (`AccessGate`) |
+| Admin dashboard | STW editor | `apps/admin` | No paywall; Edit form, Users tab, IBKR badge + proxy writer |
+
+Each deploys to its own Netlify site from the **same branch** (base dir differs).
 
 ---
 
 ## Repo Structure
 
 ```
-admin/
-  index.html              — entire admin dashboard (HTML + CSS + JS, inline)
-  ibkr_proxy.py           — IBKR local proxy (admin use only)
-  migrate.js              — data migration helper
-  requirements-ibkr.txt
-mobile/
-  app/                    — screens and routes (expo-router)
-  components/             — shared UI components
-  lib/                    — supabase client, theme, types
-  store/                  — Zustand auth store
-  assets/                 — icon and images
-  app.json  package.json  babel.config.js  metro.config.js
-  tailwind.config.js  tsconfig.json  global.css
-plans/
-  mobile-transition.md    — architecture decisions and phased roadmap
-CLAUDE.md                 — this file (common)
-netlify.toml              — Netlify build config for mobile (common)
-.gitignore
+pnpm-workspace.yaml          → packages/*, apps/*
+package.json                 → workspace scripts (dev:web, dev:admin, build, typecheck, test)
+packages/
+  shared/  (@stw/shared)     pure framework-agnostic logic: types, tiers, baskets,
+                             format, options, pnl, filters (+ unit tests)
+  ui/      (@stw/ui)         shared React: feature pages/components, data hooks,
+                             supabase/query-client factories, AppCapabilities context
+apps/
+  web/                       subscriber shell: router, Layout, auth, AccessGate
+    netlify.toml             (Netlify base dir = apps/web)
+  admin/                     admin shell: no paywall, Edit + Users + IBKR
+    ibkr_proxy.py            local IBKR writer (run on your machine, not deployed)
+    netlify.toml             (Netlify base dir = apps/admin)
+supabase/migrations/         001..006 — single source of truth for DB schema/RLS
+CLAUDE.md                    this file
 ```
+
+### Layer rules (keep them honest)
+- `@stw/ui` takes everything via **props/context** — no app-specific imports, no env,
+  no routes. The Supabase client + `VITE_*` env are created in each app and injected.
+- Admin/subscriber differences flow through **one `AppCapabilities` context**
+  (`isAdmin`, `canEdit`, `onEditHolding`, `showIbkrBadge`) — never scatter `isAdmin`
+  checks deep in shared components.
+- `@stw/shared` is the only home for derived-number logic (P&L, weights, sector %).
+  Don't re-implement it in an app. (End state: move the math into Supabase views/RPC.)
 
 ---
 
@@ -47,63 +57,83 @@ netlify.toml              — Netlify build config for mobile (common)
 
 | Branch | Purpose | Deploys to |
 |---|---|---|
-| `admin-main` | Admin production | Netlify "STW Admin" — prod |
-| `admin-staging` | Admin staging | Netlify "STW Admin" — staging |
-| `mobile-main` | Mobile production | Netlify "STW Mobile" — prod |
-| `mobile-staging` | Mobile staging | Netlify "STW Mobile" — staging |
+| `main` | Production | both Netlify sites — prod |
+| `staging` | Trunk / staging | both Netlify sites — staging |
 
-Feature branches:
-- `claude/admin-*` → branch from `admin-staging` → PR to `admin-staging` → PR to `admin-main`
-- `claude/mobile-*` → branch from `mobile-staging` → PR to `mobile-staging` → PR to `mobile-main`
+Feature branches: `claude/<feature>` → branch from `staging` → PR to `staging` →
+PR `staging` → `main` when approved.
 
----
-
-## Git Workflow
-
-### Admin changes
 ```bash
-git checkout -b claude/admin-my-feature origin/admin-staging
-# make changes inside admin/ only
-git push -u origin claude/admin-my-feature
-# PR → admin-staging for review, then admin-staging → admin-main when approved
-```
-
-### Mobile changes
-```bash
-git checkout -b claude/mobile-my-feature origin/mobile-staging
-# make changes inside mobile/ only
-git push -u origin claude/mobile-my-feature
-# PR → mobile-staging for review, then mobile-staging → mobile-main when approved
+git checkout -b claude/my-feature origin/staging
+# work across packages/* and apps/*; shared change is written once
+git push -u origin claude/my-feature
+# PR → staging for review, then staging → main when approved
 ```
 
 ---
 
-## Admin Dashboard (`admin/index.html`)
+## Local Development
 
-### Deployment
-- No build step — static file served directly from `admin/` folder
-- Netlify "STW Admin": publish dir = `admin`, no build command
-- Staging: auto-deploys on push to `admin-staging`
-- Production: auto-deploys on push to `admin-main` (requires approval)
+```bash
+pnpm install            # installs the whole workspace
+pnpm dev:web            # subscriber app (Vite)
+pnpm dev:admin          # admin app (Vite)
+pnpm build              # pnpm -r build across packages + apps
+pnpm typecheck          # pnpm -r typecheck
+pnpm test               # unit tests (@stw/shared)
+```
 
-### Code Rules
-- Do not change any JS logic, data structures, or API calls
-- Do not restructure the HTML
-- Do not rename or remove CSS classes/IDs — only change property values
-- Portfolio data lives in `<script id="stw-data-block">` — do not edit manually
+Env: each app needs `VITE_FINNHUB_KEY` (live prices) and the Supabase URL + anon
+key (in `.env`, gitignored; see `apps/web/.env.example`).
 
-### Theme System
-- **Default:** Dark mode
-- **Toggle:** Hamburger menu → sun/moon icon switches between Light and Dark Mode
-- Theme persisted to `localStorage` (`stwTheme` key), restored on `init()`
-- Light theme applied via `[data-theme="light"]` on `<html>`
-- Charts (LightweightCharts) re-themed live via `chart.applyOptions()` on toggle
-- Do not hardcode colors outside of `:root` or `[data-theme="light"]` — always use CSS variables
+---
 
-### Design System
+## Deployment (Netlify)
+
+Two sites, one repo, same branch — distinguished by **base directory**:
+- Web site: base dir `apps/web`, build `pnpm install && pnpm --filter web build`, publish `dist`
+- Admin site: base dir `apps/admin`, build `pnpm install && pnpm --filter admin build`, publish `dist`
+
+`staging` branch → staging deploy; `main` → production (requires approval). Build
+config lives in each app's `netlify.toml`; base dir + env vars are set in the
+Netlify dashboard.
+
+Add each Netlify URL to Supabase Auth → URL Configuration → Redirect URLs (Google
+OAuth on web does a full-page redirect).
+
+---
+
+## Database (Supabase)
+
+- Project: `usmqbohcjcyszjxxvnqu.supabase.co`; client created per-app and injected into `@stw/ui`.
+- `supabase/migrations/` is the single source of truth (001 base schema, 002 user
+  access, 003 price/pnl columns, 004 holdings admin-write RLS, 005 run_log, 006
+  exit-pnl + digest). **Claude authors migrations; you apply them** via the Supabase
+  SQL editor / `supabase db push`.
+- Tables: `holdings`, `graddox`, `graddox_levels`, `profiles`, `tiers`, `run_log`.
+  RLS restricts all writes to `cc@claudiachez.com`; admin app must log in as that
+  account. The IBKR proxy is the only writer of `last_pnl_*` / `ibkr_legs`.
+
+---
+
+## IBKR Pipeline (admin only)
+
+`apps/admin/ibkr_proxy.py` is a **local** Flask server (`localhost:8765`, self-signed
+TLS) that talks to IB Gateway (`127.0.0.1:4001`) via `ib_insync`. The admin browser
+calls it to price option legs, then writes `last_pnl_pct` / `last_pnl_at` /
+`ibkr_legs` to Supabase. Web only **reads** those columns (with a last-synced
+fallback when the proxy is down). Run it locally with IB Gateway connected; it is
+never deployed.
+
+---
+
+## Design System
+
 - **Font:** Barlow Condensed (700/800) for logo, headers, login; system sans-serif for body
-- **Logo:** STW mic + green arrow SVG — header (34px) and login page (90px)
-- **Favicon:** SVG data-URI in `<head>`
+- **Logo:** STW mic + green arrow SVG
+- **Default theme:** Dark. Toggle persists to `localStorage` (`stwTheme`); light
+  theme applied via `[data-theme="light"]`. Never hardcode colors outside `:root` /
+  `[data-theme="light"]` — always use CSS variables.
 
 #### Color Variables (`:root`)
 | Variable | Value | Usage |
@@ -130,61 +160,14 @@ git push -u origin claude/mobile-my-feature
 
 ---
 
-## Mobile App (`mobile/`)
-
-### Deployment
-- Built with Expo for web; served by Netlify
-- Netlify "STW Mobile": publish dir = `mobile/dist`, build = `cd mobile && npm ci && npm run build:web`
-- Staging: auto-deploys on push to `mobile-staging`
-- Production: auto-deploys on push to `mobile-main` (requires approval)
-
-### Running locally
-```bash
-cd mobile
-npx expo start          # scan QR with Expo Go on your phone
-```
-
-### Building for web locally
-```bash
-cd mobile
-EXPO_NO_TELEMETRY=1 EXPO_OFFLINE=1 npm run build:web   # outputs to mobile/dist
-npx serve dist                                          # preview at localhost:3000
-```
-`EXPO_OFFLINE=1` is needed in this cloud environment. Remove it on a local machine.
-
-### Key Constraints
-- All npm commands must `cd mobile` first — `package.json` lives inside `mobile/`
-- `metro.config.js` must NOT use `withNativeWind` — crashes on Node 20+ with TS stripping error
-- `mobile/dist/` is gitignored — built by Netlify, never committed
-
-### Auth (Supabase)
-- Supabase project: `usmqbohcjcyszjxxvnqu.supabase.co`
-- Credentials in `mobile/lib/supabase.ts`
-- **Web:** `localStorage` + `detectSessionInUrl: true` (PKCE auto-exchanged on redirect)
-- **Native:** `AsyncStorage` + manual code exchange via `WebBrowser`
-- Google OAuth on web does a full-page redirect — add each Netlify URL to Supabase Auth → URL Configuration → Redirect URLs
-
-### Routes (expo-router)
-```
-app/index.tsx             — root route; auth guard in _layout.tsx handles redirect
-app/_layout.tsx           — root layout; redirects to login or picks based on session
-app/(auth)/login.tsx      — login screen (email + Google OAuth)
-app/(tabs)/_layout.tsx    — tab bar (Picks, Signals, Profile, Settings)
-app/(tabs)/picks.tsx
-app/(tabs)/signals.tsx
-app/(tabs)/profile.tsx
-app/(tabs)/settings.tsx
-app/pick/[ticker].tsx     — individual pick detail screen
-```
-
-### Tech Stack
+## Tech Stack
 | Concern | Choice |
 |---|---|
-| Framework | Expo (React Native) + TypeScript |
-| Navigation | expo-router (file-based) |
-| Styling | NativeWind v4 (Tailwind for RN) |
-| Backend | Supabase (extend existing) |
-| Auth | Supabase Auth + Google OAuth |
-| State | Zustand + TanStack Query |
-| Subscriptions | RevenueCat (Phase 3) |
-| Broker | Alpaca OAuth (Phase 4) |
+| Framework | React 18 + Vite 5 + TypeScript |
+| Workspace | pnpm workspace (no Turborepo/Nx) |
+| Routing | react-router-dom 6 |
+| Data | TanStack Query 5 (60s staleTime) |
+| State | Zustand 5 |
+| Backend | Supabase (auth + Postgres + RLS) |
+| Prices | Finnhub (live), IBKR proxy (options legs) |
+| Styling | Tailwind 3 + CSS variables |

@@ -1,5 +1,5 @@
 import type { Holding } from '../api';
-import { TIERS, ACTION_VARS, bColor, parseCostBasis, positionType } from '../constants';
+import { TIERS, ACTION_VARS, bColor, parseCostBasis, positionType, resolvePnl } from '@stw/shared';
 import { useQuote } from '../../../shared/hooks/useLivePrice';
 import { usePriceCacheStore } from '../../../store/priceCache';
 
@@ -55,27 +55,17 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
     ? new Date(h.last_price_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...ET })
     : null;
 
-  // ── P&L — equity (calculated from price vs cost basis) ────
-  const cost      = parseCostBasis(h.position_detail);
-  const equityPnl = cost && price ? (price - cost) / cost * 100 : null;
-
-  // ── P&L — options (IBKR, stored in Supabase) ──────────────
-  const optionsPnl = h.last_pnl_pct ?? null;
-  const ibkrDate   = h.last_pnl_at
+  // ── P&L — resolved via shared logic (shares / options / mixed) ──
+  const cost = parseCostBasis(h.position_detail);
+  const { equityPnl, optionsPnl, pnlPct } = resolvePnl({
+    positionType: pType,
+    price,
+    costBasis: cost,
+    optionsPnlPct: h.last_pnl_pct,
+  });
+  const ibkrDate = h.last_pnl_at
     ? new Date(h.last_pnl_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', ...ET })
     : null;
-
-  // ── P&L — resolved main card value ────────────────────────
-  // shares  → equity (calculated)
-  // options → options P&L (IBKR)
-  // mixed   → simple average of both when both available
-  const pnlPct =
-    pType === 'shares'  ? equityPnl :
-    pType === 'options' ? optionsPnl :
-    pType === 'mixed'   ? (equityPnl != null && optionsPnl != null
-                            ? (equityPnl + optionsPnl) / 2
-                            : equityPnl ?? optionsPnl)
-    : equityPnl;
   const pnlColor = pnlPct != null ? (pnlPct >= 0 ? '#16A34A' : '#DC2626') : undefined;
 
   // ── Options legs ─────────────────────────────────────────
