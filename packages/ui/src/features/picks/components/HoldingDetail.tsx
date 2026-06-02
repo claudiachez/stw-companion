@@ -1,7 +1,10 @@
+import { useState } from 'react';
 import type { Holding } from '../api';
 import { TIERS, ACTION_VARS, bColor, parseCostBasis, positionType, resolvePnl } from '@stw/shared';
 import { useQuote } from '../../../hooks/useLivePrice';
 import { usePriceCacheStore } from '../../../store/priceCache';
+import { useCapabilities } from '../../../context/AppCapabilities';
+import { HoldingEditForm } from './HoldingEditForm';
 
 const ET = { timeZone: 'America/New_York' };
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -34,6 +37,8 @@ interface Props {
 }
 
 export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = false }: Props) {
+  const { canEdit } = useCapabilities();
+  const [editing, setEditing] = useState(false);
   const quote       = useQuote(h.ticker);
   const fetchStatus = usePriceCacheStore((s) => s.fetchStatus);
   const tier        = TIERS[h.conviction] ?? TIERS[0];
@@ -114,7 +119,34 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
     );
   }
 
+  const isClosed = h.last_action === 'Closed';
+
+  function renderClosedPnlCol(withBorder = true) {
+    const exitPct = h.exit_pnl_pct;
+    const exitColor = exitPct != null ? (exitPct >= 0 ? '#16A34A' : '#DC2626') : undefined;
+    return (
+      <div style={{ flex: 1, ...(withBorder ? colBorder : {}) }}>
+        <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>
+          Close P&L
+        </div>
+        {exitPct != null ? (
+          <>
+            <div style={{ fontSize: 20, fontWeight: 700, color: exitColor, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
+              {exitPct >= 0 ? '+' : ''}{exitPct.toFixed(1)}%
+            </div>
+            <div style={{ fontSize: 9, color: 'var(--t3)', marginTop: 4, opacity: 0.8 }}>
+              {h.exit_price != null ? `Realized · exit $${h.exit_price.toFixed(2)}` : 'Realized'}
+            </div>
+          </>
+        ) : (
+          <div style={{ fontSize: 12, color: 'var(--t3)' }}>Position closed</div>
+        )}
+      </div>
+    );
+  }
+
   function renderPnlCol(withBorder = true) {
+    if (isClosed) return renderClosedPnlCol(withBorder);
     const label = pType === 'mixed' ? 'Avg P&L' : 'Open P&L';
     const src   = pnlSrcLabel();
     return (
@@ -252,21 +284,35 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
 
   return (
     <div style={{ height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-      {/* Back / Close button */}
-      <div style={{ padding: '10px 16px 0', display: 'flex', justifyContent: isMobile ? 'flex-start' : 'flex-end' }}>
+      {/* Back / Close + Edit buttons */}
+      <div style={{ padding: '10px 16px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <button
           onClick={onClose}
           style={{
             fontSize: 12, color: 'var(--t3)', background: 'none', border: 'none', cursor: 'pointer',
             padding: isMobile ? '8px 0' : '4px 8px',
             minHeight: isMobile ? 44 : 'auto',
-            display: 'flex', alignItems: 'center',
+            display: 'flex', alignItems: 'center', order: isMobile ? 0 : 2,
           }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--text)'; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--t3)'; }}
         >
           {isMobile ? '← Back' : 'Close →'}
         </button>
+        {canEdit && h.ticker !== 'CASH' && !editing && (
+          <button
+            onClick={() => setEditing(true)}
+            style={{
+              fontSize: 12, color: 'var(--acc)', background: 'none',
+              border: '1px solid var(--border)', borderRadius: 5, cursor: 'pointer',
+              padding: '4px 10px', order: isMobile ? 1 : 1,
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
+          >
+            ✎ Edit
+          </button>
+        )}
       </div>
 
       <div style={{ padding: '8px 16px 24px', flex: 1 }}>
@@ -304,6 +350,9 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
             {tier.short}
           </span>
         </div>
+
+        {/* Edit form (admin only, when toggled) */}
+        {editing && <HoldingEditForm holding={h} onDone={() => setEditing(false)} />}
 
         {/* Data card */}
         {h.ticker !== 'CASH' && (

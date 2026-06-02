@@ -188,7 +188,7 @@ export function PicksView() {
           </div>
         ) : mobileView === 'overview' ? (
           <div style={{ flex: 1, overflow: 'hidden', background: 'var(--bg)' }}>
-            <PortfolioDashboard holdings={holdings} />
+            <PortfolioDashboard holdings={holdings} onSelectTicker={setSelectedTicker} />
           </div>
         ) : (
           <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -230,7 +230,7 @@ export function PicksView() {
               onClose={() => setSelectedTicker(null)}
             />
           ) : (
-            <PortfolioDashboard holdings={holdings} />
+            <PortfolioDashboard holdings={holdings} onSelectTicker={setSelectedTicker} />
           )}
         </div>
       </div>

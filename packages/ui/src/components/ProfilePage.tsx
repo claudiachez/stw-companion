@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '../lib/supabase';
+import { getSupabase } from '../lib/supabase';
 import { useAuthStore } from '../store/auth';
-import { LoadingSpinner } from '@stw/ui';
+import { LoadingSpinner } from '../primitives/LoadingSpinner';
 
 const TIER_LABELS: Record<string, string> = {
   free: 'Free',
@@ -21,7 +21,7 @@ export function ProfilePage() {
   const { data: profile, isLoading } = useQuery({
     queryKey: ['profile', user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await getSupabase()
         .from('profiles')
         .select('*')
         .eq('user_id', user!.id)

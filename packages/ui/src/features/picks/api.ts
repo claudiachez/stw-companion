@@ -29,6 +29,8 @@ export interface Holding {
   last_pnl_pct: number | null;
   last_pnl_at: string | null;
   ibkr_legs: IbkrLeg[] | null;
+  exit_price: number | null;
+  exit_pnl_pct: number | null;
 }
 
 export async function fetchHoldings(): Promise<Holding[]> {

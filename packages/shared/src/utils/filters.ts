@@ -11,6 +11,7 @@ export interface FilterCriteria {
   tier:   string;   // '' | '5'..'0'
   status: string;   // '' | 'New' | 'Upsized' | 'Hold' | 'Trimmed' | 'Closed'
   type:   string;   // '' | 'shares' | 'options' | 'mixed'
+  hideClosed?: boolean; // default behavior: hide Closed positions unless explicitly filtered for
 }
 
 // Minimal structural shape the filter/sort functions read. Any concrete Holding
@@ -29,6 +30,8 @@ export interface FilterableHolding {
 
 export function applyFilters<T extends FilterableHolding>(holdings: T[], f: FilterCriteria): T[] {
   return holdings.filter((h) => {
+    // Hide closed positions by default, unless the user explicitly filters for Closed.
+    if (f.hideClosed && f.status !== 'Closed' && h.last_action === 'Closed') return false;
     if (f.basket && h.basket !== f.basket) return false;
     if (f.tier   && h.conviction !== Number(f.tier)) return false;
     if (f.status && h.last_action !== f.status) return false;

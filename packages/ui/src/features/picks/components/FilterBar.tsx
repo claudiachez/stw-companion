@@ -30,11 +30,11 @@ interface Props {
 }
 
 export function FilterBar({ holdings, filtered }: Props) {
-  const { search, basket, tier, status, type, sort, setSearch, setBasket, setTier, setStatus, setType, setSort, reset } =
+  const { search, basket, tier, status, type, hideClosed, sort, setSearch, setBasket, setTier, setStatus, setType, setHideClosed, setSort, reset } =
     useFiltersStore();
 
   const baskets = [...new Set(holdings.map((h) => h.basket).filter(Boolean))].sort();
-  const hasFilter = search || basket || tier || status || type;
+  const hasFilter = search || basket || tier || status || type || !hideClosed;
 
   return (
     <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' as never, flexShrink: 0 }}>
@@ -82,6 +82,19 @@ export function FilterBar({ holdings, filtered }: Props) {
         <select value={sort} onChange={(e) => setSort(e.target.value as SortMode)} style={ctrlStyle}>
           {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
+
+        <label
+          style={{ ...ctrlStyle, display: 'flex', alignItems: 'center', gap: 6, color: hideClosed ? 'var(--t2)' : 'var(--text)' }}
+          title="Show closed positions"
+        >
+          <input
+            type="checkbox"
+            checked={!hideClosed}
+            onChange={(e) => setHideClosed(!e.target.checked)}
+            style={{ accentColor: 'var(--acc)', cursor: 'pointer' }}
+          />
+          Show closed
+        </label>
 
         {hasFilter && (
           <button

@@ -1,0 +1,14 @@
+# STW admin dashboard. In Netlify set this site's base directory to "apps/admin";
+# Netlify reads this file from the base dir and runs the build there. pnpm walks up
+# to the workspace root (pnpm-workspace.yaml) so the whole workspace installs.
+[build]
+  command = "pnpm install && pnpm --filter admin build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200

@@ -1,8 +1,8 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, type ReactNode } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabase';
-import { useAuthStore } from '../../store/auth';
-import { useThemeStore } from '../../store/theme';
+import { getSupabase } from '../lib/supabase';
+import { useAuthStore } from '../store/auth';
+import { useThemeStore } from '../store/theme';
 
 // ── SVG icon set ────────────────────────────────────────────
 function SunIcon() {
@@ -82,14 +82,28 @@ function STWLogo() {
   );
 }
 
-// ── Nav ──────────────────────────────────────────────────────
-const NAV = [
+export interface NavItem {
+  to: string;
+  label: string;
+  short: string;
+}
+
+const DEFAULT_NAV: NavItem[] = [
   { to: '/picks',   label: 'Stock Picks', short: 'Picks'   },
   { to: '/signals', label: 'GEX Signals', short: 'Signals' },
 ];
 
+interface LayoutProps {
+  /** Nav tabs shown in the header. Defaults to Picks + Signals. */
+  navItems?: NavItem[];
+  /** Optional content rendered in the header, left of the menu button (e.g. IBKR badge). */
+  headerSlot?: ReactNode;
+  /** Label shown above the user email in the menu (e.g. "STW Admin"). */
+  title?: string;
+}
+
 // ── Layout ───────────────────────────────────────────────────
-export function Layout() {
+export function Layout({ navItems = DEFAULT_NAV, headerSlot, title = 'STW Companion' }: LayoutProps) {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const { theme, toggle } = useThemeStore();
@@ -98,7 +112,7 @@ export function Layout() {
 
   async function signOut() {
     setMenuOpen(false);
-    await supabase.auth.signOut();
+    await getSupabase().auth.signOut();
     navigate('/login');
   }
 
@@ -140,7 +154,7 @@ export function Layout() {
           }}
             className="hidden sm:block"
           >
-            STW Companion
+            {title}
           </span>
 
           {/* Separator */}
@@ -148,7 +162,7 @@ export function Layout() {
 
           {/* Nav tabs */}
           <nav style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            {NAV.map(({ to, label, short }) => (
+            {navItems.map(({ to, label, short }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -185,8 +199,9 @@ export function Layout() {
           </nav>
         </div>
 
-        {/* Right: hamburger */}
+        {/* Right: optional header slot + hamburger */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          {headerSlot}
           <div ref={menuRef} style={{ position: 'relative' }}>
             <button
               onClick={() => setMenuOpen((v) => !v)}

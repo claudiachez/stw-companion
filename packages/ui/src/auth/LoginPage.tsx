@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { supabase } from '../../lib/supabase';
-import { useAuthStore } from '../../store/auth';
+import { getSupabase } from '../lib/supabase';
+import { useAuthStore } from '../store/auth';
 
 export function LoginPage() {
   const { session } = useAuthStore();
@@ -21,6 +21,7 @@ export function LoginPage() {
     setLoading(true);
 
     try {
+      const supabase = getSupabase();
       if (mode === 'login') {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) setError(error.message);
@@ -40,7 +41,7 @@ export function LoginPage() {
 
   async function handleGoogle() {
     setError('');
-    await supabase.auth.signInWithOAuth({
+    await getSupabase().auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: window.location.origin },
     });

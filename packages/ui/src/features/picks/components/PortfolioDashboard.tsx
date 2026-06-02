@@ -1,12 +1,52 @@
 import { bColor, parseCostBasis, positionType } from '@stw/shared';
 import { usePriceCacheStore } from '../../../store/priceCache';
+import { useRecentChanges } from '../useRecentChanges';
 import type { Holding } from '../api';
 
 const ET = { timeZone: 'America/New_York' };
 
+interface DashboardProps {
+  holdings: Holding[];
+  onSelectTicker?: (ticker: string) => void;
+}
+
+// Render a digest string with any known ticker rendered as a clickable link.
+function renderDigest(
+  text: string,
+  tickers: Set<string>,
+  onSelectTicker?: (ticker: string) => void,
+) {
+  // Split keeping whitespace so spacing/newlines are preserved.
+  return text.split(/(\s+)/).map((token, i) => {
+    const bare = token.replace(/[^A-Za-z0-9.]/g, '');
+    if (bare && tickers.has(bare.toUpperCase()) && onSelectTicker) {
+      const lead = token.slice(0, token.indexOf(bare));
+      const trail = token.slice(token.indexOf(bare) + bare.length);
+      return (
+        <span key={i}>
+          {lead}
+          <button
+            onClick={() => onSelectTicker(bare.toUpperCase())}
+            style={{
+              background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+              color: 'var(--acc)', fontWeight: 600, fontSize: 'inherit', fontFamily: 'inherit',
+            }}
+          >
+            {bare}
+          </button>
+          {trail}
+        </span>
+      );
+    }
+    return <span key={i}>{token}</span>;
+  });
+}
+
 // ── Portfolio dashboard (shown when no ticker selected) ───────
-export function PortfolioDashboard({ holdings }: { holdings: Holding[] }) {
+export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps) {
   const cache = usePriceCacheStore((s) => s.cache);
+  const { data: changes } = useRecentChanges(1);
+  const latestChange = changes?.[0] ?? null;
 
   const active = holdings.filter((h) => h.ticker !== 'CASH' && h.last_action !== 'Closed');
 
@@ -53,6 +93,9 @@ export function PortfolioDashboard({ holdings }: { holdings: Holding[] }) {
   }, null);
 
   const pnlColor = avgPnl != null ? (avgPnl >= 0 ? '#22c55e' : '#ef4444') : 'var(--t3)';
+
+  const tickerSet = new Set(holdings.map((h) => h.ticker.toUpperCase()));
+  const changeAt = latestChange?.ran_at ? new Date(latestChange.ran_at) : null;
 
   return (
     <div style={{ height: '100%', overflowY: 'auto', padding: '20px 24px' }}>
@@ -120,10 +163,34 @@ export function PortfolioDashboard({ holdings }: { holdings: Holding[] }) {
         })}
       </div>
 
-      {/* Last updated */}
+      {/* Latest portfolio changes (digest) */}
+      {latestChange?.digest && (
+        <div style={{ marginTop: 28 }}>
+          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 10 }}>
+            Latest Portfolio Changes
+          </div>
+          <div style={{
+            padding: '12px 14px', borderRadius: 8,
+            background: 'var(--s2)', border: '1px solid var(--bsub)',
+            fontSize: 13, color: 'var(--t2)', lineHeight: 1.6, whiteSpace: 'pre-wrap',
+          }}>
+            {renderDigest(latestChange.digest, tickerSet, onSelectTicker)}
+          </div>
+          {changeAt && (
+            <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 8 }}>
+              Updated{' '}
+              <span style={{ color: 'var(--t2)' }}>
+                {changeAt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', ...ET })} ET
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Holdings data freshness — distinct from the changes digest above */}
       {lastUpdated && (
-        <div style={{ marginTop: 24, fontSize: 11, color: 'var(--t3)' }}>
-          Last synced:{' '}
+        <div style={{ marginTop: latestChange?.digest ? 12 : 24, fontSize: 11, color: 'var(--t3)' }}>
+          Holdings data synced:{' '}
           <span style={{ color: 'var(--t2)' }}>
             {lastUpdated.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', ...ET })} ET
           </span>

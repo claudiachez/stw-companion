@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
+import { useAuthStore } from '@stw/ui';
 import { supabase } from '../../lib/supabase';
-import { useAuthStore } from '../../store/auth';
 
 export type ProfileStatus = 'pending' | 'approved' | 'rejected';
 

@@ -1,10 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthGuard } from './features/auth/AuthGuard';
-import { LoginPage } from './features/auth/LoginPage';
-import { Layout } from './shared/components/Layout';
+import { AuthGuard, LoginPage, Layout, ProfilePage } from '@stw/ui';
 import { PicksRoute } from './features/picks/PicksRoute';
 import { SignalsRoute } from './features/signals/SignalsRoute';
-import { ProfilePage } from './pages/ProfilePage';
 
 export default function App() {
   return (

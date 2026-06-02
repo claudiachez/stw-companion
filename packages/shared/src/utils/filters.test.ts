@@ -44,6 +44,19 @@ describe('applyFilters', () => {
     expect(applyFilters(rows, { ...blank, search: 'palan' }).map(r => r.ticker)).toEqual(['PLTR']);
     expect(applyFilters(rows, { ...blank, search: 'nuclear' }).map(r => r.ticker)).toEqual(['NUKE']);
   });
+
+  it('hideClosed drops Closed positions', () => {
+    expect(applyFilters(rows, { ...blank, hideClosed: true }).map(r => r.ticker)).toEqual(['NVDA', 'PLTR']);
+  });
+
+  it('hideClosed is overridden when explicitly filtering for Closed', () => {
+    expect(applyFilters(rows, { ...blank, hideClosed: true, status: 'Closed' }).map(r => r.ticker)).toEqual(['NUKE']);
+  });
+
+  it('hideClosed undefined/false keeps Closed positions', () => {
+    expect(applyFilters(rows, { ...blank, hideClosed: false })).toHaveLength(3);
+    expect(applyFilters(rows, blank)).toHaveLength(3);
+  });
 });
 
 describe('sortFlat', () => {

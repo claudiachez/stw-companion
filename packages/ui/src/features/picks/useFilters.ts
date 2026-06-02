@@ -12,12 +12,14 @@ interface FiltersState {
   tier:    string;   // '' | '5'..'0'
   status:  string;   // '' | 'New' | 'Upsized' | 'Hold' | 'Trimmed' | 'Closed'
   type:    string;   // '' | 'shares' | 'options' | 'mixed'
+  hideClosed: boolean; // default true — hide Closed positions unless filtered for
   sort:    SortMode;
   setSearch:  (v: string) => void;
   setBasket:  (v: string) => void;
   setTier:    (v: string) => void;
   setStatus:  (v: string) => void;
   setType:    (v: string) => void;
+  setHideClosed: (v: boolean) => void;
   setSort:    (v: SortMode) => void;
   reset:      () => void;
   // Legacy compat used by old FilterBar
@@ -26,14 +28,15 @@ interface FiltersState {
 }
 
 export const useFiltersStore = create<FiltersState>((set) => ({
-  search: '', basket: '', tier: '', status: '', type: '', sort: 'conviction',
+  search: '', basket: '', tier: '', status: '', type: '', hideClosed: true, sort: 'conviction',
   conviction: null,
   setSearch:     (search)     => set({ search }),
   setBasket:     (basket)     => set({ basket }),
   setTier:       (tier)       => set({ tier, conviction: tier ? Number(tier) : null }),
   setStatus:     (status)     => set({ status }),
   setType:       (type)       => set({ type }),
+  setHideClosed: (hideClosed) => set({ hideClosed }),
   setSort:       (sort)       => set({ sort }),
   setConviction: (conviction) => set({ conviction, tier: conviction !== null ? String(conviction) : '' }),
-  reset: () => set({ search: '', basket: '', tier: '', status: '', type: '', sort: 'conviction', conviction: null }),
+  reset: () => set({ search: '', basket: '', tier: '', status: '', type: '', hideClosed: true, sort: 'conviction', conviction: null }),
 }));
