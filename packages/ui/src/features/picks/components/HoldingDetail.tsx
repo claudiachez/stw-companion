@@ -20,6 +20,12 @@ function fmtDate(s: string | null): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
 }
 
+// One canonical "as of" stamp used for every price/P&L source label so they read
+// identically everywhere: "May 26, 10:18 PM".
+function fmtStamp(d: Date): string {
+  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', ...ET });
+}
+
 function fmtExpiry(expiry: string): string {
   if (expiry.length < 6) return expiry;
   const yr  = expiry.slice(2, 4);
@@ -53,12 +59,9 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
   const dpStr       = quote?.dp != null ? `${quote.dp >= 0 ? '+' : ''}${quote.dp.toFixed(2)}%` : null;
   const dpColor     = (quote?.dp ?? 0) >= 0 ? '#16A34A' : '#DC2626';
   const hiloStr     = (quote?.h && quote?.l) ? `H $${quote.h.toFixed(2)} · L $${quote.l.toFixed(2)}` : null;
-  const srcTime     = quote?.t
-    ? new Date(quote.t * 1000).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', ...ET })
-    : null;
-  const lastPriceDate = h.last_price_at
-    ? new Date(h.last_price_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...ET })
-    : null;
+  // All three carry the same "Mon D, H:MM AM/PM" stamp (see fmtStamp).
+  const srcTime     = quote?.t ? fmtStamp(new Date(quote.t * 1000)) : null;      // Finnhub quote time
+  const lastPriceDate = h.last_price_at ? fmtStamp(new Date(h.last_price_at)) : null; // admin last-set price
 
   // ── P&L — resolved via shared logic (shares / options / mixed) ──
   const cost = parseCostBasis(h.position_detail);
@@ -68,9 +71,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
     costBasis: cost,
     optionsPnlPct: h.last_pnl_pct,
   });
-  const ibkrDate = h.last_pnl_at
-    ? new Date(h.last_pnl_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', ...ET })
-    : null;
+  const ibkrDate = h.last_pnl_at ? fmtStamp(new Date(h.last_pnl_at)) : null; // IBKR proxy pricing time
   const pnlColor = pnlPct != null ? (pnlPct >= 0 ? '#16A34A' : '#DC2626') : undefined;
 
   // ── Options legs ─────────────────────────────────────────
@@ -90,12 +91,19 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
     : ibkrLegs;
   const validLegs = legs.filter((l) => l.price != null);
 
-  // ── P&L source label ─────────────────────────────────────
-  function pnlSrcLabel(): string | null {
-    if (pType === 'options') return ibkrDate ? `IBKR · ${ibkrDate}` : 'IBKR';
-    if (pType === 'mixed')   return 'IBKR + Calc (avg)';
-    // shares
-    return isLive ? 'Live calc' : lastPriceDate ? `Calc · ${lastPriceDate}` : null;
+  // ── P&L source line(s) ───────────────────────────────────
+  // Name the actual data source, each with its own "as of" stamp. Shares ride the
+  // live Finnhub price (or the last-synced price); options come from IBKR. A mixed
+  // position shows BOTH lines, since the two halves refresh on different clocks.
+  const sharesSrc = isLive
+    ? (srcTime ? `Finnhub · ${srcTime}` : 'Finnhub')
+    : (lastPriceDate ? `Last sync · ${lastPriceDate}` : null);
+  const ibkrSrc = ibkrDate ? `IBKR · ${ibkrDate}` : 'IBKR';
+
+  function pnlSrcLines(): string[] {
+    if (pType === 'options') return [ibkrSrc];
+    if (pType === 'mixed')   return sharesSrc ? [sharesSrc, ibkrSrc] : [ibkrSrc];
+    return sharesSrc ? [sharesSrc] : []; // shares
   }
 
   // ── Conviction segments ───────────────────────────────────
@@ -161,7 +169,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
   function renderPnlCol(withBorder = true) {
     if (isClosed) return renderClosedPnlCol(withBorder);
     const label = pType === 'mixed' ? 'Avg P&L' : 'Open P&L';
-    const src   = pnlSrcLabel();
+    const srcLines = pnlSrcLines();
     return (
       <div style={{ flex: 1, ...(withBorder ? colBorder : {}) }}>
         <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>
@@ -177,7 +185,9 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
                 {validLegs.length} of {legs.length} leg{legs.length > 1 ? 's' : ''} priced
               </div>
             )}
-            {src && <div style={{ fontSize: 9, color: 'var(--t3)', marginTop: 4, opacity: 0.8 }}>{src}</div>}
+            {srcLines.map((line, i) => (
+              <div key={i} style={{ fontSize: 9, color: 'var(--t3)', marginTop: i === 0 ? 4 : 1, opacity: 0.8 }}>{line}</div>
+            ))}
           </>
         ) : (
           (pType === 'options' || pType === 'mixed')
