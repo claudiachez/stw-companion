@@ -1,9 +1,16 @@
-import { bColor, parseCostBasis, positionType } from '@stw/shared';
+import { bColor, parseCostBasis, positionType, mergeLegs } from '@stw/shared';
 import { usePriceCacheStore } from '../../../store/priceCache';
 import { useRecentChanges } from '../useRecentChanges';
 import type { Holding } from '../api';
 
 const ET = { timeZone: 'America/New_York' };
+const LEG_MONTHS = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// "202608" / "20260815" → "Aug '26" for the unpriced-legs summary.
+function legExpiry(e: string): string {
+  if (!e || e.length < 6) return e || '';
+  return `${LEG_MONTHS[parseInt(e.slice(4, 6), 10)] ?? ''} '${e.slice(2, 4)}`;
+}
 
 interface DashboardProps {
   holdings: Holding[];
@@ -91,6 +98,21 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
     const d = new Date(h.updated_at);
     return !acc || d > acc ? d : acc;
   }, null);
+
+  // Options data freshness = newest IBKR pricing (last_pnl_at) across holdings.
+  const optionsSynced = holdings.reduce<Date | null>((acc, h) => {
+    if (!h.last_pnl_at) return acc;
+    const d = new Date(h.last_pnl_at);
+    return !acc || d > acc ? d : acc;
+  }, null);
+
+  // Portfolio-wide unpriced legs: parsed from position_detail but with no IBKR price.
+  const unpricedLegs = holdings.flatMap((h) => {
+    if (h.ticker === 'CASH' || h.last_action === 'Closed') return [];
+    return mergeLegs(h.position_detail ?? '', h.ticker, h.ibkr_legs)
+      .filter((l) => l.price == null)
+      .map((l) => `${h.ticker} $${l.strike}${l.right} ${legExpiry(l.expiry)}`);
+  });
 
   const pnlColor = avgPnl != null ? (avgPnl >= 0 ? '#22c55e' : '#ef4444') : 'var(--t3)';
 
@@ -187,13 +209,38 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
         </div>
       )}
 
-      {/* Holdings data freshness — distinct from the changes digest above */}
-      {lastUpdated && (
-        <div style={{ marginTop: latestChange?.digest ? 12 : 24, fontSize: 11, color: 'var(--t3)' }}>
-          Holdings data synced:{' '}
-          <span style={{ color: 'var(--t2)' }}>
-            {lastUpdated.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', ...ET })} ET
-          </span>
+      {/* Data freshness — distinct from the changes digest above */}
+      <div style={{ marginTop: latestChange?.digest ? 12 : 24, fontSize: 11, color: 'var(--t3)', display: 'flex', flexDirection: 'column', gap: 3 }}>
+        {lastUpdated && (
+          <div>
+            Holdings data synced:{' '}
+            <span style={{ color: 'var(--t2)' }}>
+              {lastUpdated.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', ...ET })} ET
+            </span>
+          </div>
+        )}
+        {optionsSynced && (
+          <div>
+            Options data synced:{' '}
+            <span style={{ color: 'var(--t2)' }}>
+              {optionsSynced.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', ...ET })} ET
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Unpriced option legs — surfaced so they don't have to be hunted one-by-one */}
+      {unpricedLegs.length > 0 && (
+        <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 6, background: 'var(--s2)', border: '1px solid var(--bsub)' }}>
+          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--c3)', marginBottom: 5 }}>
+            ⚠ Unpriced Legs ({unpricedLegs.length})
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--t2)', lineHeight: 1.6 }}>
+            {unpricedLegs.join('  ·  ')}
+          </div>
+          <div style={{ fontSize: 9, color: 'var(--t3)', marginTop: 4 }}>
+            No IBKR price yet — run the IBKR sync, or check the contract in position detail.
+          </div>
         </div>
       )}
     </div>

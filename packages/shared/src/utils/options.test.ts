@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseOptionLegs } from './options';
+import { parseOptionLegs, mergeLegs, type PricedLeg } from './options';
 
 describe('parseOptionLegs', () => {
   it('parses a dated leg ($STRIKE C MONTH DD \'YY @ $ENTRY)', () => {
@@ -34,5 +34,30 @@ describe('parseOptionLegs', () => {
   it('returns no legs for CASH or empty detail', () => {
     expect(parseOptionLegs('whatever', 'CASH')).toEqual([]);
     expect(parseOptionLegs('', 'X')).toEqual([]);
+  });
+
+  it('distributes a shared leading expiry across legs and collapses "@@"', () => {
+    expect(parseOptionLegs("Aug '26 $4C @@$0.90 and $5C @@$0.60", 'BLDP')).toEqual([
+      { symbol: 'BLDP', strike: 4, right: 'C', expiry: '202608', entry: 0.90 },
+      { symbol: 'BLDP', strike: 5, right: 'C', expiry: '202608', entry: 0.60 },
+    ]);
+  });
+});
+
+describe('mergeLegs', () => {
+  const ibkr: PricedLeg[] = [
+    { symbol: 'CXDO', strike: 7.5, right: 'C', expiry: '202607', entry: 0.65, price: 2.58, pnl_pct: 296.9 },
+  ];
+
+  it('overlays IBKR price onto parsed legs, leaving unmatched legs unpriced', () => {
+    const merged = mergeLegs("$7.5C July 17 '26 @ $0.65 + $10C Oct '26 @ $2.24", 'CXDO', ibkr);
+    expect(merged).toEqual([
+      { symbol: 'CXDO', strike: 7.5, right: 'C', expiry: '20260717', entry: 0.65, price: 2.58, pnl_pct: 296.9 },
+      { symbol: 'CXDO', strike: 10, right: 'C', expiry: '202610', entry: 2.24, price: null, pnl_pct: null },
+    ]);
+  });
+
+  it('falls back to the stored IBKR legs when nothing parses', () => {
+    expect(mergeLegs('', 'CXDO', ibkr)).toEqual(ibkr);
   });
 });

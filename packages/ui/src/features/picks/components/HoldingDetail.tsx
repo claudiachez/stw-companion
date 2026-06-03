@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { Holding, IbkrLeg } from '../api';
-import { TIERS, ACTION_VARS, bColor, parseCostBasis, positionType, resolvePnl, parseOptionLegs } from '@stw/shared';
+import type { Holding } from '../api';
+import { TIERS, ACTION_VARS, bColor, parseCostBasis, positionType, resolvePnl, mergeLegs } from '@stw/shared';
 import { useQuote } from '../../../hooks/useLivePrice';
 import { usePriceCacheStore } from '../../../store/priceCache';
 import { useCapabilities } from '../../../context/AppCapabilities';
@@ -75,20 +75,10 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
   const pnlColor = pnlPct != null ? (pnlPct >= 0 ? '#16A34A' : '#DC2626') : undefined;
 
   // ── Options legs ─────────────────────────────────────────
-  // Show EVERY leg parsed from position_detail, overlaying IBKR price/P&L where
-  // the proxy could price it (matched by strike + right + year-month). Legs the
-  // proxy couldn't resolve — e.g. a month-only expiry like "Oct '26" — still
-  // appear, just unpriced, so a multi-leg position never silently hides a leg.
-  const ibkrLegs  = h.ibkr_legs ?? [];
-  const parsedLegs = parseOptionLegs(h.position_detail ?? '', h.ticker);
-  const legs: IbkrLeg[] = parsedLegs.length > 0
-    ? parsedLegs.map((p) => {
-        const match = ibkrLegs.find(
-          (l) => l.strike === p.strike && l.right === p.right && l.expiry.slice(0, 6) === p.expiry.slice(0, 6),
-        );
-        return { ...p, price: match?.price ?? null, pnl_pct: match?.pnl_pct ?? null };
-      })
-    : ibkrLegs;
+  // Show EVERY leg parsed from position_detail, overlaying IBKR price/P&L where the
+  // proxy priced it (shared mergeLegs). Legs the proxy couldn't resolve still appear
+  // unpriced, so a multi-leg position never silently hides a leg.
+  const legs = mergeLegs(h.position_detail ?? '', h.ticker, h.ibkr_legs);
   const validLegs = legs.filter((l) => l.price != null);
 
   // ── P&L source line(s) ───────────────────────────────────

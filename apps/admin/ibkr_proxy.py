@@ -23,9 +23,18 @@ import random
 logging.getLogger('ib_insync').setLevel(logging.WARNING)
 
 app = Flask(__name__)
-# Local proxy only — allow all origins so GitHub Pages can POST to localhost
+# Local proxy only — allow all origins so the deployed admin can POST to localhost
 CORS(app, resources={r"/*": {"origins": "*"}},
      allow_headers=["Content-Type"], methods=["GET", "POST", "OPTIONS"])
+
+
+@app.after_request
+def _allow_private_network(resp):
+    # Chrome Private Network Access: a public/HTTPS origin (the deployed admin on
+    # *.netlify.app) is blocked from calling this localhost proxy unless the
+    # preflight response opts in. Harmless for a local (localhost) origin.
+    resp.headers['Access-Control-Allow-Private-Network'] = 'true'
+    return resp
 
 IB_HOST = '127.0.0.1'
 IB_PORT = 4001   # 4001 = live, 4002 = paper
@@ -95,34 +104,42 @@ async def _price_options(specs):
                         spec['right'].upper(), 'SMART', currency='USD'
                     )
 
-                # Month-only expiry (YYYYMM) → resolve to the standard monthly
-                # (3rd Friday, YYYYMMDD) so IB can qualify a single contract.
-                resolved_expiry = _third_friday(raw_expiry) if is_month_only else raw_expiry
+                # Resolve the contract, most-compatible form first:
+                #   1) the expiry exactly as given — a bare YYYYMM lets IB resolve the
+                #      monthly itself, which works for most names (incl. thin small caps);
+                #   2) only if that fails for a month-only expiry, the standard monthly
+                #      (3rd Friday) to pin a single contract when YYYYMM was ambiguous.
+                candidates = [raw_expiry]
+                if is_month_only:
+                    candidates.append(_third_friday(raw_expiry))
 
-                contract = _make(resolved_expiry)
-                qualified = await ib.qualifyContractsAsync(contract)
-                valid = [c for c in qualified if c.conId and c.conId > 0]
+                valid = []
+                resolved_expiry = raw_expiry
+                for cand in candidates:
+                    qualified = await ib.qualifyContractsAsync(_make(cand))
+                    valid = [c for c in qualified if c.conId and c.conId > 0]
+                    if valid:
+                        resolved_expiry = cand
+                        break
 
-                # Fallback for a holiday-shifted monthly: list every dated contract
-                # in that month and pick the one matching (or closest to) the 3rd Friday.
+                # Still unresolved → ask IB what actually exists for this strike+month
+                # and take the monthly (3rd-Friday match, else the latest listed).
                 if not valid and is_month_only:
                     details = await ib.reqContractDetailsAsync(_make(raw_expiry))
-                    dates = sorted({
-                        d.contract.lastTradeDateOrContractMonth
-                        for d in details
-                        if len(d.contract.lastTradeDateOrContractMonth) == 8
-                    })
-                    if dates:
-                        resolved_expiry = (
-                            resolved_expiry if resolved_expiry in dates
-                            else min(dates, key=lambda x: abs(int(x) - int(resolved_expiry)))
+                    contracts = [d.contract for d in details if d.contract.conId and d.contract.conId > 0]
+                    if contracts:
+                        tf = _third_friday(raw_expiry)
+                        pick = next(
+                            (c for c in contracts if c.lastTradeDateOrContractMonth in (tf, raw_expiry)),
+                            max(contracts, key=lambda c: c.lastTradeDateOrContractMonth),
                         )
-                        contract = _make(resolved_expiry)
-                        qualified = await ib.qualifyContractsAsync(contract)
-                        valid = [c for c in qualified if c.conId and c.conId > 0]
+                        valid = [pick]
+                        resolved_expiry = pick.lastTradeDateOrContractMonth
 
                 if not valid:
-                    # Ambiguous — fetch all possible contracts and return them for the user to fix
+                    # IB has no matching contract (e.g. an unlisted deep-ITM strike).
+                    # Report whatever exists for this strike/month so position_detail can
+                    # be fixed; leave the leg unpriced rather than blocking the others.
                     details = await ib.reqContractDetailsAsync(_make(raw_expiry))
                     possibles = [
                         {'expiry': d.contract.lastTradeDateOrContractMonth,
