@@ -10,3 +10,7 @@ apps/admin/dist/
 
 # IBKR proxy local TLS material (never commit)
 *.pem
+
+# Python build artifacts (ibkr_proxy.py)
+__pycache__/
+*.pyc

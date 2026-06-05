@@ -92,85 +92,120 @@ async def _price_options(specs):
         await ib.connectAsync(IB_HOST, IB_PORT, clientId=_new_client_id(), readonly=True)
         ib.reqMarketDataType(4)   # delayed-frozen — works outside market hours
 
-        results = []
+        def _make(spec, exp):
+            return Option(
+                spec['symbol'], str(exp), float(spec['strike']),
+                spec['right'].upper(), 'SMART', currency='USD'
+            )
+
+        # One entry per spec, carrying resolution state. Everything below operates
+        # on the whole batch at once (a single qualify + a single snapshot round-trip)
+        # instead of per-leg serial calls — the snapshot wait is what made this slow.
+        entries = []
         for spec in specs:
+            raw = str(spec['expiry'])
+            is_month = len(raw) == 6 and raw.isdigit()
+            entries.append({
+                'spec': spec, 'raw': raw, 'is_month': is_month,
+                'contract': _make(spec, raw), 'resolved': raw,
+                'valid': False, 'ticker': None, 'error': None, 'possibles': None,
+            })
+
+        # ── Pass 1: qualify every primary candidate in ONE round-trip ──
+        # A bare YYYYMM lets IB resolve the monthly itself (works for most names,
+        # incl. thin small caps). qualifyContracts mutates each contract in place
+        # and only sets conId on an unambiguous match.
+        try:
+            await ib.qualifyContractsAsync(*[e['contract'] for e in entries])
+        except Exception:
+            pass  # per-leg state is read from conId below; stragglers fall through
+        for e in entries:
+            if e['contract'].conId and e['contract'].conId > 0:
+                e['valid'] = True
+
+        # ── Pass 2: month-only legs that missed → try the standard 3rd Friday, batched ──
+        retry = [e for e in entries if not e['valid'] and e['is_month']]
+        for e in retry:
+            e['contract'] = _make(e['spec'], _third_friday(e['raw']))
+        if retry:
             try:
-                raw_expiry = str(spec['expiry'])
-                is_month_only = len(raw_expiry) == 6 and raw_expiry.isdigit()
+                await ib.qualifyContractsAsync(*[e['contract'] for e in retry])
+            except Exception:
+                pass
+            for e in retry:
+                if e['contract'].conId and e['contract'].conId > 0:
+                    e['valid'] = True
+                    e['resolved'] = _third_friday(e['raw'])
 
-                def _make(exp):
-                    return Option(
-                        spec['symbol'], str(exp), float(spec['strike']),
-                        spec['right'].upper(), 'SMART', currency='USD'
-                    )
+        # ── Pass 3: still-unresolved stragglers → ask IB what exists (rare; serial) ──
+        # For a month-only leg, pick the monthly (3rd-Friday match, else latest listed);
+        # otherwise leave it unpriced and report the candidates so position_detail can be fixed.
+        for e in entries:
+            if e['valid']:
+                continue
+            try:
+                details = await ib.reqContractDetailsAsync(_make(e['spec'], e['raw']))
+            except Exception as exc:
+                e['error'] = str(exc)
+                continue
+            contracts = [d.contract for d in details if d.contract.conId and d.contract.conId > 0]
+            if e['is_month'] and contracts:
+                tf = _third_friday(e['raw'])
+                pick = next(
+                    (c for c in contracts if c.lastTradeDateOrContractMonth in (tf, e['raw'])),
+                    max(contracts, key=lambda c: c.lastTradeDateOrContractMonth),
+                )
+                e['contract'] = pick
+                e['valid'] = True
+                e['resolved'] = pick.lastTradeDateOrContractMonth
+            else:
+                e['error'] = 'ambiguous'
+                e['possibles'] = [
+                    {'expiry': d.contract.lastTradeDateOrContractMonth,
+                     'strike': d.contract.strike,
+                     'right':  d.contract.right}
+                    for d in details
+                ]
 
-                # Resolve the contract, most-compatible form first:
-                #   1) the expiry exactly as given — a bare YYYYMM lets IB resolve the
-                #      monthly itself, which works for most names (incl. thin small caps);
-                #   2) only if that fails for a month-only expiry, the standard monthly
-                #      (3rd Friday) to pin a single contract when YYYYMM was ambiguous.
-                candidates = [raw_expiry]
-                if is_month_only:
-                    candidates.append(_third_friday(raw_expiry))
+        # ── Single batched market-data snapshot for all resolved legs ──
+        # reqTickers fetches every contract concurrently; chunk to stay under IB's
+        # market-data line cap on large portfolios.
+        valid_entries = [e for e in entries if e['valid']]
+        CHUNK = 50
+        for i in range(0, len(valid_entries), CHUNK):
+            chunk = valid_entries[i:i + CHUNK]
+            try:
+                tickers = await ib.reqTickersAsync(*[e['contract'] for e in chunk])
+                for e, ticker in zip(chunk, tickers):
+                    e['ticker'] = ticker
+            except Exception as exc:
+                for e in chunk:
+                    e['error'] = e['error'] or str(exc)
 
-                valid = []
-                resolved_expiry = raw_expiry
-                for cand in candidates:
-                    qualified = await ib.qualifyContractsAsync(_make(cand))
-                    valid = [c for c in qualified if c.conId and c.conId > 0]
-                    if valid:
-                        resolved_expiry = cand
-                        break
+        # ── Assemble results in original spec order, same shape as before ──
+        results = []
+        for e in entries:
+            if not e['valid']:
+                results.append({**e['spec'], 'price': None,
+                                'error': e['error'] or 'unresolved',
+                                'possibles': e['possibles'] or []})
+                continue
+            # Echo back the resolved dated expiry so stored legs carry YYYYMMDD.
+            spec = {**e['spec'], 'expiry': e['resolved']}
+            ticker = e['ticker']
+            bid   = ticker.bid   if ticker and ticker.bid   and ticker.bid   > 0 else None
+            ask   = ticker.ask   if ticker and ticker.ask   and ticker.ask   > 0 else None
+            last  = ticker.last  if ticker and ticker.last  and ticker.last  > 0 else None
+            close = ticker.close if ticker and ticker.close and ticker.close > 0 else None
+            mid   = round((bid + ask) / 2, 4) if bid and ask else None
+            price = last or mid or close
 
-                # Still unresolved → ask IB what actually exists for this strike+month
-                # and take the monthly (3rd-Friday match, else the latest listed).
-                if not valid and is_month_only:
-                    details = await ib.reqContractDetailsAsync(_make(raw_expiry))
-                    contracts = [d.contract for d in details if d.contract.conId and d.contract.conId > 0]
-                    if contracts:
-                        tf = _third_friday(raw_expiry)
-                        pick = next(
-                            (c for c in contracts if c.lastTradeDateOrContractMonth in (tf, raw_expiry)),
-                            max(contracts, key=lambda c: c.lastTradeDateOrContractMonth),
-                        )
-                        valid = [pick]
-                        resolved_expiry = pick.lastTradeDateOrContractMonth
+            entry   = float(spec.get('entry', 0))
+            pnl_pct = round((price - entry) / entry * 100, 2) if price and entry else None
+            pnl_dol = round(price - entry, 4)                  if price and entry else None
 
-                if not valid:
-                    # IB has no matching contract (e.g. an unlisted deep-ITM strike).
-                    # Report whatever exists for this strike/month so position_detail can
-                    # be fixed; leave the leg unpriced rather than blocking the others.
-                    details = await ib.reqContractDetailsAsync(_make(raw_expiry))
-                    possibles = [
-                        {'expiry': d.contract.lastTradeDateOrContractMonth,
-                         'strike': d.contract.strike,
-                         'right':  d.contract.right}
-                        for d in details
-                    ]
-                    results.append({**spec, 'price': None,
-                                    'error': 'ambiguous',
-                                    'possibles': possibles})
-                    continue
-
-                # Echo back the resolved dated expiry so stored legs carry YYYYMMDD.
-                spec = {**spec, 'expiry': resolved_expiry}
-
-                [ticker] = await ib.reqTickersAsync(valid[0])
-                bid   = ticker.bid   if ticker.bid   and ticker.bid   > 0 else None
-                ask   = ticker.ask   if ticker.ask   and ticker.ask   > 0 else None
-                last  = ticker.last  if ticker.last  and ticker.last  > 0 else None
-                close = ticker.close if ticker.close and ticker.close > 0 else None
-                mid   = round((bid + ask) / 2, 4) if bid and ask else None
-                price = last or mid or close
-
-                entry   = float(spec.get('entry', 0))
-                pnl_pct = round((price - entry) / entry * 100, 2) if price and entry else None
-                pnl_dol = round(price - entry, 4)                  if price and entry else None
-
-                results.append({**spec, 'price': price, 'bid': bid, 'ask': ask,
-                                 'mid': mid, 'pnl_pct': pnl_pct, 'pnl_dol': pnl_dol})
-            except Exception as e:
-                results.append({**spec, 'price': None, 'error': str(e)})
+            results.append({**spec, 'price': price, 'bid': bid, 'ask': ask,
+                             'mid': mid, 'pnl_pct': pnl_pct, 'pnl_dol': pnl_dol})
 
         return results
 
