@@ -41,9 +41,10 @@ function pnlColor(pnl: number | null): string {
 
 interface LegRowProps {
   pos: UserPosition;
+  showPnl: boolean;
 }
 
-function LegRow({ pos }: LegRowProps) {
+function LegRow({ pos, showPnl }: LegRowProps) {
   const isOpt = pos.asset_class === 'OPT';
   const qty = pos.quantity ?? 0;
   const label = isOpt
@@ -77,18 +78,20 @@ function LegRow({ pos }: LegRowProps) {
       </div>
 
       {/* Right: P&L — never shrinks */}
-      <div style={{ textAlign: 'right', flexShrink: 0 }}>
-        {pos.unrealized_pnl_pct !== null && (
-          <div style={{ fontSize: 12, fontWeight: 600, color: pnlColor(pos.unrealized_pnl_pct), fontVariantNumeric: 'tabular-nums' }}>
-            {fmtPct(pos.unrealized_pnl_pct)}
-          </div>
-        )}
-        {pos.unrealized_pnl !== null && (
-          <div style={{ fontSize: 10, color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>
-            {fmtMoney(pos.unrealized_pnl)}
-          </div>
-        )}
-      </div>
+      {showPnl && (
+        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+          {pos.unrealized_pnl_pct !== null && (
+            <div style={{ fontSize: 12, fontWeight: 600, color: pnlColor(pos.unrealized_pnl_pct), fontVariantNumeric: 'tabular-nums' }}>
+              {fmtPct(pos.unrealized_pnl_pct)}
+            </div>
+          )}
+          {pos.unrealized_pnl !== null && (
+            <div style={{ fontSize: 10, color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>
+              {fmtMoney(pos.unrealized_pnl)}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -99,9 +102,10 @@ interface GroupRowProps {
   stwConviction: number | null;
   isExpanded: boolean;
   onToggle: () => void;
+  showPnl: boolean;
 }
 
-function GroupRow({ underlying, positions, stwConviction, isExpanded, onToggle }: GroupRowProps) {
+function GroupRow({ underlying, positions, stwConviction, isExpanded, onToggle, showPnl }: GroupRowProps) {
   const netPnl = positions.reduce((sum, p) => sum + (p.unrealized_pnl ?? 0), 0);
   // Mark value = sum of markPrice * |qty| * multiplier
   const totalMark = positions.reduce((sum, p) => sum + (p.mark_price ?? 0) * Math.abs(p.quantity ?? 0) * p.multiplier, 0);
@@ -143,19 +147,21 @@ function GroupRow({ underlying, positions, stwConviction, isExpanded, onToggle }
         </div>
 
         {/* Right: net P&L — never shrinks */}
-        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: pnlColor(netPnl), fontVariantNumeric: 'tabular-nums' }}>
-            {fmtMoney(netPnl)}
-          </div>
-          {totalMark > 0 && (
-            <div style={{ fontSize: 10, color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>
-              {fmtMoney(totalMark)} mkt
+        {showPnl && (
+          <div style={{ textAlign: 'right', flexShrink: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: pnlColor(netPnl), fontVariantNumeric: 'tabular-nums' }}>
+              {fmtMoney(netPnl)}
             </div>
-          )}
-        </div>
+            {totalMark > 0 && (
+              <div style={{ fontSize: 10, color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>
+                {fmtMoney(totalMark)} mkt
+              </div>
+            )}
+          </div>
+        )}
       </button>
 
-      {isExpanded && positions.map((p) => <LegRow key={p.id} pos={p} />)}
+      {isExpanded && positions.map((p) => <LegRow key={p.id} pos={p} showPnl={showPnl} />)}
     </>
   );
 }
@@ -169,6 +175,7 @@ export function PortfolioPage() {
   const { data: stwHoldings = [] } = useHoldings();
   const { sync, isSyncing, syncError, lastResult } = useSyncPortfolio();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [showPnl, setShowPnl] = useState(true);
 
   const isConnected = !!(settings?.ibkr_flex_token && settings?.ibkr_query_id);
 
@@ -218,6 +225,19 @@ export function PortfolioPage() {
         <div style={{ fontSize: 11, color: 'var(--t3)' }}>
           {lastSynced ? `Last synced ${fmtSynced(lastSynced)}` : 'Not synced yet'}
         </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            onClick={() => setShowPnl((v) => !v)}
+            title={showPnl ? 'Hide P&L' : 'Show P&L'}
+            style={{
+              padding: '5px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+              background: 'none', border: '1px solid var(--border)',
+              color: showPnl ? 'var(--t2)' : 'var(--t3)',
+              cursor: 'pointer',
+            }}
+          >
+            {showPnl ? 'Hide P&L' : 'P&L'}
+          </button>
         <button
           onClick={sync}
           disabled={isSyncing || !isConnected}
@@ -232,6 +252,7 @@ export function PortfolioPage() {
         >
           {isSyncing ? 'Syncing…' : 'Sync'}
         </button>
+        </div>
       </div>
 
       {syncError && (
@@ -299,6 +320,7 @@ export function PortfolioPage() {
               stwConviction={stwMap.has(underlying) ? (stwMap.get(underlying) ?? null) : null}
               isExpanded={expanded.has(underlying)}
               onToggle={() => toggleGroup(underlying)}
+              showPnl={showPnl}
             />
           ))}
         </div>

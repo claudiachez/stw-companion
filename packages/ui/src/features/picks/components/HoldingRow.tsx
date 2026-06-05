@@ -81,7 +81,7 @@ export function HoldingRow({ holding: h, isSelected, maxWeight, onClick, isUserH
               fontSize: 9, fontWeight: 600, padding: '1px 5px', borderRadius: 4,
               color: 'var(--acc)', background: 'var(--c5bg)', border: '1px solid var(--c5b)',
             }}>
-              held
+              Held
             </span>
           )}
         </div>
