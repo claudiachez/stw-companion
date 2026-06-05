@@ -136,9 +136,9 @@ Security model: client sends its Supabase JWT → function verifies it, reads
 `ibkr_flex_token` + `ibkr_query_id` from `profiles` via service key → calls IBKR →
 writes positions to `user_positions`. The raw token never reaches the browser.
 
-Required Netlify env vars on the **web** site (not VITE_ vars — server-side only):
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
+Required Netlify env vars on the **web** site:
+- `VITE_SUPABASE_URL` — already present (shared with the Vite client build)
+- `SUPABASE_SERVICE_ROLE_KEY` — server-side only, must be added separately (no VITE_ prefix so Vite never bundles it into the browser)
 
 These two pipelines are independent. The admin proxy prices STW's positions; the
 subscriber function reads the subscriber's own account. Do not conflate them.
