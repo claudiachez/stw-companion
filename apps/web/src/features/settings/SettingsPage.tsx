@@ -60,6 +60,7 @@ export function SettingsPage() {
   const isConnected = !!(settings?.ibkr_flex_token && settings?.ibkr_query_id);
 
   return (
+    <div style={{ height: '100%', overflowY: 'auto' }}>
     <div style={{ maxWidth: 560, margin: '0 auto', padding: '16px 16px 48px' }}>
 
       {/* IBKR Connection card */}
@@ -206,6 +207,7 @@ export function SettingsPage() {
           )}
         </div>
       </div>
+    </div>
     </div>
   );
 }
