@@ -6,7 +6,7 @@
 - Never push to `main` without explicit approval — that is production
 - Write shared styling/logic/data **once** in the shared packages, never twice across apps
 - **All UI changes must work on mobile** — design for ≤390px first; test layouts at narrow width before pushing
-- **After ~10 commits in a chat**, offer to review CLAUDE.md: update what's stale, add what's missing, remove what doesn't belong here
+- **After ~10 commits in a chat**, run the Session Close routine (see section below)
 
 ---
 
@@ -199,3 +199,40 @@ Output format: **`Mon D · H:MM AM ET`** (Eastern Time, year omitted).
 | Backend | Supabase (auth + Postgres + RLS) |
 | Prices | Finnhub (live), IBKR proxy (options legs) |
 | Styling | Tailwind 3 + CSS variables |
+
+---
+
+## Session Close
+
+Run this routine after ~10 commits or when wrapping up a session.
+
+### 1 — Git hygiene
+```bash
+git fetch --prune origin          # drop stale remote-tracking refs
+git branch --merged staging       # list local branches already merged
+git branch -d <merged-branches>   # delete each one
+```
+Remote branches merged into staging: delete via GitHub UI
+(Settings → Branches, or the "Delete branch" button on a closed PR).
+Claude can attempt `git push origin --delete <branch>` but may get a 403 —
+flag it if so and ask the user to delete manually.
+
+### 2 — Supabase check
+- Were any new migrations authored this session? List them and confirm the user has applied them via the Supabase SQL editor.
+- If schema or RLS changed, remind user to verify on the staging project before shipping to prod.
+
+### 3 — CLAUDE.md review
+Review every section and ask: *does this still reflect the codebase, or is it stale?*
+- Update migration count if new ones were added
+- Update AppCapabilities list if the context interface changed
+- Add conventions introduced this session (only if they're rules, not implementation details)
+- Remove anything that's now discoverable from the code itself
+
+### 4 — Staging deploy
+Confirm the latest push to `staging` produced a successful Netlify build (not Canceled or Failed). If the last deploy was canceled by a rapid push, trigger a fresh one with an empty commit:
+```bash
+git commit --allow-empty -m "Trigger staging deploy" && git push -u origin staging
+```
+
+### 5 — Session summary
+Briefly list: what was shipped, any pending user actions (migrations to apply, env vars to add, manual branch deletes), and any known open issues to tackle next session.
