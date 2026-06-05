@@ -204,6 +204,7 @@ export function PortfolioPage() {
   }
 
   return (
+    <div style={{ height: '100%', overflowY: 'auto' }}>
     <div style={{ maxWidth: 720, margin: '0 auto', padding: '0 0 40px' }}>
       {/* Header */}
       <div style={{
@@ -299,6 +300,7 @@ export function PortfolioPage() {
           ))}
         </div>
       )}
+    </div>
     </div>
   );
 }

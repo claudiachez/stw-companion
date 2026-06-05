@@ -81,10 +81,12 @@ function normalise(raw: RawPosition): NormalisedPosition | null {
       ? (pnlRaw / Math.abs(costBasisMoney)) * 100
       : null;
 
-  // For options, IBKR uses the full OCC symbol in `symbol`; underlyingSymbol
-  // carries the clean ticker. For stocks they're the same.
-  const underlying = (cat === 'OPT' && raw.underlyingSymbol)
-    ? raw.underlyingSymbol.trim()
+  // For options, prefer underlyingSymbol (clean ticker). If not included in the
+  // Flex Query, fall back to extracting the ticker from the OCC symbol — the OCC
+  // format is "TICKER  YYMMDD[C/P]STRIKE" so everything before the first gap of
+  // whitespace is the underlying ticker (e.g. "ADEA  260918C00035000" → "ADEA").
+  const underlying = cat === 'OPT'
+    ? (raw.underlyingSymbol?.trim() || raw.symbol.trim().split(/\s+/)[0])
     : raw.symbol.trim();
 
   return {

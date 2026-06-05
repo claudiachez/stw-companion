@@ -94,7 +94,7 @@ export function SettingsPage() {
               <>Log in to <b style={{ color: 'var(--t2)' }}>clientportal.ibkr.com</b> or <b style={{ color: 'var(--t2)' }}>account.ibkr.com</b></>,
               <>Go to <b style={{ color: 'var(--t2)' }}>Reports → Flex Queries</b></>,
               <>Click <b style={{ color: 'var(--t2)' }}>Create → Activity Flex Query</b></>,
-              <>Under <b style={{ color: 'var(--t2)' }}>Sections</b>, enable <b style={{ color: 'var(--t2)' }}>Open Positions</b> and tick: Symbol, Asset Category, Quantity, Cost Basis Price, Mark Price, Unrealized P&amp;L, Put/Call, Strike, Expiry, Multiplier, Conid</>,
+              <>Under <b style={{ color: 'var(--t2)' }}>Sections</b>, enable <b style={{ color: 'var(--t2)' }}>Open Positions</b> and tick: Symbol, Underlying Symbol, Asset Category, Quantity, Cost Basis Price, Mark Price, Unrealized P&amp;L, Put/Call, Strike, Expiry, Multiplier, Conid</>,
               <>Save the query — note the <b style={{ color: 'var(--t2)' }}>Query ID</b> shown next to it</>,
               <>Back on Flex Queries, copy your <b style={{ color: 'var(--t2)' }}>Flex Token</b> (top of page, under "Generate Tokens")</>,
               <>Paste both below, click <b style={{ color: 'var(--t2)' }}>Save</b>, then <b style={{ color: 'var(--t2)' }}>Sync</b></>,
