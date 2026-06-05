@@ -9,6 +9,19 @@ import type { UserPosition } from './api';
 
 // ── helpers ──────────────────────────────────────────────────
 
+// Normalize OCC-style option symbols stored in the DB before the server-side
+// fix: "ADEA  260918C00035000" or "ADEA260918C00035000" → "ADEA"
+function cleanUnderlying(raw: string): string {
+  const s = raw.trim();
+  // If the value contains digits it's probably an OCC symbol — extract the
+  // leading alphabetic portion before any whitespace or digit run.
+  if (/\d/.test(s)) {
+    const ticker = s.split(/\s+/)[0].replace(/\d.*$/, '');
+    if (ticker) return ticker;
+  }
+  return s;
+}
+
 function fmtMoney(n: number | null): string {
   if (n === null) return '—';
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
@@ -179,12 +192,13 @@ export function PortfolioPage() {
     [stwHoldings],
   );
 
-  // Group positions by underlying
+  // Group positions by underlying, normalising any OCC symbols still in the DB
   const groups = useMemo(() => {
     const map = new Map<string, UserPosition[]>();
     for (const p of positions) {
-      if (!map.has(p.underlying)) map.set(p.underlying, []);
-      map.get(p.underlying)!.push(p);
+      const key = cleanUnderlying(p.underlying);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(p);
     }
     return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
   }, [positions]);
