@@ -208,17 +208,11 @@ export function PortfolioPage() {
       {/* Header */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '16px 16px 10px',
+        padding: '10px 16px',
+        borderBottom: '1px solid var(--bsub)',
       }}>
-        <div>
-          <h1 style={{ fontWeight: 800, fontSize: 22, color: 'var(--text)', margin: 0 }}>
-            My Portfolio
-          </h1>
-          {lastSynced && (
-            <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>
-              Last synced {fmtSynced(lastSynced)}
-            </div>
-          )}
+        <div style={{ fontSize: 11, color: 'var(--t3)' }}>
+          {lastSynced ? `Last synced ${fmtSynced(lastSynced)}` : 'Not synced yet'}
         </div>
         <button
           onClick={sync}

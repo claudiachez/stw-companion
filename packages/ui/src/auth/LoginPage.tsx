@@ -55,7 +55,7 @@ export function LoginPage() {
             <rect width="56" height="56" rx="12" fill="#111111" />
             <path d="M18 40 L28 18 L38 40" fill="none" stroke="#22c55e" strokeWidth="3.5" strokeLinejoin="round" />
           </svg>
-          <h1 className="font-display text-3xl font-extrabold tracking-wide text-text uppercase">STW Companion</h1>
+          <h1 className="font-sans text-2xl font-bold text-text">STW Companion</h1>
           <p className="text-t2 text-sm mt-1">Stock Talk Weekly</p>
         </div>
 
