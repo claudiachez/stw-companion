@@ -12,6 +12,7 @@ import { usePriceCacheStore, type Quote } from '../../store/priceCache';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useCapabilities } from '../../context/AppCapabilities';
 import { useUserPositions } from '../portfolio/useUserPositions';
+import { cleanUnderlying } from '../portfolio/api';
 
 const PRICE_CACHE_KEY = 'finnhub_prices';
 const PRICE_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
@@ -33,7 +34,7 @@ export function PicksView() {
   const { data: holdings = [], isLoading, error } = useHoldings();
   const { data: userPositions = [] } = useUserPositions();
   const heldTickers = useMemo(
-    () => new Set(userPositions.map((p) => p.underlying)),
+    () => new Set(userPositions.map((p) => cleanUnderlying(p.underlying))),
     [userPositions],
   );
   const filters = useFiltersStore();

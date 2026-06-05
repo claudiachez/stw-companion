@@ -1,5 +1,17 @@
 import { getSupabase } from '../../lib/supabase';
 
+// Normalize OCC-style option symbols that may still be stored in the DB
+// from before the server-side fix: "ADEA  260918C00035000" → "ADEA".
+// Safe for clean tickers (no digits → returned as-is).
+export function cleanUnderlying(raw: string): string {
+  const s = raw.trim();
+  if (/\d/.test(s)) {
+    const ticker = s.split(/\s+/)[0].replace(/\d.*$/, '');
+    if (ticker) return ticker;
+  }
+  return s;
+}
+
 export interface UserPosition {
   id:                 string;
   user_id:            string;

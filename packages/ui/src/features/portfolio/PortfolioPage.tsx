@@ -6,21 +6,7 @@ import { useHoldings } from '../picks/useHoldings';
 import { ConvictionBadge } from '../picks/components/ConvictionBadge';
 import { LoadingSpinner } from '../../primitives/LoadingSpinner';
 import type { UserPosition } from './api';
-
-// ── helpers ──────────────────────────────────────────────────
-
-// Normalize OCC-style option symbols stored in the DB before the server-side
-// fix: "ADEA  260918C00035000" or "ADEA260918C00035000" → "ADEA"
-function cleanUnderlying(raw: string): string {
-  const s = raw.trim();
-  // If the value contains digits it's probably an OCC symbol — extract the
-  // leading alphabetic portion before any whitespace or digit run.
-  if (/\d/.test(s)) {
-    const ticker = s.split(/\s+/)[0].replace(/\d.*$/, '');
-    if (ticker) return ticker;
-  }
-  return s;
-}
+import { cleanUnderlying } from './api';
 
 function fmtMoney(n: number | null): string {
   if (n === null) return '—';
