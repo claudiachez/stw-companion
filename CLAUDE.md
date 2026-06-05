@@ -229,10 +229,18 @@ Review every section and ask: *does this still reflect the codebase, or is it st
 - Remove anything that's now discoverable from the code itself
 
 ### 4 — Staging deploy
-Confirm the latest push to `staging` produced a successful Netlify build (not Canceled or Failed). If the last deploy was canceled by a rapid push, trigger a fresh one with an empty commit:
+Confirm the latest push to `staging` produced a successful Netlify build — but first decide whether a build was even *expected*.
+
+Both Netlify sites use a **base directory** (`apps/web`, `apps/admin`), so Netlify auto-**cancels** a deploy when nothing inside that base dir changed. Check what the session's commits actually touched:
 ```bash
-git commit --allow-empty -m "Trigger staging deploy" && git push -u origin staging
+git diff --stat origin/main...staging   # files changed since last prod release
 ```
+- **Only root/non-app files changed** (e.g. `CLAUDE.md`, `supabase/migrations/**`, `.github/**`): a **Canceled** deploy is *correct and expected* — there was nothing to rebuild. Leave it; do **not** force an empty commit (that just produces another no-op build).
+- **App or shared code changed** (`apps/web/**`, `apps/admin/**`, `packages/**`) but the deploy is **Canceled or Failed**: this is a real problem. If it was canceled by a rapid superseding push, trigger a fresh build:
+  ```bash
+  git commit --allow-empty -m "Trigger staging deploy" && git push -u origin staging
+  ```
+  If it Failed, read the Netlify build log before re-triggering.
 
 ### 5 — Session summary
 Briefly list: what was shipped, any pending user actions (migrations to apply, env vars to add, manual branch deletes), and any known open issues to tackle next session.
