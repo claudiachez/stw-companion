@@ -20,8 +20,8 @@ import { XMLParser } from 'fast-xml-parser';
 
 const FLEX_SEND    = 'https://gdcdyn.interactivebrokers.com/Universal/servlet/FlexStatementService.SendRequest';
 const FLEX_GET     = 'https://gdcdyn.interactivebrokers.com/Universal/servlet/FlexStatementService.GetStatement';
-const MAX_POLLS    = 6;
-const POLL_DELAY   = 2000;
+const MAX_POLLS    = 4;   // 4 × 1.5 s = 6 s max — fits the 10 s Netlify free-tier limit
+const POLL_DELAY   = 1500;
 
 function delay(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
@@ -104,6 +104,15 @@ function normalise(raw: RawPosition): NormalisedPosition | null {
 }
 
 export const handler: Handler = async (event) => {
+  try {
+    return await run(event);
+  } catch (e) {
+    console.error('ibkr-flex unhandled error', e);
+    return err(500, 'Unexpected server error');
+  }
+};
+
+async function run(event: Parameters<Handler>[0]) {
   if (event.httpMethod !== 'POST') return err(405, 'Method not allowed');
 
   // ── Auth: verify Supabase JWT ────────────────────────────────
@@ -207,4 +216,4 @@ export const handler: Handler = async (event) => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ok: true, count: positions.length, lastSyncedAt: syncTime }),
   };
-};
+}

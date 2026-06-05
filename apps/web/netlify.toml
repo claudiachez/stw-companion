@@ -11,6 +11,9 @@
 [functions]
   directory = "netlify/functions"
 
+[functions."ibkr-flex"]
+  timeout = 26
+
 [[redirects]]
   from   = "/*"
   to     = "/index.html"
