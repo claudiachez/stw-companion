@@ -5,6 +5,8 @@
 - Never force-push or reset `staging` or `main`
 - Never push to `main` without explicit approval — that is production
 - Write shared styling/logic/data **once** in the shared packages, never twice across apps
+- **All UI changes must work on mobile** — design for ≤390px first; test layouts at narrow width before pushing
+- **After ~10 commits in a chat**, offer to review CLAUDE.md: update what's stale, add what's missing, remove what doesn't belong here
 
 ---
 
@@ -48,7 +50,7 @@ CLAUDE.md                    this file
 - `@stw/ui` takes everything via **props/context** — no app-specific imports, no env,
   no routes. The Supabase client + `VITE_*` env are created in each app and injected.
 - Admin/subscriber differences flow through **one `AppCapabilities` context**
-  (`isAdmin`, `canEdit`, `onEditHolding`, `showIbkrBadge`, `finnhubKey`, `twelveDataKey`) — never scatter `isAdmin`
+  (`isAdmin`, `canEdit`, `onEditHolding`, `showIbkrBadge`) — never scatter `isAdmin`
   checks deep in shared components.
 - `@stw/shared` is the only home for derived-number logic (P&L, weights, sector %, date formatting).
   Don't re-implement it in an app. (End state: move the math into Supabase views/RPC.)
@@ -100,10 +102,6 @@ Two sites, one repo, same branch — distinguished by **base directory**:
 config lives in each app's `netlify.toml`; base dir + env vars are set in the
 Netlify dashboard.
 
-**Deploy pacing:** Netlify cancels any in-progress build when a new push arrives.
-Batch related changes into one commit (or wait for a build to finish) to avoid
-cascading cancellations.
-
 Add each Netlify URL to Supabase Auth → URL Configuration → Redirect URLs (Google
 OAuth on web does a full-page redirect).
 
@@ -112,11 +110,7 @@ OAuth on web does a full-page redirect).
 ## Database (Supabase)
 
 - Project: `usmqbohcjcyszjxxvnqu.supabase.co`; client created per-app and injected into `@stw/ui`.
-- `supabase/migrations/` is the single source of truth (001 base schema, 002 user
-  access, 003 price/pnl columns, 004 holdings admin-write RLS, 005 run_log, 006
-  exit-pnl + digest, 007 reconcile tier modules, 008 recent_changes view, 009 graddox
-  RLS, 010 recent_changes auth-only, 011 user_positions + IBKR credentials on profiles,
-  012 conviction column default = 3).
+- `supabase/migrations/` is the single source of truth (012 migrations to date).
   **Claude authors migrations; you apply them** via the Supabase SQL editor / `supabase db push`.
 - Tables: `holdings`, `graddox`, `graddox_levels`, `profiles`, `tiers`, `run_log`, `user_positions`.
   RLS on `holdings`/`graddox` restricts writes to `cc@claudiachez.com`. `user_positions`
@@ -143,16 +137,7 @@ writes positions to `user_positions`. The raw token never reaches the browser.
 
 Required Netlify env vars on the **web** site:
 - `VITE_SUPABASE_URL` — already present (shared with the Vite client build)
-- `SUPABASE_SERVICE_ROLE_KEY` — server-side only, must be added separately (no VITE_ prefix so Vite never bundles it into the browser)
-
-**Function deployment notes:**
-- Node.js 20 has no native `WebSocket`; Supabase's `createClient()` will throw at init time.
-  Fix: `import ws from 'ws'` (in `dependencies`, not devDependencies) and pass
-  `realtime: { transport: ws }` to `createClient()`.
-- IBKR Flex polls up to 4×1.5s = 6s; timeout is set to 26s in
-  `[functions."ibkr-flex"] timeout = 26` in `apps/web/netlify.toml`.
-- When moving packages between `dependencies` / `devDependencies`, commit the updated
-  `pnpm-lock.yaml` — Netlify uses `--frozen-lockfile` and will fail otherwise.
+- `SUPABASE_SERVICE_ROLE_KEY` — server-side only, must be added separately (no VITE_ prefix)
 
 These two pipelines are independent. The admin proxy prices STW's positions; the
 subscriber function reads the subscriber's own account. Do not conflate them.
@@ -167,12 +152,6 @@ Output format: **`Mon D · H:MM AM ET`** (Eastern Time, year omitted).
 - DB stores UTC; always display in ET via `timeZone: 'America/New_York'`.
 - Label pattern: `[Action]: ${fmtDateTime(value)}` — e.g. `Last synced: Jun 5 · 7:46 AM ET`.
 - Never call `toLocaleString` / `toLocaleTimeString` directly in components for timestamps.
-
-### IBKR underlying normalization
-`cleanUnderlying(raw: string)` is exported from `packages/ui/src/features/portfolio/api.ts`.
-It strips the OCC date/strike suffix from any option symbol still stored in the DB
-(`"ADEA  260918C00035000"` → `"ADEA"`). Use it anywhere you map `user_positions.underlying`
-to a display key or compare against stock tickers (e.g. the Picks "Held" badge).
 
 ---
 
