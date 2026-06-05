@@ -13,9 +13,10 @@ interface Props {
   isSelected: boolean;
   maxWeight: number;
   onClick: () => void;
+  isUserHeld?: boolean;
 }
 
-export function HoldingRow({ holding: h, isSelected, maxWeight, onClick }: Props) {
+export function HoldingRow({ holding: h, isSelected, maxWeight, onClick, isUserHeld }: Props) {
   const quote = useQuote(h.ticker);
   const tier = TIERS[h.conviction] ?? TIERS[0];
   const basketColor = bColor(h.basket);
@@ -72,6 +73,15 @@ export function HoldingRow({ holding: h, isSelected, maxWeight, onClick }: Props
               color: action.color, background: action.bg,
             }}>
               {h.last_action}
+            </span>
+          )}
+          {/* User holds this ticker */}
+          {isUserHeld && (
+            <span style={{
+              fontSize: 9, fontWeight: 600, padding: '1px 5px', borderRadius: 4,
+              color: 'var(--acc)', background: 'var(--c5bg)', border: '1px solid var(--c5b)',
+            }}>
+              held
             </span>
           )}
         </div>
