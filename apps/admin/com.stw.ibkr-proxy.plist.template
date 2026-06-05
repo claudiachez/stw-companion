@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Template — do NOT load this file directly. Fill the __TOKENS__ and write the
+     result to ~/Library/LaunchAgents/com.stw.ibkr-proxy.plist (see IBKR_PROXY_SETUP.md):
+
+       PY=$(command -v python3); ADMIN="$(pwd)"        # run from apps/admin
+       sed -e "s|__PYTHON__|$PY|" -e "s|__ADMIN_DIR__|$ADMIN|" -e "s|__HOME__|$HOME|" \
+         com.stw.ibkr-proxy.plist.template > ~/Library/LaunchAgents/com.stw.ibkr-proxy.plist
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.stw.ibkr-proxy</string>
+
+  <!-- Absolute interpreter path: a LaunchAgent has no shell PATH.
+       ibkr_proxy.py is relative to WorkingDirectory so the cert lands in apps/admin. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>__PYTHON__</string>
+    <string>ibkr_proxy.py</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>__ADMIN_DIR__</string>
+
+  <!-- Start at login. No KeepAlive on purpose: if it crashes, use ibkr-proxy.command
+       (or the Desktop launcher) to restart it — avoids a respawn loop on a hard error. -->
+  <key>RunAtLoad</key>
+  <true/>
+  <key>ProcessType</key>
+  <string>Background</string>
+
+  <key>StandardOutPath</key>
+  <string>__HOME__/Library/Logs/stw-ibkr-proxy.log</string>
+  <key>StandardErrorPath</key>
+  <string>__HOME__/Library/Logs/stw-ibkr-proxy.log</string>
+</dict>
+</plist>

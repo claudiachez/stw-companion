@@ -93,22 +93,35 @@ export function IbkrBadge() {
       const failed = synced.filter((r) => r.status === 'rejected').length;
       if (failed) console.warn(`IBKR→Supabase: ${failed} ticker(s) failed to sync`);
 
-      // Surface ambiguous contracts so position_detail can be fixed.
-      const ambiguous = results.filter((r) => r.error === 'ambiguous');
-      if (ambiguous.length) {
-        const lines = ambiguous
-          .map((r) => {
-            const opts = (r.possibles ?? []).map((p) => p.expiry).join(', ');
-            return `• ${r.symbol} $${r.strike}${r.right} — possible dates: ${opts}`;
-          })
-          .join('\n');
-        alert(`Ambiguous option contracts — update position_detail with a specific expiry:\n\n${lines}`);
+      // Surface EVERY leg we couldn't price (not just ambiguous ones) so it's clear
+      // exactly which contracts are missing and why.
+      const unpriced = results.filter((r) => r.price == null);
+      if (unpriced.length) {
+        const lines = unpriced.map((r) => {
+          const id = `${r.symbol} $${r.strike}${r.right} ${r.expiry ?? ''}`.trim();
+          if (r.error === 'ambiguous') {
+            const opts = (r.possibles ?? []).map((p) => p.expiry).join(', ') || 'none listed';
+            return `• ${id} — ambiguous expiry; IB lists: ${opts}`;
+          }
+          if (r.error) return `• ${id} — ${r.error}`;
+          return `• ${id} — no market data (illiquid, or market/Gateway closed)`;
+        });
+        alert(
+          `IBKR sync — ${unpriced.length} of ${allLegs.length} leg(s) not priced:\n\n` +
+          lines.join('\n') +
+          '\n\nFix the expiry in position detail for "ambiguous" legs, or retry when IB Gateway has data.',
+        );
       }
 
-      const priced = results.filter((r) => r.price != null).length;
+      const priced = allLegs.length - unpriced.length;
       setStatus('ok');
       setLabel(`IBKR ✓ ${priced}/${allLegs.length}`);
-      setTitle(`Last synced ${new Date(fetchedAt).toLocaleTimeString()}`);
+      setTitle(
+        unpriced.length
+          ? `${unpriced.length} unpriced: ` +
+            unpriced.map((r) => `${r.symbol} $${r.strike}${r.right}`).join(', ')
+          : `Last synced ${new Date(fetchedAt).toLocaleTimeString()}`,
+      );
 
       await queryClient.invalidateQueries({ queryKey: ['holdings'] });
     } catch (e) {
