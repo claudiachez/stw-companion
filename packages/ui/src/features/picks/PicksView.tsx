@@ -114,7 +114,7 @@ export function PicksView() {
 
   function renderGrouped() {
     const groups: Record<number, typeof sorted> = {};
-    sorted.forEach((h) => { (groups[h.conviction] ??= []).push(h); });
+    sorted.forEach((h) => { (groups[h.conviction ?? 3] ??= []).push(h); });
     return [5, 4, 3, 2, 1, 0].flatMap((conv) => {
       const rows = groups[conv];
       if (!rows?.length) return [];

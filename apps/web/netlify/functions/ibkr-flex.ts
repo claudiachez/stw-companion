@@ -108,7 +108,8 @@ export const handler: Handler = async (event) => {
     return await run(event);
   } catch (e) {
     console.error('ibkr-flex unhandled error', e);
-    return err(500, 'Unexpected server error');
+    const msg = e instanceof Error ? e.message : String(e);
+    return err(500, `Server error: ${msg}`);
   }
 };
 
