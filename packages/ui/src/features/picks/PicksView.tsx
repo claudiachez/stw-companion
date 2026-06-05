@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useHoldings } from './useHoldings';
 import { useFiltersStore, applyFilters, sortFlat, sortByPnl } from './useFilters';
 import { FilterBar } from './components/FilterBar';
@@ -11,6 +11,7 @@ import { TIERS, resolvePnl, positionType, parseCostBasis } from '@stw/shared';
 import { usePriceCacheStore, type Quote } from '../../store/priceCache';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useCapabilities } from '../../context/AppCapabilities';
+import { useUserPositions } from '../portfolio/useUserPositions';
 
 const PRICE_CACHE_KEY = 'finnhub_prices';
 const PRICE_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
@@ -30,6 +31,11 @@ function saveLocalPrices(c: LocalPriceCache) {
 export function PicksView() {
   const { finnhubKey } = useCapabilities();
   const { data: holdings = [], isLoading, error } = useHoldings();
+  const { data: userPositions = [] } = useUserPositions();
+  const heldTickers = useMemo(
+    () => new Set(userPositions.map((p) => p.underlying)),
+    [userPositions],
+  );
   const filters = useFiltersStore();
   const setPrice = usePriceCacheStore((s) => s.setPrice);
   const setFetchStatus = usePriceCacheStore((s) => s.setFetchStatus);
@@ -135,6 +141,7 @@ export function PicksView() {
             isSelected={h.ticker === selectedTicker}
             maxWeight={maxWeight}
             onClick={() => setSelectedTicker(h.ticker === selectedTicker ? null : h.ticker)}
+            isUserHeld={heldTickers.has(h.ticker)}
           />
         )),
       ];
@@ -150,6 +157,7 @@ export function PicksView() {
           isSelected={h.ticker === selectedTicker}
           maxWeight={maxWeight}
           onClick={() => setSelectedTicker(h.ticker === selectedTicker ? null : h.ticker)}
+          isUserHeld={heldTickers.has(h.ticker)}
         />
       ));
 

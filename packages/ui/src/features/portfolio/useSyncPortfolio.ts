@@ -1,0 +1,47 @@
+import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useAuthStore } from '../../store/auth';
+
+interface SyncResult {
+  count: number;
+  lastSyncedAt: string;
+}
+
+export function useSyncPortfolio() {
+  const queryClient = useQueryClient();
+  const session = useAuthStore((s) => s.session);
+  const userId = useAuthStore((s) => s.user?.id);
+
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [lastResult, setLastResult] = useState<SyncResult | null>(null);
+
+  async function sync() {
+    if (!session?.access_token) {
+      setSyncError('Not signed in');
+      return;
+    }
+    setIsSyncing(true);
+    setSyncError(null);
+    try {
+      const res = await fetch('/.netlify/functions/ibkr-flex', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({}),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+      setLastResult({ count: json.count, lastSyncedAt: json.lastSyncedAt });
+      await queryClient.invalidateQueries({ queryKey: ['user-positions', userId] });
+    } catch (e) {
+      setSyncError(e instanceof Error ? e.message : 'Sync failed');
+    } finally {
+      setIsSyncing(false);
+    }
+  }
+
+  return { sync, isSyncing, syncError, lastResult };
+}
