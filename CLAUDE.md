@@ -15,7 +15,7 @@ packages and differ only by **capability**, never by forked components.
 
 | App | Audience | Folder | Capabilities |
 |---|---|---|---|
-| Subscriber web | Subscribers | `apps/web` | Supabase auth + tier paywall (`AccessGate`) |
+| Subscriber web | Subscribers | `apps/web` | Supabase auth + tier paywall (`AccessGate`); Portfolio page + IBKR Flex Query subscriber connection; Settings page (`/settings`) |
 | Admin dashboard | STW editor | `apps/admin` | No paywall; Edit form, Users tab, IBKR badge + proxy writer |
 
 Each deploys to its own Netlify site from the **same branch** (base dir differs).
@@ -34,11 +34,13 @@ packages/
                              supabase/query-client factories, AppCapabilities context
 apps/
   web/                       subscriber shell: router, Layout, auth, AccessGate
+    netlify/functions/
+      ibkr-flex.ts           serverless IBKR Flex Query proxy (JWT-auth, never exposes token)
     netlify.toml             (Netlify base dir = apps/web)
   admin/                     admin shell: no paywall, Edit + Users + IBKR
     ibkr_proxy.py            local IBKR writer (run on your machine, not deployed)
     netlify.toml             (Netlify base dir = apps/admin)
-supabase/migrations/         001..006 — single source of truth for DB schema/RLS
+supabase/migrations/         001..011 — single source of truth for DB schema/RLS
 CLAUDE.md                    this file
 ```
 
@@ -46,7 +48,7 @@ CLAUDE.md                    this file
 - `@stw/ui` takes everything via **props/context** — no app-specific imports, no env,
   no routes. The Supabase client + `VITE_*` env are created in each app and injected.
 - Admin/subscriber differences flow through **one `AppCapabilities` context**
-  (`isAdmin`, `canEdit`, `onEditHolding`, `showIbkrBadge`) — never scatter `isAdmin`
+  (`isAdmin`, `canEdit`, `onEditHolding`, `showIbkrBadge`, `showSettingsLink`) — never scatter `isAdmin`
   checks deep in shared components.
 - `@stw/shared` is the only home for derived-number logic (P&L, weights, sector %).
   Don't re-implement it in an app. (End state: move the math into Supabase views/RPC.)
@@ -108,28 +110,44 @@ OAuth on web does a full-page redirect).
 - Project: `usmqbohcjcyszjxxvnqu.supabase.co`; client created per-app and injected into `@stw/ui`.
 - `supabase/migrations/` is the single source of truth (001 base schema, 002 user
   access, 003 price/pnl columns, 004 holdings admin-write RLS, 005 run_log, 006
-  exit-pnl + digest). **Claude authors migrations; you apply them** via the Supabase
-  SQL editor / `supabase db push`.
-- Tables: `holdings`, `graddox`, `graddox_levels`, `profiles`, `tiers`, `run_log`.
-  RLS restricts all writes to `cc@claudiachez.com`; admin app must log in as that
-  account. The IBKR proxy is the only writer of `last_pnl_*` / `ibkr_legs`.
+  exit-pnl + digest, 007 reconcile tier modules, 008 recent_changes view, 009 graddox
+  RLS, 010 recent_changes auth-only, 011 user_positions + IBKR credentials on profiles).
+  **Claude authors migrations; you apply them** via the Supabase SQL editor / `supabase db push`.
+- Tables: `holdings`, `graddox`, `graddox_levels`, `profiles`, `tiers`, `run_log`, `user_positions`.
+  RLS on `holdings`/`graddox` restricts writes to `cc@claudiachez.com`. `user_positions`
+  uses user-owned RLS — each subscriber reads and writes only their own rows.
+  The admin IBKR proxy is the only writer of `last_pnl_*` / `ibkr_legs` on `holdings`.
 
 ---
 
-## IBKR Pipeline (admin only)
+## IBKR Pipelines (two separate systems)
 
+### Admin — local option pricer
 `apps/admin/ibkr_proxy.py` is a **local** Flask server (`localhost:8765`, self-signed
 TLS) that talks to IB Gateway (`127.0.0.1:4001`) via `ib_insync`. The admin browser
-calls it to price option legs, then writes `last_pnl_pct` / `last_pnl_at` /
-`ibkr_legs` to Supabase. Web only **reads** those columns (with a last-synced
-fallback when the proxy is down). Run it locally with IB Gateway connected; it is
-never deployed.
+calls it to price **STW's** option legs (arbitrary contracts, not just held positions),
+then writes `last_pnl_pct` / `last_pnl_at` / `ibkr_legs` to `holdings` in Supabase.
+Web only **reads** those columns. Run it locally with IB Gateway connected; never deployed.
+
+### Subscriber — Flex Query portfolio sync
+`apps/web/netlify/functions/ibkr-flex.ts` is a **serverless** Netlify function that
+calls IBKR's cloud Flex Web Service API to fetch a subscriber's **own** portfolio positions.
+Security model: client sends its Supabase JWT → function verifies it, reads
+`ibkr_flex_token` + `ibkr_query_id` from `profiles` via service key → calls IBKR →
+writes positions to `user_positions`. The raw token never reaches the browser.
+
+Required Netlify env vars on the **web** site (not VITE_ vars — server-side only):
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+These two pipelines are independent. The admin proxy prices STW's positions; the
+subscriber function reads the subscriber's own account. Do not conflate them.
 
 ---
 
 ## Design System
 
-- **Font:** Barlow Condensed (700/800) for logo, headers, login; system sans-serif for body
+- **Font:** Barlow Condensed (700/800) for the **STW logo** in the header only; system sans-serif (`font-sans`) everywhere else including page headings and login
 - **Logo:** STW mic + green arrow SVG
 - **Default theme:** Dark. Toggle persists to `localStorage` (`stwTheme`); light
   theme applied via `[data-theme="light"]`. Never hardcode colors outside `:root` /
