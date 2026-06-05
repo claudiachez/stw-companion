@@ -35,9 +35,7 @@ export function ProfilePage() {
   if (isLoading) return <LoadingSpinner className="mt-16" />;
 
   return (
-    <div className="max-w-lg mx-auto px-4 py-8">
-      <h1 className="font-display font-extrabold text-2xl text-text mb-6">Profile</h1>
-
+    <div className="max-w-lg mx-auto px-4 py-6">
       <div className="bg-surface border border-border rounded-xl p-5 flex flex-col gap-4">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-full bg-s2 flex items-center justify-center text-xl font-bold text-acc">

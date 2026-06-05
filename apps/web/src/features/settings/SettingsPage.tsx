@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useIbkrSettings } from '@stw/ui';
-import { saveIbkrSettings } from '@stw/ui';
-import { useAuthStore } from '@stw/ui';
-import { useSyncPortfolio } from '@stw/ui';
-import { LoadingSpinner } from '@stw/ui';
+import { useIbkrSettings, saveIbkrSettings, useAuthStore, useSyncPortfolio, LoadingSpinner } from '@stw/ui';
 
 const inputStyle: React.CSSProperties = {
-  width: '100%', background: 'var(--bg)', border: '1px solid var(--border)',
-  borderRadius: 5, padding: '8px 10px', fontSize: 13, color: 'var(--text)',
-  outline: 'none', boxSizing: 'border-box',
+  width: '100%',
+  background: 'var(--bg)',
+  border: '1px solid var(--border)',
+  borderRadius: 5,
+  padding: '10px 12px',
+  // 16px prevents iOS auto-zoom on focus
+  fontSize: 16,
+  color: 'var(--text)',
+  outline: 'none',
+  boxSizing: 'border-box',
 };
 
 export function SettingsPage() {
@@ -57,130 +60,151 @@ export function SettingsPage() {
   const isConnected = !!(settings?.ibkr_flex_token && settings?.ibkr_query_id);
 
   return (
-    <div className="max-w-lg mx-auto px-4 py-8">
-      <h1 className="font-display font-extrabold text-2xl text-text mb-6">Settings</h1>
+    <div style={{ maxWidth: 560, margin: '0 auto', padding: '16px 16px 48px' }}>
 
-      <div className="bg-surface border border-border rounded-xl p-5 flex flex-col gap-5">
+      {/* IBKR Connection card */}
+      <div style={{
+        background: 'var(--surface)', border: '1px solid var(--border)',
+        borderRadius: 12, overflow: 'hidden',
+      }}>
 
-        {/* Section header */}
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontWeight: 600, fontSize: 15, color: 'var(--text)' }}>
-              IBKR Connection
-            </span>
-            <span style={{
-              fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 4,
-              background: isConnected ? 'var(--c5bg)' : 'var(--s2)',
-              color: isConnected ? 'var(--acc)' : 'var(--t3)',
-              border: `1px solid ${isConnected ? 'var(--c5b)' : 'var(--border)'}`,
-            }}>
-              {isConnected ? 'Connected' : 'Not connected'}
-            </span>
+        {/* Card header */}
+        <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--bsub)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text)' }}>
+            IBKR Connection
+          </span>
+          <span style={{
+            fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 4,
+            background: isConnected ? 'var(--c5bg)' : 'var(--s2)',
+            color: isConnected ? 'var(--acc)' : 'var(--t3)',
+            border: `1px solid ${isConnected ? 'var(--c5b)' : 'var(--border)'}`,
+          }}>
+            {isConnected ? 'Connected' : 'Not connected'}
+          </span>
+        </div>
+
+        {/* Setup instructions */}
+        <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--bsub)' }}>
+          <div style={{ fontSize: 11, color: 'var(--t3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>
+            How to connect
           </div>
-          <ol style={{ fontSize: 12, color: 'var(--t3)', marginTop: 6, lineHeight: 1.9, paddingLeft: 18 }}>
-            <li>Log in to <strong style={{ color: 'var(--t2)' }}>Client Portal</strong> (clientportal.ibkr.com) or <strong style={{ color: 'var(--t2)' }}>Account Management</strong> (account.ibkr.com)</li>
-            <li>Go to <strong style={{ color: 'var(--t2)' }}>Reports → Flex Queries</strong></li>
-            <li>Click <strong style={{ color: 'var(--t2)' }}>Create</strong> → choose <strong style={{ color: 'var(--t2)' }}>Activity Flex Query</strong></li>
-            <li>Under <strong style={{ color: 'var(--t2)' }}>Sections</strong>, enable <strong style={{ color: 'var(--t2)' }}>Open Positions</strong> and tick: Symbol, Asset Category, Quantity, Cost Basis Price, Mark Price, Unrealized P&amp;L, Put/Call, Strike, Expiry, Multiplier, Conid</li>
-            <li>Save the query — note the <strong style={{ color: 'var(--t2)' }}>Query ID</strong> shown next to it</li>
-            <li>Back on the Flex Queries page, copy your <strong style={{ color: 'var(--t2)' }}>Flex Token</strong> (top of the page, under "Generate Tokens")</li>
-            <li>Paste both below and click <strong style={{ color: 'var(--t2)' }}>Save</strong>, then <strong style={{ color: 'var(--t2)' }}>Sync Portfolio</strong></li>
+          <ol style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {[
+              <>Log in to <b style={{ color: 'var(--t2)' }}>clientportal.ibkr.com</b> or <b style={{ color: 'var(--t2)' }}>account.ibkr.com</b></>,
+              <>Go to <b style={{ color: 'var(--t2)' }}>Reports → Flex Queries</b></>,
+              <>Click <b style={{ color: 'var(--t2)' }}>Create → Activity Flex Query</b></>,
+              <>Under <b style={{ color: 'var(--t2)' }}>Sections</b>, enable <b style={{ color: 'var(--t2)' }}>Open Positions</b> and tick: Symbol, Asset Category, Quantity, Cost Basis Price, Mark Price, Unrealized P&amp;L, Put/Call, Strike, Expiry, Multiplier, Conid</>,
+              <>Save the query — note the <b style={{ color: 'var(--t2)' }}>Query ID</b> shown next to it</>,
+              <>Back on Flex Queries, copy your <b style={{ color: 'var(--t2)' }}>Flex Token</b> (top of page, under "Generate Tokens")</>,
+              <>Paste both below, click <b style={{ color: 'var(--t2)' }}>Save</b>, then <b style={{ color: 'var(--t2)' }}>Sync</b></>,
+            ].map((step, i) => (
+              <li key={i} style={{ fontSize: 12, color: 'var(--t3)', lineHeight: 1.6 }}>{step}</li>
+            ))}
           </ol>
-          <p style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>
-            Your token is stored securely server-side and never exposed in the browser.
+          <p style={{ fontSize: 11, color: 'var(--t3)', marginTop: 10, marginBottom: 0 }}>
+            Your token is stored server-side and never exposed in the browser.
           </p>
         </div>
 
-        <div className="h-px bg-border" />
+        {/* Form fields */}
+        <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-        {/* Flex Token */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <label style={{ fontSize: 11, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-            Flex Token
-          </label>
-          <div style={{ position: 'relative' }}>
+          {/* Flex Token */}
+          <div>
+            <label style={{ display: 'block', fontSize: 11, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, marginBottom: 6 }}>
+              Flex Token
+            </label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showToken ? 'text' : 'password'}
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                placeholder="Paste your Flex Token"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="none"
+                style={{ ...inputStyle, paddingRight: 56 }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowToken((v) => !v)}
+                style={{
+                  position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  fontSize: 12, color: 'var(--t3)', padding: '4px',
+                }}
+              >
+                {showToken ? 'Hide' : 'Show'}
+              </button>
+            </div>
+          </div>
+
+          {/* Query ID */}
+          <div>
+            <label style={{ display: 'block', fontSize: 11, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, marginBottom: 6 }}>
+              Query ID
+            </label>
             <input
-              type={showToken ? 'text' : 'password'}
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              placeholder="Paste your Flex Token"
-              style={{ ...inputStyle, paddingRight: 72 }}
+              type="text"
+              inputMode="numeric"
+              value={queryId}
+              onChange={(e) => setQueryId(e.target.value)}
+              placeholder="e.g. 123456"
+              autoComplete="off"
+              style={inputStyle}
             />
+          </div>
+
+          {saveError && (
+            <div style={{ padding: '8px 12px', borderRadius: 6, background: '#2d0c0c', border: '1px solid var(--c1b)', color: 'var(--c1)', fontSize: 12 }}>
+              {saveError}
+            </div>
+          )}
+
+          {/* Buttons */}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button
-              type="button"
-              onClick={() => setShowToken((v) => !v)}
+              onClick={handleSave}
+              disabled={saving}
               style={{
-                position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
-                background: 'none', border: 'none', cursor: 'pointer',
-                fontSize: 11, color: 'var(--t3)',
+                flex: 1, minWidth: 100,
+                padding: '10px 16px', borderRadius: 6, fontSize: 14, fontWeight: 600,
+                background: 'var(--acc)', color: '#000', border: 'none',
+                cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.6 : 1,
               }}
             >
-              {showToken ? 'Hide' : 'Show'}
+              {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save'}
             </button>
+
+            {isConnected && (
+              <button
+                onClick={sync}
+                disabled={isSyncing}
+                style={{
+                  flex: 1, minWidth: 100,
+                  padding: '10px 16px', borderRadius: 6, fontSize: 14, fontWeight: 600,
+                  background: 'var(--s2)', color: 'var(--text)',
+                  border: '1px solid var(--border)',
+                  cursor: isSyncing ? 'default' : 'pointer', opacity: isSyncing ? 0.6 : 1,
+                }}
+              >
+                {isSyncing ? 'Syncing…' : 'Sync Portfolio'}
+              </button>
+            )}
           </div>
-        </div>
 
-        {/* Query ID */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <label style={{ fontSize: 11, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-            Query ID
-          </label>
-          <input
-            type="text"
-            value={queryId}
-            onChange={(e) => setQueryId(e.target.value)}
-            placeholder="e.g. 123456"
-            style={inputStyle}
-          />
-        </div>
+          {syncError && (
+            <div style={{ padding: '8px 12px', borderRadius: 6, background: '#2d0c0c', border: '1px solid var(--c1b)', color: 'var(--c1)', fontSize: 12 }}>
+              {syncError}. IBKR reports can take up to 10 seconds — try again if it timed out.
+            </div>
+          )}
 
-        {saveError && (
-          <div style={{ padding: '8px 12px', borderRadius: 6, background: '#2d0c0c', border: '1px solid var(--c1b)', color: 'var(--c1)', fontSize: 12 }}>
-            {saveError}
-          </div>
-        )}
-
-        {/* Action buttons */}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            style={{
-              padding: '8px 18px', borderRadius: 6, fontSize: 13, fontWeight: 600,
-              background: 'var(--acc)', color: '#000', border: 'none',
-              cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.6 : 1,
-            }}
-          >
-            {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save'}
-          </button>
-
-          {isConnected && (
-            <button
-              onClick={sync}
-              disabled={isSyncing}
-              style={{
-                padding: '8px 18px', borderRadius: 6, fontSize: 13, fontWeight: 600,
-                background: 'var(--s2)', color: 'var(--text)',
-                border: '1px solid var(--border)',
-                cursor: isSyncing ? 'default' : 'pointer', opacity: isSyncing ? 0.6 : 1,
-              }}
-            >
-              {isSyncing ? 'Syncing…' : 'Sync Portfolio'}
-            </button>
+          {lastResult && (
+            <div style={{ fontSize: 12, color: 'var(--acc)' }}>
+              ✓ Synced {lastResult.count} position{lastResult.count !== 1 ? 's' : ''}
+            </div>
           )}
         </div>
-
-        {syncError && (
-          <div style={{ padding: '8px 12px', borderRadius: 6, background: '#2d0c0c', border: '1px solid var(--c1b)', color: 'var(--c1)', fontSize: 12 }}>
-            {syncError}. IBKR reports can take up to 10 seconds — try again if it timed out.
-          </div>
-        )}
-
-        {lastResult && (
-          <div style={{ fontSize: 12, color: 'var(--acc)' }}>
-            ✓ Synced {lastResult.count} position{lastResult.count !== 1 ? 's' : ''}
-          </div>
-        )}
       </div>
     </div>
   );
