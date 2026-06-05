@@ -17,6 +17,7 @@
 import type { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 import { XMLParser } from 'fast-xml-parser';
+import ws from 'ws';
 
 const FLEX_SEND    = 'https://gdcdyn.interactivebrokers.com/Universal/servlet/FlexStatementService.SendRequest';
 const FLEX_GET     = 'https://gdcdyn.interactivebrokers.com/Universal/servlet/FlexStatementService.GetStatement';
@@ -125,8 +126,11 @@ async function run(event: Parameters<Handler>[0]) {
   const serviceKey   = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !serviceKey) return err(500, 'Server misconfigured');
 
+  // Node.js 20 has no native WebSocket; pass the 'ws' package as the
+  // Realtime transport to prevent Supabase from throwing on client init.
   const admin = createClient(supabaseUrl, serviceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
+    realtime: { transport: ws },
   });
 
   // Defensive: avoid destructuring data.user directly — Supabase v2 can return
