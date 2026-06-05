@@ -77,12 +77,17 @@ export function SettingsPage() {
               {isConnected ? 'Connected' : 'Not connected'}
             </span>
           </div>
-          <p style={{ fontSize: 12, color: 'var(--t3)', marginTop: 6, lineHeight: 1.6 }}>
-            Generate a Flex Query in IBKR Account Management → Reports → Flex Queries.
-            Select <strong style={{ color: 'var(--t2)' }}>Positions</strong> as the report type,
-            save it, then copy the <strong style={{ color: 'var(--t2)' }}>Flex Token</strong> and{' '}
-            <strong style={{ color: 'var(--t2)' }}>Query ID</strong> below.
-            Your credentials are stored securely and never exposed to the browser.
+          <ol style={{ fontSize: 12, color: 'var(--t3)', marginTop: 6, lineHeight: 1.9, paddingLeft: 18 }}>
+            <li>Log in to <strong style={{ color: 'var(--t2)' }}>Client Portal</strong> (clientportal.ibkr.com) or <strong style={{ color: 'var(--t2)' }}>Account Management</strong> (account.ibkr.com)</li>
+            <li>Go to <strong style={{ color: 'var(--t2)' }}>Reports → Flex Queries</strong></li>
+            <li>Click <strong style={{ color: 'var(--t2)' }}>Create</strong> → choose <strong style={{ color: 'var(--t2)' }}>Activity Flex Query</strong></li>
+            <li>Under <strong style={{ color: 'var(--t2)' }}>Sections</strong>, enable <strong style={{ color: 'var(--t2)' }}>Open Positions</strong> and tick: Symbol, Asset Category, Quantity, Cost Basis Price, Mark Price, Unrealized P&amp;L, Put/Call, Strike, Expiry, Multiplier, Conid</li>
+            <li>Save the query — note the <strong style={{ color: 'var(--t2)' }}>Query ID</strong> shown next to it</li>
+            <li>Back on the Flex Queries page, copy your <strong style={{ color: 'var(--t2)' }}>Flex Token</strong> (top of the page, under "Generate Tokens")</li>
+            <li>Paste both below and click <strong style={{ color: 'var(--t2)' }}>Save</strong>, then <strong style={{ color: 'var(--t2)' }}>Sync Portfolio</strong></li>
+          </ol>
+          <p style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>
+            Your token is stored securely server-side and never exposed in the browser.
           </p>
         </div>
 
