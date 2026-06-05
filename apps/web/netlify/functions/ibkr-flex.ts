@@ -108,7 +108,8 @@ export const handler: Handler = async (event) => {
     return await run(event);
   } catch (e) {
     console.error('ibkr-flex unhandled error', e);
-    return err(500, 'Unexpected server error');
+    const msg = e instanceof Error ? e.message : String(e);
+    return err(500, `Server error: ${msg}`);
   }
 };
 
@@ -128,8 +129,11 @@ async function run(event: Parameters<Handler>[0]) {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  const { data: { user }, error: authErr } = await admin.auth.getUser(jwt);
-  if (authErr || !user) return err(401, 'Invalid or expired session');
+  // Defensive: avoid destructuring data.user directly — Supabase v2 can return
+  // data: null on network errors, which would throw TypeError before our catch.
+  const authResult = await admin.auth.getUser(jwt);
+  const user = authResult.data?.user ?? null;
+  if (authResult.error || !user) return err(401, 'Invalid or expired session');
 
   // ── Fetch IBKR credentials from profiles ────────────────────
   const { data: profile, error: profileErr } = await admin

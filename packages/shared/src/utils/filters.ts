@@ -21,10 +21,10 @@ export interface FilterableHolding {
   ticker: string;
   name: string | null;
   basket: string | null;
-  conviction: number;
+  conviction: number | null;
   last_action: string | null;
   position_detail: string | null;
-  rank: number;
+  rank: number | null;
   action_date: string | null;
   current_weight: number | null;
 }
@@ -34,7 +34,7 @@ export function applyFilters<T extends FilterableHolding>(holdings: T[], f: Filt
     // Hide closed positions by default, unless the user explicitly filters for Closed.
     if (f.hideClosed && f.status !== 'Closed' && h.last_action === 'Closed') return false;
     if (f.basket && h.basket !== f.basket) return false;
-    if (f.tier   && h.conviction !== Number(f.tier)) return false;
+    if (f.tier   && (h.conviction ?? 3) !== Number(f.tier)) return false;
     if (f.status && h.last_action !== f.status) return false;
     if (f.type   && positionType(h.position_detail) !== f.type) return false;
     if (f.search) {
@@ -53,7 +53,7 @@ export function sortFlat<T extends FilterableHolding>(holdings: T[], sort: SortM
   // P&L map, so they're handled by `sortByPnl` at the call site. Here they fall
   // back to conviction ordering.
   const fns: Partial<Record<SortMode, (a: T, b: T) => number>> = {
-    conviction:  (a, b) => b.conviction - a.conviction || a.rank - b.rank,
+    conviction:  (a, b) => (b.conviction ?? 3) - (a.conviction ?? 3) || (a.rank ?? 9999) - (b.rank ?? 9999),
     az:          (a, b) => a.ticker.localeCompare(b.ticker),
     za:          (a, b) => b.ticker.localeCompare(a.ticker),
     recent:      (a, b) => dateVal(b) - dateVal(a),

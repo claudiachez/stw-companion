@@ -25,7 +25,7 @@ const fieldStyle: React.CSSProperties = {
 export function HoldingEditForm({ holding: h, onDone }: Props) {
   const queryClient = useQueryClient();
   const { onEditHolding } = useCapabilities();
-  const [conviction, setConviction] = useState(String(h.conviction));
+  const [conviction, setConviction] = useState(String(h.conviction ?? 3));
   const [lastAction, setLastAction] = useState(h.last_action ?? 'Hold');
   const [actionDate, setActionDate] = useState(h.action_date ?? '');
   const [initialWeight, setInitialWeight] = useState(h.initial_weight != null ? String(h.initial_weight) : '');
@@ -39,12 +39,21 @@ export function HoldingEditForm({ holding: h, onDone }: Props) {
     setSaving(true);
     setError('');
 
+    // For new positions (initial_weight never set), promote any entered current_weight
+    // to initial_weight instead — current_weight is updated on weekly Friday runs.
+    const parsedInitial = initialWeight ? parseFloat(initialWeight) : null;
+    const parsedCurrent = currentWeight ? parseFloat(currentWeight) : null;
+    const finalInitialWeight = parsedInitial ?? (h.initial_weight == null && parsedCurrent != null ? parsedCurrent : null);
+    const finalCurrentWeight = (h.initial_weight == null && parsedInitial == null && parsedCurrent != null)
+      ? null
+      : parsedCurrent;
+
     const updates: Record<string, unknown> = {
       conviction: Number(conviction),
       last_action: lastAction,
       action_date: actionDate || null,
-      initial_weight: initialWeight ? parseFloat(initialWeight) : null,
-      current_weight: currentWeight ? parseFloat(currentWeight) : null,
+      initial_weight: finalInitialWeight,
+      current_weight: finalCurrentWeight,
       position_detail: positionDetail.trim() || null,
     };
     if (lastPrice !== '') {
