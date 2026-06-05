@@ -53,12 +53,13 @@ function LegRow({ pos }: LegRowProps) {
 
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      display: 'flex', alignItems: 'center', gap: 8,
       padding: '7px 14px 7px 36px',
       borderBottom: '1px solid var(--bsub)',
       background: 'var(--bg)',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      {/* Left: badge + label — shrinks so right side always has room */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
         <span style={{
           fontSize: 9, fontWeight: 600, padding: '1px 5px', borderRadius: 4,
           color: isOpt ? 'var(--c4)' : 'var(--t2)',
@@ -68,11 +69,15 @@ function LegRow({ pos }: LegRowProps) {
         }}>
           {isOpt ? `${qty < 0 ? 'SHORT ' : ''}${pos.put_call === 'C' ? 'CALL' : 'PUT'}` : 'STOCK'}
         </span>
-        <span style={{ fontSize: 12, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>
+        <span style={{
+          fontSize: 12, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
           {label}
         </span>
       </div>
 
+      {/* Right: P&L — never shrinks */}
       <div style={{ textAlign: 'right', flexShrink: 0 }}>
         {pos.unrealized_pnl_pct !== null && (
           <div style={{ fontSize: 12, fontWeight: 600, color: pnlColor(pos.unrealized_pnl_pct), fontVariantNumeric: 'tabular-nums' }}>
@@ -125,23 +130,21 @@ function GroupRow({ underlying, positions, stwConviction, isExpanded, onToggle }
           display: 'inline-block',
         }}>▶</span>
 
-        {/* Ticker */}
-        <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', flexShrink: 0 }}>
-          {underlying}
-        </span>
+        {/* Left group: ticker + badges — shrinks so P&L always fits */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0, overflow: 'hidden' }}>
+          <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', flexShrink: 0 }}>
+            {underlying}
+          </span>
+          {stwConviction !== null && (
+            <ConvictionBadge level={stwConviction} />
+          )}
+          <span style={{ fontSize: 10, color: 'var(--t3)', whiteSpace: 'nowrap' }}>
+            {positions.length === 1 ? '1 position' : `${positions.length} legs`}
+          </span>
+        </div>
 
-        {/* STW badge */}
-        {stwConviction !== null && (
-          <ConvictionBadge level={stwConviction} />
-        )}
-
-        {/* Leg count */}
-        <span style={{ fontSize: 10, color: 'var(--t3)', marginLeft: 2 }}>
-          {positions.length === 1 ? '1 position' : `${positions.length} legs`}
-        </span>
-
-        {/* Right: net P&L */}
-        <div style={{ marginLeft: 'auto', textAlign: 'right', flexShrink: 0 }}>
+        {/* Right: net P&L — never shrinks */}
+        <div style={{ textAlign: 'right', flexShrink: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: pnlColor(netPnl), fontVariantNumeric: 'tabular-nums' }}>
             {fmtMoney(netPnl)}
           </div>

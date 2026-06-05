@@ -85,8 +85,12 @@ function normalise(raw: RawPosition): NormalisedPosition | null {
   // Flex Query, fall back to extracting the ticker from the OCC symbol — the OCC
   // format is "TICKER  YYMMDD[C/P]STRIKE" so everything before the first gap of
   // whitespace is the underlying ticker (e.g. "ADEA  260918C00035000" → "ADEA").
+  // Extract clean underlying ticker from OCC symbol when underlyingSymbol is absent.
+  // OCC format: "TICKER  YYMMDD[C/P]STRIKE" (spaces) or "TICKERYYMMDD[C/P]STRIKE" (compact).
+  // Split on whitespace first; if no spaces, strip from the first digit onward.
+  const occTicker = raw.symbol.trim().split(/\s+/)[0].replace(/\d.*$/, '');
   const underlying = cat === 'OPT'
-    ? (raw.underlyingSymbol?.trim() || raw.symbol.trim().split(/\s+/)[0])
+    ? (raw.underlyingSymbol?.trim() || occTicker)
     : raw.symbol.trim();
 
   return {
