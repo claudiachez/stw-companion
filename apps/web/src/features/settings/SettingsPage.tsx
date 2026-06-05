@@ -169,7 +169,7 @@ export function SettingsPage() {
               style={{
                 flex: 1, minWidth: 100,
                 padding: '10px 16px', borderRadius: 6, fontSize: 14, fontWeight: 600,
-                background: 'var(--acc)', color: '#000', border: 'none',
+                background: 'var(--acc)', color: '#fff', border: 'none',
                 cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.6 : 1,
               }}
             >

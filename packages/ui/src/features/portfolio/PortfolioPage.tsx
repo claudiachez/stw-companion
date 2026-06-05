@@ -220,7 +220,7 @@ export function PortfolioPage() {
           style={{
             padding: '7px 16px', borderRadius: 6, fontSize: 12, fontWeight: 600,
             background: isConnected ? 'var(--acc)' : 'var(--s2)',
-            color: isConnected ? '#000' : 'var(--t3)',
+            color: isConnected ? '#fff' : 'var(--t3)',
             border: 'none', cursor: isConnected ? 'pointer' : 'default',
             opacity: isSyncing ? 0.6 : 1,
             transition: 'opacity 0.15s',
@@ -254,7 +254,7 @@ export function PortfolioPage() {
             onClick={() => navigate('/settings')}
             style={{
               padding: '8px 18px', borderRadius: 6, fontSize: 12, fontWeight: 600,
-              background: 'var(--acc)', color: '#000', border: 'none', cursor: 'pointer',
+              background: 'var(--acc)', color: '#fff', border: 'none', cursor: 'pointer',
             }}
           >
             Go to Settings →
