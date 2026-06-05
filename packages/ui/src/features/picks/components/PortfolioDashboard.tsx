@@ -113,6 +113,21 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
       .map((l) => `${h.ticker} $${l.strike}${l.right} ${legExpiry(l.expiry)}`);
   });
 
+  // Stale prices: a ticker priced in a PRIOR sync but not the latest one shows an old
+  // price (the last sync failed for it). last_pnl_at is per-ticker and stamped with the
+  // sync time on success, so any priced ticker older than the newest options sync is stale.
+  const stalePrices = holdings.flatMap((h) => {
+    if (h.ticker === 'CASH' || h.last_action === 'Closed') return [];
+    if (!h.last_pnl_at || !optionsSynced) return [];
+    const at = new Date(h.last_pnl_at);
+    if (at.getTime() >= optionsSynced.getTime()) return []; // refreshed in the latest sync
+    const priced = mergeLegs(h.position_detail ?? '', h.ticker, h.ibkr_legs)
+      .filter((l) => l.price != null);
+    if (!priced.length) return []; // no live price to be stale — it's in Unpriced instead
+    const legs = priced.map((l) => `$${l.strike}${l.right} ${legExpiry(l.expiry)}`).join(', ');
+    return [`${h.ticker} — priced ${fmtDateTime(at)}: ${legs}`];
+  });
+
   const pnlColor = avgPnl != null ? (avgPnl >= 0 ? '#22c55e' : '#ef4444') : 'var(--t3)';
 
   const tickerSet = new Set(holdings.map((h) => h.ticker.toUpperCase()));
@@ -233,6 +248,21 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
           </div>
           <div style={{ fontSize: 9, color: 'var(--t3)', marginTop: 4 }}>
             No IBKR price yet — run the IBKR sync, or check the contract in position detail.
+          </div>
+        </div>
+      )}
+
+      {/* Stale prices — priced before, but the latest sync didn't refresh them (still showing old prices) */}
+      {stalePrices.length > 0 && (
+        <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 6, background: 'var(--s2)', border: '1px solid var(--bsub)' }}>
+          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--c2)', marginBottom: 5 }}>
+            ◷ Stale Prices ({stalePrices.length})
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--t2)', lineHeight: 1.6 }}>
+            {stalePrices.join('  ·  ')}
+          </div>
+          <div style={{ fontSize: 9, color: 'var(--t3)', marginTop: 4 }}>
+            Showing prices from an earlier sync — the latest IBKR sync didn't refresh these. Re-run the sync.
           </div>
         </div>
       )}
