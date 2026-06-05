@@ -29,7 +29,7 @@ export function SignalsView() {
   const upd = gx.last_updated ? new Date(gx.last_updated) : null;
   const updStr = upd
     ? upd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...ET })
-      + ' · ' + upd.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', ...ET }) + ' EST'
+      + ' · ' + upd.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', ...ET }) + ' ET'
     : '–';
   const priceTime = upd ? '@ ' + upd.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', ...ET }) : '';
 
@@ -51,7 +51,7 @@ export function SignalsView() {
         <BiasChip bias={gx.bias} />
         {gx.bias_note && <span style={{ fontSize: 11, color: 'var(--t2)' }}>{gx.bias_note}</span>}
         <span style={{ marginLeft: isMobile ? 0 : 'auto', fontSize: 11, color: 'var(--t3)', whiteSpace: 'nowrap', width: isMobile ? '100%' : undefined }}>
-          Updated {updStr}
+          Updated: {updStr}
         </span>
       </div>
 

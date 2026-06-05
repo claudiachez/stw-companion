@@ -7,6 +7,7 @@ import { ConvictionBadge } from '../picks/components/ConvictionBadge';
 import { LoadingSpinner } from '../../primitives/LoadingSpinner';
 import type { UserPosition } from './api';
 import { cleanUnderlying } from './api';
+import { fmtDateTime } from '@stw/shared';
 
 function fmtMoney(n: number | null): string {
   if (n === null) return '—';
@@ -26,11 +27,6 @@ function fmtExpiry(exp: string | null): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
 }
 
-function fmtSynced(iso: string | null): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-}
 
 function pnlColor(pnl: number | null): string {
   if (pnl === null) return 'var(--t2)';
@@ -223,20 +219,31 @@ export function PortfolioPage() {
         borderBottom: '1px solid var(--bsub)',
       }}>
         <div style={{ fontSize: 11, color: 'var(--t3)' }}>
-          {lastSynced ? `Last synced ${fmtSynced(lastSynced)}` : 'Not synced yet'}
+          {lastSynced ? `Last synced: ${fmtDateTime(lastSynced)}` : 'Not synced yet'}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <button
             onClick={() => setShowPnl((v) => !v)}
             title={showPnl ? 'Hide P&L' : 'Show P&L'}
             style={{
-              padding: '5px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+              width: 34, height: 34, borderRadius: 6, padding: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
               background: 'none', border: '1px solid var(--border)',
               color: showPnl ? 'var(--t2)' : 'var(--t3)',
-              cursor: 'pointer',
+              cursor: 'pointer', flexShrink: 0,
             }}
           >
-            {showPnl ? 'Hide P&L' : 'P&L'}
+            {showPnl ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                <line x1="1" y1="1" x2="23" y2="23"/>
+              </svg>
+            )}
           </button>
         <button
           onClick={sync}

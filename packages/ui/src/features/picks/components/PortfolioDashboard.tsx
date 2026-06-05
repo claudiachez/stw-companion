@@ -1,9 +1,8 @@
-import { bColor, parseCostBasis, positionType, mergeLegs } from '@stw/shared';
+import { bColor, parseCostBasis, positionType, mergeLegs, fmtDateTime } from '@stw/shared';
 import { usePriceCacheStore } from '../../../store/priceCache';
 import { useRecentChanges } from '../useRecentChanges';
 import type { Holding } from '../api';
 
-const ET = { timeZone: 'America/New_York' };
 const LEG_MONTHS = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 // "202608" / "20260815" → "Aug '26" for the unpriced-legs summary.
@@ -200,10 +199,8 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
           </div>
           {changeAt && (
             <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 8 }}>
-              Updated{' '}
-              <span style={{ color: 'var(--t2)' }}>
-                {changeAt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', ...ET })} ET
-              </span>
+              Updated:{' '}
+              <span style={{ color: 'var(--t2)' }}>{fmtDateTime(changeAt)}</span>
             </div>
           )}
         </div>
@@ -214,17 +211,13 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
         {lastUpdated && (
           <div>
             Holdings data synced:{' '}
-            <span style={{ color: 'var(--t2)' }}>
-              {lastUpdated.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', ...ET })} ET
-            </span>
+            <span style={{ color: 'var(--t2)' }}>{fmtDateTime(lastUpdated)}</span>
           </div>
         )}
         {optionsSynced && (
           <div>
             Options data synced:{' '}
-            <span style={{ color: 'var(--t2)' }}>
-              {optionsSynced.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', ...ET })} ET
-            </span>
+            <span style={{ color: 'var(--t2)' }}>{fmtDateTime(optionsSynced)}</span>
           </div>
         )}
       </div>
