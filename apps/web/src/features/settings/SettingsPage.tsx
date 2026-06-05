@@ -196,7 +196,8 @@ export function SettingsPage() {
 
           {syncError && (
             <div style={{ padding: '8px 12px', borderRadius: 6, background: '#2d0c0c', border: '1px solid var(--c1b)', color: 'var(--c1)', fontSize: 12 }}>
-              {syncError}. IBKR reports can take up to 10 seconds — try again if it timed out.
+              {syncError}
+              {syncError.toLowerCase().includes('timed out') && ' Try again in a few seconds.'}
             </div>
           )}
 
