@@ -1,12 +1,11 @@
 import { useState } from 'react';
 import type { Holding } from '../api';
-import { TIERS, ACTION_VARS, bColor, parseCostBasis, positionType, resolvePnl, mergeLegs, legPriceReason } from '@stw/shared';
+import { TIERS, ACTION_VARS, bColor, parseCostBasis, positionType, resolvePnl, mergeLegs, legPriceReason, fmtDateTime } from '@stw/shared';
 import { useQuote } from '../../../hooks/useLivePrice';
 import { usePriceCacheStore } from '../../../store/priceCache';
 import { useCapabilities } from '../../../context/AppCapabilities';
 import { HoldingEditForm } from './HoldingEditForm';
 
-const ET = { timeZone: 'America/New_York' };
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 function PriceEmptyState({ fetchStatus }: { fetchStatus: string }) {
@@ -18,12 +17,6 @@ function fmtDate(s: string | null): string {
   if (!s) return '–';
   const d = new Date(s + 'T12:00:00');
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
-}
-
-// One canonical "as of" stamp used for every price/P&L source label so they read
-// identically everywhere: "May 26, 10:18 PM".
-function fmtStamp(d: Date): string {
-  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', ...ET });
 }
 
 function fmtExpiry(expiry: string): string {
@@ -61,9 +54,9 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
   const dpStr       = quote?.dp != null ? `${quote.dp >= 0 ? '+' : ''}${quote.dp.toFixed(2)}%` : null;
   const dpColor     = (quote?.dp ?? 0) >= 0 ? '#16A34A' : '#DC2626';
   const hiloStr     = (quote?.h && quote?.l) ? `H $${quote.h.toFixed(2)} · L $${quote.l.toFixed(2)}` : null;
-  // All three carry the same "Mon D, H:MM AM/PM" stamp (see fmtStamp).
-  const srcTime     = quote?.t ? fmtStamp(new Date(quote.t * 1000)) : null;      // Finnhub quote time
-  const lastPriceDate = h.last_price_at ? fmtStamp(new Date(h.last_price_at)) : null; // admin last-set price
+  // All carry the established fmtDateTime stamp ("Mon D · H:MM AM ET").
+  const srcTime     = quote?.t ? fmtDateTime(new Date(quote.t * 1000)) : null;   // Finnhub quote time
+  const lastPriceDate = h.last_price_at ? fmtDateTime(h.last_price_at) : null;    // admin last-set price
 
   // ── P&L — resolved via shared logic (shares / options / mixed) ──
   const cost = parseCostBasis(h.position_detail);
@@ -73,8 +66,8 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
     costBasis: cost,
     optionsPnlPct: h.last_pnl_pct,
   });
-  const ibkrDate = h.last_pnl_at ? fmtStamp(new Date(h.last_pnl_at)) : null; // IBKR proxy pricing time (the price's own date)
-  const ddDate   = h.dd_updated_at ? fmtStamp(new Date(h.dd_updated_at)) : null; // DD/conviction last refreshed
+  const ibkrDate = h.last_pnl_at ? fmtDateTime(h.last_pnl_at) : null; // IBKR proxy pricing time (the price's own date)
+  const ddDate   = h.dd_updated_at ? fmtDateTime(h.dd_updated_at) : null; // DD/conviction last refreshed
   // Stale: this ticker was priced in an earlier sync than the portfolio's newest, so its
   // options price/P&L is old — the date shown is when THIS price was captured, not "now".
   const ibkrStale =

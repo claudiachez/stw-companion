@@ -5,6 +5,7 @@
 - Never force-push or reset `staging` or `main`
 - Never push to `main` without explicit approval — that is production
 - Write shared styling/logic/data **once** in the shared packages, never twice across apps
+- **Every timestamp uses `fmtDateTime` from `@stw/shared`** — never `toLocaleString`/`toLocaleTimeString` or a local date helper (see Conventions → Timestamps)
 - **All UI changes must work on mobile** — design for ≤390px first; test layouts at narrow width before pushing
 - **After ~10 commits in a chat**, run the Session Close routine (see section below)
 
@@ -166,6 +167,7 @@ Output format: **`Mon D · H:MM AM ET`** (Eastern Time, year omitted).
 - DB stores UTC; always display in ET via `timeZone: 'America/New_York'`.
 - Label pattern: `[Action]: ${fmtDateTime(value)}` — e.g. `Last synced: Jun 5 · 7:46 AM ET`.
 - Never call `toLocaleString` / `toLocaleTimeString` directly in components for timestamps.
+- **No per-component date helpers** (e.g. a local `fmtStamp`) — import `fmtDateTime`. This covers every full "as of" timestamp: column labels, source lines, tooltips, alerts. (Exceptions: a date-only display like `action_date`, or a compact intraday tag like the Signals `@ 4:00 PM` price time — neither is a full timestamp.)
 
 ### Ticker links
 **Any ticker shown anywhere in the UI must be a hyperlink to its detail page** — never

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { parseOptionLegs, type OptionLeg } from '@stw/shared';
+import { parseOptionLegs, fmtDateTime, type OptionLeg } from '@stw/shared';
 import { useHoldings } from '@stw/ui';
 import { supabase } from '../../lib/supabase';
 
@@ -122,7 +122,7 @@ export function IbkrBadge() {
         unpriced.length
           ? `${unpriced.length} unpriced: ` +
             unpriced.map((r) => `${r.symbol} $${r.strike}${r.right}`).join(', ')
-          : `Last synced ${new Date(fetchedAt).toLocaleTimeString()}`,
+          : `Last synced ${fmtDateTime(fetchedAt)}`,
       );
 
       await queryClient.invalidateQueries({ queryKey: ['holdings'] });

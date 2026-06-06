@@ -6,6 +6,7 @@ import { GexCharts } from './components/GexCharts';
 import { DayLog } from './components/DayLog';
 import { LoadingSpinner } from '../../primitives/LoadingSpinner';
 import { EmptyState } from '../../primitives/EmptyState';
+import { fmtDateTime } from '@stw/shared';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import type { LevelSet } from './api';
 
@@ -27,10 +28,7 @@ export function SignalsView() {
     ? new Date(gx.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
     : '';
   const upd = gx.last_updated ? new Date(gx.last_updated) : null;
-  const updStr = upd
-    ? upd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', ...ET })
-      + ' · ' + upd.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', ...ET }) + ' ET'
-    : '–';
+  const updStr = upd ? fmtDateTime(upd) : '–';
   const priceTime = upd ? '@ ' + upd.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', ...ET }) : '';
 
   // SPY levels = SPX ÷ 10 (the chart + ladder both show SPY scale).
