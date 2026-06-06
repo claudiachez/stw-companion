@@ -1,4 +1,4 @@
-import { bColor, parseCostBasis, positionType, mergeLegs, legPriceReason, fmtDateTime } from '@stw/shared';
+import { bColor, parseCostBasis, positionType, resolvePnl, mergeLegs, legPriceReason, fmtDateTime } from '@stw/shared';
 import { usePriceCacheStore } from '../../../store/priceCache';
 import { useRecentChanges } from '../useRecentChanges';
 import { TickerLink } from '../../../primitives/TickerLink';
@@ -49,14 +49,16 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
 
   const active = holdings.filter((h) => h.ticker !== 'CASH' && h.last_action !== 'Closed');
 
-  // Avg P&L across positions that have cost basis + live price
+  // Avg P&L across positions with a resolvable return — shares (live price vs cost),
+  // options (IBKR last_pnl_pct), and mixed (blended), via the shared resolver.
   const pnlValues = active
-    .map((h) => {
-      const cost = parseCostBasis(h.position_detail);
-      const price = cache[h.ticker]?.c;
-      return cost && price ? (price - cost) / cost * 100 : null;
-    })
-    .filter((v): v is number => v !== null);
+    .map((h) => resolvePnl({
+      positionType: positionType(h.position_detail),
+      price: cache[h.ticker]?.c ?? null,
+      costBasis: parseCostBasis(h.position_detail),
+      optionsPnlPct: h.last_pnl_pct,
+    }).pnlPct)
+    .filter((v): v is number => v != null);
   const avgPnl = pnlValues.length > 0
     ? pnlValues.reduce((s, v) => s + v, 0) / pnlValues.length
     : null;

@@ -123,7 +123,10 @@ export function PicksView() {
         filters.sort === 'pnl_desc' ? 'desc' : 'asc',
       )
     : sortFlat(filtered, filters.sort);
-  const selected = sorted.find((h) => h.ticker === selectedTicker) ?? null;
+  // Look up the selected holding from ALL holdings, not the filtered list — otherwise
+  // selecting a ticker that's filtered out (e.g. a Closed position linked from the
+  // dashboard's Latest Changes) would silently open nothing.
+  const selected = holdings.find((h) => h.ticker === selectedTicker) ?? null;
   const maxWeight = Math.max(...holdings.map((h) => h.current_weight ?? h.initial_weight ?? 0), 0);
 
   function renderGrouped() {

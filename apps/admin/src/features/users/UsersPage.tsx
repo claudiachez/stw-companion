@@ -63,8 +63,8 @@ export function UsersPage() {
   return (
     <div className="flex-1 overflow-auto px-4 py-6">
       <div className="max-w-4xl mx-auto">
-        <h1 className="font-display font-extrabold text-2xl text-text mb-1">User Management</h1>
-        <p className="text-t2 text-sm mb-6">{profiles.length} user{profiles.length === 1 ? '' : 's'}</p>
+        {/* No page title — the active nav tab is context (matches Picks/Signals). */}
+        <p className="text-t3 text-xs mb-4">{profiles.length} user{profiles.length === 1 ? '' : 's'}</p>
 
         <div className="bg-surface border border-border rounded-xl overflow-hidden">
           <table className="w-full text-sm">
