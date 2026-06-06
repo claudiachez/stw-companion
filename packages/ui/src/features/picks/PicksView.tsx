@@ -37,6 +37,17 @@ export function PicksView() {
     () => new Set(userPositions.map((p) => cleanUnderlying(p.underlying))),
     [userPositions],
   );
+  // Newest IBKR options-sync time across all holdings. A holding priced earlier than
+  // this is stale (the last sync didn't refresh it) — passed to HoldingDetail so the
+  // detail page can flag an old price instead of it looking freshly synced.
+  const latestOptionsSync = useMemo<Date | null>(
+    () => holdings.reduce<Date | null>((acc, h) => {
+      if (!h.last_pnl_at) return acc;
+      const d = new Date(h.last_pnl_at);
+      return !acc || d > acc ? d : acc;
+    }, null),
+    [holdings],
+  );
   const filters = useFiltersStore();
   const setPrice = usePriceCacheStore((s) => s.setPrice);
   const setFetchStatus = usePriceCacheStore((s) => s.setFetchStatus);
@@ -210,6 +221,7 @@ export function PicksView() {
               totalCount={holdings.length}
               onClose={() => { setSelectedTicker(null); setMobileView('list'); }}
               isMobile
+              latestOptionsSync={latestOptionsSync}
             />
           </div>
         ) : mobileView === 'overview' ? (
@@ -254,6 +266,7 @@ export function PicksView() {
               holding={selected}
               totalCount={holdings.length}
               onClose={() => setSelectedTicker(null)}
+              latestOptionsSync={latestOptionsSync}
             />
           ) : (
             <PortfolioDashboard holdings={holdings} onSelectTicker={setSelectedTicker} />

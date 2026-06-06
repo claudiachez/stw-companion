@@ -40,9 +40,11 @@ interface Props {
   totalCount: number;
   onClose: () => void;
   isMobile?: boolean;
+  /** Newest IBKR options-sync time across the portfolio; lets us flag a stale price. */
+  latestOptionsSync?: Date | null;
 }
 
-export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = false }: Props) {
+export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = false, latestOptionsSync = null }: Props) {
   const { canEdit } = useCapabilities();
   const [editing, setEditing] = useState(false);
   const quote       = useQuote(h.ticker);
@@ -71,7 +73,13 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
     costBasis: cost,
     optionsPnlPct: h.last_pnl_pct,
   });
-  const ibkrDate = h.last_pnl_at ? fmtStamp(new Date(h.last_pnl_at)) : null; // IBKR proxy pricing time
+  const ibkrDate = h.last_pnl_at ? fmtStamp(new Date(h.last_pnl_at)) : null; // IBKR proxy pricing time (the price's own date)
+  // Stale: this ticker was priced in an earlier sync than the portfolio's newest, so its
+  // options price/P&L is old — the date shown is when THIS price was captured, not "now".
+  const ibkrStale =
+    (pType === 'options' || pType === 'mixed') &&
+    h.last_pnl_at != null && latestOptionsSync != null &&
+    new Date(h.last_pnl_at).getTime() < latestOptionsSync.getTime();
   const pnlColor = pnlPct != null ? (pnlPct >= 0 ? '#16A34A' : '#DC2626') : undefined;
 
   // ── Options legs ─────────────────────────────────────────
@@ -88,12 +96,16 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
   const sharesSrc = isLive
     ? (srcTime ? `Finnhub · ${srcTime}` : 'Finnhub')
     : (lastPriceDate ? `Last sync · ${lastPriceDate}` : null);
-  const ibkrSrc = ibkrDate ? `IBKR · ${ibkrDate}` : 'IBKR';
+  // For options, show the price's own capture date. When stale, mark it so an old price
+  // isn't mistaken for a fresh sync.
+  const ibkrSrc = ibkrDate ? `IBKR · ${ibkrDate}${ibkrStale ? ' · stale' : ''}` : 'IBKR';
 
-  function pnlSrcLines(): string[] {
-    if (pType === 'options') return [ibkrSrc];
-    if (pType === 'mixed')   return sharesSrc ? [sharesSrc, ibkrSrc] : [ibkrSrc];
-    return sharesSrc ? [sharesSrc] : []; // shares
+  function pnlSrcLines(): { text: string; stale?: boolean }[] {
+    if (pType === 'options') return [{ text: ibkrSrc, stale: ibkrStale }];
+    if (pType === 'mixed')   return sharesSrc
+      ? [{ text: sharesSrc }, { text: ibkrSrc, stale: ibkrStale }]
+      : [{ text: ibkrSrc, stale: ibkrStale }];
+    return sharesSrc ? [{ text: sharesSrc }] : []; // shares
   }
 
   // ── Conviction segments ───────────────────────────────────
@@ -176,7 +188,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
               </div>
             )}
             {srcLines.map((line, i) => (
-              <div key={i} style={{ fontSize: 9, color: 'var(--t3)', marginTop: i === 0 ? 4 : 1, opacity: 0.8 }}>{line}</div>
+              <div key={i} style={{ fontSize: 9, color: line.stale ? 'var(--c3)' : 'var(--t3)', marginTop: i === 0 ? 4 : 1, opacity: line.stale ? 1 : 0.8 }}>{line.text}</div>
             ))}
           </>
         ) : (
