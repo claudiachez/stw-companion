@@ -23,6 +23,7 @@ export interface Holding {
   position_detail: string | null;
   summary: string | null;
   bullets: string[] | null;
+  dd_updated_at: string | null;   // when DD/thesis/conviction was last refreshed (runs + stream)
   updated_at: string | null;
   last_price: number | null;
   last_price_at: string | null;

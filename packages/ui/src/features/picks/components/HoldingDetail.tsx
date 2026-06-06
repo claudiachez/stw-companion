@@ -74,6 +74,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
     optionsPnlPct: h.last_pnl_pct,
   });
   const ibkrDate = h.last_pnl_at ? fmtStamp(new Date(h.last_pnl_at)) : null; // IBKR proxy pricing time (the price's own date)
+  const ddDate   = h.dd_updated_at ? fmtStamp(new Date(h.dd_updated_at)) : null; // DD/conviction last refreshed
   // Stale: this ticker was priced in an earlier sync than the portfolio's newest, so its
   // options price/P&L is old — the date shown is when THIS price was captured, not "now".
   const ibkrStale =
@@ -254,19 +255,21 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
             </div>
           )}
         </div>
+        {legs.length > 0 && (
+          <div style={{ borderTop: '1px solid var(--border)', marginTop: 10, paddingTop: 10 }}>
+            {renderLegRows()}
+          </div>
+        )}
       </div>
     );
   }
 
-  function renderLegsSection() {
-    if ((pType !== 'options' && pType !== 'mixed') || legs.length === 0) return null;
+  // Leg rows (entry → price, P&L, unpriced reason). Rendered inside the P&L Breakdown
+  // card for mixed positions; as their own section for options-only positions.
+  function renderLegRows() {
     return (
-      <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>
-          Options Legs
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {legs.map((leg, i) => {
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {legs.map((leg, i) => {
             const lColor      = leg.pnl_pct != null ? (leg.pnl_pct >= 0 ? '#16A34A' : '#DC2626') : 'var(--t3)';
             const perContract = leg.price != null ? (leg.price - leg.entry) * 100 : null;
             const reason      = legPriceReason(leg); // why this leg has no price (if so)
@@ -311,6 +314,18 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
             );
           })}
         </div>
+    );
+  }
+
+  // Options-only positions: legs as their own section (mixed renders them in breakdown).
+  function renderLegsSection() {
+    if (pType !== 'options' || legs.length === 0) return null;
+    return (
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>
+          Options Legs
+        </div>
+        {renderLegRows()}
       </div>
     );
   }
@@ -439,7 +454,10 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
 
         {/* Conviction meter */}
         <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>Conviction</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+            <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Conviction</div>
+            {ddDate && <div style={{ fontSize: 9, color: 'var(--t3)' }}>Updated {ddDate}</div>}
+          </div>
           <div style={{ display: 'flex', gap: 3 }}>{convSegs}</div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'var(--t3)', marginTop: 3 }}>
             <span>Concern</span><span>Highest</span>
@@ -456,7 +474,9 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
         {/* Bullets */}
         {h.bullets && h.bullets.length > 0 && (
           <div>
-            <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Key Points from Stream</div>
+            <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>
+              Key Points from Stream{ddDate ? ` · ${ddDate}` : ''}
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {h.bullets.map((b, i) => (
                 <div key={i} style={{ display: 'flex', gap: 8, fontSize: 13, color: 'var(--t2)', lineHeight: 1.5 }}>
