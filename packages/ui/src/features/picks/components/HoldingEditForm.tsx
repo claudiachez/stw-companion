@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { TIERS } from '@stw/shared';
 import type { Holding } from '../api';
+import { fetchMaxLeg, insertHoldingTransaction } from '../api';
 import { getSupabase } from '../../../lib/supabase';
 import { useCapabilities } from '../../../context/AppCapabilities';
 
@@ -64,6 +65,30 @@ export function HoldingEditForm({ holding: h, onDone }: Props) {
     try {
       const { error: dbErr } = await getSupabase().from('holdings').update(updates).eq('ticker', h.ticker);
       if (dbErr) throw dbErr;
+
+      // Auto-record transaction event; re-entry (New after existing Closed) bumps leg
+      if (lastAction !== 'Hold' && h.ticker !== 'CASH') {
+        try {
+          const maxLeg = await fetchMaxLeg(h.ticker);
+          const isReentry = lastAction === 'New' && h.last_action === 'Closed';
+          const leg = isReentry ? maxLeg + 1 : maxLeg;
+          await insertHoldingTransaction({
+            ticker: h.ticker,
+            leg,
+            action: lastAction as 'New' | 'Upsized' | 'Trimmed' | 'Hold' | 'Closed',
+            event_date: actionDate || new Date().toISOString().slice(0, 10),
+            weight: currentWeight ? parseFloat(currentWeight) : null,
+            position_detail: positionDetail.trim() || null,
+            price: lastPrice ? parseFloat(lastPrice) : null,
+            pnl_pct: lastAction === 'Closed' ? (h.exit_pnl_pct ?? null) : null,
+            notes: null,
+          });
+          await queryClient.invalidateQueries({ queryKey: ['transactions', h.ticker] });
+        } catch {
+          // transaction insert failure is non-fatal; holdings update already succeeded
+        }
+      }
+
       await queryClient.invalidateQueries({ queryKey: ['holdings'] });
       onEditHolding?.({ ...h, ...updates } as Holding);
       onDone();

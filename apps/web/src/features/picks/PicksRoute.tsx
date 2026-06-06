@@ -1,4 +1,4 @@
-import { PicksView, LoadingSpinner } from '@stw/ui';
+import { PicksView, LoadingSpinner, AppCapabilitiesProvider, useCapabilities } from '@stw/ui';
 import { AccessGate } from '../../shared/components/AccessGate';
 import { useProfile } from '../../shared/hooks/useProfile';
 import { useTierAccess } from '../../shared/hooks/useTierAccess';
@@ -10,6 +10,7 @@ import { useTierAccess } from '../../shared/hooks/useTierAccess';
 export function PicksRoute() {
   const { data: profile, isLoading: profileLoading } = useProfile();
   const canAccess = useTierAccess('picks');
+  const canViewHistory = useTierAccess('history');
 
   if (profileLoading) return <LoadingSpinner className="mt-16" />;
   if (!canAccess) {
@@ -23,5 +24,14 @@ export function PicksRoute() {
     );
   }
 
-  return <PicksView />;
+  return <PicksViewWithHistory canViewHistory={canViewHistory} />;
+}
+
+function PicksViewWithHistory({ canViewHistory }: { canViewHistory: boolean }) {
+  const base = useCapabilities();
+  return (
+    <AppCapabilitiesProvider value={{ ...base, canViewHistory }}>
+      <PicksView />
+    </AppCapabilitiesProvider>
+  );
 }
