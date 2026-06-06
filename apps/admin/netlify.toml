@@ -4,6 +4,11 @@
 [build]
   command = "pnpm install && pnpm --filter admin build"
   publish = "dist"
+  # Base dir is apps/admin, so by default Netlify skips a build when only files OUTSIDE
+  # it change — which silently dropped shared packages/** updates. Build when the app
+  # dir, any shared package, or a root manifest changed; skip otherwise (e.g. docs).
+  # (git diff --quiet exits 0 = no change → skip; non-zero → build.)
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- . ../../packages ../../pnpm-lock.yaml ../../package.json ../../pnpm-workspace.yaml"
 
 [build.environment]
   NODE_VERSION = "20"
