@@ -14,6 +14,7 @@ const capabilities: AppCapabilities = {
   isAdmin: true,
   canEdit: true,
   showIbkrBadge: true,
+  canViewHistory: true,
   finnhubKey: import.meta.env.VITE_FINNHUB_KEY as string | undefined,
   twelveDataKey: import.meta.env.VITE_TWELVEDATA_KEY as string | undefined,
 };

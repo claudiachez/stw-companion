@@ -13,6 +13,8 @@ export interface AppCapabilities {
   canEdit: boolean;
   /** Whether the IBKR sync badge renders (admin only). */
   showIbkrBadge: boolean;
+  /** Whether transaction history + conviction timelines are visible (premium or admin). */
+  canViewHistory?: boolean;
   /** Invoked when an editable holding is chosen (admin Edit form). */
   onEditHolding?: (holding: Holding) => void;
   /** Finnhub API key for live prices — injected from each app's env. */

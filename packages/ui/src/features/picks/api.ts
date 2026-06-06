@@ -1,4 +1,5 @@
 import { getSupabase } from '../../lib/supabase';
+import type { HoldingTransaction, ConvictionComment } from '@stw/shared';
 
 export interface IbkrLeg {
   symbol: string;
@@ -42,4 +43,63 @@ export async function fetchHoldings(): Promise<Holding[]> {
 
   if (error) throw error;
   return (data ?? []) as Holding[];
+}
+
+export async function fetchHoldingTransactions(ticker: string): Promise<HoldingTransaction[]> {
+  const { data, error } = await getSupabase()
+    .from('holding_transactions')
+    .select('*')
+    .eq('ticker', ticker)
+    .order('leg', { ascending: true })
+    .order('event_date', { ascending: true });
+
+  if (error) throw error;
+  return (data ?? []) as HoldingTransaction[];
+}
+
+export async function fetchConvictionComments(ticker: string): Promise<ConvictionComment[]> {
+  const { data, error } = await getSupabase()
+    .from('conviction_comments')
+    .select('*')
+    .eq('ticker', ticker)
+    .order('event_date', { ascending: false });
+
+  if (error) throw error;
+  return (data ?? []) as ConvictionComment[];
+}
+
+export async function insertHoldingTransaction(
+  row: Omit<HoldingTransaction, 'id' | 'created_at'>
+): Promise<void> {
+  const { error } = await getSupabase().from('holding_transactions').insert(row);
+  if (error) throw error;
+}
+
+export async function insertConvictionComment(
+  row: Omit<ConvictionComment, 'id' | 'created_at'>
+): Promise<void> {
+  const { error } = await getSupabase().from('conviction_comments').insert(row);
+  if (error) throw error;
+}
+
+export async function deleteHoldingTransaction(id: number): Promise<void> {
+  const { error } = await getSupabase().from('holding_transactions').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteConvictionComment(id: number): Promise<void> {
+  const { error } = await getSupabase().from('conviction_comments').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function fetchMaxLeg(ticker: string): Promise<number> {
+  const { data, error } = await getSupabase()
+    .from('holding_transactions')
+    .select('leg')
+    .eq('ticker', ticker)
+    .order('leg', { ascending: false })
+    .limit(1);
+
+  if (error) throw error;
+  return data?.[0]?.leg ?? 1;
 }

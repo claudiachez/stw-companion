@@ -5,6 +5,8 @@ import { useQuote } from '../../../hooks/useLivePrice';
 import { usePriceCacheStore } from '../../../store/priceCache';
 import { useCapabilities } from '../../../context/AppCapabilities';
 import { HoldingEditForm } from './HoldingEditForm';
+import { TransactionTimeline } from './TransactionTimeline';
+import { ConvictionTimeline } from './ConvictionTimeline';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -28,6 +30,28 @@ function fmtExpiry(expiry: string): string {
   return day ? `${mon} ${day} '${yr}` : `${mon} '${yr}`;
 }
 
+function HistorySection({ title, children }: { title: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div style={{ marginTop: 20 }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+          background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0',
+        }}
+      >
+        <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+        <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', whiteSpace: 'nowrap' }}>
+          {title} {open ? '▲' : '▼'}
+        </span>
+        <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+      </button>
+      {open && <div style={{ marginTop: 8 }}>{children}</div>}
+    </div>
+  );
+}
+
 interface Props {
   holding: Holding;
   totalCount: number;
@@ -38,7 +62,8 @@ interface Props {
 }
 
 export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = false, latestOptionsSync = null }: Props) {
-  const { canEdit } = useCapabilities();
+  const { canEdit, canViewHistory, isAdmin } = useCapabilities();
+  const showHistory = canViewHistory || isAdmin;
   const [editing, setEditing] = useState(false);
   const quote       = useQuote(h.ticker);
   const fetchStatus = usePriceCacheStore((s) => s.fetchStatus);
@@ -524,6 +549,18 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
               ))}
             </div>
           </div>
+        )}
+
+        {/* Transaction History & Conviction Notes — premium + admin only */}
+        {showHistory && h.ticker !== 'CASH' && (
+          <>
+            <HistorySection title="Transaction History">
+              <TransactionTimeline ticker={h.ticker} />
+            </HistorySection>
+            <HistorySection title="Conviction Notes">
+              <ConvictionTimeline ticker={h.ticker} currentConviction={h.conviction} />
+            </HistorySection>
+          </>
         )}
       </div>
     </div>
