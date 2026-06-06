@@ -222,8 +222,13 @@ async def _price_options(specs):
             pnl_pct = round((price - entry) / entry * 100, 2) if price and entry else None
             pnl_dol = round(price - entry, 4)                  if price and entry else None
 
-            results.append({**spec, 'price': price, 'bid': bid, 'ask': ask,
-                             'mid': mid, 'pnl_pct': pnl_pct, 'pnl_dol': pnl_dol})
+            row = {**spec, 'price': price, 'bid': bid, 'ask': ask,
+                   'mid': mid, 'pnl_pct': pnl_pct, 'pnl_dol': pnl_dol}
+            # Resolved fine but IB returned no quote — flag the reason so the UI can
+            # explain it (illiquid / deep-ITM / far-dated) instead of a bare blank.
+            if price is None:
+                row['error'] = 'no_market_data'
+            results.append(row)
 
         return results
 

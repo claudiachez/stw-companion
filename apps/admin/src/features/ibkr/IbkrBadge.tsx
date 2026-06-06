@@ -101,10 +101,12 @@ export function IbkrBadge() {
           const id = `${r.symbol} $${r.strike}${r.right} ${r.expiry ?? ''}`.trim();
           if (r.error === 'ambiguous') {
             const opts = (r.possibles ?? []).map((p) => p.expiry).join(', ') || 'none listed';
-            return `• ${id} — ambiguous expiry; IB lists: ${opts}`;
+            return `• ${id} — strike isn't listed for that expiry; IBKR lists: ${opts}`;
           }
-          if (r.error) return `• ${id} — ${r.error}`;
-          return `• ${id} — no market data (illiquid, or market/Gateway closed)`;
+          if (r.error === 'no_market_data' || !r.error) {
+            return `• ${id} — no bid/ask/last/close (likely illiquid, deep-ITM, or far-dated)`;
+          }
+          return `• ${id} — ${r.error}`;
         });
         alert(
           `IBKR sync — ${unpriced.length} of ${allLegs.length} leg(s) not priced:\n\n` +

@@ -135,6 +135,13 @@ calls it to price **STW's** option legs (arbitrary contracts, not just held posi
 then writes `last_pnl_pct` / `last_pnl_at` / `ibkr_legs` to `holdings` in Supabase.
 Web only **reads** those columns. Run it locally with IB Gateway connected; never deployed.
 
+The proxy batches snapshots for speed, then **retries any leg the batch returned empty,
+one at a time** (concurrent frozen snapshots occasionally drop an illiquid contract).
+An unpriced leg carries an `error` reason so the UI can explain it, never a bare blank:
+`ambiguous` (strike not listed for that expiry) or `no_market_data` (resolved but no
+bid/ask/last/close — likely illiquid / deep-ITM / far-dated). Map it via
+`legPriceReason(leg)` from `@stw/shared` — the single source of truth for unpriced copy.
+
 ### Subscriber — Flex Query portfolio sync
 `apps/web/netlify/functions/ibkr-flex.ts` is a **serverless** Netlify function that
 calls IBKR's cloud Flex Web Service API to fetch a subscriber's **own** portfolio positions.

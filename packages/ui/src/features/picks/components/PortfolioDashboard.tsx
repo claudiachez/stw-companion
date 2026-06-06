@@ -1,4 +1,4 @@
-import { bColor, parseCostBasis, positionType, mergeLegs, fmtDateTime } from '@stw/shared';
+import { bColor, parseCostBasis, positionType, mergeLegs, legPriceReason, fmtDateTime } from '@stw/shared';
 import { usePriceCacheStore } from '../../../store/priceCache';
 import { useRecentChanges } from '../useRecentChanges';
 import { TickerLink } from '../../../primitives/TickerLink';
@@ -103,7 +103,11 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
     if (h.ticker === 'CASH' || h.last_action === 'Closed') return [];
     return mergeLegs(h.position_detail ?? '', h.ticker, h.ibkr_legs)
       .filter((l) => l.price == null)
-      .map((l) => ({ ticker: h.ticker, label: `$${l.strike}${l.right} ${legExpiry(l.expiry)}` }));
+      .map((l) => ({
+        ticker: h.ticker,
+        label: `$${l.strike}${l.right} ${legExpiry(l.expiry)}`,
+        reason: legPriceReason(l),
+      }));
   });
 
   // Stale prices: a ticker priced in a PRIOR sync but not the latest one shows an old
@@ -236,13 +240,17 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
           <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--c3)', marginBottom: 5 }}>
             ⚠ Unpriced Legs ({unpricedLegs.length})
           </div>
-          <div style={{ fontSize: 11, color: 'var(--t2)', lineHeight: 1.6 }}>
+          <div style={{ fontSize: 11, color: 'var(--t2)', display: 'flex', flexDirection: 'column', gap: 4 }}>
             {unpricedLegs.map((u, i) => (
-              <span key={i}>{i > 0 ? '  ·  ' : ''}<TickerLink ticker={u.ticker} onSelect={onSelectTicker} /> {u.label}</span>
+              <div key={i}>
+                <TickerLink ticker={u.ticker} onSelect={onSelectTicker} /> {u.label}
+                {u.reason && (
+                  <span style={{ color: 'var(--t3)' }}>
+                    {' — '}{u.reason.title}{u.reason.hint ? ` (${u.reason.hint})` : ''}
+                  </span>
+                )}
+              </div>
             ))}
-          </div>
-          <div style={{ fontSize: 9, color: 'var(--t3)', marginTop: 4 }}>
-            No IBKR price yet — run the IBKR sync, or check the contract in position detail.
           </div>
         </div>
       )}

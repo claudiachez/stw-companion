@@ -91,15 +91,23 @@ export function parseOptionLegs(positionDetail: string, ticker: string): OptionL
   });
 }
 
+// Why a leg has no price (set by the IBKR proxy, persisted in ibkr_legs):
+//   'ambiguous'      — IB has no listed contract for that strike+expiry
+//   'no_market_data' — contract exists but IB returned no bid/ask/last/close
+//   'unsynced'       — leg never went through a sync (no stored IBKR row)
+export type LegPriceError = 'ambiguous' | 'no_market_data' | 'unsynced';
+
 export interface PricedLeg extends OptionLeg {
   price: number | null;
   pnl_pct: number | null;
+  error?: LegPriceError | string | null;
+  possibles?: { expiry: string }[];
 }
 
 // Pair every leg in `positionDetail` with its IBKR-priced counterpart (matched by
 // strike + right + year-month). Legs the proxy hasn't priced come back with
-// price/pnl_pct = null so callers can show them as unpriced rather than hide them.
-// Falls back to the stored IBKR legs when nothing parses.
+// price/pnl_pct = null AND an `error` reason so callers can explain WHY rather than
+// just hide them. Falls back to the stored IBKR legs when nothing parses.
 export function mergeLegs(
   positionDetail: string,
   ticker: string,
@@ -112,6 +120,33 @@ export function mergeLegs(
     const match = ibkr.find(
       (l) => l.strike === p.strike && l.right === p.right && (l.expiry ?? '').slice(0, 6) === p.expiry.slice(0, 6),
     );
-    return { ...p, price: match?.price ?? null, pnl_pct: match?.pnl_pct ?? null };
+    const price = match?.price ?? null;
+    const error: PricedLeg['error'] =
+      price != null ? null : match ? (match.error ?? 'no_market_data') : 'unsynced';
+    return { ...p, price, pnl_pct: match?.pnl_pct ?? null, error, possibles: match?.possibles };
   });
+}
+
+// Human-readable explanation + potential reason for a leg with no price. Returns null
+// when the leg is priced. Single source of truth for unpriced-leg copy across the UI.
+export function legPriceReason(leg: PricedLeg): { title: string; hint?: string } | null {
+  if (leg.price != null) return null;
+  switch (leg.error) {
+    case 'ambiguous':
+      return {
+        title: "Strike isn't listed for that expiry",
+        hint: leg.possibles?.length
+          ? `IBKR lists: ${leg.possibles.map((p) => p.expiry).join(', ')}`
+          : 'Fix the expiry in position detail',
+      };
+    case 'no_market_data':
+      return {
+        title: 'Contract exists but IBKR returned no bid/ask/last/close',
+        hint: 'Likely illiquid, deep-ITM, or far-dated',
+      };
+    case 'unsynced':
+      return { title: 'Not priced yet', hint: 'Run the IBKR sync' };
+    default:
+      return leg.error ? { title: String(leg.error) } : { title: 'Not priced yet', hint: 'Run the IBKR sync' };
+  }
 }

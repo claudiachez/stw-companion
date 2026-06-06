@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Holding } from '../api';
-import { TIERS, ACTION_VARS, bColor, parseCostBasis, positionType, resolvePnl, mergeLegs } from '@stw/shared';
+import { TIERS, ACTION_VARS, bColor, parseCostBasis, positionType, resolvePnl, mergeLegs, legPriceReason } from '@stw/shared';
 import { useQuote } from '../../../hooks/useLivePrice';
 import { usePriceCacheStore } from '../../../store/priceCache';
 import { useCapabilities } from '../../../context/AppCapabilities';
@@ -269,6 +269,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
           {legs.map((leg, i) => {
             const lColor      = leg.pnl_pct != null ? (leg.pnl_pct >= 0 ? '#16A34A' : '#DC2626') : 'var(--t3)';
             const perContract = leg.price != null ? (leg.price - leg.entry) * 100 : null;
+            const reason      = legPriceReason(leg); // why this leg has no price (if so)
             return (
               <div key={i} style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -276,11 +277,18 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
                 background: 'var(--s2)', border: '1px solid var(--bsub)',
                 fontSize: 11, gap: 8,
               }}>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 0 }}>
-                  <span style={{ fontWeight: 700, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
-                    ${leg.strike}{leg.right}
-                  </span>
-                  <span style={{ color: 'var(--t3)' }}>{fmtExpiry(leg.expiry)}</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <span style={{ fontWeight: 700, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
+                      ${leg.strike}{leg.right}
+                    </span>
+                    <span style={{ color: 'var(--t3)' }}>{fmtExpiry(leg.expiry)}</span>
+                  </div>
+                  {reason && (
+                    <span style={{ fontSize: 9, color: 'var(--c3)', lineHeight: 1.3 }}>
+                      {reason.title}{reason.hint ? ` · ${reason.hint}` : ''}
+                    </span>
+                  )}
                 </div>
                 <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexShrink: 0 }}>
                   <span style={{ color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>
