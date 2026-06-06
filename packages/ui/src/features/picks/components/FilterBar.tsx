@@ -37,6 +37,8 @@ export function FilterBar({ holdings, filtered }: Props) {
 
   const baskets = [...new Set(holdings.map((h) => h.basket).filter(Boolean))].sort();
   const hasFilter = search || basket || tier || status || type || !hideClosed;
+  // CASH is a balance, not a position — never count it (numerator already excludes it).
+  const total = holdings.filter((h) => h.ticker !== 'CASH').length;
 
   return (
     <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' as never, flexShrink: 0 }}>
@@ -109,7 +111,7 @@ export function FilterBar({ holdings, filtered }: Props) {
         )}
 
         <span style={{ fontSize: 11, color: 'var(--t3)', marginLeft: 4, whiteSpace: 'nowrap' }}>
-          {filtered < holdings.length ? `${filtered} of ${holdings.length}` : `${holdings.length} positions`}
+          {filtered < total ? `${filtered} of ${total}` : `${total} positions`}
         </span>
       </div>
     </div>
