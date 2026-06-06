@@ -109,7 +109,7 @@ export function FilterBar({ holdings, filtered }: Props) {
         )}
 
         <span style={{ fontSize: 11, color: 'var(--t3)', marginLeft: 4, whiteSpace: 'nowrap' }}>
-          {hasFilter ? `${filtered} of ${holdings.length}` : `${holdings.length} positions`}
+          {filtered < holdings.length ? `${filtered} of ${holdings.length}` : `${holdings.length} positions`}
         </span>
       </div>
     </div>

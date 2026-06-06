@@ -1,6 +1,7 @@
 import { bColor, parseCostBasis, positionType, mergeLegs, fmtDateTime } from '@stw/shared';
 import { usePriceCacheStore } from '../../../store/priceCache';
 import { useRecentChanges } from '../useRecentChanges';
+import { TickerLink } from '../../../primitives/TickerLink';
 import type { Holding } from '../api';
 
 const LEG_MONTHS = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -31,15 +32,7 @@ function renderDigest(
       return (
         <span key={i}>
           {lead}
-          <button
-            onClick={() => onSelectTicker(bare.toUpperCase())}
-            style={{
-              background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-              color: 'var(--acc)', fontWeight: 600, fontSize: 'inherit', fontFamily: 'inherit',
-            }}
-          >
-            {bare}
-          </button>
+          <TickerLink ticker={bare.toUpperCase()} label={bare} onSelect={onSelectTicker} />
           {trail}
         </span>
       );
@@ -110,7 +103,7 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
     if (h.ticker === 'CASH' || h.last_action === 'Closed') return [];
     return mergeLegs(h.position_detail ?? '', h.ticker, h.ibkr_legs)
       .filter((l) => l.price == null)
-      .map((l) => `${h.ticker} $${l.strike}${l.right} ${legExpiry(l.expiry)}`);
+      .map((l) => ({ ticker: h.ticker, label: `$${l.strike}${l.right} ${legExpiry(l.expiry)}` }));
   });
 
   // Stale prices: a ticker priced in a PRIOR sync but not the latest one shows an old
@@ -125,7 +118,7 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
       .filter((l) => l.price != null);
     if (!priced.length) return []; // no live price to be stale — it's in Unpriced instead
     const legs = priced.map((l) => `$${l.strike}${l.right} ${legExpiry(l.expiry)}`).join(', ');
-    return [`${h.ticker} — priced ${fmtDateTime(at)}: ${legs}`];
+    return [{ ticker: h.ticker, label: `priced ${fmtDateTime(at)}: ${legs}` }];
   });
 
   const pnlColor = avgPnl != null ? (avgPnl >= 0 ? '#22c55e' : '#ef4444') : 'var(--t3)';
@@ -244,7 +237,9 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
             ⚠ Unpriced Legs ({unpricedLegs.length})
           </div>
           <div style={{ fontSize: 11, color: 'var(--t2)', lineHeight: 1.6 }}>
-            {unpricedLegs.join('  ·  ')}
+            {unpricedLegs.map((u, i) => (
+              <span key={i}>{i > 0 ? '  ·  ' : ''}<TickerLink ticker={u.ticker} onSelect={onSelectTicker} /> {u.label}</span>
+            ))}
           </div>
           <div style={{ fontSize: 9, color: 'var(--t3)', marginTop: 4 }}>
             No IBKR price yet — run the IBKR sync, or check the contract in position detail.
@@ -259,7 +254,9 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
             ◷ Stale Prices ({stalePrices.length})
           </div>
           <div style={{ fontSize: 11, color: 'var(--t2)', lineHeight: 1.6 }}>
-            {stalePrices.join('  ·  ')}
+            {stalePrices.map((s, i) => (
+              <span key={i}>{i > 0 ? '  ·  ' : ''}<TickerLink ticker={s.ticker} onSelect={onSelectTicker} /> — {s.label}</span>
+            ))}
           </div>
           <div style={{ fontSize: 9, color: 'var(--t3)', marginTop: 4 }}>
             Showing prices from an earlier sync — the latest IBKR sync didn't refresh these. Re-run the sync.

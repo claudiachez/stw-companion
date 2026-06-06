@@ -104,6 +104,8 @@ export function PicksView() {
   if (error) return <EmptyState message="Failed to load holdings." />;
 
   const filtered = applyFilters(holdings, filters);
+  // FilterBar count excludes the CASH balance row — it's not a real position.
+  const positionCount = filtered.filter((h) => h.ticker !== 'CASH').length;
   // P&L sorts need a live-price-derived map (built here, sorted in @stw/shared via
   // the same resolver the rows use). All other sorts are pure data-only.
   const sorted = (filters.sort === 'pnl_desc' || filters.sort === 'pnl_asc')
@@ -183,7 +185,7 @@ export function PicksView() {
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-        <FilterBar holdings={holdings} filtered={filtered.length} />
+        <FilterBar holdings={holdings} filtered={positionCount} />
 
         {/* Tab bar — hidden while viewing a detail */}
         {!selected && (
@@ -242,7 +244,7 @@ export function PicksView() {
   // ── Desktop: split panel ──────────────────────────────────────
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      <FilterBar holdings={holdings} filtered={filtered.length} />
+      <FilterBar holdings={holdings} filtered={positionCount} />
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {/* Position list */}

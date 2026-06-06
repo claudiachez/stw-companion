@@ -160,6 +160,16 @@ Output format: **`Mon D · H:MM AM ET`** (Eastern Time, year omitted).
 - Label pattern: `[Action]: ${fmtDateTime(value)}` — e.g. `Last synced: Jun 5 · 7:46 AM ET`.
 - Never call `toLocaleString` / `toLocaleTimeString` directly in components for timestamps.
 
+### Ticker links
+**Any ticker shown anywhere in the UI must be a hyperlink to its detail page** — never
+plain text. Use `<TickerLink ticker onSelect={onSelectTicker} />` from `@stw/ui` (free
+text like a digest can be linkified token-by-token against the holdings set). This is a
+standing rule: when you render a ticker, link it without being asked.
+
+### Counts
+"Positions" counts exclude the `CASH` balance row (it's not a position) and reflect the
+active filter (closed hidden by default). The FilterBar count shows `N of {total}`.
+
 ---
 
 ## Design System

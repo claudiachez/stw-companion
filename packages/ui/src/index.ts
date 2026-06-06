@@ -13,6 +13,7 @@ export { useSession } from './auth/useSession';
 export { Layout } from './components/Layout';
 export type { NavItem } from './components/Layout';
 export { ProfilePage } from './components/ProfilePage';
+export { TickerLink } from './primitives/TickerLink';
 
 // ── Store ─────────────────────────────────────────────────────
 export { usePriceCacheStore } from './store/priceCache';
