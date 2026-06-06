@@ -24,6 +24,10 @@ const fieldStyle: React.CSSProperties = {
 };
 const cellStyle: React.CSSProperties = { minWidth: 0 };
 
+function formatDateDisplay(iso: string) {
+  return new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 interface Props {
   ticker: string;
   currentConviction: number;
@@ -35,7 +39,8 @@ export function ConvictionCommentForm({ ticker, currentConviction, onDone }: Pro
   const { canEdit } = useCapabilities();
   const user = useAuthStore((s) => s.user);
 
-  const [eventDate, setEventDate] = useState(new Date().toISOString().slice(0, 10));
+  const today = new Date().toISOString().slice(0, 10);
+  const [eventDate, setEventDate] = useState(today);
   const [convictionLevel, setConvictionLevel] = useState(String(currentConviction));
   const [source, setSource] = useState<ConvictionSource>('discord');
   const [comment, setComment] = useState('');
@@ -43,17 +48,15 @@ export function ConvictionCommentForm({ ticker, currentConviction, onDone }: Pro
   const [error, setError] = useState('');
 
   async function save() {
-    if (!comment.trim()) { setError('Comment is required.'); return; }
-    if (!eventDate) { setError('Date is required.'); return; }
+    if (!comment.trim()) { setError('Note is required.'); return; }
     setSaving(true);
     setError('');
     try {
       await insertConvictionComment({
         ticker,
-        event_date: eventDate,
-        conviction_level: Number(convictionLevel) as 0 | 1 | 2 | 3 | 4 | 5,
+        event_date: canEdit ? eventDate : today,
+        conviction_level: (canEdit ? Number(convictionLevel) : currentConviction) as 0 | 1 | 2 | 3 | 4 | 5,
         comment: comment.trim(),
-        // Admin notes are public (user_id null); subscriber notes are private
         source: canEdit ? source : 'manual',
         user_id: canEdit ? null : (user?.id ?? null),
       });
@@ -74,37 +77,51 @@ export function ConvictionCommentForm({ ticker, currentConviction, onDone }: Pro
       <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--acc)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
         {canEdit ? '＋ New Conviction Note' : '＋ Add Personal Note'}
       </div>
+
+      {/* Subscriber: show date as text + single note field only */}
+      {!canEdit && (
+        <div style={{ fontSize: 11, color: 'var(--t3)', marginBottom: 10 }}>
+          {formatDateDisplay(today)}
+        </div>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        <div style={cellStyle}>
-          <label style={labelStyle}>Date</label>
-          <input style={fieldStyle} type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} />
-        </div>
-        <div style={cellStyle}>
-          <label style={labelStyle}>Conviction Level</label>
-          <select style={fieldStyle} value={convictionLevel} onChange={(e) => setConvictionLevel(e.target.value)}>
-            {CONVICTIONS.map((v) => (
-              <option key={v} value={v}>{v} — {TIERS[v].short}</option>
-            ))}
-          </select>
-        </div>
+        {/* Admin: full controls */}
         {canEdit && (
-          <div style={{ ...cellStyle, gridColumn: '1 / -1' }}>
-            <label style={labelStyle}>Source</label>
-            <select style={fieldStyle} value={source} onChange={(e) => setSource(e.target.value as ConvictionSource)}>
-              {SOURCES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-            </select>
-          </div>
+          <>
+            <div style={cellStyle}>
+              <label style={labelStyle}>Date</label>
+              <input style={fieldStyle} type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} />
+            </div>
+            <div style={cellStyle}>
+              <label style={labelStyle}>Conviction Level</label>
+              <select style={fieldStyle} value={convictionLevel} onChange={(e) => setConvictionLevel(e.target.value)}>
+                {CONVICTIONS.map((v) => (
+                  <option key={v} value={v}>{v} — {TIERS[v].short}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ ...cellStyle, gridColumn: '1 / -1' }}>
+              <label style={labelStyle}>Source</label>
+              <select style={fieldStyle} value={source} onChange={(e) => setSource(e.target.value as ConvictionSource)}>
+                {SOURCES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+              </select>
+            </div>
+          </>
         )}
+
         <div style={{ ...cellStyle, gridColumn: '1 / -1' }}>
-          <label style={labelStyle}>Note</label>
+          {canEdit && <label style={labelStyle}>Note</label>}
           <textarea
-            style={{ ...fieldStyle, minHeight: 72, resize: 'vertical' }}
+            style={{ ...fieldStyle, minHeight: 80, resize: 'vertical' }}
             value={comment}
             placeholder={canEdit ? 'What drove this conviction reading?' : 'Your personal notes on this position…'}
             onChange={(e) => setComment(e.target.value)}
+            autoFocus
           />
         </div>
       </div>
+
       {error && <div style={{ fontSize: 11, color: '#ef4444', marginTop: 10 }}>{error}</div>}
       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
         <button

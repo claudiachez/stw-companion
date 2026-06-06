@@ -109,6 +109,9 @@ export function ConvictionTimeline({ ticker, currentConviction }: Props) {
     return <div style={{ fontSize: 12, color: 'var(--t3)', padding: '8px 0' }}>Loading…</div>;
   }
 
+  // Non-admin: hide entire block when there's nothing to show
+  if (!canEdit && comments.length === 0) return null;
+
   return (
     <div>
       {comments.length === 0 && !showForm && (

@@ -7,6 +7,7 @@ import { useCapabilities } from '../../../context/AppCapabilities';
 import { HoldingEditForm } from './HoldingEditForm';
 import { TransactionTimeline } from './TransactionTimeline';
 import { ConvictionTimeline } from './ConvictionTimeline';
+import { useHoldingTransactions } from '../useHoldingHistory';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -64,6 +65,7 @@ interface Props {
 export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = false, latestOptionsSync = null }: Props) {
   const { canEdit, canViewHistory, isAdmin } = useCapabilities();
   const showHistory = canViewHistory || isAdmin;
+  const { data: txData = [] } = useHoldingTransactions(showHistory && h.ticker !== 'CASH' ? h.ticker : '');
   const [editing, setEditing] = useState(false);
   const quote       = useQuote(h.ticker);
   const fetchStatus = usePriceCacheStore((s) => s.fetchStatus);
@@ -552,15 +554,16 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
         )}
 
         {/* Transaction History & Conviction Notes — premium + admin only */}
+        {showHistory && h.ticker !== 'CASH' && (txData.length > 0 || canEdit) && (
+          <HistorySection title="Transaction History">
+            <TransactionTimeline ticker={h.ticker} />
+          </HistorySection>
+        )}
+        {/* Conviction Notes: always visible for premium+ so they can add personal notes */}
         {showHistory && h.ticker !== 'CASH' && (
-          <>
-            <HistorySection title="Transaction History">
-              <TransactionTimeline ticker={h.ticker} />
-            </HistorySection>
-            <HistorySection title="Conviction Notes">
-              <ConvictionTimeline ticker={h.ticker} currentConviction={h.conviction} />
-            </HistorySection>
-          </>
+          <HistorySection title="Conviction Notes">
+            <ConvictionTimeline ticker={h.ticker} currentConviction={h.conviction} />
+          </HistorySection>
         )}
       </div>
     </div>
