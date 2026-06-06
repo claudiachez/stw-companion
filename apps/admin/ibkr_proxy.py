@@ -167,6 +167,18 @@ async def _price_options(specs):
                     for d in details
                 ]
 
+        # Pull a usable price out of a ticker. Delayed-frozen data has null bid/ask
+        # off-hours, so fall back to last → mid → close.
+        def _quote(t):
+            if t is None:
+                return (None, None, None, None, None, None)
+            bid   = t.bid   if t.bid   and t.bid   > 0 else None
+            ask   = t.ask   if t.ask   and t.ask   > 0 else None
+            last  = t.last  if t.last  and t.last  > 0 else None
+            close = t.close if t.close and t.close > 0 else None
+            mid   = round((bid + ask) / 2, 4) if bid and ask else None
+            return (bid, ask, last, close, mid, last or mid or close)
+
         # ── Single batched market-data snapshot for all resolved legs ──
         # reqTickers fetches every contract concurrently; chunk to stay under IB's
         # market-data line cap on large portfolios.
@@ -182,6 +194,18 @@ async def _price_options(specs):
                 for e in chunk:
                     e['error'] = e['error'] or str(exc)
 
+        # Retry — one contract at a time — any leg the batch returned without a usable
+        # price. A concurrent frozen snapshot occasionally drops an illiquid contract
+        # (deep-ITM / far-dated) that prices fine when requested on its own.
+        for e in valid_entries:
+            if _quote(e.get('ticker'))[5] is not None:
+                continue
+            try:
+                [ticker] = await ib.reqTickersAsync(e['contract'])
+                e['ticker'] = ticker
+            except Exception:
+                pass
+
         # ── Assemble results in original spec order, same shape as before ──
         results = []
         for e in entries:
@@ -192,13 +216,7 @@ async def _price_options(specs):
                 continue
             # Echo back the resolved dated expiry so stored legs carry YYYYMMDD.
             spec = {**e['spec'], 'expiry': e['resolved']}
-            ticker = e['ticker']
-            bid   = ticker.bid   if ticker and ticker.bid   and ticker.bid   > 0 else None
-            ask   = ticker.ask   if ticker and ticker.ask   and ticker.ask   > 0 else None
-            last  = ticker.last  if ticker and ticker.last  and ticker.last  > 0 else None
-            close = ticker.close if ticker and ticker.close and ticker.close > 0 else None
-            mid   = round((bid + ask) / 2, 4) if bid and ask else None
-            price = last or mid or close
+            bid, ask, _last, _close, mid, price = _quote(e['ticker'])
 
             entry   = float(spec.get('entry', 0))
             pnl_pct = round((price - entry) / entry * 100, 2) if price and entry else None
