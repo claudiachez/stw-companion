@@ -23,5 +23,6 @@ export interface ConvictionComment {
   conviction_level: ConvictionLevel;
   comment: string;
   source: ConvictionSource;
+  user_id: string | null;
   created_at: string;
 }

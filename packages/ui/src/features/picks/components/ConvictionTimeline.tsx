@@ -6,19 +6,29 @@ import { useQueryClient } from '@tanstack/react-query';
 import { deleteConvictionComment } from '../api';
 import { ConvictionCommentForm } from './ConvictionCommentForm';
 import { useCapabilities } from '../../../context/AppCapabilities';
+import { useAuthStore } from '../../../store/auth';
 
 const SOURCE_LABELS: Record<ConvictionSource, string> = {
-  discord: 'Discord',
+  discord:   'Discord',
   streaming: 'Stream',
-  manual: 'Manual',
+  manual:    'Manual',
 };
 
 function formatDate(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function CommentRow({ cc, canEdit, onDelete }: { cc: ConvictionComment; canEdit: boolean; onDelete: (id: number) => void }) {
+function CommentRow({
+  cc, currentUserId, canEdit, onDelete,
+}: {
+  cc: ConvictionComment;
+  currentUserId: string | null;
+  canEdit: boolean;
+  onDelete: (id: number) => void;
+}) {
   const tier = TIERS[cc.conviction_level] ?? TIERS[0];
+  const isOwn = cc.user_id != null && cc.user_id === currentUserId;
+  const canDelete = canEdit || isOwn;
 
   return (
     <div style={{ padding: '8px 0', borderBottom: '1px solid var(--bsub)' }}>
@@ -32,15 +42,28 @@ function CommentRow({ cc, canEdit, onDelete }: { cc: ConvictionComment; canEdit:
           C{cc.conviction_level} {tier.short}
         </span>
         <span style={{ fontSize: 11, color: 'var(--t2)' }}>{formatDate(cc.event_date)}</span>
-        <span style={{
-          fontSize: 9, fontWeight: 600, letterSpacing: '0.08em',
-          padding: '1px 5px', borderRadius: 3,
-          background: 'var(--s2)', color: 'var(--t3)',
-          textTransform: 'uppercase',
-        }}>
-          {SOURCE_LABELS[cc.source]}
-        </span>
-        {canEdit && (
+        {/* Show source only on admin notes (user_id null) */}
+        {cc.user_id === null && (
+          <span style={{
+            fontSize: 9, fontWeight: 600, letterSpacing: '0.08em',
+            padding: '1px 5px', borderRadius: 3,
+            background: 'var(--s2)', color: 'var(--t3)',
+            textTransform: 'uppercase',
+          }}>
+            {SOURCE_LABELS[cc.source]}
+          </span>
+        )}
+        {isOwn && (
+          <span style={{
+            fontSize: 9, fontWeight: 600, letterSpacing: '0.08em',
+            padding: '1px 5px', borderRadius: 3,
+            background: 'var(--s2)', color: 'var(--acc)',
+            textTransform: 'uppercase',
+          }}>
+            You
+          </span>
+        )}
+        {canDelete && (
           <button
             onClick={() => onDelete(cc.id)}
             title="Delete"
@@ -64,10 +87,14 @@ interface Props {
 }
 
 export function ConvictionTimeline({ ticker, currentConviction }: Props) {
-  const { canEdit } = useCapabilities();
+  const { canEdit, canViewHistory, isAdmin } = useCapabilities();
+  const user = useAuthStore((s) => s.user);
   const { data: comments = [], isLoading } = useConvictionComments(ticker);
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+
+  // Subscribers can add their own notes too
+  const canAddNote = canEdit || canViewHistory || isAdmin;
 
   async function handleDelete(id: number) {
     try {
@@ -90,7 +117,13 @@ export function ConvictionTimeline({ ticker, currentConviction }: Props) {
 
       <div>
         {comments.map((cc) => (
-          <CommentRow key={cc.id} cc={cc} canEdit={!!canEdit} onDelete={handleDelete} />
+          <CommentRow
+            key={cc.id}
+            cc={cc}
+            currentUserId={user?.id ?? null}
+            canEdit={!!canEdit}
+            onDelete={handleDelete}
+          />
         ))}
       </div>
 
@@ -100,7 +133,7 @@ export function ConvictionTimeline({ ticker, currentConviction }: Props) {
           currentConviction={currentConviction}
           onDone={() => setShowForm(false)}
         />
-      ) : canEdit && (
+      ) : canAddNote && (
         <button
           onClick={() => setShowForm(true)}
           style={{
@@ -109,7 +142,7 @@ export function ConvictionTimeline({ ticker, currentConviction }: Props) {
             padding: '5px 10px', width: '100%',
           }}
         >
-          ＋ Add Note
+          ＋ {canEdit ? 'Add Note' : 'Add Personal Note'}
         </button>
       )}
     </div>
