@@ -224,9 +224,10 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
         <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>
           P&L Breakdown
         </div>
-        <div style={{ display: 'flex', gap: 0 }}>
+        {/* Shares 25% · Options 25% · Options Detail 50% (stacks on mobile). */}
+        <div style={{ display: 'flex', flexWrap: isMobile ? 'wrap' : 'nowrap', gap: isMobile ? 10 : 0, alignItems: 'flex-start' }}>
           {equityPnl != null && (
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: isMobile ? '1 1 40%' : '0 0 25%' }}>
               <div style={{ fontSize: 9, color: 'var(--t3)', marginBottom: 3 }}>Shares</div>
               <div style={{ fontSize: 17, fontWeight: 700, color: equityPnl >= 0 ? '#16A34A' : '#DC2626', fontVariantNumeric: 'tabular-nums' }}>
                 {equityPnl >= 0 ? '+' : ''}{equityPnl.toFixed(1)}%
@@ -235,7 +236,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
             </div>
           )}
           {optionsPnl != null && (
-            <div style={{ flex: 1, ...(equityPnl != null ? colBorder : {}) }}>
+            <div style={{ flex: isMobile ? '1 1 40%' : '0 0 25%', ...(equityPnl != null && !isMobile ? colBorder : {}) }}>
               <div style={{ fontSize: 9, color: 'var(--t3)', marginBottom: 3 }}>Options</div>
               <div style={{ fontSize: 17, fontWeight: 700, color: optionsPnl >= 0 ? '#16A34A' : '#DC2626', fontVariantNumeric: 'tabular-nums' }}>
                 {optionsPnl >= 0 ? '+' : ''}{optionsPnl.toFixed(1)}%
@@ -247,12 +248,56 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
               )}
             </div>
           )}
+          {legs.length > 0 && (
+            <div style={{ flex: isMobile ? '1 1 100%' : '1 1 50%', ...(isMobile ? { borderTop: '1px solid var(--border)', paddingTop: 10 } : colBorder) }}>
+              <div style={{ fontSize: 9, color: 'var(--t3)', marginBottom: 3 }}>Options Detail</div>
+              {renderLegRowsCompact()}
+            </div>
+          )}
         </div>
-        {legs.length > 0 && (
-          <div style={{ borderTop: '1px solid var(--border)', marginTop: 10, paddingTop: 10 }}>
-            {renderLegRows()}
-          </div>
-        )}
+      </div>
+    );
+  }
+
+  // Compact leg list for the P&L Breakdown's third column (mixed positions): two tight
+  // lines per leg — strike/expiry + P&L%, then entry→price + per-contract (or reason).
+  function renderLegRowsCompact() {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {legs.map((leg, i) => {
+          const lColor      = leg.pnl_pct != null ? (leg.pnl_pct >= 0 ? '#16A34A' : '#DC2626') : 'var(--t3)';
+          const perContract = leg.price != null ? (leg.price - leg.entry) * 100 : null;
+          const reason      = legPriceReason(leg);
+          return (
+            <div key={i} style={{ fontSize: 11 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ fontWeight: 700, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>${leg.strike}{leg.right}</span>
+                  <span style={{ color: 'var(--t3)', marginLeft: 6 }}>{fmtExpiry(leg.expiry)}</span>
+                </span>
+                {leg.pnl_pct != null && (
+                  <span style={{ fontWeight: 700, color: lColor, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+                    {leg.pnl_pct >= 0 ? '+' : ''}{leg.pnl_pct.toFixed(1)}%
+                  </span>
+                )}
+              </div>
+              {leg.price != null ? (
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 10, color: 'var(--t3)', marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
+                  <span>${leg.entry.toFixed(2)} → ${leg.price.toFixed(2)}</span>
+                  {perContract != null && (
+                    <span style={{ flexShrink: 0 }}>{perContract >= 0 ? '+' : ''}${Math.abs(perContract).toFixed(0)}/ct</span>
+                  )}
+                </div>
+              ) : (
+                reason && (
+                  <div style={{ fontSize: 9, color: 'var(--c3)', marginTop: 1, lineHeight: 1.3 }}>
+                    {reason.title}{reason.hint ? ` · ${reason.hint}` : ''}
+                  </div>
+                )
+              )}
+            </div>
+          );
+        })}
       </div>
     );
   }
