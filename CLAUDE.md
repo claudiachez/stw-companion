@@ -102,6 +102,13 @@ Two sites, one repo, same branch — distinguished by **base directory**:
 config lives in each app's `netlify.toml`; base dir + env vars are set in the
 Netlify dashboard.
 
+**Build-skip:** with a base dir, Netlify by default skips a build when nothing in
+that dir changed — which silently dropped shared `packages/**` updates. Each
+`netlify.toml` now has an `ignore` command that builds when the app dir, any shared
+package, or a root manifest (`pnpm-lock.yaml`/`package.json`/`pnpm-workspace.yaml`)
+changed, and skips doc-only commits. So a `packages/**` change now correctly rebuilds
+both sites.
+
 Add each Netlify URL to Supabase Auth → URL Configuration → Redirect URLs (Google
 OAuth on web does a full-page redirect).
 
@@ -231,12 +238,13 @@ Review every section and ask: *does this still reflect the codebase, or is it st
 ### 4 — Staging deploy
 Confirm the latest push to `staging` produced a successful Netlify build — but first decide whether a build was even *expected*.
 
-Both Netlify sites use a **base directory** (`apps/web`, `apps/admin`), so Netlify auto-**cancels** a deploy when nothing inside that base dir changed. Check what the session's commits actually touched:
+Each `netlify.toml` `ignore` command builds only when the app dir, a shared
+`packages/**`, or a root manifest changed (see Deployment). Check what the session's commits actually touched:
 ```bash
 git diff --stat origin/main...staging   # files changed since last prod release
 ```
 - **Only root/non-app files changed** (e.g. `CLAUDE.md`, `supabase/migrations/**`, `.github/**`): a **Canceled** deploy is *correct and expected* — there was nothing to rebuild. Leave it; do **not** force an empty commit (that just produces another no-op build).
-- **App or shared code changed** (`apps/web/**`, `apps/admin/**`, `packages/**`) but the deploy is **Canceled or Failed**: this is a real problem. If it was canceled by a rapid superseding push, trigger a fresh build:
+- **App or shared code changed** (`apps/web/**`, `apps/admin/**`, `packages/**`) but the deploy is **Canceled or Failed**: this is a real problem (the `ignore` command should have built it). If it was canceled by a rapid superseding push, trigger a fresh build:
   ```bash
   git commit --allow-empty -m "Trigger staging deploy" && git push -u origin staging
   ```
