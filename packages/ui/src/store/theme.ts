@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-type Theme = 'dark' | 'light';
+export type Theme = 'dark' | 'light';
 
 function applyTheme(theme: Theme) {
   if (theme === 'light') {
@@ -16,6 +16,8 @@ applyTheme(initial);
 interface ThemeState {
   theme: Theme;
   toggle: () => void;
+  /** Set theme explicitly (used when hydrating from the user's saved profile prefs). */
+  setTheme: (theme: Theme) => void;
 }
 
 export const useThemeStore = create<ThemeState>((set) => ({
@@ -26,5 +28,11 @@ export const useThemeStore = create<ThemeState>((set) => ({
       localStorage.setItem('theme', next);
       applyTheme(next);
       return { theme: next };
+    }),
+  setTheme: (theme) =>
+    set(() => {
+      localStorage.setItem('theme', theme);
+      applyTheme(theme);
+      return { theme };
     }),
 }));

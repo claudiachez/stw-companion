@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { type SortMode } from '@stw/shared';
 
 // Pure filter/sort logic lives in @stw/shared (shared by web + admin).
@@ -6,14 +7,19 @@ import { type SortMode } from '@stw/shared';
 export { applyFilters, sortFlat, sortByPnl } from '@stw/shared';
 export type { SortMode };
 
-interface FiltersState {
-  search:  string;
-  basket:  string;
-  tier:    string;   // '' | '5'..'0'
-  status:  string;   // '' | 'New' | 'Upsized' | 'Hold' | 'Trimmed' | 'Closed'
-  type:    string;   // '' | 'shares' | 'options' | 'mixed'
-  hideClosed: boolean; // default true — hide Closed positions unless filtered for
-  sort:    SortMode;
+// Serializable filter prefs — persisted to localStorage (instant) and synced to the
+// user's profile (cross-device) via usePreferencesSync.
+export interface PicksFilters {
+  search: string;
+  basket: string;
+  tier: string;
+  status: string;
+  type: string;
+  hideClosed: boolean;
+  sort: SortMode;
+}
+
+interface FiltersState extends PicksFilters {
   setSearch:  (v: string) => void;
   setBasket:  (v: string) => void;
   setTier:    (v: string) => void;
@@ -22,21 +28,54 @@ interface FiltersState {
   setHideClosed: (v: boolean) => void;
   setSort:    (v: SortMode) => void;
   reset:      () => void;
+  /** Apply a saved filter set (from profile prefs). Missing fields keep current value. */
+  hydrate:    (p: Partial<PicksFilters>) => void;
   // Legacy compat used by old FilterBar
   conviction: number | null;
   setConviction: (v: number | null) => void;
 }
 
-export const useFiltersStore = create<FiltersState>((set) => ({
+const DEFAULTS: PicksFilters = {
   search: '', basket: '', tier: '', status: '', type: '', hideClosed: true, sort: 'conviction',
-  conviction: null,
-  setSearch:     (search)     => set({ search }),
-  setBasket:     (basket)     => set({ basket }),
-  setTier:       (tier)       => set({ tier, conviction: tier ? Number(tier) : null }),
-  setStatus:     (status)     => set({ status }),
-  setType:       (type)       => set({ type }),
-  setHideClosed: (hideClosed) => set({ hideClosed }),
-  setSort:       (sort)       => set({ sort }),
-  setConviction: (conviction) => set({ conviction, tier: conviction !== null ? String(conviction) : '' }),
-  reset: () => set({ search: '', basket: '', tier: '', status: '', type: '', hideClosed: true, sort: 'conviction', conviction: null }),
-}));
+};
+
+export const selectPicksFilters = (s: FiltersState): PicksFilters => ({
+  search: s.search, basket: s.basket, tier: s.tier, status: s.status,
+  type: s.type, hideClosed: s.hideClosed, sort: s.sort,
+});
+
+export const useFiltersStore = create<FiltersState>()(
+  persist(
+    (set) => ({
+      ...DEFAULTS,
+      conviction: null,
+      setSearch:     (search)     => set({ search }),
+      setBasket:     (basket)     => set({ basket }),
+      setTier:       (tier)       => set({ tier, conviction: tier ? Number(tier) : null }),
+      setStatus:     (status)     => set({ status }),
+      setType:       (type)       => set({ type }),
+      setHideClosed: (hideClosed) => set({ hideClosed }),
+      setSort:       (sort)       => set({ sort }),
+      setConviction: (conviction) => set({ conviction, tier: conviction !== null ? String(conviction) : '' }),
+      reset: () => set({ ...DEFAULTS, conviction: null }),
+      hydrate: (p) => set((s) => {
+        const tier = p.tier ?? s.tier;
+        return {
+          search:     p.search     ?? s.search,
+          basket:     p.basket     ?? s.basket,
+          tier,
+          status:     p.status     ?? s.status,
+          type:       p.type       ?? s.type,
+          hideClosed: p.hideClosed ?? s.hideClosed,
+          sort:       p.sort       ?? s.sort,
+          conviction: tier ? Number(tier) : null,
+        };
+      }),
+    }),
+    {
+      name: 'stw-picks-filters',
+      // Only the filter values; setters/conviction derive from them.
+      partialize: (s) => selectPicksFilters(s),
+    },
+  ),
+);

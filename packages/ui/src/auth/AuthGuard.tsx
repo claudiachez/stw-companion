@@ -1,9 +1,11 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuthStore } from '../store/auth';
 import { useSession } from './useSession';
+import { usePreferencesSync } from '../preferences/usePreferencesSync';
 
 export function AuthGuard() {
   useSession();
+  usePreferencesSync(); // load + persist per-user theme & Stock Picks filters
   const { session, isLoading } = useAuthStore();
 
   if (isLoading) {

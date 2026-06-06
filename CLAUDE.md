@@ -42,7 +42,7 @@ apps/
   admin/                     admin shell: no paywall, Edit + Users + IBKR
     ibkr_proxy.py            local IBKR writer (run on your machine, not deployed)
     netlify.toml             (Netlify base dir = apps/admin)
-supabase/migrations/         001..012 — single source of truth for DB schema/RLS
+supabase/migrations/         001..013 — single source of truth for DB schema/RLS
 CLAUDE.md                    this file
 ```
 
@@ -117,7 +117,7 @@ OAuth on web does a full-page redirect).
 ## Database (Supabase)
 
 - Project: `usmqbohcjcyszjxxvnqu.supabase.co`; client created per-app and injected into `@stw/ui`.
-- `supabase/migrations/` is the single source of truth (012 migrations to date).
+- `supabase/migrations/` is the single source of truth (013 migrations to date).
   **Claude authors migrations; you apply them** via the Supabase SQL editor / `supabase db push`.
 - Tables: `holdings`, `graddox`, `graddox_levels`, `profiles`, `tiers`, `run_log`, `user_positions`.
   RLS on `holdings`/`graddox` restricts writes to `cc@claudiachez.com`. `user_positions`

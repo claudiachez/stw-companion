@@ -1,0 +1,43 @@
+import { useEffect, useRef } from 'react';
+import { useShallow } from 'zustand/react/shallow';
+import { useAuthStore } from '../store/auth';
+import { useThemeStore } from '../store/theme';
+import { useFiltersStore, selectPicksFilters } from '../features/picks/useFilters';
+import { loadPreferences, savePreferences } from './preferences';
+
+// Per-user theme + Stock Picks filter persistence.
+// - localStorage (theme store + persisted filters store) gives instant/offline restore.
+// - On login we load the user's profile prefs (cross-device source of truth) and apply
+//   them, then debounce-save any later change back to the profile.
+// Mounted once in AuthGuard, so it covers both the web and admin shells.
+export function usePreferencesSync() {
+  const userId   = useAuthStore((s) => s.user?.id ?? null);
+  const theme    = useThemeStore((s) => s.theme);
+  const setTheme = useThemeStore((s) => s.setTheme);
+  const filters  = useFiltersStore(useShallow(selectPicksFilters));
+  const hydrate  = useFiltersStore((s) => s.hydrate);
+  const loadedFor = useRef<string | null>(null);
+
+  // Load once per signed-in user; profile wins over localStorage (cross-device intent).
+  useEffect(() => {
+    if (!userId) { loadedFor.current = null; return; }
+    if (loadedFor.current === userId) return;
+    let cancelled = false;
+    loadPreferences(userId).then((prefs) => {
+      if (cancelled) return;
+      if (prefs?.theme) setTheme(prefs.theme);
+      if (prefs?.picksFilters) hydrate(prefs.picksFilters);
+      loadedFor.current = userId;
+    });
+    return () => { cancelled = true; };
+  }, [userId, setTheme, hydrate]);
+
+  // Save changes (debounced), only after this user's prefs have loaded.
+  useEffect(() => {
+    if (!userId || loadedFor.current !== userId) return;
+    const t = setTimeout(() => {
+      savePreferences({ theme, picksFilters: filters });
+    }, 800);
+    return () => clearTimeout(t);
+  }, [userId, theme, filters]);
+}
