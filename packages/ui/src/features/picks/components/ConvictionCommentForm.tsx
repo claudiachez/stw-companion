@@ -85,7 +85,7 @@ export function ConvictionCommentForm({ ticker, currentConviction, onDone }: Pro
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {/* Admin: full controls */}
         {canEdit && (
           <>
@@ -101,7 +101,7 @@ export function ConvictionCommentForm({ ticker, currentConviction, onDone }: Pro
                 ))}
               </select>
             </div>
-            <div style={{ ...cellStyle, gridColumn: '1 / -1' }}>
+            <div style={cellStyle}>
               <label style={labelStyle}>Source</label>
               <select style={fieldStyle} value={source} onChange={(e) => setSource(e.target.value as ConvictionSource)}>
                 {SOURCES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
@@ -110,7 +110,7 @@ export function ConvictionCommentForm({ ticker, currentConviction, onDone }: Pro
           </>
         )}
 
-        <div style={{ ...cellStyle, gridColumn: '1 / -1' }}>
+        <div style={cellStyle}>
           {canEdit && <label style={labelStyle}>Note</label>}
           <textarea
             style={{ ...fieldStyle, minHeight: 80, resize: 'vertical' }}
