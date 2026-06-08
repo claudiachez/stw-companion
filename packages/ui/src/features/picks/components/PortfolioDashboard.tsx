@@ -1,6 +1,7 @@
 import { bColor, parseCostBasis, positionType, resolvePnl, mergeLegs, legPriceReason, fmtDateTime } from '@stw/shared';
 import { usePriceCacheStore } from '../../../store/priceCache';
 import { useRecentChanges } from '../useRecentChanges';
+import { useLatestWebinar } from '../useLatestWebinar';
 import { TickerLink } from '../../../primitives/TickerLink';
 import type { Holding } from '../api';
 
@@ -15,6 +16,11 @@ function legExpiry(e: string): string {
 interface DashboardProps {
   holdings: Holding[];
   onSelectTicker?: (ticker: string) => void;
+}
+
+// Date-only display for a conviction event_date (no time component) — matches ConvictionTimeline.
+function fmtEventDate(d: string): string {
+  return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 // Render a digest string with any known ticker rendered as a clickable link.
@@ -46,6 +52,7 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
   const cache = usePriceCacheStore((s) => s.cache);
   const { data: changes } = useRecentChanges(1);
   const latestChange = changes?.[0] ?? null;
+  const { data: webinar } = useLatestWebinar();
 
   const active = holdings.filter((h) => h.ticker !== 'CASH' && h.last_action !== 'Closed');
 
@@ -197,6 +204,32 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
           );
         })}
       </div>
+
+      {/* New webinar analysis — which positions had conviction notes refreshed by the latest stream */}
+      {webinar && webinar.tickers.length > 0 && (
+        <div style={{ marginTop: 28 }}>
+          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 10 }}>
+            New Webinar Analysis
+          </div>
+          <div style={{
+            padding: '12px 14px', borderRadius: 8,
+            background: 'var(--s2)', border: '1px solid var(--acc)',
+            fontSize: 13, color: 'var(--t2)', lineHeight: 1.6,
+          }}>
+            <div style={{ color: 'var(--text)', marginBottom: 8 }}>
+              📺 Conviction notes updated for {webinar.tickers.length} {webinar.tickers.length === 1 ? 'position' : 'positions'}
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px 12px' }}>
+              {webinar.tickers.map((t) => (
+                <TickerLink key={t} ticker={t} onSelect={onSelectTicker} />
+              ))}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 10 }}>
+              {fmtEventDate(webinar.eventDate)}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Latest portfolio changes (digest) */}
       {latestChange?.digest && (
