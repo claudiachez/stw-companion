@@ -43,7 +43,7 @@ apps/
   admin/                     admin shell: no paywall, Edit + Users + IBKR
     ibkr_proxy.py            local IBKR writer (run on your machine, not deployed)
     netlify.toml             (Netlify base dir = apps/admin)
-supabase/migrations/         001..014 — single source of truth for DB schema/RLS
+supabase/migrations/         001..017 — single source of truth for DB schema/RLS
 CLAUDE.md                    this file
 ```
 
@@ -118,12 +118,21 @@ OAuth on web does a full-page redirect).
 ## Database (Supabase)
 
 - Project: `usmqbohcjcyszjxxvnqu.supabase.co`; client created per-app and injected into `@stw/ui`.
-- `supabase/migrations/` is the single source of truth (014 migrations to date).
+- `supabase/migrations/` is the single source of truth (017 migrations to date).
   **Claude authors migrations; you apply them** via the Supabase SQL editor / `supabase db push`.
-- Tables: `holdings`, `graddox`, `graddox_levels`, `profiles`, `tiers`, `run_log`, `user_positions`.
+- Tables: `holdings`, `graddox`, `graddox_levels`, `profiles`, `tiers`, `run_log`,
+  `user_positions`, `holding_transactions`, `conviction_comments`.
   RLS on `holdings`/`graddox` restricts writes to `cc@claudiachez.com`. `user_positions`
   uses user-owned RLS — each subscriber reads and writes only their own rows.
   The admin IBKR proxy is the only writer of `last_pnl_*` / `ibkr_legs` on `holdings`.
+- **Transaction History is auto-logged by a DB trigger** (`stw_log_holding_transaction`,
+  migration 016): any non-`Hold` change to a `holdings` row's `last_action`/`action_date`
+  writes a `holding_transactions` row — so every writer (admin Edit form *and* the external
+  scheduled routines) is captured with no client code. A dedupe guard on
+  `(ticker, leg, action, event_date)` makes idempotent script re-runs safe. The admin
+  "+ Add Event" form is a manual backup (a direct insert that doesn't touch `holdings`,
+  so it never double-fires the trigger). This intentionally differs from conviction
+  history, which uses explicit appends (see migration 015).
 
 ---
 

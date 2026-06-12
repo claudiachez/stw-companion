@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { ACTION_VARS } from '@stw/shared';
 import type { HoldingTransaction } from '@stw/shared';
 import { useHoldingTransactions } from '../useHoldingHistory';
 import { useQueryClient } from '@tanstack/react-query';
 import { deleteHoldingTransaction } from '../api';
 import { TransactionEventForm } from './TransactionEventForm';
+import { ActionBadge } from './ActionBadge';
 import { useCapabilities } from '../../../context/AppCapabilities';
 
 function dotColor(action: string): string {
@@ -17,21 +17,6 @@ function dotColor(action: string): string {
 
 function formatDate(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-function ActionBadge({ action }: { action: string }) {
-  const vars = ACTION_VARS[action];
-  if (!vars) return null;
-  return (
-    <span style={{
-      fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
-      padding: '2px 5px', borderRadius: 3,
-      color: vars.color, background: vars.bg,
-      textTransform: 'uppercase',
-    }}>
-      {action}
-    </span>
-  );
 }
 
 function EventRow({ tx, canEdit, onDelete }: { tx: HoldingTransaction; canEdit: boolean; onDelete: (id: number) => void }) {

@@ -57,6 +57,17 @@ export async function fetchHoldingTransactions(ticker: string): Promise<HoldingT
   return (data ?? []) as HoldingTransaction[];
 }
 
+export async function fetchAllTransactions(): Promise<HoldingTransaction[]> {
+  const { data, error } = await getSupabase()
+    .from('holding_transactions')
+    .select('*')
+    .order('event_date', { ascending: false })
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return (data ?? []) as HoldingTransaction[];
+}
+
 export async function fetchConvictionComments(ticker: string): Promise<ConvictionComment[]> {
   const { data, error } = await getSupabase()
     .from('conviction_comments')
