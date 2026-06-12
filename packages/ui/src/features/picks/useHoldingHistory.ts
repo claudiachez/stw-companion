@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { fetchHoldingTransactions, fetchAllTransactions, fetchConvictionComments } from './api';
+import { fetchHoldingTransactions, fetchConvictionComments } from './api';
 
 export function useHoldingTransactions(ticker: string) {
   return useQuery({
@@ -7,15 +7,6 @@ export function useHoldingTransactions(ticker: string) {
     queryFn: () => fetchHoldingTransactions(ticker),
     staleTime: 30_000,
     enabled: !!ticker,
-  });
-}
-
-// Every transaction across all tickers — feeds the global Transaction Ledger.
-export function useAllTransactions() {
-  return useQuery({
-    queryKey: ['all-transactions'],
-    queryFn: fetchAllTransactions,
-    staleTime: 60_000,
   });
 }
 

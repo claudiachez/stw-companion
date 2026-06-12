@@ -69,7 +69,6 @@ export function HoldingEditForm({ holding: h, onDone }: Props) {
       // (migration 016) on any non-Hold change — so every writer, not just this form, is
       // captured. Refresh both the holdings list and the per-ticker timeline.
       await queryClient.invalidateQueries({ queryKey: ['transactions', h.ticker] });
-      await queryClient.invalidateQueries({ queryKey: ['all-transactions'] });
       await queryClient.invalidateQueries({ queryKey: ['holdings'] });
       onEditHolding?.({ ...h, ...updates } as Holding);
       onDone();

@@ -1,5 +1,5 @@
 import { getSupabase } from '../../lib/supabase';
-import type { HoldingTransaction, ConvictionComment } from '@stw/shared';
+import type { HoldingTransaction, ConvictionComment, Direction } from '@stw/shared';
 
 export interface IbkrLeg {
   symbol: string;
@@ -33,6 +33,7 @@ export interface Holding {
   ibkr_legs: IbkrLeg[] | null;
   exit_price: number | null;
   exit_pnl_pct: number | null;
+  direction: Direction | null;
 }
 
 export async function fetchHoldings(): Promise<Holding[]> {
@@ -52,17 +53,6 @@ export async function fetchHoldingTransactions(ticker: string): Promise<HoldingT
     .eq('ticker', ticker)
     .order('leg', { ascending: true })
     .order('event_date', { ascending: true });
-
-  if (error) throw error;
-  return (data ?? []) as HoldingTransaction[];
-}
-
-export async function fetchAllTransactions(): Promise<HoldingTransaction[]> {
-  const { data, error } = await getSupabase()
-    .from('holding_transactions')
-    .select('*')
-    .order('event_date', { ascending: false })
-    .order('created_at', { ascending: false });
 
   if (error) throw error;
   return (data ?? []) as HoldingTransaction[];
@@ -90,14 +80,6 @@ export async function insertConvictionComment(
   row: Omit<ConvictionComment, 'id' | 'created_at'>
 ): Promise<void> {
   const { error } = await getSupabase().from('conviction_comments').insert(row);
-  if (error) throw error;
-}
-
-export async function updateHoldingTransaction(
-  id: number,
-  fields: Partial<Pick<HoldingTransaction, 'price' | 'event_date' | 'weight' | 'position_detail' | 'pnl_pct' | 'direction'>>,
-): Promise<void> {
-  const { error } = await getSupabase().from('holding_transactions').update(fields).eq('id', id);
   if (error) throw error;
 }
 
