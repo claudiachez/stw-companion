@@ -1,11 +1,13 @@
 import { getSupabase } from '../lib/supabase';
 import type { Theme } from '../store/theme';
 import type { PicksFilters } from '../features/picks/useFilters';
+import type { PicksTab } from '../features/picks/usePicksTab';
 
 // Per-user UI preferences stored in profiles.preferences (jsonb).
 export interface UserPreferences {
   theme?: Theme;
   picksFilters?: Partial<PicksFilters>;
+  picksDefaultTab?: PicksTab;
 }
 
 export async function loadPreferences(userId: string): Promise<UserPreferences | null> {

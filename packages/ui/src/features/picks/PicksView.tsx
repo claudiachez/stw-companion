@@ -1,10 +1,12 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useHoldings } from './useHoldings';
 import { useFiltersStore, applyFilters, sortFlat, sortByPnl } from './useFilters';
+import { usePicksTabStore, PICKS_TAB_LABELS, type PicksTab } from './usePicksTab';
 import { FilterBar } from './components/FilterBar';
 import { HoldingRow } from './components/HoldingRow';
 import { HoldingDetail } from './components/HoldingDetail';
 import { PortfolioDashboard } from './components/PortfolioDashboard';
+import { TransactionLedger } from './components/TransactionLedger';
 import { LoadingSpinner } from '../../primitives/LoadingSpinner';
 import { EmptyState } from '../../primitives/EmptyState';
 import { TIERS, resolvePnl, positionType, parseCostBasis } from '@stw/shared';
@@ -53,8 +55,16 @@ export function PicksView() {
   const setFetchStatus = usePriceCacheStore((s) => s.setFetchStatus);
   const priceCache = usePriceCacheStore((s) => s.cache);
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
-  const [mobileView, setMobileView] = useState<'list' | 'overview'>('list');
+  // Active sub-tab; seeds from the user's saved default (localStorage-instant, profile-synced).
+  const [activeTab, setActiveTab] = useState<PicksTab>(() => usePicksTabStore.getState().defaultTab);
   const isMobile = useIsMobile();
+
+  // Selecting a ticker anywhere (list row, dashboard link, ledger link) lands on the
+  // Ticker Details tab so the detail is visible without first switching tabs.
+  function selectTicker(ticker: string | null) {
+    setSelectedTicker(ticker);
+    if (ticker) setActiveTab('positions');
+  }
 
   useEffect(() => {
     if (!finnhubKey || holdings.length === 0) return;
@@ -178,106 +188,102 @@ export function PicksView() {
         />
       ));
 
-  // ── Mobile: tab bar + full-screen views ─────────────────────
-  if (isMobile) {
-    const tabBase: React.CSSProperties = {
-      flex: 1, padding: '10px 0', fontSize: 13,
-      background: 'none', border: 'none', borderBottom: '2px solid transparent',
-      cursor: 'pointer', marginBottom: -1, transition: 'color 0.15s',
-    };
+  // ── Sub-tab bar: Portfolio Overview · Ticker Details · Transactions ──
+  // Overview + Transactions are full-width peers, so the dashboard is always one click
+  // away — no need to deselect a ticker to reach it.
+  const TABS: PicksTab[] = ['overview', 'positions', 'transactions'];
+  const tabBtn = (tab: PicksTab): React.CSSProperties => ({
+    flex: isMobile ? 1 : '0 0 auto',
+    padding: isMobile ? '10px 0' : '9px 16px',
+    fontSize: 13, background: 'none', border: 'none',
+    borderBottom: '2px solid transparent', cursor: 'pointer',
+    marginBottom: -1, transition: 'color 0.15s', whiteSpace: 'nowrap',
+    fontWeight: activeTab === tab ? 600 : 400,
+    color: activeTab === tab ? 'var(--acc)' : 'var(--t2)',
+    borderBottomColor: activeTab === tab ? 'var(--acc)' : 'transparent',
+  });
 
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-        <FilterBar holdings={holdings} filtered={positionCount} />
+  // On mobile an open detail takes over the screen — hide the sub-tabs + filter bar.
+  const mobileDetail = isMobile && activeTab === 'positions' && !!selected;
 
-        {/* Tab bar — hidden while viewing a detail */}
-        {!selected && (
-          <div style={{ display: 'flex', background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', flexShrink: 0 }}>
-            <button
-              style={{
-                ...tabBase,
-                fontWeight: mobileView === 'list' ? 600 : 400,
-                color: mobileView === 'list' ? 'var(--acc)' : 'var(--t2)',
-                borderBottomColor: mobileView === 'list' ? 'var(--acc)' : 'transparent',
-              }}
-              onClick={() => setMobileView('list')}
-            >
-              Positions ({sorted.length})
-            </button>
-            <button
-              style={{
-                ...tabBase,
-                fontWeight: mobileView === 'overview' ? 600 : 400,
-                color: mobileView === 'overview' ? 'var(--acc)' : 'var(--t2)',
-                borderBottomColor: mobileView === 'overview' ? 'var(--acc)' : 'transparent',
-              }}
-              onClick={() => setMobileView('overview')}
-            >
-              Overview
-            </button>
-          </div>
-        )}
-
-        {/* Content area */}
-        {selected ? (
-          <div style={{ flex: 1, overflow: 'hidden', background: 'var(--bg)' }}>
-            <HoldingDetail
-              holding={selected}
-              totalCount={holdings.length}
-              onClose={() => { setSelectedTicker(null); setMobileView('list'); }}
-              isMobile
-              latestOptionsSync={latestOptionsSync}
-            />
-          </div>
-        ) : mobileView === 'overview' ? (
-          <div style={{ flex: 1, overflow: 'hidden', background: 'var(--bg)' }}>
-            <PortfolioDashboard holdings={holdings} onSelectTicker={setSelectedTicker} />
-          </div>
-        ) : (
-          <div style={{ flex: 1, overflowY: 'auto' }}>
-            {sorted.length === 0
-              ? <EmptyState message="No positions match your filters." />
-              : listContent}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // ── Desktop: split panel ──────────────────────────────────────
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      <FilterBar holdings={holdings} filtered={positionCount} />
-
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {/* Position list */}
-        <div
-          style={{
-            overflowY: 'auto',
-            borderRight: '1px solid var(--border)',
-            transition: 'flex 0.25s ease',
-            flex: selected ? '0 0 42%' : 1,
-          }}
-        >
-          {sorted.length === 0
-            ? <EmptyState message="No positions match your filters." />
-            : listContent}
+      {!mobileDetail && (
+        <div style={{ display: 'flex', background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', flexShrink: 0, gap: isMobile ? 0 : 4, padding: isMobile ? 0 : '0 8px' }}>
+          {TABS.map((tab) => (
+            <button key={tab} style={tabBtn(tab)} onClick={() => setActiveTab(tab)}>
+              {tab === 'positions' ? `${PICKS_TAB_LABELS.positions} (${sorted.length})` : PICKS_TAB_LABELS[tab]}
+            </button>
+          ))}
         </div>
+      )}
 
-        {/* Right panel: detail or dashboard */}
+      {/* FilterBar belongs to the position list only */}
+      {activeTab === 'positions' && !mobileDetail && (
+        <FilterBar holdings={holdings} filtered={positionCount} />
+      )}
+
+      {/* Portfolio Overview — full width */}
+      {activeTab === 'overview' && (
         <div style={{ flex: 1, overflow: 'hidden', background: 'var(--bg)' }}>
-          {selected ? (
-            <HoldingDetail
-              holding={selected}
-              totalCount={holdings.length}
-              onClose={() => setSelectedTicker(null)}
-              latestOptionsSync={latestOptionsSync}
-            />
-          ) : (
-            <PortfolioDashboard holdings={holdings} onSelectTicker={setSelectedTicker} />
-          )}
+          <PortfolioDashboard holdings={holdings} onSelectTicker={selectTicker} />
         </div>
-      </div>
+      )}
+
+      {/* Transactions — full-width ledger */}
+      {activeTab === 'transactions' && (
+        <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)', padding: isMobile ? '14px 12px' : '20px 24px' }}>
+          <TransactionLedger onSelectTicker={selectTicker} />
+        </div>
+      )}
+
+      {/* Ticker Details — position list + selected-holding detail */}
+      {activeTab === 'positions' && (
+        isMobile ? (
+          selected ? (
+            <div style={{ flex: 1, overflow: 'hidden', background: 'var(--bg)' }}>
+              <HoldingDetail
+                holding={selected}
+                totalCount={holdings.length}
+                onClose={() => setSelectedTicker(null)}
+                isMobile
+                latestOptionsSync={latestOptionsSync}
+              />
+            </div>
+          ) : (
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              {sorted.length === 0
+                ? <EmptyState message="No positions match your filters." />
+                : listContent}
+            </div>
+          )
+        ) : (
+          <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+            <div
+              style={{
+                overflowY: 'auto',
+                borderRight: selected ? '1px solid var(--border)' : 'none',
+                transition: 'flex 0.25s ease',
+                flex: selected ? '0 0 42%' : 1,
+              }}
+            >
+              {sorted.length === 0
+                ? <EmptyState message="No positions match your filters." />
+                : listContent}
+            </div>
+            {selected && (
+              <div style={{ flex: 1, overflow: 'hidden', background: 'var(--bg)' }}>
+                <HoldingDetail
+                  holding={selected}
+                  totalCount={holdings.length}
+                  onClose={() => setSelectedTicker(null)}
+                  latestOptionsSync={latestOptionsSync}
+                />
+              </div>
+            )}
+          </div>
+        )
+      )}
     </div>
   );
 }

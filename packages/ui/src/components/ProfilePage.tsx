@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getSupabase } from '../lib/supabase';
 import { useAuthStore } from '../store/auth';
 import { LoadingSpinner } from '../primitives/LoadingSpinner';
+import { usePicksTabStore, PICKS_TAB_LABELS, type PicksTab } from '../features/picks/usePicksTab';
 
 const TIER_LABELS: Record<string, string> = {
   free: 'Free',
@@ -17,6 +18,8 @@ const STATUS_STYLES: Record<string, string> = {
 
 export function ProfilePage() {
   const user = useAuthStore((s) => s.user);
+  const defaultTab = usePicksTabStore((s) => s.defaultTab);
+  const setDefaultTab = usePicksTabStore((s) => s.setDefaultTab);
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ['profile', user?.id],
@@ -83,6 +86,26 @@ export function ProfilePage() {
             Your account request was not approved. Contact support for more information.
           </div>
         )}
+      </div>
+
+      {/* Preferences */}
+      <div className="bg-surface border border-border rounded-xl p-5 flex flex-col gap-4 mt-4">
+        <div className="text-text font-semibold text-sm">Preferences</div>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <div className="text-text text-sm">Default Stock Picks tab</div>
+            <div className="text-t3 text-xs mt-0.5">Which sub-tab opens first on the Stock Picks page.</div>
+          </div>
+          <select
+            value={defaultTab}
+            onChange={(e) => setDefaultTab(e.target.value as PicksTab)}
+            className="bg-s2 border border-border rounded-lg px-3 py-2 text-text text-sm"
+          >
+            {(['overview', 'positions', 'transactions'] as PicksTab[]).map((t) => (
+              <option key={t} value={t}>{PICKS_TAB_LABELS[t]}</option>
+            ))}
+          </select>
+        </div>
       </div>
     </div>
   );

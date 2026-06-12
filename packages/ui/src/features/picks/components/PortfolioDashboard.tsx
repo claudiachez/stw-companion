@@ -3,8 +3,6 @@ import { usePriceCacheStore } from '../../../store/priceCache';
 import { useRecentChanges } from '../useRecentChanges';
 import { useLatestWebinar } from '../useLatestWebinar';
 import { TickerLink } from '../../../primitives/TickerLink';
-import { TransactionLedger } from './TransactionLedger';
-import { useCapabilities } from '../../../context/AppCapabilities';
 import type { Holding } from '../api';
 
 const LEG_MONTHS = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -51,7 +49,6 @@ function renderDigest(
 
 // ── Portfolio dashboard (shown when no ticker selected) ───────
 export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps) {
-  const { canViewHistory } = useCapabilities();
   const cache = usePriceCacheStore((s) => s.cache);
   const { data: changes } = useRecentChanges(1);
   const latestChange = changes?.[0] ?? null;
@@ -253,16 +250,6 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
               <span style={{ color: 'var(--t2)' }}>{fmtDateTime(changeAt)}</span>
             </div>
           )}
-        </div>
-      )}
-
-      {/* Global transaction ledger — every logged action across all tickers (premium + admin) */}
-      {canViewHistory && (
-        <div style={{ marginTop: 28 }}>
-          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 10 }}>
-            Transaction Ledger
-          </div>
-          <TransactionLedger onSelectTicker={onSelectTicker} />
         </div>
       )}
 

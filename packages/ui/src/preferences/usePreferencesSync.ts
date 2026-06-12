@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useAuthStore } from '../store/auth';
 import { useThemeStore } from '../store/theme';
 import { useFiltersStore, selectPicksFilters } from '../features/picks/useFilters';
+import { usePicksTabStore } from '../features/picks/usePicksTab';
 import { loadPreferences, savePreferences } from './preferences';
 
 // Per-user theme + Stock Picks filter persistence.
@@ -16,6 +17,8 @@ export function usePreferencesSync() {
   const setTheme = useThemeStore((s) => s.setTheme);
   const filters  = useFiltersStore(useShallow(selectPicksFilters));
   const hydrate  = useFiltersStore((s) => s.hydrate);
+  const defaultTab    = usePicksTabStore((s) => s.defaultTab);
+  const hydrateTab    = usePicksTabStore((s) => s.hydrate);
   const loadedFor = useRef<string | null>(null);
 
   // Load once per signed-in user; profile wins over localStorage (cross-device intent).
@@ -27,6 +30,7 @@ export function usePreferencesSync() {
       if (cancelled) return;
       if (prefs?.theme) setTheme(prefs.theme);
       if (prefs?.picksFilters) hydrate(prefs.picksFilters);
+      if (prefs?.picksDefaultTab) hydrateTab(prefs.picksDefaultTab);
       loadedFor.current = userId;
     });
     return () => { cancelled = true; };
@@ -36,8 +40,8 @@ export function usePreferencesSync() {
   useEffect(() => {
     if (!userId || loadedFor.current !== userId) return;
     const t = setTimeout(() => {
-      savePreferences({ theme, picksFilters: filters });
+      savePreferences({ theme, picksFilters: filters, picksDefaultTab: defaultTab });
     }, 800);
     return () => clearTimeout(t);
-  }, [userId, theme, filters]);
+  }, [userId, theme, filters, defaultTab]);
 }
