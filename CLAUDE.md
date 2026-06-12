@@ -134,6 +134,63 @@ OAuth on web does a full-page redirect).
   so it never double-fires the trigger). This intentionally differs from conviction
   history, which uses explicit appends (see migration 015).
 
+### Data sources / writers
+The apps mostly **read** these tables; the rows are written by systems that live **outside this
+repo**. Know who writes what before you reason about freshness or "why is this row here":
+
+| Table | Primary writer | Notes |
+|---|---|---|
+| `holdings` | **the routines** (see next section) | core position rows; admin Edit form also writes; admin IBKR proxy writes only `last_pnl_*`/`ibkr_legs` |
+| `graddox` / `graddox_levels` | **morning routine** (Gradoxx step) | GEX signal bias + levels |
+| `conviction_comments` | **the routines** + `stw-transcripts` | explicit appends; `source` = `discord` or `streaming`; admin/users can also add notes |
+| `holding_transactions` | **DB trigger** (no client) | auto-logged from any `holdings` write; never written directly by app or routine |
+| `run_log` | **the routines** | ingestion audit + high-water mark; newest `digest` → "Latest Portfolio Changes" |
+| `user_positions` | **web `ibkr-flex.ts`** | each subscriber's own IBKR account; user-owned RLS |
+| `profiles` / `tiers` | auth + Settings | per-user creds/preferences, tier paywall |
+
+"The routines" = three cowork cron tasks that ingest Discord into Supabase — **the primary writers of
+`holdings`, `graddox`, `conviction_comments`, `run_log`.** They are not in this repo (they live at
+`~/Documents/Claude/Scheduled/<id>/SKILL.md`); the next section documents the full flow. They write
+via the Supabase REST API with the **service-role key**, which is why their writes bypass the
+`cc@claudiachez.com`-only RLS on `holdings`/`graddox`.
+
+---
+
+## Data Ingestion — The Routines (out-of-repo, but the source of almost all data)
+
+The apps render data that an external ingestion engine writes on a schedule. This engine is **not
+checked into this repo** — it is a set of Claude cowork cron tasks at
+`~/Documents/Claude/Scheduled/<id>/SKILL.md` (thin shims under `~/.claude/scheduled-tasks/`). It is
+documented here because the Supabase schema is the contract between it (writer) and the apps
+(readers); changing a table or the `position_detail` format affects both sides.
+
+**Mechanism (shared by every routine):**
+- Reads Discord via **Claude in Chrome** (the user's own account — not a bot; the user isn't a server admin).
+- Writes to Supabase via `curl` to the REST API using the **service-role key** (from `~/Documents/Claude/Scheduled/.supabase-service-key`), bypassing RLS. Every write uses `Prefer: return=representation` and is verified — an empty `[]` body is treated as failure.
+- **High-water mark:** each routine first reads the newest `run_log.last_message_ts` for its channel, processes only messages newer than that, then writes a fresh `run_log` row. This makes every run idempotent — a message/recording/snapshot is processed exactly once, no matter which path fires.
+- **Only extracts what is explicitly stated** — never infers actions, weights, or conviction.
+
+**The four routines:**
+
+| Routine | Cadence | Reads (Discord channel) | Writes |
+|---|---|---|---|
+| `stw-morning-run` | 9am wkdays | Gradoxx → `live-notes-portfolio` → (fallback) `stream-library-stw` | `graddox`, `graddox_levels`, `holdings`, `conviction_comments`, `run_log` |
+| `stw-afternoon-run` | 3pm wkdays | `live-notes-portfolio` → (fallback) `stream-library-stw` | `holdings`, `conviction_comments`, `run_log` |
+| `stw-friday-weighting` | 5pm Fri | `updates-portfolio` (weekly full snapshot) | `holdings` (weights only), `run_log` |
+| `stw-transcripts` | manual (+ daily fallback) | `stream-library-stw` (webinar recording) | methodology `.md` (local), `holdings`, `conviction_comments`, `run_log` |
+
+**Daily flow (morning / afternoon):**
+1. Read `live-notes-portfolio` — the host's real-time buy / sell / upsize / trim calls **and** his DD/thesis (he posts thesis here, not in a separate channel).
+2. For each changed ticker, **upsert `holdings`** on the `ticker` PK — `last_action` (`New`/`Upsized`/`Trimmed`/`Hold`/`Closed`), `current_weight`, and `position_detail` normalized to the canonical leg form (`Common @ $X + $STRIKE[C|P] MON 'YY @ $entry`, one `@` per leg) so the Picks **Trades** tab can parse each leg/lot. On a Close, also snapshot `exit_price`/`exit_pnl_pct` (from a stated exit or a Finnhub quote).
+3. That `holdings` write **auto-fires the DB trigger** → a `holding_transactions` row (no client code).
+4. For notable commentary, **append a `conviction_comments` row** (`source='discord'`) → becomes "Latest Comments"; refresh `holdings.summary`/`bullets` + `dd_updated_at` only when the durable thesis actually changed.
+5. Write the `run_log` mark, including a multi-line **`digest`** → rendered as "Latest Portfolio Changes" in the Overview.
+6. **Recording fallback:** if `stream-library-stw` has an unprocessed recording, delegate to `stw-transcripts`. (Morning also runs the Gradoxx GEX step first → `graddox`/`graddox_levels`.)
+
+**Weekly flow (Friday):** read the full-portfolio snapshot from `updates-portfolio` and **truth-up every holding's `current_weight`** to match it (this is the weighting source of record; daily calls only nudge weights). A ticker in `holdings` but absent from the snapshot is flagged, not auto-closed.
+
+**Webinar flow (`stw-transcripts`):** processes the newest unprocessed recording **exactly once** (dedup via the `stream-library-stw` high-water mark). From one Zoom transcript it produces **two outputs**: (A) a **methodology-analysis `.md`** — a fixed 10-section reverse-engineering of *how the host thinks* (not what he owns) — saved to `~/Documents/Claude/Projects/Stock Talk Weekly/StockTalk_Episode_<DATE>_Analysis.md`; and (B) **conviction notes** — a `conviction_comments` row per ticker (`source='streaming'`) plus a thesis refresh when the durable "why" changed. Output A is the **only** routine output the apps never read (a local research library, kept separate from position data on purpose).
+
 ---
 
 ## IBKR Pipelines (two separate systems)
