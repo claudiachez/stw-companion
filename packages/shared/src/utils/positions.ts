@@ -1,5 +1,14 @@
 export type PositionType = 'shares' | 'options' | 'mixed';
 
+export type Direction = 'long' | 'short';
+
+// Infer trade direction from a free-form `position_detail`. Conservative: only an explicit
+// "short" reads as short; everything else (plain shares, calls, puts) is treated as long.
+// Overridable per-trade via holding_transactions.direction.
+export function inferDirection(positionDetail: string | null): Direction {
+  return /\bshort\b/i.test(positionDetail ?? '') ? 'short' : 'long';
+}
+
 // Classify a free-form `position_detail` string into shares / options / mixed.
 // Mirrors the admin dashboard's parser exactly so both apps agree.
 export function positionType(positionDetail: string | null): PositionType | null {

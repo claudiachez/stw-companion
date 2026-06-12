@@ -93,6 +93,14 @@ export async function insertConvictionComment(
   if (error) throw error;
 }
 
+export async function updateHoldingTransaction(
+  id: number,
+  fields: Partial<Pick<HoldingTransaction, 'price' | 'event_date' | 'weight' | 'position_detail' | 'pnl_pct' | 'direction'>>,
+): Promise<void> {
+  const { error } = await getSupabase().from('holding_transactions').update(fields).eq('id', id);
+  if (error) throw error;
+}
+
 export async function deleteHoldingTransaction(id: number): Promise<void> {
   const { error } = await getSupabase().from('holding_transactions').delete().eq('id', id);
   if (error) throw error;

@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getSupabase } from '../lib/supabase';
 import { useAuthStore } from '../store/auth';
 import { LoadingSpinner } from '../primitives/LoadingSpinner';
-import { usePicksTabStore, PICKS_TAB_LABELS, type PicksTab } from '../features/picks/usePicksTab';
+import { usePicksTabStore, coercePicksTab, PICKS_TABS, PICKS_TAB_LABELS, type PicksTab } from '../features/picks/usePicksTab';
 
 const TIER_LABELS: Record<string, string> = {
   free: 'Free',
@@ -97,11 +97,11 @@ export function ProfilePage() {
             <div className="text-t3 text-xs mt-0.5">Which sub-tab opens first on the Stock Picks page.</div>
           </div>
           <select
-            value={defaultTab}
+            value={coercePicksTab(defaultTab)}
             onChange={(e) => setDefaultTab(e.target.value as PicksTab)}
             className="bg-s2 border border-border rounded-lg px-3 py-2 text-text text-sm"
           >
-            {(['overview', 'positions', 'transactions'] as PicksTab[]).map((t) => (
+            {PICKS_TABS.map((t) => (
               <option key={t} value={t}>{PICKS_TAB_LABELS[t]}</option>
             ))}
           </select>

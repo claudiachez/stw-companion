@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { HoldingTransaction } from '@stw/shared';
+import { positionType } from '@stw/shared';
 import { useHoldingTransactions } from '../useHoldingHistory';
 import { useQueryClient } from '@tanstack/react-query';
 import { deleteHoldingTransaction } from '../api';
@@ -19,8 +20,10 @@ function formatDate(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+// Row columns: Action · Date · Position · Position Type (Options/Shares) · Weight.
 function EventRow({ tx, canEdit, onDelete }: { tx: HoldingTransaction; canEdit: boolean; onDelete: (id: number) => void }) {
   const color = dotColor(tx.action);
+  const ptype = positionType(tx.position_detail);
 
   return (
     <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '6px 0' }}>
@@ -28,22 +31,20 @@ function EventRow({ tx, canEdit, onDelete }: { tx: HoldingTransaction; canEdit: 
         <div style={{ width: 8, height: 8, borderRadius: '50%', background: color }} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <ActionBadge action={tx.action} />
           <span style={{ fontSize: 11, color: 'var(--t2)' }}>{formatDate(tx.event_date)}</span>
-          {tx.weight != null && (
-            <span style={{ fontSize: 11, color: 'var(--t2)' }}>{tx.weight}%</span>
-          )}
-          {tx.action === 'Closed' && tx.pnl_pct != null && (
+          {ptype && (
             <span style={{
-              fontSize: 11, fontWeight: 600,
-              color: tx.pnl_pct >= 0 ? 'var(--acc)' : '#ef4444',
+              fontSize: 9, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
+              padding: '1px 5px', borderRadius: 3, color: 'var(--t2)', background: 'var(--s2)',
+              border: '1px solid var(--border)',
             }}>
-              {tx.pnl_pct >= 0 ? '+' : ''}{tx.pnl_pct.toFixed(1)}%
+              {ptype}
             </span>
           )}
-          {tx.price != null && (
-            <span style={{ fontSize: 11, color: 'var(--t3)' }}>${tx.price.toFixed(2)}</span>
+          {tx.weight != null && (
+            <span style={{ fontSize: 11, color: 'var(--t2)' }}>{tx.weight}%</span>
           )}
         </div>
         {tx.position_detail && (

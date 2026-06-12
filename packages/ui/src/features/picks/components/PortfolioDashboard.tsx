@@ -3,6 +3,7 @@ import { usePriceCacheStore } from '../../../store/priceCache';
 import { useRecentChanges } from '../useRecentChanges';
 import { useLatestWebinar } from '../useLatestWebinar';
 import { TickerLink } from '../../../primitives/TickerLink';
+import { useIsMobile } from '../../../hooks/useIsMobile';
 import type { Holding } from '../api';
 
 const LEG_MONTHS = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -49,6 +50,7 @@ function renderDigest(
 
 // ── Portfolio dashboard (shown when no ticker selected) ───────
 export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps) {
+  const isMobile = useIsMobile();
   const cache = usePriceCacheStore((s) => s.cache);
   const { data: changes } = useRecentChanges(1);
   const latestChange = changes?.[0] ?? null;
@@ -178,7 +180,12 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
         </div>
       </div>
 
-      {/* Sector distribution */}
+      {/* Two-column grid on desktop — sector breakdown beside the activity feed so the
+          wide overview tab isn't mostly empty space. Single column on mobile. */}
+      <div style={{ display: isMobile ? 'block' : 'grid', gridTemplateColumns: isMobile ? undefined : 'minmax(280px, 1fr) 1.4fr', gap: 32, alignItems: 'start' }}>
+
+      {/* Left column — sector distribution */}
+      <div>
       <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 10 }}>
         Sector Distribution
       </div>
@@ -204,10 +211,14 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
           );
         })}
       </div>
+      </div>
+
+      {/* Right column — activity + data status */}
+      <div>
 
       {/* New webinar analysis — which positions had conviction notes refreshed by the latest stream */}
       {webinar && webinar.tickers.length > 0 && (
-        <div style={{ marginTop: 28 }}>
+        <div style={{ marginTop: isMobile ? 28 : 0 }}>
           <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 10 }}>
             New Webinar Analysis
           </div>
@@ -306,6 +317,9 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
           </div>
         </div>
       )}
+
+      </div>{/* end right column */}
+      </div>{/* end two-column grid */}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import type { ActionType, ConvictionLevel } from './holding';
+import type { Direction } from '../utils/positions';
 
 export interface HoldingTransaction {
   id: number;
@@ -11,6 +12,8 @@ export interface HoldingTransaction {
   price: number | null;
   pnl_pct: number | null;
   notes: string | null;
+  /** Trade direction override; null = use inferDirection(position_detail). */
+  direction?: Direction | null;
   created_at: string;
 }
 

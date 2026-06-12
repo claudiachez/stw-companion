@@ -1,12 +1,12 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useHoldings } from './useHoldings';
 import { useFiltersStore, applyFilters, sortFlat, sortByPnl } from './useFilters';
-import { usePicksTabStore, PICKS_TAB_LABELS, type PicksTab } from './usePicksTab';
+import { usePicksTabStore, coercePicksTab, PICKS_TAB_LABELS, type PicksTab } from './usePicksTab';
 import { FilterBar } from './components/FilterBar';
 import { HoldingRow } from './components/HoldingRow';
 import { HoldingDetail } from './components/HoldingDetail';
 import { PortfolioDashboard } from './components/PortfolioDashboard';
-import { TransactionLedger } from './components/TransactionLedger';
+import { TradesTable } from './components/TradesTable';
 import { LoadingSpinner } from '../../primitives/LoadingSpinner';
 import { EmptyState } from '../../primitives/EmptyState';
 import { TIERS, resolvePnl, positionType, parseCostBasis } from '@stw/shared';
@@ -56,7 +56,7 @@ export function PicksView() {
   const priceCache = usePriceCacheStore((s) => s.cache);
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
   // Active sub-tab; seeds from the user's saved default (localStorage-instant, profile-synced).
-  const [activeTab, setActiveTab] = useState<PicksTab>(() => usePicksTabStore.getState().defaultTab);
+  const [activeTab, setActiveTab] = useState<PicksTab>(() => coercePicksTab(usePicksTabStore.getState().defaultTab));
   const isMobile = useIsMobile();
 
   // Selecting a ticker anywhere (list row, dashboard link, ledger link) lands on the
@@ -191,7 +191,7 @@ export function PicksView() {
   // ── Sub-tab bar: Portfolio Overview · Ticker Details · Transactions ──
   // Overview + Transactions are full-width peers, so the dashboard is always one click
   // away — no need to deselect a ticker to reach it.
-  const TABS: PicksTab[] = ['overview', 'positions', 'transactions'];
+  const TABS: PicksTab[] = ['overview', 'positions', 'trades'];
   const tabBtn = (tab: PicksTab): React.CSSProperties => ({
     flex: isMobile ? 1 : '0 0 auto',
     padding: isMobile ? '10px 0' : '9px 16px',
@@ -230,10 +230,10 @@ export function PicksView() {
         </div>
       )}
 
-      {/* Transactions — full-width ledger */}
-      {activeTab === 'transactions' && (
+      {/* Trades — full-width blotter */}
+      {activeTab === 'trades' && (
         <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)', padding: isMobile ? '14px 12px' : '20px 24px' }}>
-          <TransactionLedger onSelectTicker={selectTicker} />
+          <TradesTable holdings={holdings} onSelectTicker={selectTicker} />
         </div>
       )}
 
