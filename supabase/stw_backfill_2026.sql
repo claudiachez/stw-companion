@@ -108,7 +108,8 @@ VALUES
   ('DPRO', (SELECT id FROM public.traders WHERE name='STW'), 'New', '2025-12-19', 1.5,
    'New position 12/19. Shares only @ $6.50.'),
   ('AVAV', (SELECT id FROM public.traders WHERE name='STW'), 'New', '2025-12-19', 0.7,
-   'Lotto: $245C Jan 09 26 @ $9.60. 0.7% weighting.');
+   'Lotto: $245C Jan 09 26 @ $9.60. 0.7% weighting.')
+ON CONFLICT (ticker, trader_id, action, event_date) DO NOTHING;
 
 -- ── JAN 2026 ───────────────────────────────────────────────────
 
@@ -125,7 +126,8 @@ VALUES
   ('GLDD', (SELECT id FROM public.traders WHERE name='STW'), 'New', '2026-01-15', 4.5,
    'New position. Shares @ $13.95 + $12.5C Mar 26 @ $1.75 avg.'),
   ('PANL', (SELECT id FROM public.traders WHERE name='STW'), 'New', '2026-01-22', 4.0,
-   'Greenland basket. Shares @ $7.23 + small $7.5C May 26.');
+   'Greenland basket. Shares @ $7.23 + small $7.5C May 26.')
+ON CONFLICT (ticker, trader_id, action, event_date) DO NOTHING;
 
 -- ── FEB 2026 ───────────────────────────────────────────────────
 
@@ -150,7 +152,8 @@ VALUES
   ('THR',  (SELECT id FROM public.traders WHERE name='STW'), 'Closed', '2026-02-26', 0.0,
    'Full exit. +50% from $36.59. Merger with CECO announced 2/24.'),
   ('IRDM', (SELECT id FROM public.traders WHERE name='STW'), 'New', '2026-02-27', 1.5,
-   'Options-only position. $22.5C Jul 17 26 @ $3.35 avg.');
+   'Options-only position. $22.5C Jul 17 26 @ $3.35 avg.')
+ON CONFLICT (ticker, trader_id, action, event_date) DO NOTHING;
 
 -- ── MAR 2026 ───────────────────────────────────────────────────
 
@@ -179,7 +182,8 @@ VALUES
   ('AMKR', (SELECT id FROM public.traders WHERE name='STW'), 'Hold', '2026-03-23', 16.0,
    'Portfolio update 3/23. Cash -4.3%.'),
   ('VIAV', (SELECT id FROM public.traders WHERE name='STW'), 'Hold', '2026-03-23', 9.0,
-   'Portfolio update 3/23.');
+   'Portfolio update 3/23.')
+ON CONFLICT (ticker, trader_id, action, event_date) DO NOTHING;
 
 -- ── APR 2026 ───────────────────────────────────────────────────
 
@@ -214,7 +218,8 @@ VALUES
   ('VLN',  (SELECT id FROM public.traders WHERE name='STW'), 'New', '2026-04-30', 5.5,
    'New position. Shares only @ $1.57.'),
   ('P',    (SELECT id FROM public.traders WHERE name='STW'), 'Upsized', '2026-04-30', 1.0,
-   'Raised from 0.5% → 1.0% same $75C Aug 26 contracts. Added more contracts.');
+   'Raised from 0.5% → 1.0% same $75C Aug 26 contracts. Added more contracts.')
+ON CONFLICT (ticker, trader_id, action, event_date) DO NOTHING;
 
 -- ── MAY 2026 ───────────────────────────────────────────────────
 
@@ -239,7 +244,8 @@ VALUES
   ('FIVN', (SELECT id FROM public.traders WHERE name='STW'), 'Upsized', '2026-05-28', 6.0,
    'Added $25C Oct 16 26 @ $3.70. Kept existing $22.5C Oct in full size. Weight → 6%.'),
   ('P',    (SELECT id FROM public.traders WHERE name='STW'), 'Closed', '2026-05-28', 0.0,
-   'Fully closed $75C Aug 26. Thesis broken after earnings.');
+   'Fully closed $75C Aug 26. Thesis broken after earnings.')
+ON CONFLICT (ticker, trader_id, action, event_date) DO NOTHING;
 
 -- ── JUN 2026 ───────────────────────────────────────────────────
 
@@ -288,7 +294,8 @@ VALUES
   ('ARKK', (SELECT id FROM public.traders WHERE name='STW'), 'New', '2026-06-11', 1.0,
    'Hedge. $70P Jun 18 26 @ $0.83. Portfolio hedge play.'),
   ('TE',   (SELECT id FROM public.traders WHERE name='STW'), 'New', '2026-06-11', 6.0,
-   'New position. Shares @ $7.87. 6% weighting.');
+   'New position. Shares @ $7.87. 6% weighting.')
+ON CONFLICT (ticker, trader_id, action, event_date) DO NOTHING;
 
 
 -- ================================================================
