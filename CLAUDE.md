@@ -14,9 +14,12 @@
 ## Current Status — schema migration in progress (handoff 2026-06-14)
 
 Active work: the **multi-trader / per-leg schema migration** on branch `claude/schema-multi-leg`
-(off `staging`; **nothing pushed or merged**). Authoritative worklist + full detail:
-[`plans/cutover_change_checklist.md`](plans/cutover_change_checklist.md); spec:
-[`plans/schema_migration_plan_v4.md`](plans/schema_migration_plan_v4.md).
+(off `staging`; **nothing pushed or merged; prod untouched**). Plan docs (all in `plans/`):
+- [`cutover_change_checklist.md`](plans/cutover_change_checklist.md) — authoritative worklist
+- [`schema_migration_plan_v4.md`](plans/schema_migration_plan_v4.md) — original spec
+- [`cutover_runbook.md`](plans/cutover_runbook.md) — ordered apply sequence + pre-flight + rollback
+- [`workstream2_routine_edits.md`](plans/workstream2_routine_edits.md) — line-level SKILL.md edits (Phase 1 + 2)
+- [`weight_backfill_followup.md`](plans/weight_backfill_followup.md) — deferred per-leg weight fill (hand-off prompt inside)
 
 **Done & validated (committed on `claude/schema-multi-leg`; not pushed):**
 - Migration files **022–036** authored in `supabase/migrations/`. `legs`/`leg_transactions`
@@ -38,9 +41,17 @@ Active work: the **multi-trader / per-leg schema migration** on branch `claude/s
     `mark_price_source='IBKR'` (proxy stays a pure pricer, echoes `leg_id`); `useDataStatus` off
     `last_pnl_at`. typecheck + 30 unit tests + both builds green.
 - **Legs backfill of record = `supabase/stw_backfill_2026.sql`** (full Dec 2025–Jun 2026 event
-  history, size-less %-model). Supersedes/retires `scripts/backfill_legs.ts`. **Validated on the
-  sandbox 2026-06-14** (ran clean; idempotent via `ON CONFLICT`; use the SQL editor's *Run without
-  RLS* — the linter false-flags a `shares` table). Re-run on prod after the migrations land.
+  history, size-less %-model). Supersedes/retires `scripts/backfill_legs.ts`. **Validated clean on
+  the sandbox 2026-06-14** (90 holding_transactions, 73 legs, statuses derive correctly, 44 holdings
+  get real initial weights). Idempotent via `ON CONFLICT`; **use the SQL editor's *Run without RLS***
+  — its linter false-flags a nonexistent `shares` table (the green "enable RLS" button is what threw
+  the `relation "shares" does not exist` error). Re-run on prod after the migrations land.
+  - **Per-leg `weight` is intentionally NULL** in this file (only holding-level weight captured), so
+    `legs.weight` is empty and the weighted-avg headline P&L can't roll up yet → **deferred
+    follow-up**: a separate `supabase/stw_leg_weights_2026.sql` (UPDATEs), see
+    [`plans/weight_backfill_followup.md`](plans/weight_backfill_followup.md).
+- **Migration 021 (`holdings.direction`) was DROPPED** — never applied to prod, superseded by
+  `legs.direction` (029). Migration set is now 022–036 (021 file removed).
 - **Prod has ONLY migration 022 applied** (`traders` table, rows `STW` + `Graddox`). Nothing else.
 - **Sandbox** (throwaway Supabase project `stw-schema-sandbox`, ref `uolabcgbnrkhzpwuvzlk`) holds the
   full 022–036 + new legs model + sample data; login `cc@claudiachez.com` / `SandboxTest1234!`.
@@ -63,19 +74,24 @@ Active work: the **multi-trader / per-leg schema migration** on branch `claude/s
 
 ## Next Steps
 
-All in-repo app work is done (Phase 1 + Phase 2). What remains is out-of-repo / user-triggered.
-Detail + dependencies in the checklist.
-1. **Routines (out-of-repo `~/Documents/Claude/Scheduled/*/SKILL.md`)** — Workstream 2 Phase 1
-   payload changes (trader_id, `on_conflict`, `channel_id`, `/signals`+`signals_data`+`date`,
-   dedupe upsert) then Phase 2 (stop writing `position_detail`/`last_action`/`current_weight` to
-   `holdings`; write `legs`/`leg_transactions` + `holding_transactions` rows). Skill/brand already
-   renamed to `graddox`; payloads NOT yet changed.
-2. **Cutover** (user-triggered): preview branch → apply 023–036 in order (**033 right after 026**) →
-   deploy app + routines.
-3. **Run the legs backfill** on the real book, then apply **034/035**.
-   - **Before 034:** ensure every holding has a `category_id` (the app sources `basket` from the
-     category join, falling back to `'Other'`; 034 may drop `holdings.basket`).
-4. **Deferred:** `$100k` notional portfolio + SPY benchmark (`spy_daily` already created in 032).
+All in-repo app work is done (Phase 1 + Phase 2) and the backfill is validated. What remains is
+out-of-repo / user-triggered. Full detail in the plan docs above.
+1. **Per-leg weight backfill (deferred, ready to start):** hand the prompt in
+   [`plans/weight_backfill_followup.md`](plans/weight_backfill_followup.md) to the agent with the
+   Discord history → it produces `supabase/stw_leg_weights_2026.sql` (UPDATEs `legs.weight` +
+   opening `leg_transactions.weight`; re-derives real per-leg weights from messages, 90/10 fallback).
+   Applied **after** the main backfill.
+2. **Routines (out-of-repo `~/Documents/Claude/Scheduled/*/SKILL.md`)** — apply the edits in
+   [`workstream2_routine_edits.md`](plans/workstream2_routine_edits.md): Phase 1 (trader_id,
+   `on_conflict`, `channel_id`, `/signals`+`signals_data`+`date`, new graddox `run_log` row) then
+   Phase 2 (write `legs`/`leg_transactions`+`holding_transactions`; `basket`→`category_id`). **Apply
+   only inside the cutover window** — applying early breaks every cron write. Payloads NOT yet changed.
+3. **Cutover** (user-triggered): follow [`cutover_runbook.md`](plans/cutover_runbook.md) — preview
+   branch → apply 023–032 + 036 in order (**033 right after 026**) → run the backfill (+ weights
+   file) → deploy app + Phase-1 routines.
+4. **After backfill confirmed:** ensure every holding has a `category_id` (app falls back to
+   `'Other'`), then apply **034/035** and deploy Phase-2 routines.
+5. **Deferred:** `$100k` notional portfolio + SPY benchmark (`spy_daily` already created in 032).
 
 ---
 
