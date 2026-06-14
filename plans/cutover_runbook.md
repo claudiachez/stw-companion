@@ -27,12 +27,17 @@ legs), `0` on close/expire/exercise, stated holding weight on the 4 trims. EXERC
 leg (`parent_leg_id`, entry = strike + premium). AMRC option leg omitted (strike unknown). 44
 tickers; ~90 holding events, 73 leg shells, ~119 leg events.
 
-> ⚠️ **NOT yet executed** — it must be run on the **sandbox / preview branch** (which has 022–036)
-> before it's trusted on prod. Two residual risks a run will surface: (a) Section 0's `holdings`
-> identity insert assumes `current_weight`/`initial_weight`/`last_action` are the only NOT-NULL
-> columns beyond the PK — confirm the real NOT-NULL set; (b) any `legs` leg_id subquery that finds
-> no match → NULL leg_id → insert error (the multi-leg disambiguators use ticker+strike+expiry, and
-> ticker+instrument_type+opened_at for share lots).
+> ✅ **Validated on the sandbox (2026-06-14)** — ran clean end-to-end against the live 022–036
+> schema. Section 0's `holdings` identity insert succeeded (NOT-NULL set was fine), every leg_id
+> subquery resolved, and the triggers derived leg state without error. Made idempotent during
+> validation: Section 1 uses `ON CONFLICT (ticker,trader_id,action,event_date) DO NOTHING`.
+>
+> Two gotchas seen while validating, for the prod run: (a) clear any pre-existing
+> `legs`/`leg_transactions`/`holding_transactions` for STW first if re-loading, or the
+> `holding_transactions` unique key collides (the `ON CONFLICT` now absorbs that); (b) Supabase's
+> SQL-editor RLS linter **falsely** flags "creates a table shares" — click **Run without RLS**
+> (the "Run and enable RLS" button appends an `ALTER TABLE shares … RLS` that fails, since the
+> file creates no tables).
 
 ---
 

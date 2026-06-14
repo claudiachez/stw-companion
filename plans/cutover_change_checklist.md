@@ -39,8 +39,10 @@ Decided with the user and implemented + sandbox-validated:
   - **Backfill of record = `supabase/stw_backfill_2026.sql`** (decided 2026-06-14): the full
     Dec 2025–Jun 2026 event history, adapted to the size-less %-model. Supersedes the snapshot
     `scripts/backfill_legs.ts` (retired, with `scripts/_position_detail_parse.ts`). Per-leg weights
-    NULL where unstated; exercise spawns a SHARES leg. **Pending sandbox/preview validation run.**
-    See the runbook's Step 3 + [`plans/cutover_runbook.md`](cutover_runbook.md).
+    NULL where unstated; exercise spawns a SHARES leg. **✅ Validated on the sandbox 2026-06-14**
+    (ran clean end-to-end; Section 1 made idempotent via `ON CONFLICT … DO NOTHING`; use the
+    editor's **Run without RLS** — the RLS linter false-flags a phantom `shares` table). See the
+    runbook's Step 3 + [`plans/cutover_runbook.md`](cutover_runbook.md).
 - **`$100k` notional portfolio + SPY benchmark: deferred** (separate follow-up; legs don't depend
   on it). With per-leg weights it's now fully computable later.
 
