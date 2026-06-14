@@ -37,7 +37,9 @@ Active work: the **multi-trader / per-leg schema migration** on branch `claude/s
   - Admin **per-leg weight editor** (`TradeEditForm`); `IbkrBadge` writes `legs.mark_price`/
     `mark_price_source='IBKR'` (proxy stays a pure pricer, echoes `leg_id`); `useDataStatus` off
     `last_pnl_at`. typecheck + 30 unit tests + both builds green.
-- `backfill_legs.ts` rewritten for the weight model + validated.
+- **Legs backfill of record = `supabase/stw_backfill_2026.sql`** (full Dec 2025–Jun 2026 event
+  history, size-less %-model). Supersedes/retires `scripts/backfill_legs.ts`. Pending a
+  sandbox/preview validation run before prod.
 - **Prod has ONLY migration 022 applied** (`traders` table, rows `STW` + `Graddox`). Nothing else.
 - **Sandbox** (throwaway Supabase project `stw-schema-sandbox`, ref `uolabcgbnrkhzpwuvzlk`) holds the
   full 022–036 + new legs model + sample data; login `cc@claudiachez.com` / `SandboxTest1234!`.

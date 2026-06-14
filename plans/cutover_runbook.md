@@ -12,19 +12,27 @@ it is the ordered checklist to run in the window.
 
 ---
 
-## ✅ P0 — backfill script fixed (2026-06-14)
+## Backfill of record — `supabase/stw_backfill_2026.sql` (decided 2026-06-14)
 
-**Was:** `scripts/backfill_legs.ts` imported `parseOptionLegs`/`parseCostBasis`/`inferDirection` from
-`@stw/shared` utils that the Phase-2 rework (commit `091c76d`) deleted (`options.ts` removed,
-`positions.ts` trimmed to types) — so it wouldn't run, blocking the backfill (a 034 prerequisite).
+The authoritative backfill is now the **full-history SQL file** `supabase/stw_backfill_2026.sql`
+(user-authored Dec 2025 → Jun 2026 event history; adapted 2026-06-14 to the size-less %-model).
+It supersedes the snapshot script. **`scripts/backfill_legs.ts` and `scripts/_position_detail_parse.ts`
+are RETIRED** (removed from the repo; recoverable from git history if ever needed). The earlier "P0
+backfill-script fix" is therefore moot.
 
-**Fixed:** recovered those four symbols (`OptionLeg`, `parseOptionLegs`, `parseCostBasis`,
-`inferDirection`) verbatim from commit `70ab338` into a self-contained
-`scripts/_position_detail_parse.ts`; repointed the backfill's imports there. `@stw/shared` stays
-clean (it deliberately dropped `position_detail` parsing). Verified: the script loads (reaches its
-env check, no module error) and the parsers smoke-test correctly (`Common @ $30.10 + $30C Jun '26 …`
-→ cost basis 30.1, two option legs, long/short direction). The module is disposable once the
-real-book backfill has run.
+The adapted file: 4 sections — **0 holdings identity** (FK target; trigger 031 only UPDATEs) → **1
+holding_transactions** → **2 legs shells** → **3 leg_transactions** (trigger 030 derives entry/
+status/exit/realized %). Size-less: no quantities; per-leg `weight` is NULL where unstated (open
+legs), `0` on close/expire/exercise, stated holding weight on the 4 trims. EXERCISE spawns a SHARES
+leg (`parent_leg_id`, entry = strike + premium). AMRC option leg omitted (strike unknown). 44
+tickers; ~90 holding events, 73 leg shells, ~119 leg events.
+
+> ⚠️ **NOT yet executed** — it must be run on the **sandbox / preview branch** (which has 022–036)
+> before it's trusted on prod. Two residual risks a run will surface: (a) Section 0's `holdings`
+> identity insert assumes `current_weight`/`initial_weight`/`last_action` are the only NOT-NULL
+> columns beyond the PK — confirm the real NOT-NULL set; (b) any `legs` leg_id subquery that finds
+> no match → NULL leg_id → insert error (the multi-leg disambiguators use ticker+strike+expiry, and
+> ticker+instrument_type+opened_at for share lots).
 
 ---
 
@@ -126,22 +134,24 @@ Resulting order: `(022 done) → 023 → 024 → 025 → 026 → 033 → 027 →
 
 ## Step 3 — Backfill `legs` on the real book
 
-> Requires the **P0 fix** above. Confirm 029/030 are applied first; 034 must NOT be applied yet.
+> Run `supabase/stw_backfill_2026.sql` in the Supabase **SQL editor**. Confirm 023–032 + 036 are
+> applied first (legs/leg_transactions/triggers exist); 034 must NOT be applied yet (the file's
+> source data was parsed from the legacy text, but the file itself only writes the new tables).
 
-```bash
-export SUPABASE_URL="https://<cutover-target-ref>.supabase.co"
-export SUPABASE_SERVICE_ROLE_KEY="<service role key for that target>"
-pnpm dlx tsx scripts/backfill_legs.ts                      # dry run, all open holdings
-pnpm dlx tsx scripts/backfill_legs.ts --ticker ADEA         # spot-check one
-pnpm dlx tsx scripts/backfill_legs.ts --overrides f.json --apply   # apply with per-leg weight overrides
-```
-- The script seeds **open** holdings only by default (closed lifecycle belongs to the later
-  message-replay). Provide real per-leg weights from chat in the overrides file where known; else
-  the 90/10 default applies. Resolve month-only expiries via `expiry_day` overrides.
+Execute the four sections **in order** (0 holdings → 1 holding_transactions → 2 legs → 3
+leg_transactions). The triggers do the rest (031 drives holdings; 030 derives leg state). After it
+runs, spot-check a few holdings in the app (ADEA mixed, CXDO long history, BLDP closed, an exercise
+like VIAV/AMKR with its spawned share lot).
+
+- **Validate on the sandbox/preview FIRST** (see the ⚠️ above) — fix any NOT-NULL / leg_id-subquery
+  errors there before prod.
+- **Per-leg weights are NULL** for open legs (decided) → holdings' weighted-avg P&L is incomplete
+  until you fill them; per-leg P&L still shows. Holding-level weight is set (Section 1 → trigger 031).
+- **AMRC** option leg is omitted (unknown strike) — add a real strike and uncomment to include it.
 - **Data-transfer caveat:** a Supabase branch **merge applies migrations to prod, it does not copy
-  data rows.** If you backfill on the preview branch, the `legs`/`leg_transactions` rows do **not**
-  travel to prod on merge — the backfill must be **re-run against prod** after merge. Decide where
-  the authoritative backfill runs (see Decisions).
+  data rows.** If you run the backfill on the preview branch, those `legs`/`holding_transactions`
+  rows do **not** travel to prod on merge — re-run the file against prod after merge. Decide where
+  the authoritative run happens (see Decisions).
 
 ---
 

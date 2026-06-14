@@ -36,8 +36,11 @@ Decided with the user and implemented + sandbox-validated:
     spawns a SHARES leg at `entry = strike + premium` (`parent_leg_id` set) that carries the
     continuing %. Validated: open / partial-trim / full-close / expire / exercise all derive
     correctly via the trigger.
-  - **Backfill rewritten** for this model — no more per-leg size gaps; weight from 90/10 default,
-    month-only expiries → 3rd Friday. Dry-run + apply validated on the sandbox (ADEA → 4 legs).
+  - **Backfill of record = `supabase/stw_backfill_2026.sql`** (decided 2026-06-14): the full
+    Dec 2025–Jun 2026 event history, adapted to the size-less %-model. Supersedes the snapshot
+    `scripts/backfill_legs.ts` (retired, with `scripts/_position_detail_parse.ts`). Per-leg weights
+    NULL where unstated; exercise spawns a SHARES leg. **Pending sandbox/preview validation run.**
+    See the runbook's Step 3 + [`plans/cutover_runbook.md`](cutover_runbook.md).
 - **`$100k` notional portfolio + SPY benchmark: deferred** (separate follow-up; legs don't depend
   on it). With per-leg weights it's now fully computable later.
 
