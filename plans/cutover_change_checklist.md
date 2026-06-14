@@ -54,12 +54,10 @@ notes below are the actionable takeaways.
    `null value in column "trader_id"` on every holdings write until 033 replaces it. Sequence
    at cutover: …025 → 026 → **033** → 027 → 028 → 029 → 030 → 031 → 032.
 
-2. **Migration 021 (`holdings.direction`) was never applied to prod** — prod `holdings` has
-   no `direction` column (only `holding_transactions.direction`, from 020, exists). The repo
-   migration files imply 021 is live; it isn't. Action: decide whether to apply 021 or drop
-   the file. The backfill script + app default direction via `inferDirection(position_detail)`,
-   so this is not a blocker — but `apps/.../api.ts` `Holding.direction` and `TradeEditForm`
-   reference it; confirm they degrade gracefully (they read it as nullable).
+2. **Migration 021 (`holdings.direction`) — DROPPED (2026-06-14).** It was never applied to prod and
+   is superseded by `legs.direction` (029). `021_holding_direction.sql` was removed from the repo, so
+   repo = prod (the column simply doesn't exist on `holdings`). `Holding.direction` is read as
+   nullable and `select('*')` omits the absent column — no error. No cutover action.
 
 3. **Backfill reality — contract SIZE is a manual override for EVERY leg.** Neither
    `position_detail` nor `ibkr_legs` carries a share/contract count (`ibkr_legs` is price-only:
