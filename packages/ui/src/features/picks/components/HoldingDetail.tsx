@@ -1,18 +1,13 @@
 import { useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import type { Holding } from '../api';
 import { TIERS, ACTION_VARS, bColor, parseCostBasis, positionType, resolvePnl, mergeLegs, legPriceReason, fmtDateTime } from '@stw/shared';
 import { useQuote } from '../../../hooks/useLivePrice';
 import { usePriceCacheStore } from '../../../store/priceCache';
 import { useCapabilities } from '../../../context/AppCapabilities';
-import { useAuthStore } from '../../../store/auth';
 import { HoldingEditForm } from './HoldingEditForm';
 import { TransactionTimeline } from './TransactionTimeline';
 import { ConvictionTimeline } from './ConvictionTimeline';
-import { CommentRow } from './CommentRow';
 import { useHoldingTransactions } from '../useHoldingHistory';
-import { useLatestComment } from '../useLatestComment';
-import { deleteConvictionComment } from '../api';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -71,20 +66,8 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
   const { canEdit, canViewHistory, isAdmin } = useCapabilities();
   const showHistory = canViewHistory || isAdmin;
   const { data: txData = [] } = useHoldingTransactions(showHistory && h.ticker !== 'CASH' ? h.ticker : '');
-  const { data: latestComment } = useLatestComment(showHistory && h.ticker !== 'CASH' ? h.ticker : '');
-  const user = useAuthStore((s) => s.user);
-  const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
 
-  async function handleDeleteComment(id: number) {
-    try {
-      await deleteConvictionComment(id);
-      queryClient.invalidateQueries({ queryKey: ['latest-comment', h.ticker] });
-      queryClient.invalidateQueries({ queryKey: ['conviction-comments', h.ticker] });
-    } catch {
-      // silently ignore
-    }
-  }
   const quote       = useQuote(h.ticker);
   const fetchStatus = usePriceCacheStore((s) => s.fetchStatus);
   const tier        = TIERS[h.conviction] ?? TIERS[0];
@@ -571,31 +554,18 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
           </div>
         )}
 
-        {/* Latest Comments — the single newest host note (Discord or stream); the rest live in history */}
-        {showHistory && h.ticker !== 'CASH' && latestComment && (
-          <div style={{ marginBottom: 4 }}>
-            <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 2 }}>
-              Latest Comments
-            </div>
-            <CommentRow
-              cc={latestComment}
-              currentUserId={user?.id ?? null}
-              canEdit={!!canEdit}
-              onDelete={handleDeleteComment}
-            />
-          </div>
+        {/* Commentary — one unified conviction_comments feed (host Discord/stream notes +
+            subscriber personal notes), newest first. Replaces the old Latest Comments /
+            Conviction Notes split. */}
+        {showHistory && h.ticker !== 'CASH' && (
+          <HistorySection title="Commentary">
+            <ConvictionTimeline ticker={h.ticker} currentConviction={h.conviction} />
+          </HistorySection>
         )}
-
-        {/* Transaction History & Conviction Notes — premium + admin only */}
+        {/* Transaction History — moved to the bottom so it no longer interrupts the narrative */}
         {showHistory && h.ticker !== 'CASH' && (txData.length > 0 || canEdit) && (
           <HistorySection title="Transaction History">
             <TransactionTimeline ticker={h.ticker} />
-          </HistorySection>
-        )}
-        {/* Conviction Notes: always visible for premium+ so they can add personal notes */}
-        {showHistory && h.ticker !== 'CASH' && (
-          <HistorySection title="Conviction Notes">
-            <ConvictionTimeline ticker={h.ticker} currentConviction={h.conviction} excludeId={latestComment?.id} />
           </HistorySection>
         )}
       </div>

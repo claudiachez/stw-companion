@@ -11,6 +11,58 @@
 
 ---
 
+## Current Status — schema migration in progress (handoff 2026-06-14)
+
+Active work: the **multi-trader / per-leg schema migration** on branch `claude/schema-multi-leg`
+(off `staging`; **nothing pushed or merged**). Authoritative worklist + full detail:
+[`plans/cutover_change_checklist.md`](plans/cutover_change_checklist.md); spec:
+[`plans/schema_migration_plan_v4.md`](plans/schema_migration_plan_v4.md).
+
+**Done & validated (uncommitted working tree → being committed at handoff):**
+- Migration files **022–036** authored in `supabase/migrations/`. `legs`/`leg_transactions`
+  (029/030) use a **size-less, %-P&L, event-sourced** model (see Key decisions); 036 adds a
+  `holding_transactions` dedupe constraint.
+- **Phase-1 app code** done + browser-verified: `trader_id` stamped on inserts (via
+  `features/traders/api.ts` `getTraderId`), `graddox`→`signals` read, unified **Commentary**
+  section in `HoldingDetail`, guard rails A (back-date block on "+ Add Event") + B (dedupe upsert).
+- `backfill_legs.ts` rewritten for the weight model + validated.
+- **Prod has ONLY migration 022 applied** (`traders` table, rows `STW` + `Graddox`). Nothing else.
+- **Sandbox** (throwaway Supabase project `stw-schema-sandbox`, ref `uolabcgbnrkhzpwuvzlk`) holds the
+  full 022–036 + new legs model + sample data; login `cc@claudiachez.com` / `SandboxTest1234!`.
+  Point a dev server at it via a temporary `apps/<app>/.env.local`. (Service-role key is NOT in
+  the repo — ask the user.)
+
+**Key design decisions (this migration):**
+- No share/contract counts exist anywhere — only the host's **weight**. `legs` store
+  `entry_price` + per-leg `weight` + `mark_price`/`exit_price`/`realized_pnl_pct`; **P&L is %**
+  (`(mark−entry)/entry×100`). Per-leg weight = stated in chat, else **90/10 default** (mixed:
+  90% shares / 10% across options; options-only: even; shares-only: 100%), admin-overridable.
+- `leg_transactions` is a **quantity-free event log** → trigger derives leg state (replay-safe).
+- **Exercise is common**: option leg → `EXERCISED` / `realized_pnl_pct = null`; a SHARES leg is
+  spawned at `strike + premium` (`parent_leg_id`) and carries the continuing %.
+- Trigger inversion: `holding_transactions` → trigger 031 → `holdings`. The "+ Add Event" form
+  fires 031 (propagates to the live position); back-dating is blocked.
+- Apply order at cutover: **033 immediately after 026** (026 breaks writes until 033 lands).
+
+## Next Steps
+
+In priority order (all in-repo unless noted). Detail + dependencies in the checklist.
+1. **Phase-2 app reader rework** *(biggest; gates 034/035)* — move the Trades tab + holdings
+   reads off `position_detail`/`ibkr_legs`/`last_pnl_pct` onto `legs`/`leg_transactions` with
+   **%**-P&L; trim the `Holding`/`HoldingTransaction` types; drop `leg`-ordering & `fetchMaxLeg`.
+2. **Admin per-leg weight editor** — UI to override the 90/10 default split.
+3. **Admin IBKR proxy** (`apps/admin/ibkr_proxy.py`) — write `legs.mark_price` /
+   `mark_price_source='IBKR'` instead of `holdings` columns.
+4. **Routines (out-of-repo `~/Documents/Claude/Scheduled/*/SKILL.md`)** — Workstream 2 Phase 1
+   payload changes (trader_id, `on_conflict`, `channel_id`, `/signals`+`signals_data`+`date`,
+   dedupe upsert) then Phase 2 (write `legs`/`leg_transactions`). Skill/brand already renamed to
+   `graddox`; payloads NOT yet changed.
+5. **Cutover** (user-triggered): preview branch → apply 023–036 → deploy app + routines.
+6. **Run the legs backfill** on the real book, then apply **034/035**.
+- **Deferred:** `$100k` notional portfolio + SPY benchmark (`spy_daily` already created in 032).
+
+---
+
 ## One Monorepo, Two App Shells
 
 This is a single pnpm workspace. Two thin app shells consume the same shared
@@ -141,7 +193,7 @@ repo**. Know who writes what before you reason about freshness or "why is this r
 | Table | Primary writer | Notes |
 |---|---|---|
 | `holdings` | **the routines** (see next section) | core position rows; admin Edit form also writes; admin IBKR proxy writes only `last_pnl_*`/`ibkr_legs` |
-| `graddox` / `graddox_levels` | **morning routine** (Gradoxx step) | GEX signal bias + levels |
+| `graddox` / `graddox_levels` | **morning routine** (Graddox step) | GEX signal bias + levels |
 | `conviction_comments` | **the routines** + `stw-transcripts` | explicit appends; `source` = `discord` or `streaming`; admin/users can also add notes |
 | `holding_transactions` | **DB trigger** (no client) | auto-logged from any `holdings` write; never written directly by app or routine |
 | `run_log` | **the routines** | ingestion audit + high-water mark; newest `digest` → "Latest Portfolio Changes" |
@@ -174,7 +226,7 @@ documented here because the Supabase schema is the contract between it (writer) 
 
 | Routine | Cadence | Reads (Discord channel) | Writes |
 |---|---|---|---|
-| `stw-morning-run` | 9am wkdays | Gradoxx → `live-notes-portfolio` → (fallback) `stream-library-stw` | `graddox`, `graddox_levels`, `holdings`, `conviction_comments`, `run_log` |
+| `stw-morning-run` | 9am wkdays | Graddox → `live-notes-portfolio` → (fallback) `stream-library-stw` | `graddox`, `graddox_levels`, `holdings`, `conviction_comments`, `run_log` |
 | `stw-afternoon-run` | 3pm wkdays | `live-notes-portfolio` → (fallback) `stream-library-stw` | `holdings`, `conviction_comments`, `run_log` |
 | `stw-friday-weighting` | 5pm Fri | `updates-portfolio` (weekly full snapshot) | `holdings` (weights only), `run_log` |
 | `stw-transcripts` | manual (+ daily fallback) | `stream-library-stw` (webinar recording) | methodology `.md` (local), `holdings`, `conviction_comments`, `run_log` |
@@ -185,7 +237,7 @@ documented here because the Supabase schema is the contract between it (writer) 
 3. That `holdings` write **auto-fires the DB trigger** → a `holding_transactions` row (no client code).
 4. For notable commentary, **append a `conviction_comments` row** (`source='discord'`) → becomes "Latest Comments"; refresh `holdings.summary`/`bullets` + `dd_updated_at` only when the durable thesis actually changed.
 5. Write the `run_log` mark, including a multi-line **`digest`** → rendered as "Latest Portfolio Changes" in the Overview.
-6. **Recording fallback:** if `stream-library-stw` has an unprocessed recording, delegate to `stw-transcripts`. (Morning also runs the Gradoxx GEX step first → `graddox`/`graddox_levels`.)
+6. **Recording fallback:** if `stream-library-stw` has an unprocessed recording, delegate to `stw-transcripts`. (Morning also runs the Graddox GEX step first → `graddox`/`graddox_levels`.)
 
 **Weekly flow (Friday):** read the full-portfolio snapshot from `updates-portfolio` and **truth-up every holding's `current_weight`** to match it (this is the weighting source of record; daily calls only nudge weights). A ticker in `holdings` but absent from the snapshot is flagged, not auto-closed.
 

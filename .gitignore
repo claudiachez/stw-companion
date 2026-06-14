@@ -14,3 +14,6 @@ apps/admin/dist/
 # Python build artifacts (ibkr_proxy.py)
 __pycache__/
 *.pyc
+
+# Local DB snapshots (contain subscriber PII — never commit)
+backups/

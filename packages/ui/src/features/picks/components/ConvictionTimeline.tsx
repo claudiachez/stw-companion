@@ -10,15 +10,14 @@ import { useAuthStore } from '../../../store/auth';
 interface Props {
   ticker: string;
   currentConviction: number;
-  /** Row id featured in the "Latest Comments" block — excluded here so it isn't shown twice. */
-  excludeId?: number;
 }
 
-export function ConvictionTimeline({ ticker, currentConviction, excludeId }: Props) {
+// Unified "Commentary" feed: every conviction_comments row for the ticker, newest first
+// (host Discord/stream notes + subscriber personal notes), with + Add Note at the bottom.
+export function ConvictionTimeline({ ticker, currentConviction }: Props) {
   const { canEdit, canViewHistory, isAdmin } = useCapabilities();
   const user = useAuthStore((s) => s.user);
-  const { data: allComments = [], isLoading } = useConvictionComments(ticker);
-  const comments = excludeId != null ? allComments.filter((c) => c.id !== excludeId) : allComments;
+  const { data: comments = [], isLoading } = useConvictionComments(ticker);
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
 
@@ -44,7 +43,7 @@ export function ConvictionTimeline({ ticker, currentConviction, excludeId }: Pro
   return (
     <div>
       {comments.length === 0 && !showForm && (
-        <div style={{ fontSize: 12, color: 'var(--t3)', padding: '4px 0' }}>No conviction notes yet.</div>
+        <div style={{ fontSize: 12, color: 'var(--t3)', padding: '4px 0' }}>No commentary yet.</div>
       )}
 
       <div>

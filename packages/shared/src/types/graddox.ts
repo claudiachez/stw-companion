@@ -29,7 +29,8 @@ export interface LogEntry {
 // LevelSets; `signals`/`log` are JSONB arrays. `spx_price`/`qqq_price` are the
 // captured spot at `last_updated` (SPX scale; SPY level cards divide by 10).
 export interface GraddoxData {
-  id: number;
+  // uuid PK after migration 028 (per-trader, per-day rows).
+  id: string;
   date: string;
   last_updated: string;
   bias: BiasLabel;

@@ -4,6 +4,8 @@ import type { Direction } from '../utils/positions';
 export interface HoldingTransaction {
   id: number;
   ticker: string;
+  /** Owning trader (NOT NULL after migration 026). */
+  trader_id: string;
   leg: number;
   action: ActionType;
   event_date: string;
@@ -22,6 +24,8 @@ export type ConvictionSource = 'discord' | 'streaming' | 'manual';
 export interface ConvictionComment {
   id: number;
   ticker: string;
+  /** Owning trader (NOT NULL after migration 026). */
+  trader_id: string;
   event_date: string;
   conviction_level: ConvictionLevel;
   comment: string;

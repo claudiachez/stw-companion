@@ -21,8 +21,9 @@ interface Props {
 
 export function TransactionEventForm({ ticker, defaultLeg, onDone }: Props) {
   const queryClient = useQueryClient();
+  const today = new Date().toISOString().slice(0, 10);
   const [action, setAction] = useState<typeof ACTIONS[number]>('New');
-  const [eventDate, setEventDate] = useState(new Date().toISOString().slice(0, 10));
+  const [eventDate, setEventDate] = useState(today);
   const [leg, setLeg] = useState(String(defaultLeg));
   const [weight, setWeight] = useState('');
   const [positionDetail, setPositionDetail] = useState('');
@@ -34,6 +35,13 @@ export function TransactionEventForm({ ticker, defaultLeg, onDone }: Props) {
 
   async function save() {
     if (!eventDate) { setError('Event date is required.'); return; }
+    // Guard rail (Option A): a manual event now propagates to the live position via trigger
+    // 031, so back-dating would rewind last_action/action_date. Block it — historical events
+    // belong to the message-replay backfill, not this form.
+    if (eventDate < today) {
+      setError('Back-dating is disabled — this entry updates the live position. Use today or later.');
+      return;
+    }
     setSaving(true);
     setError('');
     try {
@@ -74,7 +82,7 @@ export function TransactionEventForm({ ticker, defaultLeg, onDone }: Props) {
         </div>
         <div>
           <label style={labelStyle}>Event Date</label>
-          <input style={fieldStyle} type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} />
+          <input style={fieldStyle} type="date" value={eventDate} min={today} onChange={(e) => setEventDate(e.target.value)} />
         </div>
         <div>
           <label style={labelStyle}>Leg #</label>
