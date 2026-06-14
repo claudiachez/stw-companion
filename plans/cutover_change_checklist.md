@@ -88,11 +88,17 @@ notes below are the actionable takeaways.
 > **FLAG — not in this repo. These are the five cron skills. They must all change
 > simultaneously at cutover or the first post-cutover run fails.** I cannot edit them from
 > here; this is the spec to apply to each SKILL.md.
+>
+> **Line-level worklist (exact before/after, UUID resolution, payload skeletons):**
+> [`plans/workstream2_routine_edits.md`](workstream2_routine_edits.md) — drafted + decision-complete
+> 2026-06-14. Apply the SKILL.md edits **only inside the cutover window** (the cron tasks run against
+> prod on a timer — applying Phase 1 early breaks every write until the migrations land).
 
 **All routines that upsert `holdings`** (`stw-morning-run`, `stw-afternoon-run`,
 `stw-friday-weighting`, `stw-transcripts`):
 - [ ] Add `"trader_id": "<STW uuid>"` to every `holdings` payload
-- [ ] Change conflict target `on_conflict=ticker` → `on_conflict=ticker,trader_id`
+- [ ] Add `?on_conflict=ticker,trader_id` to the upsert URL (the current curls have **no**
+      `on_conflict` param — they rely on the old single-column `ticker` PK; this is an add)
 
 **All routines that insert `conviction_comments`:**
 - [ ] Add `"trader_id": "<STW uuid>"` to every payload
@@ -102,16 +108,21 @@ notes below are the actionable takeaways.
 - [ ] High-water-mark read: `channel=eq.<name>` → `channel_id=eq.<channel uuid>`
 
 **`graddox-daily-summary` skill** (writes the signals table):
-- [ ] Endpoint `/rest/v1/graddox` → `/rest/v1/signals`
+- [ ] Endpoint `/rest/v1/graddox` → `/rest/v1/signals?on_conflict=trader_id,date`
+      (the `on_conflict` is required — `signals_trader_date_unique` backs it)
 - [ ] Remove `"id": 1` from the payload entirely (id is now uuid default)
 - [ ] Add `"trader_id": "<Graddox uuid>"`
 - [ ] Rename payload key `"signals": [...]` → `"signals_data": [...]`
 - [ ] **Always set `"date"`** — it is half the conflict key; a NULL date never conflicts
       and silently duplicates
-- [ ] Upsert conflict target `on_conflict=trader_id,date` (backed by `signals_trader_date_unique`)
 
-**`stw-morning-run` Graddox-step `run_log` write:**
-- [ ] Use `channel_id` for the `graddox-vip` channel UUID
+**`graddox-daily-summary` `run_log` write — NEW (decided 2026-06-14: add it):**
+- [ ] The GEX step currently writes **no** `run_log` row. Add one (in `graddox-daily-summary` itself,
+      so both the standalone and `stw-morning-run` PART 1 paths log it): `run_type="graddox"`,
+      `channel_id="<CH_GRADDOX>"` (discord id `1149448308293632110`; 023 seeds it as `graddox`, not
+      "graddox-vip"), newest graddox msg ts/id, verify non-empty body. Gating the GEX read on this
+      high-water mark is optional/future. `stw-morning-run` PART 1 needs no separate write — the
+      delegated skill now writes the row.
 
 ### Workstream 3 — App code (this repo, `@stw/ui` + `@stw/shared`)
 
@@ -199,13 +210,24 @@ per-leg weight override only (no full leg CRUD).
 
 ### Workstream 2 — Routines Phase 2
 
+> Full event-model spec (per-host-action ordering table, 90/10 weight default, curl templates):
+> [`plans/workstream2_routine_edits.md`](workstream2_routine_edits.md) §Phase 2.
+
 **`stw-morning-run` + `stw-afternoon-run`:**
-- [ ] Stop writing `position_detail` to `holdings`
-- [ ] Stop writing `exit_price` / `exit_pnl_pct` to `holdings` — write to the closed `legs` row
+- [ ] Stop writing `position_detail` to `holdings` (column dropped in 034)
+- [ ] Stop writing `exit_price` / `exit_pnl_pct` to `holdings` — the closing `SELL`
+      `leg_transaction` (price = exit) lets trigger 030 book `exit_price`/`realized_pnl_pct` on the leg
 - [ ] Stop writing `last_action` / `action_date` / `current_weight` directly to `holdings` —
-      insert a `holding_transactions` row instead; trigger 031 propagates upward
-- [ ] Create a `legs` row for every new position
+      upsert a `holding_transactions` row instead (`on_conflict=ticker,trader_id,action,event_date`,
+      migration 036); trigger 031 propagates upward
+- [ ] Create a `legs` row for every new position (size-less: `entry_price` + `weight` per leg)
 - [ ] Insert a `leg_transactions` row for every BUY / SELL / TRIM / EXERCISE / EXPIRE
+- [ ] **Exercise:** insert the spawned SHARES `legs` row (`entry_price=strike+premium`,
+      `parent_leg_id`) + its opening `BUY` after the option leg's `EXERCISED` event
+- [ ] **`basket` → `category_id`** (034 drops `holdings.basket`): resolve/create the category via
+      upsert on `(trader_id, name)` and write `category_id` on the holdings upsert, not `basket`
+      text. **Decided 2026-06-14: the routine creates categories** (keep to the seeded theme
+      vocabulary so `baskets.ts` colors resolve).
 
 **`stw-friday-weighting`:**
 - [ ] Stop writing `current_weight` directly to `holdings`
@@ -221,10 +243,16 @@ per-leg weight override only (no full leg CRUD).
       `holdings.last_pnl_pct`/`last_pnl_at`/`ibkr_legs`. `ibkr_proxy.py` echoes `leg_id` back
       (docstring updated); `parseOptionLegs(position_detail)` removed from the badge.
 
-### Routine docs (all three skills)
-- [ ] Replace the contradictory conviction-notes language in `stw-transcripts` STEP 5 (and
-      apply consistently to morning/afternoon) with the corrected paragraph in plan
-      Workstream 3 (explicit curl INSERT incl. `trader_id`, no trigger/RPC, no archiving).
+### Routine docs (stale "auto-archive trigger" language — `stw-transcripts`)
+`stw-transcripts` still describes conviction notes as trigger-written / auto-archived, contradicting
+its own STEP 5 body (which already says "no archive trigger — write each piece directly"). Morning/
+afternoon already use the correct explicit language. Fix the three spots:
+- [ ] **Header** (~lines 13–16): "the **previous note is auto-archived to the conviction history**"
+      → conviction notes are explicit `conviction_comments` inserts; dashboard renders all rows
+      newest-first (no archiving, no trigger).
+- [ ] **Context** (~line 26): "`conviction_comments` (written **automatically** by a trigger — see
+      STEP 5)" → "written explicitly via curl — one INSERT per ticker; no trigger, no RPC."
+- [ ] **STEP 7 confirm block** (~line 271): "prior note archived to history" → "added to commentary".
 
 ---
 
