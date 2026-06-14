@@ -23,7 +23,6 @@ export interface Holding {
   action_date: string | null;
   initial_weight: number | null;
   current_weight: number;
-  position_detail: string | null;
   summary: string;
   bullets: string[];
   updated_at?: string;

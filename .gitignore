@@ -7,6 +7,8 @@ apps/web/dist/
 apps/admin/dist/
 .env
 **/.env
+.env.local
+**/.env.local
 
 # IBKR proxy local TLS material (never commit)
 *.pem

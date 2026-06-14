@@ -164,26 +164,38 @@ notes below are the actionable takeaways.
 
 ## Phase 2 — after `legs` backfill confirmed (with migrations 034–035)
 
-### ⚠️ FLAG — the biggest app change is implied, not enumerated in the plan
+### ✅ DONE 2026-06-14 — app reader rework (was the biggest, implied app change)
 
-Migration 034 drops `holdings.position_detail`, `ibkr_legs`, `last_price`, `last_pnl_pct`,
-`exit_price`, `exit_pnl_pct`, `basket`. The **Trades tab and options-leg display read all of
-these today** and must move to `legs` / `leg_transactions` **before** 034 lands, or the Picks
-page breaks. This is the reader half of the legs migration:
-- [ ] `packages/ui/src/features/picks/api.ts` — `fetchHoldings` `select('*')` + the `Holding`
-      interface (`:14-37`) reference the dropped columns. Add `fetchLegs(ticker, trader_id)` /
-      `fetchLegTransactions`; trim the interface.
-- [ ] Trades tab (`usePicksTab.ts`, `TradesTable.tsx`, `TradeEditForm.tsx`) currently derives
-      rows from `position_detail` via `parseOptionLegs` / `mergeLegs` / `positionType`
-      (`@stw/shared/utils/options`,`positions`). Re-source from `legs` rows.
-- [ ] Unrealized P&L: stop reading `last_pnl_pct`/`ibkr_legs`; compute
-      `(mark_price − avg_cost_basis) × current_size × multiplier` in `@stw/shared` or a view.
-- [ ] `legPriceReason()` in `@stw/shared/utils/options.ts` — reference
-      `legs.mark_price_source` instead of `holdings.ibkr_legs` leg objects.
-- [ ] `fetchHoldingTransactions` (api.ts:49,54) `.order('leg', …)` and `fetchMaxLeg`
-      (api.ts:96) read `leg`, dropped in 035 — remove the `leg` ordering and the
-      `defaultLeg`/`leg` input on `TransactionEventForm` (`:26,42,81`). Trim `leg`,
-      `position_detail`, `price`, `pnl_pct` from the `HoldingTransaction` type.
+Implemented on `claude/schema-multi-leg`; typecheck + 30 unit tests green; both apps build;
+**browser-verified against the sandbox** (ADEA mixed, CXDO long+short, BLDP closed+exercised+
+spawned shares). Weighted-average %-P&L rollup confirmed (decided with the user); leg editing =
+per-leg weight override only (no full leg CRUD).
+- [x] **New `@stw/shared/utils/legs.ts`** — `Leg`/`LegTransaction` types + the %-model math:
+      `legMark`, `legUnrealizedPnlPct`, `legPnlPct`, `holdingPnlPct` (**weight-weighted avg**),
+      `holdingType`, `legMarkReason`, `fmtLegInstrument`, `fmtOptionExpiry`, `legIsOpen` (+ tests).
+      **Deleted** `options.ts`/`pnl.ts` (+ their tests; the failing `mergeLegs` test is gone) and
+      the three `position_detail` fns in `positions.ts` (kept the `Direction`/`PositionType` types).
+- [x] **`picks/api.ts`** — `fetchHoldings` now `select('*, legs(*)')` (PostgREST nested embed, so
+      legs travel with each holding); `Holding` interface trimmed of all dropped columns + `legs`
+      added; `fetchHoldingTransactions` drops `.order('leg')`; `fetchMaxLeg` removed;
+      `updateLegWeight` added.
+- [x] **Trades tab / detail / dashboard / row / filters** re-sourced from `h.legs`
+      (`TradesTable`, `HoldingDetail`, `PortfolioDashboard`, `HoldingRow`, `PicksView`,
+      `filters.ts` type filter via `holdingType`). `TradeEditForm` → **per-leg weight editor**;
+      `HoldingEditForm`/`TransactionEventForm` stripped of `position_detail`/`last_price`/leg fields;
+      `TransactionTimeline` flat (no leg grouping / position columns).
+- [x] **`HoldingTransaction` type** trimmed (`leg`/`position_detail`/`price`/`pnl_pct`/`direction`).
+- [x] **`apps/web/.../useDataStatus.ts`** (was reading the to-be-dropped `holdings.last_pnl_at`)
+      re-sourced to newest `legs.mark_price_at`.
+
+> **✅ RESOLVED 2026-06-14 — `basket` → category read-swap done.** `fetchHoldings` now embeds
+> `category:categories(name)` and sources the `Holding.basket` field from it (kept the field name —
+> it's the UI vocabulary; `bColor`/filters/sector dist key off the same strings the categories were
+> seeded from). Uncategorized rows fall back to `'Other'`. Verified on the sandbox: sector
+> distribution, the basket filter (Defense → IRDM), and ARKK→'Other' all work. **034 may now drop
+> `holdings.basket`.** Remaining data caveat: ensure every holding has a `category_id` before
+> cutover (sandbox ARKK had a null `category_id` → relies on the 'Other' fallback). No in-app
+> writer sets `basket`/`category_id` (the routines do, out of repo).
 
 ### Workstream 2 — Routines Phase 2
 
@@ -202,9 +214,12 @@ page breaks. This is the reader half of the legs migration:
       carve-out). Do **not** use a real action verb for a weight-only refresh.
 - [ ] May pass `initial_weight` unconditionally — the trigger protects it (write-once)
 
-**Admin IBKR proxy (`apps/admin/ibkr_proxy.py`):**
-- [ ] Stop writing `last_pnl_pct` / `last_pnl_at` / `ibkr_legs` to `holdings`
-- [ ] Write `legs.mark_price`, `legs.mark_price_at`, `legs.mark_price_source='IBKR'` instead
+**Admin IBKR proxy — ✅ DONE 2026-06-14:**
+- [x] The Supabase **writer is `IbkrBadge.tsx`** (the proxy is a pure pricer and never touched
+      Supabase). `IbkrBadge` now collects OPTION legs from `h.legs` (carrying `leg_id`), and writes
+      `legs.mark_price` / `mark_price_at` / `mark_price_source='IBKR'` per leg — no more
+      `holdings.last_pnl_pct`/`last_pnl_at`/`ibkr_legs`. `ibkr_proxy.py` echoes `leg_id` back
+      (docstring updated); `parseOptionLegs(position_detail)` removed from the badge.
 
 ### Routine docs (all three skills)
 - [ ] Replace the contradictory conviction-notes language in `stw-transcripts` STEP 5 (and

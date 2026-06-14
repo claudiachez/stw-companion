@@ -18,19 +18,33 @@ Active work: the **multi-trader / per-leg schema migration** on branch `claude/s
 [`plans/cutover_change_checklist.md`](plans/cutover_change_checklist.md); spec:
 [`plans/schema_migration_plan_v4.md`](plans/schema_migration_plan_v4.md).
 
-**Done & validated (uncommitted working tree → being committed at handoff):**
+**Done & validated (committed on `claude/schema-multi-leg`; not pushed):**
 - Migration files **022–036** authored in `supabase/migrations/`. `legs`/`leg_transactions`
   (029/030) use a **size-less, %-P&L, event-sourced** model (see Key decisions); 036 adds a
   `holding_transactions` dedupe constraint.
 - **Phase-1 app code** done + browser-verified: `trader_id` stamped on inserts (via
   `features/traders/api.ts` `getTraderId`), `graddox`→`signals` read, unified **Commentary**
   section in `HoldingDetail`, guard rails A (back-date block on "+ Add Event") + B (dedupe upsert).
+- **Phase-2 app reader rework DONE + browser-verified (this session).** All Trades/holdings reads
+  moved off `position_detail`/`ibkr_legs`/`last_pnl_pct` onto `legs`/`leg_transactions`:
+  - New `@stw/shared/utils/legs.ts` — the %-model math (`legUnrealizedPnlPct`, `legPnlPct`,
+    `holdingPnlPct` = **weight-weighted avg**, `holdingType`, `legMarkReason`, `fmtLegInstrument`).
+    Deleted `options.ts`/`pnl.ts` + the dead `position_detail` fns in `positions.ts` (+ tests).
+  - `fetchHoldings` now `select('*, legs(*), category:categories(name)')` — legs embed with each
+    holding; `Holding.basket` sourced from the joined category (**basket→category read-swap done**,
+    so 034 may drop `holdings.basket`). `Holding`/`HoldingTransaction` types trimmed; `fetchMaxLeg`
+    + leg-ordering gone; `updateLegWeight` added.
+  - Admin **per-leg weight editor** (`TradeEditForm`); `IbkrBadge` writes `legs.mark_price`/
+    `mark_price_source='IBKR'` (proxy stays a pure pricer, echoes `leg_id`); `useDataStatus` off
+    `last_pnl_at`. typecheck + 30 unit tests + both builds green.
 - `backfill_legs.ts` rewritten for the weight model + validated.
 - **Prod has ONLY migration 022 applied** (`traders` table, rows `STW` + `Graddox`). Nothing else.
 - **Sandbox** (throwaway Supabase project `stw-schema-sandbox`, ref `uolabcgbnrkhzpwuvzlk`) holds the
   full 022–036 + new legs model + sample data; login `cc@claudiachez.com` / `SandboxTest1234!`.
-  Point a dev server at it via a temporary `apps/<app>/.env.local`. (Service-role key is NOT in
-  the repo — ask the user.)
+  Point a dev server at it via `apps/<app>/.env.local` (gitignored). Seeded for verification:
+  ADEA (mixed, 2 priced + 1 unpriced option leg), CXDO (long + short), BLDP (closed + exercised +
+  spawned shares), ARKK category = **Hedge** (new category + teal color in `baskets.ts`).
+  (Service-role key is NOT in the repo — ask the user.)
 
 **Key design decisions (this migration):**
 - No share/contract counts exist anywhere — only the host's **weight**. `legs` store
@@ -46,20 +60,19 @@ Active work: the **multi-trader / per-leg schema migration** on branch `claude/s
 
 ## Next Steps
 
-In priority order (all in-repo unless noted). Detail + dependencies in the checklist.
-1. **Phase-2 app reader rework** *(biggest; gates 034/035)* — move the Trades tab + holdings
-   reads off `position_detail`/`ibkr_legs`/`last_pnl_pct` onto `legs`/`leg_transactions` with
-   **%**-P&L; trim the `Holding`/`HoldingTransaction` types; drop `leg`-ordering & `fetchMaxLeg`.
-2. **Admin per-leg weight editor** — UI to override the 90/10 default split.
-3. **Admin IBKR proxy** (`apps/admin/ibkr_proxy.py`) — write `legs.mark_price` /
-   `mark_price_source='IBKR'` instead of `holdings` columns.
-4. **Routines (out-of-repo `~/Documents/Claude/Scheduled/*/SKILL.md`)** — Workstream 2 Phase 1
+All in-repo app work is done (Phase 1 + Phase 2). What remains is out-of-repo / user-triggered.
+Detail + dependencies in the checklist.
+1. **Routines (out-of-repo `~/Documents/Claude/Scheduled/*/SKILL.md`)** — Workstream 2 Phase 1
    payload changes (trader_id, `on_conflict`, `channel_id`, `/signals`+`signals_data`+`date`,
-   dedupe upsert) then Phase 2 (write `legs`/`leg_transactions`). Skill/brand already renamed to
-   `graddox`; payloads NOT yet changed.
-5. **Cutover** (user-triggered): preview branch → apply 023–036 → deploy app + routines.
-6. **Run the legs backfill** on the real book, then apply **034/035**.
-- **Deferred:** `$100k` notional portfolio + SPY benchmark (`spy_daily` already created in 032).
+   dedupe upsert) then Phase 2 (stop writing `position_detail`/`last_action`/`current_weight` to
+   `holdings`; write `legs`/`leg_transactions` + `holding_transactions` rows). Skill/brand already
+   renamed to `graddox`; payloads NOT yet changed.
+2. **Cutover** (user-triggered): preview branch → apply 023–036 in order (**033 right after 026**) →
+   deploy app + routines.
+3. **Run the legs backfill** on the real book, then apply **034/035**.
+   - **Before 034:** ensure every holding has a `category_id` (the app sources `basket` from the
+     category join, falling back to `'Other'`; 034 may drop `holdings.basket`).
+4. **Deferred:** `$100k` notional portfolio + SPY benchmark (`spy_daily` already created in 032).
 
 ---
 

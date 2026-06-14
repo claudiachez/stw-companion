@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import type { HoldingTransaction } from '@stw/shared';
-import { positionType } from '@stw/shared';
 import { useHoldingTransactions } from '../useHoldingHistory';
 import { useQueryClient } from '@tanstack/react-query';
 import { deleteHoldingTransaction } from '../api';
@@ -20,10 +19,9 @@ function formatDate(d: string) {
   return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-// Row columns: Action · Date · Position · Position Type (Options/Shares) · Weight.
+// Row columns: Action · Date · Weight · Notes.
 function EventRow({ tx, canEdit, onDelete }: { tx: HoldingTransaction; canEdit: boolean; onDelete: (id: number) => void }) {
   const color = dotColor(tx.action);
-  const ptype = positionType(tx.position_detail);
 
   return (
     <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '6px 0' }}>
@@ -34,22 +32,10 @@ function EventRow({ tx, canEdit, onDelete }: { tx: HoldingTransaction; canEdit: 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <ActionBadge action={tx.action} />
           <span style={{ fontSize: 11, color: 'var(--t2)' }}>{formatDate(tx.event_date)}</span>
-          {ptype && (
-            <span style={{
-              fontSize: 9, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
-              padding: '1px 5px', borderRadius: 3, color: 'var(--t2)', background: 'var(--s2)',
-              border: '1px solid var(--border)',
-            }}>
-              {ptype}
-            </span>
-          )}
           {tx.weight != null && (
             <span style={{ fontSize: 11, color: 'var(--t2)' }}>{tx.weight}%</span>
           )}
         </div>
-        {tx.position_detail && (
-          <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>{tx.position_detail}</div>
-        )}
         {tx.notes && (
           <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 2, fontStyle: 'italic' }}>{tx.notes}</div>
         )}
@@ -89,15 +75,6 @@ export function TransactionTimeline({ ticker }: Props) {
     }
   }
 
-  // Group by leg
-  const byLeg = transactions.reduce<Record<number, HoldingTransaction[]>>((acc, tx) => {
-    if (!acc[tx.leg]) acc[tx.leg] = [];
-    acc[tx.leg].push(tx);
-    return acc;
-  }, {});
-  const legs = Object.keys(byLeg).map(Number).sort((a, b) => a - b);
-  const maxLeg = legs.length > 0 ? Math.max(...legs) : 1;
-
   if (isLoading) {
     return <div style={{ fontSize: 12, color: 'var(--t3)', padding: '8px 0' }}>Loading…</div>;
   }
@@ -105,37 +82,26 @@ export function TransactionTimeline({ ticker }: Props) {
   // Non-admin: hide entire block when there's nothing to show
   if (!canEdit && transactions.length === 0) return null;
 
+  // Newest first — a flat chronological audit of weight/action changes (no leg grouping).
+  const ordered = [...transactions].sort((a, b) => b.event_date.localeCompare(a.event_date));
+
   return (
     <div>
       {transactions.length === 0 && !showForm && (
         <div style={{ fontSize: 12, color: 'var(--t3)', padding: '4px 0' }}>No transaction history yet.</div>
       )}
 
-      {legs.map((leg) => (
-        <div key={leg} style={{ marginBottom: 12 }}>
-          {(legs.length > 1 || leg > 1) && (
-            <div style={{
-              fontSize: 10, fontWeight: 700, letterSpacing: '0.1em',
-              color: 'var(--acc)', textTransform: 'uppercase', marginBottom: 6,
-              display: 'flex', alignItems: 'center', gap: 8,
-            }}>
-              <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-              {leg === 1 ? 'Position #1' : `Position #${leg} — Re-entry`}
-              <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-            </div>
-          )}
-          <div style={{ borderLeft: '1px solid var(--border)', paddingLeft: 10 }}>
-            {byLeg[leg].map((tx) => (
-              <EventRow key={tx.id} tx={tx} canEdit={!!canEdit} onDelete={handleDelete} />
-            ))}
-          </div>
+      {ordered.length > 0 && (
+        <div style={{ borderLeft: '1px solid var(--border)', paddingLeft: 10, marginBottom: 12 }}>
+          {ordered.map((tx) => (
+            <EventRow key={tx.id} tx={tx} canEdit={!!canEdit} onDelete={handleDelete} />
+          ))}
         </div>
-      ))}
+      )}
 
       {showForm ? (
         <TransactionEventForm
           ticker={ticker}
-          defaultLeg={maxLeg}
           onDone={() => setShowForm(false)}
         />
       ) : canEdit && (

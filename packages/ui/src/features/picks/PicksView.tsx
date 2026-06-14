@@ -9,7 +9,7 @@ import { PortfolioDashboard } from './components/PortfolioDashboard';
 import { TradesTable } from './components/TradesTable';
 import { LoadingSpinner } from '../../primitives/LoadingSpinner';
 import { EmptyState } from '../../primitives/EmptyState';
-import { TIERS, resolvePnl, positionType, parseCostBasis } from '@stw/shared';
+import { TIERS, holdingPnlPct } from '@stw/shared';
 import { usePriceCacheStore, type Quote } from '../../store/priceCache';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useCapabilities } from '../../context/AppCapabilities';
@@ -39,14 +39,17 @@ export function PicksView() {
     () => new Set(userPositions.map((p) => cleanUnderlying(p.underlying))),
     [userPositions],
   );
-  // Newest IBKR options-sync time across all holdings. A holding priced earlier than
-  // this is stale (the last sync didn't refresh it) — passed to HoldingDetail so the
-  // detail page can flag an old price instead of it looking freshly synced.
+  // Newest IBKR options-sync time across all legs. A leg priced earlier than this is stale
+  // (the last sync didn't refresh it) — passed to HoldingDetail so the detail page can flag
+  // an old price instead of it looking freshly synced.
   const latestOptionsSync = useMemo<Date | null>(
     () => holdings.reduce<Date | null>((acc, h) => {
-      if (!h.last_pnl_at) return acc;
-      const d = new Date(h.last_pnl_at);
-      return !acc || d > acc ? d : acc;
+      for (const leg of h.legs) {
+        if (!leg.mark_price_at) continue;
+        const d = new Date(leg.mark_price_at);
+        if (!acc || d > acc) acc = d;
+      }
+      return acc;
     }, null),
     [holdings],
   );
@@ -123,12 +126,7 @@ export function PicksView() {
         filtered,
         Object.fromEntries(filtered.map((h) => [
           h.ticker,
-          resolvePnl({
-            positionType: positionType(h.position_detail),
-            price: priceCache[h.ticker]?.c ?? null,
-            costBasis: parseCostBasis(h.position_detail),
-            optionsPnlPct: h.last_pnl_pct,
-          }).pnlPct,
+          holdingPnlPct(h.legs, priceCache[h.ticker]?.c ?? null),
         ])),
         filters.sort === 'pnl_desc' ? 'desc' : 'asc',
       )
