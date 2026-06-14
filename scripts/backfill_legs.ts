@@ -42,8 +42,9 @@
 
 import { readFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
-import { parseOptionLegs, type OptionLeg } from '../packages/shared/src/utils/options';
-import { parseCostBasis, inferDirection } from '../packages/shared/src/utils/positions';
+// position_detail parsers live in a scripts-local module — @stw/shared dropped them in the
+// Phase-2 rework (the app reads structured `legs` now). See _position_detail_parse.ts.
+import { parseOptionLegs, parseCostBasis, inferDirection, type OptionLeg } from './_position_detail_parse';
 
 // ---------------------------------------------------------------------------
 // args + env
