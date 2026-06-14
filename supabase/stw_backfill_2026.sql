@@ -54,10 +54,16 @@
 -- 031 has a row to update. ON CONFLICT DO NOTHING preserves existing (currently-held) rows
 -- and their thesis/category data; only missing (historical/closed) tickers get a bare row.
 -- The real last_action/weight come from Section 1 via trigger 031.
+--
+-- last_action = 'Hold' (a PLACEHOLDER): the 033 audit trigger ignores 'Hold', so a newly
+-- created identity row does NOT emit a phantom today-dated 'New' holding_transactions row.
+-- Section 1's first real event overwrites last_action via trigger 031.
+-- initial_weight = NULL so 031's write-once guard fills it from the first event's weight
+-- (pre-setting 0 would pin it to 0 forever).
 -- ================================================================
 
 INSERT INTO holdings (ticker, trader_id, current_weight, initial_weight, last_action)
-SELECT t.ticker, (SELECT id FROM public.traders WHERE name='STW'), 0, 0, 'New'
+SELECT t.ticker, (SELECT id FROM public.traders WHERE name='STW'), 0, NULL, 'Hold'
 FROM (VALUES
   ('ENS'),('PLPC'),('AMKR'),('VIAV'),('OSS'),('NBIS'),('THR'),('LEU'),('HII'),('KTOS'),
   ('HOOD'),('TSLA'),('AMZN'),('DPRO'),('AVAV'),('SYNA'),('GLDD'),('PANL'),('SQQQ'),('GME'),
