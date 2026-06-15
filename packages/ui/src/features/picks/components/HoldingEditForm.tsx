@@ -4,6 +4,7 @@ import { TIERS } from '@stw/shared';
 import type { Holding } from '../api';
 import { getSupabase } from '../../../lib/supabase';
 import { useCapabilities } from '../../../context/AppCapabilities';
+import { useCategories } from '../useCategories';
 
 const CONVICTIONS = [5, 4, 3, 2, 1, 0];
 const ACTIONS = ['New', 'Upsized', 'Trimmed', 'Hold', 'Closed'];
@@ -25,9 +26,11 @@ const fieldStyle: React.CSSProperties = {
 export function HoldingEditForm({ holding: h, onDone }: Props) {
   const queryClient = useQueryClient();
   const { onEditHolding } = useCapabilities();
+  const { data: categories = [] } = useCategories();
   const [conviction, setConviction] = useState(String(h.conviction ?? 3));
   const [lastAction, setLastAction] = useState(h.last_action ?? 'Hold');
   const [actionDate, setActionDate] = useState(h.action_date ?? '');
+  const [categoryId, setCategoryId] = useState(h.category_id ?? '');
   const [initialWeight, setInitialWeight] = useState(h.initial_weight != null ? String(h.initial_weight) : '');
   const [currentWeight, setCurrentWeight] = useState(h.current_weight != null ? String(h.current_weight) : '');
   const [saving, setSaving] = useState(false);
@@ -50,6 +53,7 @@ export function HoldingEditForm({ holding: h, onDone }: Props) {
       conviction: Number(conviction),
       last_action: lastAction,
       action_date: actionDate || null,
+      category_id: categoryId || null,
       initial_weight: finalInitialWeight,
       current_weight: finalCurrentWeight,
     };
@@ -91,6 +95,13 @@ export function HoldingEditForm({ holding: h, onDone }: Props) {
           <label style={labelStyle}>Status</label>
           <select style={fieldStyle} value={lastAction} onChange={(e) => setLastAction(e.target.value)}>
             {ACTIONS.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={labelStyle}>Category</label>
+          <select style={fieldStyle} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+            <option value="">— Uncategorized —</option>
+            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
         <div>

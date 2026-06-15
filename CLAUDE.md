@@ -19,12 +19,23 @@ Active branch: `claude/schema-multi-leg` (off `staging`). Plan docs (all in `pla
 - [`cutover_runbook.md`](plans/cutover_runbook.md) — ordered apply sequence + pre-flight + rollback
 - [`workstream2_routine_edits.md`](plans/workstream2_routine_edits.md) — line-level SKILL.md edits (Phase 1 + 2)
 
-**Prod (`usmqbohcjcyszjxxvnqu`) — fully migrated and backfilled:**
-- All migrations **022–036** applied to prod ✅
+**Prod (`usmqbohcjcyszjxxvnqu`) — migrated and backfilled (column drops deferred):**
+- Migrations **022–033 + 036** applied to prod ✅. **034/035 NOT applied yet (intentional)** — they
+  drop the deprecated `holdings`/`holding_transactions` columns (`basket`, `position_detail`,
+  `last_pnl_*`, `last_price*`, `ibkr_legs`, `exit_price`, `exit_pnl_pct`), which Phase 1 routines
+  still write. Hold until cron verified + Phase 2 routine edits ready (see Next Steps post-backfill).
+  (Migrations were applied via the SQL editor, so the Supabase `list_migrations` MCP shows none —
+  infer applied state from schema, not from that tool.)
 - `stw_backfill_2026.sql` fully applied: **46 holdings, 114 holding_transactions, 73 legs
   (34 OPEN / 32 CLOSED / 3 EXERCISED / 4 EXPIRED_WORTHLESS), 119 leg_transactions** ✅
+  (Sandbox shows 90 holding_transactions — it was validated against an earlier backfill revision;
+  prod's 114 is the finalized count. All other counts match, so the legs model is identical.)
 - `stw_leg_weights_2026.sql` applied: all OPEN legs weighted; only SHLS $10C = 0 (intentional — de-facto closed) ✅
+- **Categories backfill:** ARRY→Power Infrastructure; ARKK→Hedge (new category);
+  DPRO/GLDD/PANL→Defense; GME→Other. **Still uncategorized: AVAV, ITRI, SQQQ, THR** (app falls back
+  to 'Other'; must be set before 034 drops `basket`).
 - **App deploy not yet done** — both Netlify sites still running pre-migration code on `main`
+  (`claude/schema-multi-leg` merged to `staging` 2026-06-15 via PR #28; staging builds only).
 
 **App code on `claude/schema-multi-leg` (committed, not pushed to GitHub):**
 - Migration files 022–036 in `supabase/migrations/`

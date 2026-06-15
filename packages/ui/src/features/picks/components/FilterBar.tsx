@@ -37,8 +37,15 @@ export function FilterBar({ holdings, filtered }: Props) {
 
   const baskets = [...new Set(holdings.map((h) => h.basket).filter(Boolean))].sort();
   const hasFilter = search || basket || tier || status || type || !hideClosed;
-  // CASH is a balance, not a position — never count it (numerator already excludes it).
-  const total = holdings.filter((h) => h.ticker !== 'CASH').length;
+  // Denominator = the universe under the current closed-context (not all-time). CASH is a
+  // balance, never counted. When "Show closed" is off, closed positions are excluded from the
+  // total too — so it reads "34 positions" instead of the confusing "34 of 45". Mirrors the
+  // hideClosed rule in applyFilters so the numerator and denominator stay in the same universe.
+  const total = holdings.filter((h) => {
+    if (h.ticker === 'CASH') return false;
+    if (hideClosed && status !== 'Closed' && h.last_action === 'Closed') return false;
+    return true;
+  }).length;
 
   return (
     <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' as never, flexShrink: 0 }}>
