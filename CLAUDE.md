@@ -11,86 +11,69 @@
 
 ---
 
-## Current Status — schema migration in progress (handoff 2026-06-14)
+## Current Status — cutover complete; Phase 1 routines ~95% done (handoff 2026-06-15)
 
-Active work: the **multi-trader / per-leg schema migration** on branch `claude/schema-multi-leg`
-(off `staging`; **nothing pushed or merged; prod untouched**). Plan docs (all in `plans/`):
+Active branch: `claude/schema-multi-leg` (off `staging`). Plan docs (all in `plans/`):
 - [`cutover_change_checklist.md`](plans/cutover_change_checklist.md) — authoritative worklist
 - [`schema_migration_plan_v4.md`](plans/schema_migration_plan_v4.md) — original spec
 - [`cutover_runbook.md`](plans/cutover_runbook.md) — ordered apply sequence + pre-flight + rollback
 - [`workstream2_routine_edits.md`](plans/workstream2_routine_edits.md) — line-level SKILL.md edits (Phase 1 + 2)
-- [`weight_backfill_followup.md`](plans/weight_backfill_followup.md) — deferred per-leg weight fill (hand-off prompt inside)
 
-**Done & validated (committed on `claude/schema-multi-leg`; not pushed):**
-- Migration files **022–036** authored in `supabase/migrations/`. `legs`/`leg_transactions`
-  (029/030) use a **size-less, %-P&L, event-sourced** model (see Key decisions); 036 adds a
-  `holding_transactions` dedupe constraint.
-- **Phase-1 app code** done + browser-verified: `trader_id` stamped on inserts (via
-  `features/traders/api.ts` `getTraderId`), `graddox`→`signals` read, unified **Commentary**
-  section in `HoldingDetail`, guard rails A (back-date block on "+ Add Event") + B (dedupe upsert).
-- **Phase-2 app reader rework DONE + browser-verified (this session).** All Trades/holdings reads
-  moved off `position_detail`/`ibkr_legs`/`last_pnl_pct` onto `legs`/`leg_transactions`:
-  - New `@stw/shared/utils/legs.ts` — the %-model math (`legUnrealizedPnlPct`, `legPnlPct`,
-    `holdingPnlPct` = **weight-weighted avg**, `holdingType`, `legMarkReason`, `fmtLegInstrument`).
-    Deleted `options.ts`/`pnl.ts` + the dead `position_detail` fns in `positions.ts` (+ tests).
-  - `fetchHoldings` now `select('*, legs(*), category:categories(name)')` — legs embed with each
-    holding; `Holding.basket` sourced from the joined category (**basket→category read-swap done**,
-    so 034 may drop `holdings.basket`). `Holding`/`HoldingTransaction` types trimmed; `fetchMaxLeg`
-    + leg-ordering gone; `updateLegWeight` added.
-  - Admin **per-leg weight editor** (`TradeEditForm`); `IbkrBadge` writes `legs.mark_price`/
-    `mark_price_source='IBKR'` (proxy stays a pure pricer, echoes `leg_id`); `useDataStatus` off
-    `last_pnl_at`. typecheck + 30 unit tests + both builds green.
-- **Legs backfill of record = `supabase/stw_backfill_2026.sql`** (full Dec 2025–Jun 2026 event
-  history, size-less %-model). Supersedes/retires `scripts/backfill_legs.ts`. **Validated clean on
-  the sandbox 2026-06-14** (90 holding_transactions, 73 legs, statuses derive correctly, 44 holdings
-  get real initial weights). Idempotent via `ON CONFLICT`; **use the SQL editor's *Run without RLS***
-  — its linter false-flags a nonexistent `shares` table (the green "enable RLS" button is what threw
-  the `relation "shares" does not exist` error). Re-run on prod after the migrations land.
-  - **Per-leg `weight` is intentionally NULL** in this file (only holding-level weight captured), so
-    `legs.weight` is empty and the weighted-avg headline P&L can't roll up yet → **deferred
-    follow-up**: a separate `supabase/stw_leg_weights_2026.sql` (UPDATEs), see
-    [`plans/weight_backfill_followup.md`](plans/weight_backfill_followup.md).
-- **Migration 021 (`holdings.direction`) was DROPPED** — never applied to prod, superseded by
-  `legs.direction` (029). Migration set is now 022–036 (021 file removed).
-- **Prod has ONLY migration 022 applied** (`traders` table, rows `STW` + `Graddox`). Nothing else.
-- **Sandbox** (throwaway Supabase project `stw-schema-sandbox`, ref `uolabcgbnrkhzpwuvzlk`) holds the
-  full 022–036 + new legs model + sample data; login `cc@claudiachez.com` / `SandboxTest1234!`.
-  Point a dev server at it via `apps/<app>/.env.local` (gitignored). Seeded for verification:
-  ADEA (mixed, 2 priced + 1 unpriced option leg), CXDO (long + short), BLDP (closed + exercised +
-  spawned shares), ARKK category = **Hedge** (new category + teal color in `baskets.ts`).
-  (Service-role key is NOT in the repo — ask the user.)
+**Prod (`usmqbohcjcyszjxxvnqu`) — fully migrated and backfilled:**
+- All migrations **022–036** applied to prod ✅
+- `stw_backfill_2026.sql` fully applied: **46 holdings, 114 holding_transactions, 73 legs
+  (34 OPEN / 32 CLOSED / 3 EXERCISED / 4 EXPIRED_WORTHLESS), 119 leg_transactions** ✅
+- `stw_leg_weights_2026.sql` applied: all OPEN legs weighted; only SHLS $10C = 0 (intentional — de-facto closed) ✅
+- **App deploy not yet done** — both Netlify sites still running pre-migration code on `main`
+
+**App code on `claude/schema-multi-leg` (committed, not pushed to GitHub):**
+- Migration files 022–036 in `supabase/migrations/`
+- Phase-1 app code (trader_id, graddox→signals read, unified Commentary, guard rails A+B)
+- Phase-2 app reader rework: all reads off `legs`/`leg_transactions`; `@stw/shared/utils/legs.ts`; admin per-leg weight editor; IbkrBadge writes `legs.mark_price`
+- typecheck + 30 unit tests + both builds green ✅
+
+**Phase 1 SKILL.md edits — ALL 5 files DONE ✅ (2026-06-15) — safe to deploy:**
+
+| File | Status |
+|---|---|
+| `stw-morning-run/SKILL.md` | **DONE** ✅ (PART 3 read → `channel_id=eq.2301bd70…`) |
+| `stw-afternoon-run/SKILL.md` | **DONE** ✅ (STEP 5 run_log body → `channel_id:b876b57b…`) |
+| `stw-friday-weighting/SKILL.md` | **DONE** ✅ |
+| `stw-transcripts/SKILL.md` | **DONE** ✅ (Context § "written explicitly via curl…"; STEP 7 confirm "added to commentary") |
+| `graddox-daily-summary/SKILL.md` | **DONE** ✅ (STEP 5 item 4: new `run_log` write, `run_type='graddox'`, `channel_id=7d127084…`) |
 
 **Key design decisions (this migration):**
-- No share/contract counts exist anywhere — only the host's **weight**. `legs` store
-  `entry_price` + per-leg `weight` + `mark_price`/`exit_price`/`realized_pnl_pct`; **P&L is %**
-  (`(mark−entry)/entry×100`). Per-leg weight = stated in chat, else **90/10 default** (mixed:
-  90% shares / 10% across options; options-only: even; shares-only: 100%), admin-overridable.
-- `leg_transactions` is a **quantity-free event log** → trigger derives leg state (replay-safe).
-- **Exercise is common**: option leg → `EXERCISED` / `realized_pnl_pct = null`; a SHARES leg is
-  spawned at `strike + premium` (`parent_leg_id`) and carries the continuing %.
-- Trigger inversion: `holding_transactions` → trigger 031 → `holdings`. The "+ Add Event" form
-  fires 031 (propagates to the live position); back-dating is blocked.
-- Apply order at cutover: **033 immediately after 026** (026 breaks writes until 033 lands).
+- Size-less %-P&L model: no share/contract counts. `legs` store `entry_price` + per-leg `weight` + `mark_price`/`exit_price`/`realized_pnl_pct`. P&L is always a %. Per-leg weight stated in chat, else 90/10 default (mixed: 90% shares / 10% options; options-only: even split; shares-only: 100%).
+- `leg_transactions` is a quantity-free event log → trigger 030 derives leg state (replay-safe).
+- Exercise: option → `EXERCISED`; SHARES leg spawned at `strike + premium` (`parent_leg_id`).
+- Trigger 031: `holding_transactions` → `holdings`. Trigger 033 (rewrite of 016): dedupe guard breaks the 031↔033 loop.
+- Apply order: **033 immediately after 026** at cutover.
+- Sandbox (`uolabcgbnrkhzpwuvzlk`) holds full 022–036 + sample data for reference.
 
 ## Next Steps
 
-All in-repo app work is done (Phase 1 + Phase 2) and the backfill is validated. What remains is
-out-of-repo / user-triggered. Full detail in the plan docs above.
-1. **Per-leg weight backfill (deferred, ready to start):** hand the prompt in
-   [`plans/weight_backfill_followup.md`](plans/weight_backfill_followup.md) to the agent with the
-   Discord history → it produces `supabase/stw_leg_weights_2026.sql` (UPDATEs `legs.weight` +
-   opening `leg_transactions.weight`; re-derives real per-leg weights from messages, 90/10 fallback).
-   Applied **after** the main backfill.
-2. **Routines (out-of-repo `~/Documents/Claude/Scheduled/*/SKILL.md`)** — apply the edits in
-   [`workstream2_routine_edits.md`](plans/workstream2_routine_edits.md): Phase 1 (trader_id,
-   `on_conflict`, `channel_id`, `/signals`+`signals_data`+`date`, new graddox `run_log` row) then
-   Phase 2 (write `legs`/`leg_transactions`+`holding_transactions`; `basket`→`category_id`). **Apply
-   only inside the cutover window** — applying early breaks every cron write. Payloads NOT yet changed.
-3. **Cutover** (user-triggered): follow [`cutover_runbook.md`](plans/cutover_runbook.md) — preview
-   branch → apply 023–032 + 036 in order (**033 right after 026**) → run the backfill (+ weights
-   file) → deploy app + Phase-1 routines.
-4. **After backfill confirmed:** ensure every holding has a `category_id` (app falls back to
-   `'Other'`), then apply **034/035** and deploy Phase-2 routines.
+1. ~~Finish the 5 Phase 1 SKILL.md edits~~ **DONE ✅ (2026-06-15)** — all 5 skills in
+   `~/Documents/Claude/Scheduled/*/SKILL.md` are now consistent (no `channel=eq.<name>` /
+   `"channel":"<name>"` text refs remain; graddox writes its own `run_log` row). Ready for cutover.
+
+2. **Deploy both Netlify sites** from branch `claude/schema-multi-leg`:
+   - Push branch to GitHub, open PRs to `staging`, merge, let Netlify build
+   - Or trigger a direct deploy from the branch in the Netlify dashboard
+   - Legs are populated ✅ — safe to deploy now
+
+3. **Resume cron.** Verify the first post-cutover morning/afternoon/graddox run:
+   - `signals` row lands with `trader_id` + `date` ✅
+   - `run_log` carries `channel_id` (not `channel`) ✅
+   - `holdings` upserts hit the composite PK (`ticker,trader_id`) ✅
+   - `conviction_comments` rows carry `trader_id` ✅
+
+4. **Post-backfill (after cron verified):**
+   a. Confirm every holding has a `category_id` (app falls back to `'Other'`)
+   b. Take a fresh DB dump
+   c. Apply `034_holdings_drop_deprecated_columns.sql`
+   d. Apply `035_holding_transactions_drop_deprecated.sql`
+   e. Deploy Phase-2 routine edits (routines write `legs`/`leg_transactions` + `holding_transactions`; `basket`→`category_id`)
+
 5. **Deferred:** `$100k` notional portfolio + SPY benchmark (`spy_daily` already created in 032).
 
 ---
