@@ -1,5 +1,5 @@
 import type { Holding } from '../api';
-import { TIERS, ACTION_VARS, bColor, parseCostBasis, positionType, resolvePnl } from '@stw/shared';
+import { TIERS, ACTION_VARS, bColor, holdingPnlPct } from '@stw/shared';
 import { useQuote } from '../../../hooks/useLivePrice';
 
 function fmtDate(s: string | null): string {
@@ -22,14 +22,9 @@ export function HoldingRow({ holding: h, isSelected, maxWeight, onClick, isUserH
   const basketColor = bColor(h.basket);
   const action = ACTION_VARS[h.last_action];
 
-  // Row P&L: live quote only (no last_price fallback). Shared resolver keeps the
-  // shares/options/mixed math identical to the detail pane.
-  const { pnlPct } = resolvePnl({
-    positionType: positionType(h.position_detail),
-    price: quote?.c ?? null,
-    costBasis: parseCostBasis(h.position_detail),
-    optionsPnlPct: h.last_pnl_pct,
-  });
+  // Row P&L: weight-weighted across the holding's legs. Shares legs price off the live quote;
+  // option legs use their stored IBKR mark.
+  const pnlPct = holdingPnlPct(h.legs, quote?.c ?? null);
   const pnlColor = pnlPct != null ? (pnlPct >= 0 ? '#16A34A' : '#DC2626') : undefined;
 
   const w = h.current_weight ?? h.initial_weight ?? 0;

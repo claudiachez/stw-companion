@@ -15,37 +15,36 @@ const fieldStyle: React.CSSProperties = {
 
 interface Props {
   ticker: string;
-  defaultLeg: number;
   onDone: () => void;
 }
 
-export function TransactionEventForm({ ticker, defaultLeg, onDone }: Props) {
+export function TransactionEventForm({ ticker, onDone }: Props) {
   const queryClient = useQueryClient();
+  const today = new Date().toISOString().slice(0, 10);
   const [action, setAction] = useState<typeof ACTIONS[number]>('New');
-  const [eventDate, setEventDate] = useState(new Date().toISOString().slice(0, 10));
-  const [leg, setLeg] = useState(String(defaultLeg));
+  const [eventDate, setEventDate] = useState(today);
   const [weight, setWeight] = useState('');
-  const [positionDetail, setPositionDetail] = useState('');
-  const [price, setPrice] = useState('');
-  const [pnlPct, setPnlPct] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   async function save() {
     if (!eventDate) { setError('Event date is required.'); return; }
+    // Guard rail (Option A): a manual event now propagates to the live position via trigger
+    // 031, so back-dating would rewind last_action/action_date. Block it — historical events
+    // belong to the message-replay backfill, not this form.
+    if (eventDate < today) {
+      setError('Back-dating is disabled — this entry updates the live position. Use today or later.');
+      return;
+    }
     setSaving(true);
     setError('');
     try {
       await insertHoldingTransaction({
         ticker,
-        leg: parseInt(leg) || 1,
         action,
         event_date: eventDate,
         weight: weight ? parseFloat(weight) : null,
-        position_detail: positionDetail.trim() || null,
-        price: price ? parseFloat(price) : null,
-        pnl_pct: action === 'Closed' && pnlPct ? parseFloat(pnlPct) : null,
         notes: notes.trim() || null,
       });
       await queryClient.invalidateQueries({ queryKey: ['transactions', ticker] });
@@ -74,30 +73,12 @@ export function TransactionEventForm({ ticker, defaultLeg, onDone }: Props) {
         </div>
         <div>
           <label style={labelStyle}>Event Date</label>
-          <input style={fieldStyle} type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} />
-        </div>
-        <div>
-          <label style={labelStyle}>Leg #</label>
-          <input style={fieldStyle} type="number" min="1" step="1" value={leg} onChange={(e) => setLeg(e.target.value)} />
+          <input style={fieldStyle} type="date" value={eventDate} min={today} onChange={(e) => setEventDate(e.target.value)} />
         </div>
         <div>
           <label style={labelStyle}>Weight %</label>
           <input style={fieldStyle} type="number" step="0.1" min="0" value={weight} placeholder="—" onChange={(e) => setWeight(e.target.value)} />
         </div>
-        <div style={{ gridColumn: '1 / -1' }}>
-          <label style={labelStyle}>Position Detail</label>
-          <input style={fieldStyle} type="text" placeholder="e.g. Common @ $14.63" value={positionDetail} onChange={(e) => setPositionDetail(e.target.value)} />
-        </div>
-        <div>
-          <label style={labelStyle}>Price $</label>
-          <input style={fieldStyle} type="number" step="0.01" min="0" value={price} placeholder="—" onChange={(e) => setPrice(e.target.value)} />
-        </div>
-        {action === 'Closed' && (
-          <div>
-            <label style={labelStyle}>P&amp;L %</label>
-            <input style={fieldStyle} type="number" step="0.01" value={pnlPct} placeholder="—" onChange={(e) => setPnlPct(e.target.value)} />
-          </div>
-        )}
         <div style={{ gridColumn: '1 / -1' }}>
           <label style={labelStyle}>Notes</label>
           <input style={fieldStyle} type="text" value={notes} placeholder="Optional notes" onChange={(e) => setNotes(e.target.value)} />

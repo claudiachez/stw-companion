@@ -15,17 +15,25 @@ export function useDataStatus() {
   return useQuery({
     queryKey: ['data-status'],
     queryFn: async () => {
-      // Prefer last_pnl_at (IBKR sync time) over updated_at (manual edit time)
-      const { data } = await supabase
-        .from('holdings')
-        .select('last_pnl_at, updated_at')
-        .order('last_pnl_at', { ascending: false, nullsFirst: false })
-        .limit(1)
-        .single();
-      return data?.last_pnl_at
-        ? new Date(data.last_pnl_at)
-        : data?.updated_at
-        ? new Date(data.updated_at)
+      // Prefer the newest IBKR leg mark (sync time) over holdings.updated_at (manual edit time).
+      const [{ data: mark }, { data: holding }] = await Promise.all([
+        supabase
+          .from('legs')
+          .select('mark_price_at')
+          .order('mark_price_at', { ascending: false, nullsFirst: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from('holdings')
+          .select('updated_at')
+          .order('updated_at', { ascending: false, nullsFirst: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
+      return mark?.mark_price_at
+        ? new Date(mark.mark_price_at)
+        : holding?.updated_at
+        ? new Date(holding.updated_at)
         : null;
     },
     staleTime: 5 * 60 * 1000,

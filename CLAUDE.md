@@ -11,6 +11,73 @@
 
 ---
 
+## Current Status — cutover complete; Phase 1 routines ~95% done (handoff 2026-06-15)
+
+Active branch: `claude/schema-multi-leg` (off `staging`). Plan docs (all in `plans/`):
+- [`cutover_change_checklist.md`](plans/cutover_change_checklist.md) — authoritative worklist
+- [`schema_migration_plan_v4.md`](plans/schema_migration_plan_v4.md) — original spec
+- [`cutover_runbook.md`](plans/cutover_runbook.md) — ordered apply sequence + pre-flight + rollback
+- [`workstream2_routine_edits.md`](plans/workstream2_routine_edits.md) — line-level SKILL.md edits (Phase 1 + 2)
+
+**Prod (`usmqbohcjcyszjxxvnqu`) — fully migrated and backfilled:**
+- All migrations **022–036** applied to prod ✅
+- `stw_backfill_2026.sql` fully applied: **46 holdings, 114 holding_transactions, 73 legs
+  (34 OPEN / 32 CLOSED / 3 EXERCISED / 4 EXPIRED_WORTHLESS), 119 leg_transactions** ✅
+- `stw_leg_weights_2026.sql` applied: all OPEN legs weighted; only SHLS $10C = 0 (intentional — de-facto closed) ✅
+- **App deploy not yet done** — both Netlify sites still running pre-migration code on `main`
+
+**App code on `claude/schema-multi-leg` (committed, not pushed to GitHub):**
+- Migration files 022–036 in `supabase/migrations/`
+- Phase-1 app code (trader_id, graddox→signals read, unified Commentary, guard rails A+B)
+- Phase-2 app reader rework: all reads off `legs`/`leg_transactions`; `@stw/shared/utils/legs.ts`; admin per-leg weight editor; IbkrBadge writes `legs.mark_price`
+- typecheck + 30 unit tests + both builds green ✅
+
+**Phase 1 SKILL.md edits — ALL 5 files DONE ✅ (2026-06-15) — safe to deploy:**
+
+| File | Status |
+|---|---|
+| `stw-morning-run/SKILL.md` | **DONE** ✅ (PART 3 read → `channel_id=eq.2301bd70…`) |
+| `stw-afternoon-run/SKILL.md` | **DONE** ✅ (STEP 5 run_log body → `channel_id:b876b57b…`) |
+| `stw-friday-weighting/SKILL.md` | **DONE** ✅ |
+| `stw-transcripts/SKILL.md` | **DONE** ✅ (Context § "written explicitly via curl…"; STEP 7 confirm "added to commentary") |
+| `graddox-daily-summary/SKILL.md` | **DONE** ✅ (STEP 5 item 4: new `run_log` write, `run_type='graddox'`, `channel_id=7d127084…`) |
+
+**Key design decisions (this migration):**
+- Size-less %-P&L model: no share/contract counts. `legs` store `entry_price` + per-leg `weight` + `mark_price`/`exit_price`/`realized_pnl_pct`. P&L is always a %. Per-leg weight stated in chat, else 90/10 default (mixed: 90% shares / 10% options; options-only: even split; shares-only: 100%).
+- `leg_transactions` is a quantity-free event log → trigger 030 derives leg state (replay-safe).
+- Exercise: option → `EXERCISED`; SHARES leg spawned at `strike + premium` (`parent_leg_id`).
+- Trigger 031: `holding_transactions` → `holdings`. Trigger 033 (rewrite of 016): dedupe guard breaks the 031↔033 loop.
+- Apply order: **033 immediately after 026** at cutover.
+- Sandbox (`uolabcgbnrkhzpwuvzlk`) holds full 022–036 + sample data for reference.
+
+## Next Steps
+
+1. ~~Finish the 5 Phase 1 SKILL.md edits~~ **DONE ✅ (2026-06-15)** — all 5 skills in
+   `~/Documents/Claude/Scheduled/*/SKILL.md` are now consistent (no `channel=eq.<name>` /
+   `"channel":"<name>"` text refs remain; graddox writes its own `run_log` row). Ready for cutover.
+
+2. **Deploy both Netlify sites** from branch `claude/schema-multi-leg`:
+   - Push branch to GitHub, open PRs to `staging`, merge, let Netlify build
+   - Or trigger a direct deploy from the branch in the Netlify dashboard
+   - Legs are populated ✅ — safe to deploy now
+
+3. **Resume cron.** Verify the first post-cutover morning/afternoon/graddox run:
+   - `signals` row lands with `trader_id` + `date` ✅
+   - `run_log` carries `channel_id` (not `channel`) ✅
+   - `holdings` upserts hit the composite PK (`ticker,trader_id`) ✅
+   - `conviction_comments` rows carry `trader_id` ✅
+
+4. **Post-backfill (after cron verified):**
+   a. Confirm every holding has a `category_id` (app falls back to `'Other'`)
+   b. Take a fresh DB dump
+   c. Apply `034_holdings_drop_deprecated_columns.sql`
+   d. Apply `035_holding_transactions_drop_deprecated.sql`
+   e. Deploy Phase-2 routine edits (routines write `legs`/`leg_transactions` + `holding_transactions`; `basket`→`category_id`)
+
+5. **Deferred:** `$100k` notional portfolio + SPY benchmark (`spy_daily` already created in 032).
+
+---
+
 ## One Monorepo, Two App Shells
 
 This is a single pnpm workspace. Two thin app shells consume the same shared
@@ -141,7 +208,7 @@ repo**. Know who writes what before you reason about freshness or "why is this r
 | Table | Primary writer | Notes |
 |---|---|---|
 | `holdings` | **the routines** (see next section) | core position rows; admin Edit form also writes; admin IBKR proxy writes only `last_pnl_*`/`ibkr_legs` |
-| `graddox` / `graddox_levels` | **morning routine** (Gradoxx step) | GEX signal bias + levels |
+| `graddox` / `graddox_levels` | **morning routine** (Graddox step) | GEX signal bias + levels |
 | `conviction_comments` | **the routines** + `stw-transcripts` | explicit appends; `source` = `discord` or `streaming`; admin/users can also add notes |
 | `holding_transactions` | **DB trigger** (no client) | auto-logged from any `holdings` write; never written directly by app or routine |
 | `run_log` | **the routines** | ingestion audit + high-water mark; newest `digest` → "Latest Portfolio Changes" |
@@ -174,7 +241,7 @@ documented here because the Supabase schema is the contract between it (writer) 
 
 | Routine | Cadence | Reads (Discord channel) | Writes |
 |---|---|---|---|
-| `stw-morning-run` | 9am wkdays | Gradoxx → `live-notes-portfolio` → (fallback) `stream-library-stw` | `graddox`, `graddox_levels`, `holdings`, `conviction_comments`, `run_log` |
+| `stw-morning-run` | 9am wkdays | Graddox → `live-notes-portfolio` → (fallback) `stream-library-stw` | `graddox`, `graddox_levels`, `holdings`, `conviction_comments`, `run_log` |
 | `stw-afternoon-run` | 3pm wkdays | `live-notes-portfolio` → (fallback) `stream-library-stw` | `holdings`, `conviction_comments`, `run_log` |
 | `stw-friday-weighting` | 5pm Fri | `updates-portfolio` (weekly full snapshot) | `holdings` (weights only), `run_log` |
 | `stw-transcripts` | manual (+ daily fallback) | `stream-library-stw` (webinar recording) | methodology `.md` (local), `holdings`, `conviction_comments`, `run_log` |
@@ -185,7 +252,7 @@ documented here because the Supabase schema is the contract between it (writer) 
 3. That `holdings` write **auto-fires the DB trigger** → a `holding_transactions` row (no client code).
 4. For notable commentary, **append a `conviction_comments` row** (`source='discord'`) → becomes "Latest Comments"; refresh `holdings.summary`/`bullets` + `dd_updated_at` only when the durable thesis actually changed.
 5. Write the `run_log` mark, including a multi-line **`digest`** → rendered as "Latest Portfolio Changes" in the Overview.
-6. **Recording fallback:** if `stream-library-stw` has an unprocessed recording, delegate to `stw-transcripts`. (Morning also runs the Gradoxx GEX step first → `graddox`/`graddox_levels`.)
+6. **Recording fallback:** if `stream-library-stw` has an unprocessed recording, delegate to `stw-transcripts`. (Morning also runs the Graddox GEX step first → `graddox`/`graddox_levels`.)
 
 **Weekly flow (Friday):** read the full-portfolio snapshot from `updates-portfolio` and **truth-up every holding's `current_weight`** to match it (this is the weighting source of record; daily calls only nudge weights). A ticker in `holdings` but absent from the snapshot is flagged, not auto-closed.
 

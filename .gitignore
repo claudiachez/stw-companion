@@ -7,6 +7,8 @@ apps/web/dist/
 apps/admin/dist/
 .env
 **/.env
+.env.local
+**/.env.local
 
 # IBKR proxy local TLS material (never commit)
 *.pem
@@ -14,3 +16,6 @@ apps/admin/dist/
 # Python build artifacts (ibkr_proxy.py)
 __pycache__/
 *.pyc
+
+# Local DB snapshots (contain subscriber PII — never commit)
+backups/

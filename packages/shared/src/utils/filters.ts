@@ -1,4 +1,4 @@
-import { positionType } from './positions';
+import { holdingType, type Leg } from './legs';
 
 export type SortMode =
   | 'conviction' | 'az' | 'za' | 'recent' | 'oldest'
@@ -23,7 +23,7 @@ export interface FilterableHolding {
   basket: string | null;
   conviction: number | null;
   last_action: string | null;
-  position_detail: string | null;
+  legs?: Leg[];
   rank: number | null;
   action_date: string | null;
   current_weight: number | null;
@@ -36,7 +36,7 @@ export function applyFilters<T extends FilterableHolding>(holdings: T[], f: Filt
     if (f.basket && h.basket !== f.basket) return false;
     if (f.tier   && (h.conviction ?? 3) !== Number(f.tier)) return false;
     if (f.status && h.last_action !== f.status) return false;
-    if (f.type   && positionType(h.position_detail) !== f.type) return false;
+    if (f.type   && holdingType(h.legs ?? []) !== f.type) return false;
     if (f.search) {
       const q = f.search.toLowerCase();
       if (!h.ticker.toLowerCase().includes(q) &&

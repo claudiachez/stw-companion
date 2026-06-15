@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { parseOptionLegs, fmtDateTime, type OptionLeg } from '@stw/shared';
+import { fmtDateTime } from '@stw/shared';
 import { useHoldings } from '@stw/ui';
 import { supabase } from '../../lib/supabase';
 
@@ -9,13 +9,18 @@ const PROXY_URL =
 
 type Status = 'idle' | 'loading' | 'ok' | 'error';
 
-interface LegResult extends OptionLeg {
+// One contract sent to the proxy — `leg_id` is echoed back so each mark maps to its legs row.
+interface LegSpec {
+  leg_id: string;
+  symbol: string;
+  strike: number | null;
+  right: 'C' | 'P';
+  expiry: string;        // 'YYYYMMDD'
+  entry: number | null;
+}
+
+interface LegResult extends LegSpec {
   price: number | null;
-  bid?: number | null;
-  ask?: number | null;
-  mid?: number | null;
-  pnl_pct?: number | null;
-  pnl_dol?: number | null;
   error?: string;
   possibles?: { expiry: string }[];
 }
@@ -40,16 +45,27 @@ export function IbkrBadge() {
     setLabel('IBKR…');
 
     try {
-      // Collect all option legs across all holdings.
-      const allLegs: OptionLeg[] = [];
+      // Collect all OPTION legs across all holdings, carrying each leg's id so the returned
+      // mark can be written straight back to its `legs` row.
+      const allLegs: LegSpec[] = [];
       for (const h of holdings) {
-        parseOptionLegs(h.position_detail ?? '', h.ticker).forEach((leg) => allLegs.push(leg));
+        for (const leg of h.legs) {
+          if (leg.instrument_type !== 'OPTION' || leg.status !== 'OPEN') continue;
+          allLegs.push({
+            leg_id: leg.id,
+            symbol: h.ticker,
+            strike: leg.option_strike,
+            right: leg.option_right === 'PUT' ? 'P' : 'C',
+            expiry: (leg.option_expiry ?? '').replace(/-/g, ''),
+            entry: leg.entry_price,
+          });
+        }
       }
 
       if (!allLegs.length) {
         setStatus('idle');
         setLabel('IBKR');
-        setTitle('No parseable option legs found');
+        setTitle('No open option legs to price');
         return;
       }
 
@@ -64,34 +80,21 @@ export function IbkrBadge() {
         throw new Error((results as unknown as { error: string }).error);
       }
 
-      // Group legs by ticker and aggregate P&L.
+      // Persist each priced leg's mark to the `legs` row (mark_price_source = IBKR). P&L % is
+      // derived in-app from entry vs mark — the proxy is a pricer only. Don't touch holdings.
       const fetchedAt = new Date().toISOString();
-      const byTicker = new Map<string, { legs: LegResult[]; pnlPct: number | null }>();
-      for (const r of results) {
-        const entry = byTicker.get(r.symbol) ?? { legs: [], pnlPct: null };
-        entry.legs.push(r);
-        byTicker.set(r.symbol, entry);
-      }
-      for (const entry of byTicker.values()) {
-        const valid = entry.legs.filter((l) => l.price != null && l.entry != null);
-        if (valid.length) {
-          entry.pnlPct = valid.reduce((s, l) => s + (l.pnl_pct ?? 0), 0) / valid.length;
-        }
-      }
-
-      // Persist to Supabase so subscribers see it (don't touch updated_at).
       const synced = await Promise.allSettled(
-        [...byTicker.entries()]
-          .filter(([, v]) => v.pnlPct != null)
-          .map(([ticker, v]) =>
+        results
+          .filter((r) => r.price != null && r.leg_id)
+          .map((r) =>
             supabase
-              .from('holdings')
-              .update({ last_pnl_pct: v.pnlPct, last_pnl_at: fetchedAt, ibkr_legs: v.legs })
-              .eq('ticker', ticker),
+              .from('legs')
+              .update({ mark_price: r.price, mark_price_at: fetchedAt, mark_price_source: 'IBKR' })
+              .eq('id', r.leg_id),
           ),
       );
       const failed = synced.filter((r) => r.status === 'rejected').length;
-      if (failed) console.warn(`IBKR→Supabase: ${failed} ticker(s) failed to sync`);
+      if (failed) console.warn(`IBKR→Supabase: ${failed} leg(s) failed to sync`);
 
       // Surface EVERY leg we couldn't price (not just ambiguous ones) so it's clear
       // exactly which contracts are missing and why.
@@ -111,7 +114,7 @@ export function IbkrBadge() {
         alert(
           `IBKR sync — ${unpriced.length} of ${allLegs.length} leg(s) not priced:\n\n` +
           lines.join('\n') +
-          '\n\nFix the expiry in position detail for "ambiguous" legs, or retry when IB Gateway has data.',
+          '\n\nFix the leg\'s strike/expiry for "ambiguous" legs, or retry when IB Gateway has data.',
         );
       }
 

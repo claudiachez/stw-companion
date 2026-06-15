@@ -34,7 +34,7 @@ export { PicksView } from './features/picks/PicksView';
 export { useHoldings } from './features/picks/useHoldings';
 export { useFiltersStore, applyFilters, sortFlat } from './features/picks/useFilters';
 export { fetchHoldings } from './features/picks/api';
-export type { Holding, IbkrLeg } from './features/picks/api';
+export type { Holding } from './features/picks/api';
 export type { SortMode } from './features/picks/useFilters';
 export { HoldingRow } from './features/picks/components/HoldingRow';
 export { HoldingDetail } from './features/picks/components/HoldingDetail';

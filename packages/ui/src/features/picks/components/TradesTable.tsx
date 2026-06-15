@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { mergeLegs, parseCostBasis, positionType, resolvePnl, inferDirection, type Direction } from '@stw/shared';
+import { fmtLegInstrument, legIsOpen, legUnrealizedPnlPct, type Direction } from '@stw/shared';
 import { TradeEditForm } from './TradeEditForm';
 import { TickerLink } from '../../../primitives/TickerLink';
 import { usePriceCacheStore, type Quote } from '../../../store/priceCache';
@@ -7,28 +7,26 @@ import { useCapabilities } from '../../../context/AppCapabilities';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 import type { Holding } from '../api';
 
-const MONTHS = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-function fmtExpiry(e: string): string {
-  if (!e || e.length < 6) return e || '';
-  return `${MONTHS[parseInt(e.slice(4, 6), 10)] ?? ''} '${e.slice(2, 4)}`;
-}
 function daysBetween(from: string | null, to: string | null): number | null {
   if (!from || !to) return null;
-  const a = new Date(from + 'T00:00:00').getTime();
-  const b = new Date(to + 'T00:00:00').getTime();
+  const a = new Date(from).getTime();
+  const b = new Date(to).getTime();
   if (Number.isNaN(a) || Number.isNaN(b)) return null;
   return Math.max(0, Math.round((b - a) / 86_400_000));
 }
 
-// One trade per parsed component of a holding: each option leg, plus a share lot.
+// One trade row per leg (share lot or option leg). Open legs show live (unrealized) %-P&L;
+// closed legs show their booked realized %; exercised legs carry no P&L (value moved to the
+// spawned shares leg).
 interface TradeRow {
   key: string;
   holding: Holding;
   instrument: string;       // "Common" or "$7.5C Jul '26"
-  openPrice: number | null; // entry, parsed from position_detail
+  openPrice: number | null; // leg entry_price
   closePrice: number | null;
   currentPnl: number | null;
   realizedPnl: number | null;
+  exercised: boolean;
   direction: Direction;
   isOpen: boolean;
   openDate: string | null;
@@ -39,47 +37,23 @@ function buildTrades(holdings: Holding[], cache: Record<string, Quote>): TradeRo
   const rows: TradeRow[] = [];
   for (const h of holdings) {
     if (h.ticker === 'CASH') continue;
-    const isOpen = h.last_action !== 'Closed';
-    const direction = h.direction ?? inferDirection(h.position_detail);
-    const realizedPnl = isOpen ? null : (h.exit_pnl_pct ?? null);
-    const openDate = h.action_date;
-    const closeDate = isOpen ? null : h.action_date;
-    const base = { holding: h, closePrice: null, realizedPnl, direction, isOpen, openDate, closeDate };
-    let added = 0;
-
-    for (const leg of mergeLegs(h.position_detail ?? '', h.ticker, h.ibkr_legs)) {
+    const live = cache[h.ticker]?.c ?? null;
+    for (const leg of h.legs) {
+      const isOpen = legIsOpen(leg);
+      const exercised = leg.status === 'EXERCISED';
       rows.push({
-        ...base,
-        key: `${h.ticker}-${leg.strike}${leg.right}-${leg.expiry}`,
-        instrument: `$${leg.strike}${leg.right} ${fmtExpiry(leg.expiry)}`,
-        openPrice: leg.entry ?? null,
-        currentPnl: isOpen ? (leg.pnl_pct ?? null) : null,
-      });
-      added++;
-    }
-
-    const cost = parseCostBasis(h.position_detail);
-    if (cost != null) {
-      const live = cache[h.ticker]?.c ?? h.last_price ?? null;
-      rows.push({
-        ...base,
-        key: `${h.ticker}-common`,
-        instrument: 'Common',
-        openPrice: cost,
-        currentPnl: isOpen ? resolvePnl({ positionType: 'shares', price: live, costBasis: cost, optionsPnlPct: null }).pnlPct : null,
-      });
-      added++;
-    }
-
-    // Unparseable detail → still show the position once, from holding-level data.
-    if (added === 0) {
-      const live = cache[h.ticker]?.c ?? h.last_price ?? null;
-      rows.push({
-        ...base,
-        key: `${h.ticker}-pos`,
-        instrument: h.position_detail || '—',
-        openPrice: h.last_price ?? null,
-        currentPnl: isOpen ? resolvePnl({ positionType: positionType(h.position_detail), price: live, costBasis: parseCostBasis(h.position_detail), optionsPnlPct: h.last_pnl_pct }).pnlPct : null,
+        key: leg.id,
+        holding: h,
+        instrument: fmtLegInstrument(leg),
+        openPrice: leg.entry_price,
+        closePrice: leg.exit_price ?? null,
+        currentPnl: isOpen ? legUnrealizedPnlPct(leg, live) : null,
+        realizedPnl: isOpen ? null : leg.realized_pnl_pct,
+        exercised,
+        direction: leg.direction,
+        isOpen,
+        openDate: leg.opened_at ?? h.action_date,
+        closeDate: leg.closed_at ?? null,
       });
     }
   }
@@ -110,8 +84,8 @@ interface Props {
   onSelectTicker?: (ticker: string) => void;
 }
 
-// Trade blotter — one row per parsed leg / share lot. Open Price comes from position_detail;
-// open trades show live (unrealized) P&L, closed show the position's realized P&L.
+// Trade blotter — one row per leg (share lot or option leg). Open Price is the leg's
+// entry_price; open legs show live (unrealized) %-P&L, closed show the leg's realized %.
 export function TradesTable({ holdings, onSelectTicker }: Props) {
   const { canEdit } = useCapabilities();
   const priceCache = usePriceCacheStore((s) => s.cache);
@@ -158,7 +132,9 @@ export function TradesTable({ holdings, onSelectTicker }: Props) {
               <tbody>
                 {trades.map((t) => {
                   const cur = pnlCell(t.currentPnl);
-                  const real = pnlCell(t.realizedPnl);
+                  const real = t.exercised
+                    ? { text: 'Exercised', color: 'var(--t2)' }
+                    : pnlCell(t.realizedPnl);
                   return (
                     <tr key={t.key}>
                       <td style={td}>

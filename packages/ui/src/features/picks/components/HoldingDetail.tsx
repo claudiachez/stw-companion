@@ -1,20 +1,17 @@
 import { useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import type { Holding } from '../api';
-import { TIERS, ACTION_VARS, bColor, parseCostBasis, positionType, resolvePnl, mergeLegs, legPriceReason, fmtDateTime } from '@stw/shared';
+import {
+  TIERS, ACTION_VARS, bColor, fmtDateTime,
+  holdingType, holdingPnlPct, legIsOpen, legUnrealizedPnlPct, legMarkReason,
+  fmtOptionExpiry, fmtLegInstrument,
+} from '@stw/shared';
 import { useQuote } from '../../../hooks/useLivePrice';
 import { usePriceCacheStore } from '../../../store/priceCache';
 import { useCapabilities } from '../../../context/AppCapabilities';
-import { useAuthStore } from '../../../store/auth';
 import { HoldingEditForm } from './HoldingEditForm';
 import { TransactionTimeline } from './TransactionTimeline';
 import { ConvictionTimeline } from './ConvictionTimeline';
-import { CommentRow } from './CommentRow';
 import { useHoldingTransactions } from '../useHoldingHistory';
-import { useLatestComment } from '../useLatestComment';
-import { deleteConvictionComment } from '../api';
-
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 function PriceEmptyState({ fetchStatus }: { fetchStatus: string }) {
   if (fetchStatus === 'fetching') return <div style={{ fontSize: 12, color: 'var(--t3)', fontStyle: 'italic' }}>Loading…</div>;
@@ -25,15 +22,6 @@ function fmtDate(s: string | null): string {
   if (!s) return '–';
   const d = new Date(s + 'T12:00:00');
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
-}
-
-function fmtExpiry(expiry: string): string {
-  if (expiry.length < 6) return expiry;
-  const yr  = expiry.slice(2, 4);
-  const mo  = parseInt(expiry.slice(4, 6), 10) - 1;
-  const day = expiry.length === 8 ? parseInt(expiry.slice(6, 8), 10) : null;
-  const mon = MONTHS[mo] ?? '';
-  return day ? `${mon} ${day} '${yr}` : `${mon} '${yr}`;
 }
 
 function HistorySection({ title, children }: { title: string; children: React.ReactNode }) {
@@ -71,62 +59,52 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
   const { canEdit, canViewHistory, isAdmin } = useCapabilities();
   const showHistory = canViewHistory || isAdmin;
   const { data: txData = [] } = useHoldingTransactions(showHistory && h.ticker !== 'CASH' ? h.ticker : '');
-  const { data: latestComment } = useLatestComment(showHistory && h.ticker !== 'CASH' ? h.ticker : '');
-  const user = useAuthStore((s) => s.user);
-  const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
 
-  async function handleDeleteComment(id: number) {
-    try {
-      await deleteConvictionComment(id);
-      queryClient.invalidateQueries({ queryKey: ['latest-comment', h.ticker] });
-      queryClient.invalidateQueries({ queryKey: ['conviction-comments', h.ticker] });
-    } catch {
-      // silently ignore
-    }
-  }
   const quote       = useQuote(h.ticker);
   const fetchStatus = usePriceCacheStore((s) => s.fetchStatus);
   const tier        = TIERS[h.conviction] ?? TIERS[0];
   const action      = ACTION_VARS[h.last_action];
   const basketColor = bColor(h.basket);
-  const pType       = positionType(h.position_detail);
+  const pType       = holdingType(h.legs);
 
-  // ── Price (Finnhub live → last_price fallback) ────────────
+  // ── Price (Finnhub live underlying) ───────────────────────
   const livePrice   = quote?.c ?? null;
-  const price       = livePrice ?? h.last_price ?? null;
+  const price       = livePrice;
   const isLive      = livePrice != null;
   const dpStr       = quote?.dp != null ? `${quote.dp >= 0 ? '+' : ''}${quote.dp.toFixed(2)}%` : null;
   const dpColor     = (quote?.dp ?? 0) >= 0 ? '#16A34A' : '#DC2626';
   const hiloStr     = (quote?.h && quote?.l) ? `H $${quote.h.toFixed(2)} · L $${quote.l.toFixed(2)}` : null;
   // All carry the established fmtDateTime stamp ("Mon D · H:MM AM ET").
   const srcTime     = quote?.t ? fmtDateTime(new Date(quote.t * 1000)) : null;   // Finnhub quote time
-  const lastPriceDate = h.last_price_at ? fmtDateTime(h.last_price_at) : null;    // admin last-set price
 
-  // ── P&L — resolved via shared logic (shares / options / mixed) ──
-  const cost = parseCostBasis(h.position_detail);
-  const { equityPnl, optionsPnl, pnlPct } = resolvePnl({
-    positionType: pType,
-    price,
-    costBasis: cost,
-    optionsPnlPct: h.last_pnl_pct,
-  });
-  const ibkrDate = h.last_pnl_at ? fmtDateTime(h.last_pnl_at) : null; // IBKR proxy pricing time (the price's own date)
+  // ── Legs (the %-P&L source of truth) ──────────────────────
+  const openLegs   = h.legs.filter(legIsOpen);
+  const closedLegs = h.legs.filter((l) => !legIsOpen(l));
+  const optionLegs = h.legs.filter((l) => l.instrument_type === 'OPTION');
+  const shareLegs  = h.legs.filter((l) => l.instrument_type === 'SHARES');
+  const validLegs  = optionLegs.filter((l) => l.mark_price != null); // priced by IBKR
+
+  // ── P&L — weight-weighted across legs ─────────────────────
+  const pnlPct     = holdingPnlPct(openLegs, livePrice);
+  const equityPnl  = holdingPnlPct(shareLegs, livePrice);
+  const optionsPnl = holdingPnlPct(optionLegs, livePrice);
+  const pnlColor   = pnlPct != null ? (pnlPct >= 0 ? '#16A34A' : '#DC2626') : undefined;
+
+  // Newest OPTION leg mark across this holding → the "IBKR · <time>" stamp + stale flag.
+  const newestMarkAt = optionLegs.reduce<Date | null>((acc, l) => {
+    if (!l.mark_price_at) return acc;
+    const d = new Date(l.mark_price_at);
+    return !acc || d > acc ? d : acc;
+  }, null);
+  const ibkrDate = newestMarkAt ? fmtDateTime(newestMarkAt) : null;
   const ddDate   = h.dd_updated_at ? fmtDateTime(h.dd_updated_at) : null; // DD/conviction last refreshed
-  // Stale: this ticker was priced in an earlier sync than the portfolio's newest, so its
-  // options price/P&L is old — the date shown is when THIS price was captured, not "now".
+  // Stale: this holding's option marks predate the portfolio's newest sync, so the price shown
+  // is old — the date shown is when THIS mark was captured, not "now".
   const ibkrStale =
     (pType === 'options' || pType === 'mixed') &&
-    h.last_pnl_at != null && latestOptionsSync != null &&
-    new Date(h.last_pnl_at).getTime() < latestOptionsSync.getTime();
-  const pnlColor = pnlPct != null ? (pnlPct >= 0 ? '#16A34A' : '#DC2626') : undefined;
-
-  // ── Options legs ─────────────────────────────────────────
-  // Show EVERY leg parsed from position_detail, overlaying IBKR price/P&L where the
-  // proxy priced it (shared mergeLegs). Legs the proxy couldn't resolve still appear
-  // unpriced, so a multi-leg position never silently hides a leg.
-  const legs = mergeLegs(h.position_detail ?? '', h.ticker, h.ibkr_legs);
-  const validLegs = legs.filter((l) => l.price != null);
+    newestMarkAt != null && latestOptionsSync != null &&
+    newestMarkAt.getTime() < latestOptionsSync.getTime();
 
   // ── P&L source line(s) ───────────────────────────────────
   // Name the actual data source, each with its own "as of" stamp. Shares ride the
@@ -134,7 +112,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
   // position shows BOTH lines, since the two halves refresh on different clocks.
   const sharesSrc = isLive
     ? (srcTime ? `Finnhub · ${srcTime}` : 'Finnhub')
-    : (lastPriceDate ? `Last sync · ${lastPriceDate}` : null);
+    : null;
   // For options, show the price's own capture date. When stale, mark it so an old price
   // isn't mistaken for a fresh sync.
   const ibkrSrc = ibkrDate ? `IBKR · ${ibkrDate}${ibkrStale ? ' · stale' : ''}` : 'IBKR';
@@ -169,9 +147,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
             {isLive && dpStr  && <div style={{ fontSize: 11, fontWeight: 600, color: dpColor, marginTop: 2 }}>{dpStr}</div>}
             {isLive && hiloStr && <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 1 }}>{hiloStr}</div>}
             <div style={{ fontSize: 9, color: 'var(--t3)', marginTop: 4, opacity: 0.8 }}>
-              {isLive
-                ? (srcTime ? `Finnhub · ${srcTime}` : 'Finnhub')
-                : (lastPriceDate ? `Last sync · ${lastPriceDate}` : 'Last sync')}
+              {srcTime ? `Finnhub · ${srcTime}` : 'Finnhub'}
             </div>
           </>
         ) : (
@@ -184,7 +160,8 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
   const isClosed = h.last_action === 'Closed';
 
   function renderClosedPnlCol(withBorder = true) {
-    const exitPct = h.exit_pnl_pct;
+    // Weighted realized % across the closed legs.
+    const exitPct = holdingPnlPct(closedLegs, livePrice);
     const exitColor = exitPct != null ? (exitPct >= 0 ? '#16A34A' : '#DC2626') : undefined;
     return (
       <div style={{ flex: 1, ...(withBorder ? colBorder : {}) }}>
@@ -196,9 +173,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
             <div style={{ fontSize: 20, fontWeight: 700, color: exitColor, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
               {exitPct >= 0 ? '+' : ''}{exitPct.toFixed(1)}%
             </div>
-            <div style={{ fontSize: 9, color: 'var(--t3)', marginTop: 4, opacity: 0.8 }}>
-              {h.exit_price != null ? `Realized · exit $${h.exit_price.toFixed(2)}` : 'Realized'}
-            </div>
+            <div style={{ fontSize: 9, color: 'var(--t3)', marginTop: 4, opacity: 0.8 }}>Realized</div>
           </>
         ) : (
           <div style={{ fontSize: 12, color: 'var(--t3)' }}>Position closed</div>
@@ -221,9 +196,9 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
             <div style={{ fontSize: 20, fontWeight: 700, color: pnlColor, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
               {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%
             </div>
-            {pType === 'options' && legs.length > 0 && (
+            {pType === 'options' && optionLegs.length > 0 && (
               <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>
-                {validLegs.length} of {legs.length} leg{legs.length > 1 ? 's' : ''} priced
+                {validLegs.length} of {optionLegs.length} leg{optionLegs.length > 1 ? 's' : ''} priced
               </div>
             )}
             {srcLines.map((line, i) => (
@@ -250,9 +225,9 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
           <span style={{ color: 'var(--t3)', fontWeight: 400, margin: '0 4px' }}>→</span>
           {h.current_weight != null ? `${h.current_weight.toFixed(1)}%` : '—'}
         </div>
-        {h.position_detail ? (
+        {h.legs.length > 0 ? (
           <div style={{ fontSize: isMobile ? 11 : 10, color: 'var(--t2)', marginTop: 4, lineHeight: 1.5 }}>
-            {h.position_detail}
+            {h.legs.map((l) => `${fmtLegInstrument(l)}${l.weight != null ? ` ${l.weight}%` : ''}`).join(' · ')}
           </div>
         ) : (
           <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 4 }}>detail pending</div>
@@ -277,7 +252,9 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
               <div style={{ fontSize: 17, fontWeight: 700, color: equityPnl >= 0 ? '#16A34A' : '#DC2626', fontVariantNumeric: 'tabular-nums' }}>
                 {equityPnl >= 0 ? '+' : ''}{equityPnl.toFixed(1)}%
               </div>
-              {cost && <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>from ${cost.toFixed(2)}</div>}
+              {shareLegs[0]?.entry_price != null && (
+                <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>from ${shareLegs[0].entry_price!.toFixed(2)}</div>
+              )}
             </div>
           )}
           {optionsPnl != null && (
@@ -293,7 +270,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
               )}
             </div>
           )}
-          {legs.length > 0 && (
+          {optionLegs.length > 0 && (
             <div style={{ flex: isMobile ? '1 1 100%' : '1 1 50%', ...(isMobile ? { borderTop: '1px solid var(--border)', paddingTop: 10 } : colBorder) }}>
               <div style={{ fontSize: 9, color: 'var(--t3)', marginBottom: 3 }}>Options Detail</div>
               {renderLegRowsCompact()}
@@ -304,31 +281,35 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
     );
   }
 
-  // Compact leg list for the P&L Breakdown's third column (mixed positions): two tight
-  // lines per leg — strike/expiry + P&L%, then entry→price + per-contract (or reason).
+  // Compact option-leg list for the P&L Breakdown's third column (mixed positions): two tight
+  // lines per leg — strike/expiry + P&L%, then entry→mark + per-contract (or unpriced reason).
   function renderLegRowsCompact() {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {legs.map((leg, i) => {
-          const lColor      = leg.pnl_pct != null ? (leg.pnl_pct >= 0 ? '#16A34A' : '#DC2626') : 'var(--t3)';
-          const perContract = leg.price != null ? (leg.price - leg.entry) * 100 : null;
-          const reason      = legPriceReason(leg);
+        {optionLegs.map((leg) => {
+          const right       = leg.option_right === 'PUT' ? 'P' : 'C';
+          const pnl         = legUnrealizedPnlPct(leg, livePrice);
+          const mark        = leg.mark_price;
+          const entry       = leg.entry_price;
+          const lColor      = pnl != null ? (pnl >= 0 ? '#16A34A' : '#DC2626') : 'var(--t3)';
+          const perContract = mark != null && entry != null ? (mark - entry) * 100 : null;
+          const reason      = legMarkReason(leg);
           return (
-            <div key={i} style={{ fontSize: 11 }}>
+            <div key={leg.id} style={{ fontSize: 11 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
                 <span style={{ minWidth: 0 }}>
-                  <span style={{ fontWeight: 700, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>${leg.strike}{leg.right}</span>
-                  <span style={{ color: 'var(--t3)', marginLeft: 6 }}>{fmtExpiry(leg.expiry)}</span>
+                  <span style={{ fontWeight: 700, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>${leg.option_strike}{right}</span>
+                  <span style={{ color: 'var(--t3)', marginLeft: 6 }}>{fmtOptionExpiry(leg.option_expiry)}</span>
                 </span>
-                {leg.pnl_pct != null && (
+                {pnl != null && (
                   <span style={{ fontWeight: 700, color: lColor, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
-                    {leg.pnl_pct >= 0 ? '+' : ''}{leg.pnl_pct.toFixed(1)}%
+                    {pnl >= 0 ? '+' : ''}{pnl.toFixed(1)}%
                   </span>
                 )}
               </div>
-              {leg.price != null ? (
+              {mark != null && entry != null ? (
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 10, color: 'var(--t3)', marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
-                  <span>${leg.entry.toFixed(2)} → ${leg.price.toFixed(2)}</span>
+                  <span>${entry.toFixed(2)} → ${mark.toFixed(2)}</span>
                   {perContract != null && (
                     <span style={{ flexShrink: 0 }}>{perContract >= 0 ? '+' : ''}${Math.abs(perContract).toFixed(0)}/ct</span>
                   )}
@@ -347,17 +328,21 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
     );
   }
 
-  // Leg rows (entry → price, P&L, unpriced reason). Rendered inside the P&L Breakdown
+  // Option-leg rows (entry → mark, P&L, unpriced reason). Rendered inside the P&L Breakdown
   // card for mixed positions; as their own section for options-only positions.
   function renderLegRows() {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {legs.map((leg, i) => {
-            const lColor      = leg.pnl_pct != null ? (leg.pnl_pct >= 0 ? '#16A34A' : '#DC2626') : 'var(--t3)';
-            const perContract = leg.price != null ? (leg.price - leg.entry) * 100 : null;
-            const reason      = legPriceReason(leg); // why this leg has no price (if so)
+        {optionLegs.map((leg) => {
+            const right       = leg.option_right === 'PUT' ? 'P' : 'C';
+            const pnl         = legUnrealizedPnlPct(leg, livePrice);
+            const mark        = leg.mark_price;
+            const entry       = leg.entry_price;
+            const lColor      = pnl != null ? (pnl >= 0 ? '#16A34A' : '#DC2626') : 'var(--t3)';
+            const perContract = mark != null && entry != null ? (mark - entry) * 100 : null;
+            const reason      = legMarkReason(leg); // why this leg has no mark (if so)
             return (
-              <div key={i} style={{
+              <div key={leg.id} style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 padding: '6px 10px', borderRadius: 5,
                 background: 'var(--s2)', border: '1px solid var(--bsub)',
@@ -366,9 +351,9 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <span style={{ fontWeight: 700, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
-                      ${leg.strike}{leg.right}
+                      ${leg.option_strike}{right}
                     </span>
-                    <span style={{ color: 'var(--t3)' }}>{fmtExpiry(leg.expiry)}</span>
+                    <span style={{ color: 'var(--t3)' }}>{fmtOptionExpiry(leg.option_expiry)}</span>
                   </div>
                   {reason && (
                     <span style={{ fontSize: 9, color: 'var(--c3)', lineHeight: 1.3 }}>
@@ -378,12 +363,12 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
                 </div>
                 <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexShrink: 0 }}>
                   <span style={{ color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>
-                    ${leg.entry.toFixed(2)} → {leg.price != null ? `$${leg.price.toFixed(2)}` : '—'}
+                    {entry != null ? `$${entry.toFixed(2)}` : '—'} → {mark != null ? `$${mark.toFixed(2)}` : '—'}
                   </span>
-                  {leg.pnl_pct != null && (
+                  {pnl != null && (
                     <div style={{ textAlign: 'right' }}>
                       <div style={{ fontWeight: 700, color: lColor, fontVariantNumeric: 'tabular-nums' }}>
-                        {leg.pnl_pct >= 0 ? '+' : ''}{leg.pnl_pct.toFixed(1)}%
+                        {pnl >= 0 ? '+' : ''}{pnl.toFixed(1)}%
                       </div>
                       {perContract != null && (
                         <div style={{ fontSize: 9, color: 'var(--t3)' }}>
@@ -402,7 +387,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
 
   // Options-only positions: legs as their own section (mixed renders them in breakdown).
   function renderLegsSection() {
-    if (pType !== 'options' || legs.length === 0) return null;
+    if (pType !== 'options' || optionLegs.length === 0) return null;
     return (
       <div style={{ marginBottom: 12 }}>
         <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>
@@ -571,31 +556,18 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
           </div>
         )}
 
-        {/* Latest Comments — the single newest host note (Discord or stream); the rest live in history */}
-        {showHistory && h.ticker !== 'CASH' && latestComment && (
-          <div style={{ marginBottom: 4 }}>
-            <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 2 }}>
-              Latest Comments
-            </div>
-            <CommentRow
-              cc={latestComment}
-              currentUserId={user?.id ?? null}
-              canEdit={!!canEdit}
-              onDelete={handleDeleteComment}
-            />
-          </div>
+        {/* Commentary — one unified conviction_comments feed (host Discord/stream notes +
+            subscriber personal notes), newest first. Replaces the old Latest Comments /
+            Conviction Notes split. */}
+        {showHistory && h.ticker !== 'CASH' && (
+          <HistorySection title="Commentary">
+            <ConvictionTimeline ticker={h.ticker} currentConviction={h.conviction} />
+          </HistorySection>
         )}
-
-        {/* Transaction History & Conviction Notes — premium + admin only */}
+        {/* Transaction History — moved to the bottom so it no longer interrupts the narrative */}
         {showHistory && h.ticker !== 'CASH' && (txData.length > 0 || canEdit) && (
           <HistorySection title="Transaction History">
             <TransactionTimeline ticker={h.ticker} />
-          </HistorySection>
-        )}
-        {/* Conviction Notes: always visible for premium+ so they can add personal notes */}
-        {showHistory && h.ticker !== 'CASH' && (
-          <HistorySection title="Conviction Notes">
-            <ConvictionTimeline ticker={h.ticker} currentConviction={h.conviction} excludeId={latestComment?.id} />
           </HistorySection>
         )}
       </div>

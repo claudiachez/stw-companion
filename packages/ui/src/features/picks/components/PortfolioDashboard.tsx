@@ -1,18 +1,10 @@
-import { bColor, parseCostBasis, positionType, resolvePnl, mergeLegs, legPriceReason, fmtDateTime } from '@stw/shared';
+import { bColor, holdingPnlPct, holdingType, legMarkReason, fmtLegInstrument, fmtDateTime } from '@stw/shared';
 import { usePriceCacheStore } from '../../../store/priceCache';
 import { useRecentChanges } from '../useRecentChanges';
 import { useLatestWebinar } from '../useLatestWebinar';
 import { TickerLink } from '../../../primitives/TickerLink';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 import type { Holding } from '../api';
-
-const LEG_MONTHS = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-// "202608" / "20260815" → "Aug '26" for the unpriced-legs summary.
-function legExpiry(e: string): string {
-  if (!e || e.length < 6) return e || '';
-  return `${LEG_MONTHS[parseInt(e.slice(4, 6), 10)] ?? ''} '${e.slice(2, 4)}`;
-}
 
 interface DashboardProps {
   holdings: Holding[];
@@ -58,15 +50,10 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
 
   const active = holdings.filter((h) => h.ticker !== 'CASH' && h.last_action !== 'Closed');
 
-  // Avg P&L across positions with a resolvable return — shares (live price vs cost),
-  // options (IBKR last_pnl_pct), and mixed (blended), via the shared resolver.
+  // Avg P&L across positions with a resolvable return — each holding's weight-weighted P&L
+  // across its legs (shares ride the live quote, options their stored IBKR mark).
   const pnlValues = active
-    .map((h) => resolvePnl({
-      positionType: positionType(h.position_detail),
-      price: cache[h.ticker]?.c ?? null,
-      costBasis: parseCostBasis(h.position_detail),
-      optionsPnlPct: h.last_pnl_pct,
-    }).pnlPct)
+    .map((h) => holdingPnlPct(h.legs, cache[h.ticker]?.c ?? null))
     .filter((v): v is number => v != null);
   const avgPnl = pnlValues.length > 0
     ? pnlValues.reduce((s, v) => s + v, 0) / pnlValues.length
@@ -78,7 +65,7 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
   let optionsWeight = 0;
   active.forEach((h) => {
     const w = h.current_weight ?? h.initial_weight ?? 0;
-    const t = positionType(h.position_detail);
+    const t = holdingType(h.legs);
     if (t === 'options') optionsWeight += w;
     else if (w > 0) equityWeight += w; // shares, mixed, or unclassified
   });
@@ -102,37 +89,36 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
     return !acc || d > acc ? d : acc;
   }, null);
 
-  // Options data freshness = newest IBKR pricing (last_pnl_at) across holdings.
+  // Options data freshness = newest IBKR leg mark across all holdings.
   const optionsSynced = holdings.reduce<Date | null>((acc, h) => {
-    if (!h.last_pnl_at) return acc;
-    const d = new Date(h.last_pnl_at);
-    return !acc || d > acc ? d : acc;
+    for (const leg of h.legs) {
+      if (!leg.mark_price_at) continue;
+      const d = new Date(leg.mark_price_at);
+      if (!acc || d > acc) acc = d;
+    }
+    return acc;
   }, null);
 
-  // Portfolio-wide unpriced legs: parsed from position_detail but with no IBKR price.
+  // Portfolio-wide unpriced option legs: open OPTION legs with no IBKR mark yet.
   const unpricedLegs = holdings.flatMap((h) => {
     if (h.ticker === 'CASH' || h.last_action === 'Closed') return [];
-    return mergeLegs(h.position_detail ?? '', h.ticker, h.ibkr_legs)
-      .filter((l) => l.price == null)
-      .map((l) => ({
-        ticker: h.ticker,
-        label: `$${l.strike}${l.right} ${legExpiry(l.expiry)}`,
-        reason: legPriceReason(l),
-      }));
+    return h.legs
+      .filter((l) => l.instrument_type === 'OPTION' && l.status === 'OPEN' && l.mark_price == null)
+      .map((l) => ({ ticker: h.ticker, label: fmtLegInstrument(l), reason: legMarkReason(l) }));
   });
 
-  // Stale prices: a ticker priced in a PRIOR sync but not the latest one shows an old
-  // price (the last sync failed for it). last_pnl_at is per-ticker and stamped with the
-  // sync time on success, so any priced ticker older than the newest options sync is stale.
+  // Stale prices: an option leg marked in a PRIOR sync but not the latest one shows an old
+  // price. mark_price_at is per-leg and stamped on a successful sync, so any priced leg older
+  // than the newest mark is stale.
   const stalePrices = holdings.flatMap((h) => {
-    if (h.ticker === 'CASH' || h.last_action === 'Closed') return [];
-    if (!h.last_pnl_at || !optionsSynced) return [];
-    const at = new Date(h.last_pnl_at);
-    if (at.getTime() >= optionsSynced.getTime()) return []; // refreshed in the latest sync
-    const priced = mergeLegs(h.position_detail ?? '', h.ticker, h.ibkr_legs)
-      .filter((l) => l.price != null);
-    if (!priced.length) return []; // no live price to be stale — it's in Unpriced instead
-    const legs = priced.map((l) => `$${l.strike}${l.right} ${legExpiry(l.expiry)}`).join(', ');
+    if (h.ticker === 'CASH' || h.last_action === 'Closed' || !optionsSynced) return [];
+    const stale = h.legs.filter(
+      (l) => l.instrument_type === 'OPTION' && l.mark_price != null && l.mark_price_at != null &&
+        new Date(l.mark_price_at).getTime() < optionsSynced.getTime(),
+    );
+    if (!stale.length) return [];
+    const at = new Date(stale[0].mark_price_at!);
+    const legs = stale.map((l) => fmtLegInstrument(l)).join(', ');
     return [{ ticker: h.ticker, label: `priced ${fmtDateTime(at)}: ${legs}` }];
   });
 

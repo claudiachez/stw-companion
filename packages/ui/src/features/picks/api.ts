@@ -1,15 +1,6 @@
 import { getSupabase } from '../../lib/supabase';
-import type { HoldingTransaction, ConvictionComment, Direction } from '@stw/shared';
-
-export interface IbkrLeg {
-  symbol: string;
-  strike: number;
-  right: 'C' | 'P';
-  expiry: string;
-  entry: number;
-  price: number | null;
-  pnl_pct: number | null;
-}
+import { getTraderId, STW } from '../traders/api';
+import type { HoldingTransaction, ConvictionComment, Leg } from '@stw/shared';
 
 export interface Holding {
   rank: number;
@@ -21,29 +12,32 @@ export interface Holding {
   action_date: string | null;
   initial_weight: number | null;
   current_weight: number | null;
-  position_detail: string | null;
   summary: string | null;
   bullets: string[] | null;
   dd_updated_at: string | null;   // when DD/thesis/conviction was last refreshed (runs + stream)
   updated_at: string | null;
-  last_price: number | null;
-  last_price_at: string | null;
-  last_pnl_pct: number | null;
-  last_pnl_at: string | null;
-  ibkr_legs: IbkrLeg[] | null;
-  exit_price: number | null;
-  exit_pnl_pct: number | null;
-  direction: Direction | null;
+  // Structured per-leg position rows (migrations 029/030), embedded via a PostgREST nested
+  // select. The %-P&L model reads everything off these — there are no more position_detail /
+  // ibkr_legs / last_pnl_pct columns.
+  legs: Leg[];
 }
 
 export async function fetchHoldings(): Promise<Holding[]> {
   const { data, error } = await getSupabase()
     .from('holdings')
-    .select('*')
+    .select('*, legs(*), category:categories(name)')
     .order('rank', { ascending: true });
 
   if (error) throw error;
-  return (data ?? []) as Holding[];
+  // `basket` is sourced from the joined category (migration 034 drops holdings.basket; the
+  // categories were seeded from those exact strings so bColor/filters keep working). Keep the
+  // field name — it's the UI's vocabulary ("Sector Distribution", "All Baskets"). Pre-034 the
+  // column still exists and equals the category name; uncategorized rows fall back to 'Other'.
+  return (data ?? []).map((h) => ({
+    ...h,
+    basket: (h.category as { name?: string } | null)?.name ?? h.basket ?? 'Other',
+    legs: h.legs ?? [],
+  })) as Holding[];
 }
 
 export async function fetchHoldingTransactions(ticker: string): Promise<HoldingTransaction[]> {
@@ -51,7 +45,6 @@ export async function fetchHoldingTransactions(ticker: string): Promise<HoldingT
     .from('holding_transactions')
     .select('*')
     .eq('ticker', ticker)
-    .order('leg', { ascending: true })
     .order('event_date', { ascending: true });
 
   if (error) throw error;
@@ -63,23 +56,32 @@ export async function fetchConvictionComments(ticker: string): Promise<Convictio
     .from('conviction_comments')
     .select('*')
     .eq('ticker', ticker)
-    .order('event_date', { ascending: false });
+    // Unified Commentary feed is newest-first by when the row was written.
+    .order('created_at', { ascending: false });
 
   if (error) throw error;
   return (data ?? []) as ConvictionComment[];
 }
 
+// trader_id is stamped here (not in the forms) so the "app writes are STW" rule lives in
+// one place. NOT NULL after migration 026.
 export async function insertHoldingTransaction(
-  row: Omit<HoldingTransaction, 'id' | 'created_at'>
+  row: Omit<HoldingTransaction, 'id' | 'created_at' | 'trader_id'>
 ): Promise<void> {
-  const { error } = await getSupabase().from('holding_transactions').insert(row);
+  const trader_id = await getTraderId(STW);
+  // Idempotent on the dedupe key (migration 036): a manual entry + the routine processing the
+  // same event collapse to one row (last write wins) instead of duplicating.
+  const { error } = await getSupabase()
+    .from('holding_transactions')
+    .upsert({ ...row, trader_id }, { onConflict: 'ticker,trader_id,action,event_date' });
   if (error) throw error;
 }
 
 export async function insertConvictionComment(
-  row: Omit<ConvictionComment, 'id' | 'created_at'>
+  row: Omit<ConvictionComment, 'id' | 'created_at' | 'trader_id'>
 ): Promise<void> {
-  const { error } = await getSupabase().from('conviction_comments').insert(row);
+  const trader_id = await getTraderId(STW);
+  const { error } = await getSupabase().from('conviction_comments').insert({ ...row, trader_id });
   if (error) throw error;
 }
 
@@ -93,14 +95,8 @@ export async function deleteConvictionComment(id: number): Promise<void> {
   if (error) throw error;
 }
 
-export async function fetchMaxLeg(ticker: string): Promise<number> {
-  const { data, error } = await getSupabase()
-    .from('holding_transactions')
-    .select('leg')
-    .eq('ticker', ticker)
-    .order('leg', { ascending: false })
-    .limit(1);
-
+// Admin per-leg weight override — the editor for the writer's 90/10 default split.
+export async function updateLegWeight(legId: string, weight: number | null): Promise<void> {
+  const { error } = await getSupabase().from('legs').update({ weight }).eq('id', legId);
   if (error) throw error;
-  return data?.[0]?.leg ?? 1;
 }
