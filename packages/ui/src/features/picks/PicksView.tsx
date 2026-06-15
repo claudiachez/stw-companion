@@ -210,7 +210,7 @@ export function PicksView() {
         <div style={{ display: 'flex', background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', flexShrink: 0, gap: isMobile ? 0 : 4, padding: isMobile ? 0 : '0 8px' }}>
           {TABS.map((tab) => (
             <button key={tab} style={tabBtn(tab)} onClick={() => setActiveTab(tab)}>
-              {tab === 'positions' ? `${PICKS_TAB_LABELS.positions} (${sorted.length})` : PICKS_TAB_LABELS[tab]}
+              {tab === 'positions' ? `${PICKS_TAB_LABELS.positions} (${positionCount})` : PICKS_TAB_LABELS[tab]}
             </button>
           ))}
         </div>

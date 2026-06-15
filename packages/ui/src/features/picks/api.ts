@@ -8,6 +8,7 @@ export interface Holding {
   name: string;
   conviction: number;
   basket: string;
+  category_id: string | null;
   last_action: string;
   action_date: string | null;
   initial_weight: number | null;
@@ -38,6 +39,25 @@ export async function fetchHoldings(): Promise<Holding[]> {
     basket: (h.category as { name?: string } | null)?.name ?? h.basket ?? 'Other',
     legs: h.legs ?? [],
   })) as Holding[];
+}
+
+export interface Category {
+  id: string;
+  name: string;
+}
+
+// Categories for the STW trader, used by the admin edit form to (re)assign a holding's
+// category. Full CRUD lives in the admin Manage area (separate work).
+export async function fetchCategories(): Promise<Category[]> {
+  const trader_id = await getTraderId(STW);
+  const { data, error } = await getSupabase()
+    .from('categories')
+    .select('id, name')
+    .eq('trader_id', trader_id)
+    .order('name', { ascending: true });
+
+  if (error) throw error;
+  return (data ?? []) as Category[];
 }
 
 export async function fetchHoldingTransactions(ticker: string): Promise<HoldingTransaction[]> {

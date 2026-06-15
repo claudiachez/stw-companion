@@ -4,6 +4,7 @@ import { useRecentChanges } from '../useRecentChanges';
 import { useLatestWebinar } from '../useLatestWebinar';
 import { TickerLink } from '../../../primitives/TickerLink';
 import { useIsMobile } from '../../../hooks/useIsMobile';
+import { useCapabilities } from '../../../context/AppCapabilities';
 import type { Holding } from '../api';
 
 interface DashboardProps {
@@ -43,6 +44,9 @@ function renderDigest(
 // ── Portfolio dashboard (shown when no ticker selected) ───────
 export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps) {
   const isMobile = useIsMobile();
+  // Only the admin can act on a stale price (re-run the IBKR sync); subscribers can't, so
+  // the "Re-run the sync." instruction is admin-only — the explanation still shows to everyone.
+  const { canEdit } = useCapabilities();
   const cache = usePriceCacheStore((s) => s.cache);
   const { data: changes } = useRecentChanges(1);
   const latestChange = changes?.[0] ?? null;
@@ -299,7 +303,7 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
             ))}
           </div>
           <div style={{ fontSize: 9, color: 'var(--t3)', marginTop: 4 }}>
-            Showing prices from an earlier sync — the latest IBKR sync didn't refresh these. Re-run the sync.
+            Showing prices from an earlier sync — the latest IBKR sync didn't refresh these.{canEdit ? ' Re-run the sync.' : ''}
           </div>
         </div>
       )}
