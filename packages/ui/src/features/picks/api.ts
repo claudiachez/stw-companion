@@ -133,7 +133,7 @@ export async function updateLegWeight(legId: string, weight: number | null): Pro
 export type LegEditableFields = Pick<
   Leg,
   | 'instrument_type' | 'option_strike' | 'option_expiry' | 'option_right'
-  | 'direction' | 'status' | 'entry_price' | 'weight'
+  | 'direction' | 'status' | 'entry_price' | 'weight' | 'initial_weight'
   | 'exit_price' | 'realized_pnl_pct' | 'close_reason' | 'opened_at' | 'closed_at'
 >;
 

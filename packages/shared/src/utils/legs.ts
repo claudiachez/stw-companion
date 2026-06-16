@@ -26,7 +26,8 @@ export interface Leg {
   direction: Direction;
   status: LegStatus;
   entry_price: number | null;
-  weight: number | null;
+  weight: number | null;          // CURRENT per-leg weight (% of portfolio)
+  initial_weight: number | null;  // ENTRY per-leg weight (migration 037)
   mark_price: number | null;
   mark_price_source: MarkPriceSource | null;
   mark_price_at: string | null;
@@ -161,4 +162,22 @@ export function fmtLegInstrument(leg: Leg, withDay = false): string {
   if (leg.instrument_type === 'SHARES') return 'Common';
   const right = leg.option_right === 'PUT' ? 'P' : 'C';
   return `$${leg.option_strike}${right} ${fmtOptionExpiry(leg.option_expiry, withDay)}`.trim();
+}
+
+// Compact per-leg breakdown line for the "Entry · Current Weight" panel, e.g.
+//   single leg:  "Shares @ $4.71"
+//   multi-leg:   "5.8% Shares @ $53.16 · 0.3% $50C Nov '26 · 0.3% $60C Jun '26"
+// Shares show their entry price + read "Shares" (not "Common"); options show the contract. Per-leg
+// weight (1 decimal) is prefixed only when there are multiple legs — for a single leg it's
+// redundant with the holding's current weight shown just above.
+export function fmtLegWeightLine(legs: Leg[]): string {
+  const multi = legs.length > 1;
+  return legs
+    .map((l) => {
+      const w = multi && l.weight != null ? `${l.weight.toFixed(1)}% ` : '';
+      const label = l.instrument_type === 'SHARES' ? 'Shares' : fmtLegInstrument(l);
+      const entry = l.instrument_type === 'SHARES' && l.entry_price != null ? ` @ $${l.entry_price}` : '';
+      return `${w}${label}${entry}`;
+    })
+    .join(' · ');
 }

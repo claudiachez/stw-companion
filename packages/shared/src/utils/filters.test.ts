@@ -9,7 +9,7 @@ function legOf(instrument: 'SHARES' | 'OPTION'): Leg {
     id: 'l', ticker: 'X', trader_id: 't', parent_leg_id: null, instrument_type: instrument,
     option_strike: instrument === 'OPTION' ? 30 : null, option_expiry: instrument === 'OPTION' ? '2026-01-16' : null,
     option_right: instrument === 'OPTION' ? 'CALL' : null, direction: 'long', status: 'OPEN',
-    entry_price: 1, weight: 1, mark_price: null, mark_price_source: null, mark_price_at: null,
+    entry_price: 1, weight: 1, initial_weight: 1, mark_price: null, mark_price_source: null, mark_price_at: null,
     exit_price: null, realized_pnl_pct: null, opened_at: null, closed_at: null, close_reason: null,
   };
 }

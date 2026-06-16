@@ -9,7 +9,7 @@ function leg(over: Partial<Leg>): Leg {
   return {
     id: 'l1', ticker: 'X', trader_id: 't', parent_leg_id: null,
     instrument_type: 'SHARES', option_strike: null, option_expiry: null, option_right: null,
-    direction: 'long', status: 'OPEN', entry_price: null, weight: null,
+    direction: 'long', status: 'OPEN', entry_price: null, weight: null, initial_weight: null,
     mark_price: null, mark_price_source: null, mark_price_at: null,
     exit_price: null, realized_pnl_pct: null, opened_at: null, closed_at: null, close_reason: null,
     ...over,
