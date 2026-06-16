@@ -7,6 +7,7 @@ import {
 } from '@stw/shared';
 import { insertLeg, updateLeg, deleteLeg, type LegEditableFields } from '../api';
 import type { Holding } from '../api';
+import { errMsg } from '../../../lib/errMsg';
 
 interface Props {
   holding: Holding;
@@ -136,7 +137,7 @@ function LegForm({ ticker, leg, onSaved, onCancel }: { ticker: string; leg?: Leg
       else await insertLeg(ticker, fields);
       onSaved();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errMsg(e));
     } finally {
       setSaving(false);
     }
@@ -264,7 +265,7 @@ export function LegEditor({ holding: h, onDone }: Props) {
       await deleteLeg(leg.id);
       await refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errMsg(e));
     } finally {
       setBusyId(null);
     }

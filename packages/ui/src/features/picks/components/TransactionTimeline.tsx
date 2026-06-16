@@ -3,6 +3,7 @@ import type { HoldingTransaction } from '@stw/shared';
 import { useHoldingTransactions } from '../useHoldingHistory';
 import { useQueryClient } from '@tanstack/react-query';
 import { deleteHoldingTransaction } from '../api';
+import { errMsg } from '../../../lib/errMsg';
 import { TransactionEventForm } from './TransactionEventForm';
 import { ActionBadge } from './ActionBadge';
 import { useCapabilities } from '../../../context/AppCapabilities';
@@ -80,7 +81,7 @@ export function TransactionTimeline({ ticker }: Props) {
       await deleteHoldingTransaction(id);
       await queryClient.invalidateQueries({ queryKey: ['transactions', ticker] });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errMsg(e));
     } finally {
       setDeletingId(null);
     }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { Holding } from '../api';
 import {
   TIERS, ACTION_VARS, bColor, fmtDateTime,
@@ -63,6 +63,19 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
   const [editing, setEditing] = useState(false);
   const [managingLegs, setManagingLegs] = useState(false);
   const [editMenuOpen, setEditMenuOpen] = useState(false);
+  const editBtnRef = useRef<HTMLButtonElement>(null);
+  const [editMenuPos, setEditMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  function toggleEditMenu() {
+    const r = editBtnRef.current?.getBoundingClientRect();
+    if (r) {
+      const menuW = 170;
+      const vw = window.innerWidth || r.right + menuW; // guard against a 0 width
+      // left-anchor under the button, clamped so it never runs off either edge
+      const left = Math.max(8, Math.min(r.left, vw - menuW - 8));
+      setEditMenuPos({ top: r.bottom + 4, left });
+    }
+    setEditMenuOpen((v) => !v);
+  }
 
   const quote       = useQuote(h.ticker);
   const fetchStatus = usePriceCacheStore((s) => s.fetchStatus);
@@ -419,9 +432,10 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
           {isMobile ? '← Back' : 'Close →'}
         </button>
         {canEdit && h.ticker !== 'CASH' && !editing && (
-          <div style={{ position: 'relative', order: 1 }}>
+          <div style={{ order: 1 }}>
             <button
-              onClick={() => setEditMenuOpen((v) => !v)}
+              ref={editBtnRef}
+              onClick={toggleEditMenu}
               style={{
                 fontSize: 12, color: 'var(--acc)', background: editMenuOpen ? 'var(--s2)' : 'none',
                 border: '1px solid var(--border)', borderRadius: 5, cursor: 'pointer', padding: '4px 10px',
@@ -433,8 +447,9 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
             </button>
             {editMenuOpen && (
               <>
-                <div onClick={() => setEditMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
-                <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 41, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, boxShadow: '0 8px 24px rgba(0,0,0,0.45)', minWidth: 160, overflow: 'hidden' }}>
+                <div onClick={() => setEditMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 1000 }} />
+                {/* fixed (not absolute) so the panel's overflow can't clip it */}
+                <div style={{ position: 'fixed', top: editMenuPos.top, left: editMenuPos.left, zIndex: 1001, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, boxShadow: '0 8px 24px rgba(0,0,0,0.45)', minWidth: 160, overflow: 'hidden' }}>
                   {[
                     { label: '✎ Position fields', act: () => setEditing(true) },
                     { label: '⚙ Legs', act: () => setManagingLegs(true) },
@@ -442,7 +457,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
                     <button
                       key={it.label}
                       onClick={() => { setEditMenuOpen(false); it.act(); }}
-                      style={{ display: 'block', width: '100%', textAlign: 'left', fontSize: 12, color: 'var(--text)', background: 'none', border: 'none', cursor: 'pointer', padding: '8px 12px' }}
+                      style={{ display: 'block', width: '100%', textAlign: 'left', whiteSpace: 'nowrap', fontSize: 12, color: 'var(--text)', background: 'none', border: 'none', cursor: 'pointer', padding: '8px 12px' }}
                       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
                       onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
                     >
