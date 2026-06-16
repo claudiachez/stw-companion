@@ -1,4 +1,14 @@
-# Workstream 2 — Routine SKILL.md Edits (DRAFT)
+# Workstream 2 — Routine SKILL.md Edits
+
+> **STATUS (2026-06-15): Phase 1 + Phase 2 APPLIED** to the out-of-repo SKILL.md files.
+> morning/afternoon on the event model; Friday reconciles legs from the snapshot; transcripts
+> unchanged. Two enhancements **beyond this spec**, added at the user's request:
+> (1) Graddox switched **Control Chrome → Claude in Chrome** (morning now runs silently like the
+> afternoon — Control Chrome takes over the visible browser); (2) an **early-portfolio-update
+> fallback** in morning + afternoon — if `updates-portfolio` posts a snapshot early (Thu/holiday),
+> they delegate to `stw-friday-weighting` (idempotent on its high-water mark). Also: unstated
+> entry/exit prices are **researched** (Yahoo/MarketWatch), not guessed.
+> **Remaining:** smoke-test one live run, then DB dump + apply 034/035.
 
 Companion to `cutover_change_checklist.md` (§Workstream 2) and `schema_migration_plan_v4.md`
 (§Workstream 2). **Nothing in here is applied** — the five cron skills live **out of this repo**

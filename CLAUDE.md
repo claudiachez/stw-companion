@@ -41,7 +41,23 @@ PR [#29](https://github.com/claudiachez/stw-companion/pull/29) (picks count fixe
   (Old discrepancy worklist [`legs_rebuild.md`](plans/legs_rebuild.md) is superseded.)
 
 **Phase 1 SKILL.md edits — ALL 5 DONE ✅** (out-of-repo `~/Documents/Claude/Scheduled/*`). First live cron
-run = **9am ET 2026-06-15** (verification pending — see Next Steps #1).
+run = **9am ET 2026-06-15**, verified clean (Next Steps #1).
+
+**Phase 2 SKILL.md edits — DONE ✅ (2026-06-15), pending a live smoke-test + 034/035.** Out-of-repo:
+- `stw-morning-run` / `stw-afternoon-run`: rewritten to the **event model** — write `legs` +
+  `leg_transactions` + `holding_transactions` (trigger-derived); stop writing
+  `last_action`/`current_weight`/`position_detail`/`exit_*`; `basket`→`category_id` (resolve/create);
+  close = `SELL` leg_transaction (no `exit_*` on holdings); **90/10** weight default; **unstated
+  entry/exit price → research that day's close (Yahoo/MarketWatch), don't guess**.
+- `stw-friday-weighting`: weight-only `holding_transactions {Hold}` + **reconciles legs from the
+  snapshot** (the leg source of record).
+- `stw-transcripts`: no change (only writes surviving cols; docs already clean).
+- **Two enhancements beyond the spec:** (a) Graddox switched **Control Chrome → Claude in Chrome** so the
+  morning run is silent like the afternoon (Control Chrome = visible takeover; Claude in Chrome =
+  silent); (b) **early-portfolio-update fallback** added to morning + afternoon — if `updates-portfolio`
+  has a new snapshot (host posts Thu/holiday early), they delegate to `stw-friday-weighting`;
+  idempotent on its high-water mark (whoever processes it first claims it; later runs skip).
+- **REMAINING:** smoke-test one live run on the new model, then DB dump + apply **034/035**.
 
 **App code (PR #29 verified in admin preview):** count fixes (CASH excluded from Ticker Details tab count;
 FilterBar total respects "Show closed"); web "Re-run the sync." gated to admin; admin Edit form has a
@@ -86,10 +102,15 @@ Admin dev `.env.local` points at the **sandbox** DB, not prod.
    Use it to refine the two soft spots (ADEA `30C Jun'26` exit estimate; IRDM trim). Note: editing
    does NOT rewrite `leg_transactions` (the event log stays as the rebuild/routine wrote it).
 
-4. **Phase 2 routine edits** (after legs fixed): routines write `legs`/`leg_transactions` +
-   `holding_transactions` events; `basket`→`category_id`; **Friday routine reconciles legs/contracts from
-   the weekly snapshot** (new insight). Then take a DB dump and apply `034`/`035`. Spec in
-   [`workstream2_routine_edits.md`](plans/workstream2_routine_edits.md).
+4. ✅ **DONE — Phase 2 routine edits (2026-06-15).** morning/afternoon on the event model
+   (`legs`/`leg_transactions`/`holding_transactions`; `basket`→`category_id`; close-via-SELL; 90/10;
+   research unstated prices); Friday reconciles legs from the snapshot; transcripts unchanged. Plus the
+   silent-browser (Graddox→Claude in Chrome) + early-portfolio-update fallback enhancements. See the
+   Current Status block above + [`workstream2_routine_edits.md`](plans/workstream2_routine_edits.md).
+   **NEXT (carries the column drop):** smoke-test one live run on the new model (a New + a Hold + a
+   Close — confirm legs/leg_transactions/holding_transactions land and `holdings` updates via triggers),
+   then take a DB dump and apply **034/035** (drops the deprecated cols). Until 034/035, the routines
+   simply stop writing those cols — no break.
 
 5. **Deferred:** admin **Manage** area (CRUD + activate/inactivate categories/traders/channels; move
    basket colors into `categories.color`, retiring the hardcoded `baskets.ts` map); `$100k` notional
