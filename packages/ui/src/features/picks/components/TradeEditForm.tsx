@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { fmtLegInstrument } from '@stw/shared';
+import { fmtLegInstrument, humanizeLegEnum } from '@stw/shared';
 import { updateLegWeight } from '../api';
 import type { Holding } from '../api';
 
@@ -89,8 +89,8 @@ export function TradeEditForm({ holding: h, onDone }: Props) {
               <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{fmtLegInstrument(l)}</div>
-                  <div style={{ fontSize: 10, color: 'var(--t3)', textTransform: 'capitalize' }}>
-                    {l.instrument_type.toLowerCase()} · {l.status.toLowerCase().replace('_', ' ')}
+                  <div style={{ fontSize: 10, color: 'var(--t3)' }}>
+                    {humanizeLegEnum(l.instrument_type)} · {humanizeLegEnum(l.status)}
                   </div>
                 </div>
                 <div style={{ width: 92 }}>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  fmtLegInstrument, computeRealizedPct, legPnlPct,
+  fmtLegInstrument, computeRealizedPct, legPnlPct, humanizeLegEnum,
   type Leg, type LegInstrument, type LegStatus, type OptionRight,
   type Direction, type LegCloseReason,
 } from '@stw/shared';
@@ -192,7 +192,7 @@ function LegForm({ ticker, leg, onSaved, onCancel }: { ticker: string; leg?: Leg
         <div>
           <label style={labelStyle}>Status</label>
           <select style={fieldStyle} value={d.status} onChange={(e) => set('status', e.target.value as LegStatus)}>
-            {STATUSES.map((s) => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
+            {STATUSES.map((s) => <option key={s} value={s}>{humanizeLegEnum(s)}</option>)}
           </select>
         </div>
         {d.status === 'CLOSED' && (
@@ -206,7 +206,7 @@ function LegForm({ ticker, leg, onSaved, onCancel }: { ticker: string; leg?: Leg
             <label style={labelStyle}>Close reason</label>
             <select style={fieldStyle} value={d.close_reason} onChange={(e) => set('close_reason', e.target.value as LegCloseReason)}>
               <option value="">auto (gain/loss)</option>
-              {SELL_REASONS.map((r) => <option key={r} value={r}>{r.replace('_', ' ')}</option>)}
+              {SELL_REASONS.map((r) => <option key={r} value={r}>{humanizeLegEnum(r)}</option>)}
             </select>
           </div>
         )}
@@ -312,7 +312,7 @@ export function LegEditor({ holding: h, onDone }: Props) {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{fmtLegInstrument(l)}</div>
                         <div style={{ fontSize: 10, color: 'var(--t3)' }}>
-                          {l.status.toLowerCase().replace('_', ' ')} · entry {l.entry_price ?? '–'}
+                          {humanizeLegEnum(l.status)} · entry {l.entry_price ?? '–'}
                           {l.weight != null && ` · ${l.weight}%`}
                           {l.status !== 'OPEN' && pnl != null && ` · ${pnl >= 0 ? '+' : ''}${pnl.toFixed(1)}%`}
                         </div>

@@ -145,6 +145,17 @@ export function fmtOptionExpiry(expiry: string | null, withDay = false): string 
   return withDay && d ? `${mon} ${parseInt(d, 10)} '${yy}` : `${mon} '${yy}`;
 }
 
+// Human label for a leg enum constant: 'EXPIRED_WORTHLESS' → 'Expired Worthless',
+// 'PROFIT_TARGET' → 'Profit Target', 'OPEN' → 'Open'. Single source of truth for how leg
+// status / close-reason values read in the UI (the dropdowns and the leg rows agree).
+export function humanizeLegEnum(s: string): string {
+  return s
+    .toLowerCase()
+    .split('_')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
 // Display label for a leg: "Common" for shares, "$30C Sep '26" for an option.
 export function fmtLegInstrument(leg: Leg, withDay = false): string {
   if (leg.instrument_type === 'SHARES') return 'Common';

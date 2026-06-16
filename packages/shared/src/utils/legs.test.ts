@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   legUnrealizedPnlPct, legPnlPct, holdingPnlPct, holdingType,
-  legMarkReason, fmtLegInstrument, computeRealizedPct, type Leg,
+  legMarkReason, fmtLegInstrument, computeRealizedPct, humanizeLegEnum, type Leg,
 } from './legs';
 
 // Minimal leg factory — only the fields the pure functions read.
@@ -103,6 +103,15 @@ describe('computeRealizedPct', () => {
     expect(computeRealizedPct(null, 5)).toBeNull();
     expect(computeRealizedPct(0, 5)).toBeNull();
     expect(computeRealizedPct(5, null)).toBeNull();
+  });
+});
+
+describe('humanizeLegEnum', () => {
+  it('title-cases enum constants', () => {
+    expect(humanizeLegEnum('EXPIRED_WORTHLESS')).toBe('Expired Worthless');
+    expect(humanizeLegEnum('PROFIT_TARGET')).toBe('Profit Target');
+    expect(humanizeLegEnum('OPEN')).toBe('Open');
+    expect(humanizeLegEnum('SHARES')).toBe('Shares');
   });
 });
 
