@@ -10,9 +10,10 @@
 > entry/exit prices are **researched** (Yahoo/MarketWatch), not guessed.
 >
 > **Refinements (2026-06-15, second pass):**
-> - **Researched prices are flagged, not silent** — a `leg_transactions.notes` audit line + a
->   `(researched, not host-stated)` marker in the run `digest` (so the assumption shows in Portfolio
->   Overview's "Latest Portfolio Changes"). A persistent per-leg badge would need a `legs` provenance
+> - **Researched prices are flagged, not silent** — a short `(Source: Yahoo Finance)` marker in the
+>   run `digest` (shows in Portfolio Overview's "Latest Portfolio Changes") + a brief
+>   `leg_transactions.notes` audit line. The admin can overwrite a researched price with the real one
+>   anytime via the leg editor's edit form. A persistent per-leg badge would need a `legs` provenance
 >   column (deferred).
 > - **Portfolio-update fallback gated to Thu/Fri** — the snapshot effectively never posts before
 >   Thursday; Mon–Wed the daily runs skip the check (run `stw-friday-weighting` manually in the rare
