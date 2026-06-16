@@ -42,6 +42,7 @@ interface Draft {
   direction: Direction;
   status: LegStatus;
   entry_price: string;
+  initial_weight: string;
   weight: string;
   exit_price: string;
   close_reason: LegCloseReason | '';
@@ -58,6 +59,7 @@ function draftFromLeg(l?: Leg): Draft {
     direction: l?.direction ?? 'long',
     status: l?.status ?? 'OPEN',
     entry_price: l?.entry_price != null ? String(l.entry_price) : '',
+    initial_weight: l?.initial_weight != null ? String(l.initial_weight) : '',
     weight: l?.weight != null ? String(l.weight) : '',
     exit_price: l?.exit_price != null ? String(l.exit_price) : '',
     close_reason: l?.close_reason ?? '',
@@ -92,6 +94,7 @@ function toFields(d: Draft): LegEditableFields {
     direction: d.direction,
     status: d.status,
     entry_price: entry,
+    initial_weight: d.initial_weight.trim() === '' ? null : parseFloat(d.initial_weight),
     weight: d.weight.trim() === '' ? null : parseFloat(d.weight),
     exit_price: exit,
     realized_pnl_pct: realized,
@@ -185,7 +188,11 @@ function LegForm({ ticker, leg, onSaved, onCancel }: { ticker: string; leg?: Leg
           <input style={fieldStyle} type="number" step="0.01" value={d.entry_price} onChange={(e) => set('entry_price', e.target.value)} />
         </div>
         <div>
-          <label style={labelStyle}>Weight % {d.status !== 'OPEN' && <span style={{ textTransform: 'none', color: 'var(--t3)' }}>(0 when closed)</span>}</label>
+          <label style={labelStyle}>Initial weight %</label>
+          <input style={fieldStyle} type="number" step="0.1" min="0" placeholder="entry" value={d.initial_weight} onChange={(e) => set('initial_weight', e.target.value)} />
+        </div>
+        <div>
+          <label style={labelStyle}>Current weight % {d.status !== 'OPEN' && <span style={{ textTransform: 'none', color: 'var(--t3)' }}>(0 when closed)</span>}</label>
           <input style={fieldStyle} type="number" step="0.1" min="0" placeholder="auto" value={d.weight} onChange={(e) => set('weight', e.target.value)} />
         </div>
 
@@ -313,7 +320,7 @@ export function LegEditor({ holding: h, onDone }: Props) {
                         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{fmtLegInstrument(l)}</div>
                         <div style={{ fontSize: 10, color: 'var(--t3)' }}>
                           {humanizeLegEnum(l.status)} · entry {l.entry_price ?? '–'}
-                          {l.weight != null && ` · ${l.weight}%`}
+                          {(l.initial_weight != null || l.weight != null) && ` · ${l.initial_weight != null && l.initial_weight !== l.weight ? `${l.initial_weight}% → ` : ''}${l.weight ?? '–'}%`}
                           {l.status !== 'OPEN' && pnl != null && ` · ${pnl >= 0 ? '+' : ''}${pnl.toFixed(1)}%`}
                         </div>
                       </div>

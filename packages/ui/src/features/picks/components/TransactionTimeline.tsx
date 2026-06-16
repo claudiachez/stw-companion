@@ -20,7 +20,7 @@ function formatDate(d: string) {
 }
 
 // Row columns: Action · Date · Weight · Notes.
-function EventRow({ tx, canEdit, onDelete }: { tx: HoldingTransaction; canEdit: boolean; onDelete: (id: number) => void }) {
+function EventRow({ tx, canEdit, deleting, onDelete }: { tx: HoldingTransaction; canEdit: boolean; deleting: boolean; onDelete: (id: number) => void }) {
   const color = dotColor(tx.action);
 
   return (
@@ -43,13 +43,14 @@ function EventRow({ tx, canEdit, onDelete }: { tx: HoldingTransaction; canEdit: 
       {canEdit && (
         <button
           onClick={() => onDelete(tx.id)}
-          title="Delete"
+          disabled={deleting}
+          title="Delete transaction"
           style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: 'var(--t3)', fontSize: 12, padding: '0 2px', flexShrink: 0,
+            background: 'none', border: 'none', cursor: deleting ? 'default' : 'pointer',
+            color: deleting ? 'var(--t3)' : '#ef4444', fontSize: 12, padding: '0 2px', flexShrink: 0,
           }}
         >
-          ✕
+          {deleting ? '…' : '✕'}
         </button>
       )}
     </div>
@@ -65,13 +66,23 @@ export function TransactionTimeline({ ticker }: Props) {
   const { data: transactions = [], isLoading } = useHoldingTransactions(ticker);
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  const [error, setError] = useState('');
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   async function handleDelete(id: number) {
+    const tx = transactions.find((t) => t.id === id);
+    const label = tx ? `${tx.action} · ${formatDate(tx.event_date)}` : 'this transaction';
+    // Confirm first — deleting an audit row does not change the holding's current state.
+    if (!window.confirm(`Delete transaction "${label}"?\n\nThis removes the history row only; it won't change the position's current weight or status.`)) return;
+    setError('');
+    setDeletingId(id);
     try {
       await deleteHoldingTransaction(id);
-      queryClient.invalidateQueries({ queryKey: ['transactions', ticker] });
-    } catch {
-      // silently ignore
+      await queryClient.invalidateQueries({ queryKey: ['transactions', ticker] });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -94,10 +105,12 @@ export function TransactionTimeline({ ticker }: Props) {
       {ordered.length > 0 && (
         <div style={{ borderLeft: '1px solid var(--border)', paddingLeft: 10, marginBottom: 12 }}>
           {ordered.map((tx) => (
-            <EventRow key={tx.id} tx={tx} canEdit={!!canEdit} onDelete={handleDelete} />
+            <EventRow key={tx.id} tx={tx} canEdit={!!canEdit} deleting={deletingId === tx.id} onDelete={handleDelete} />
           ))}
         </div>
       )}
+
+      {error && <div style={{ fontSize: 11, color: '#ef4444', marginBottom: 8 }}>Delete failed: {error}</div>}
 
       {showForm ? (
         <TransactionEventForm

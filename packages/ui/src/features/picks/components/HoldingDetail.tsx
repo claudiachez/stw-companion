@@ -3,7 +3,7 @@ import type { Holding } from '../api';
 import {
   TIERS, ACTION_VARS, bColor, fmtDateTime,
   holdingType, holdingPnlPct, legIsOpen, legUnrealizedPnlPct, legMarkReason,
-  fmtOptionExpiry, fmtLegInstrument,
+  fmtOptionExpiry, fmtLegWeightLine,
 } from '@stw/shared';
 import { useQuote } from '../../../hooks/useLivePrice';
 import { usePriceCacheStore } from '../../../store/priceCache';
@@ -62,6 +62,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
   const { data: txData = [] } = useHoldingTransactions(showHistory && h.ticker !== 'CASH' ? h.ticker : '');
   const [editing, setEditing] = useState(false);
   const [managingLegs, setManagingLegs] = useState(false);
+  const [editMenuOpen, setEditMenuOpen] = useState(false);
 
   const quote       = useQuote(h.ticker);
   const fetchStatus = usePriceCacheStore((s) => s.fetchStatus);
@@ -229,7 +230,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
         </div>
         {h.legs.length > 0 ? (
           <div style={{ fontSize: isMobile ? 11 : 10, color: 'var(--t2)', marginTop: 4, lineHeight: 1.5 }}>
-            {h.legs.map((l) => `${fmtLegInstrument(l)}${l.weight != null ? ` ${l.weight}%` : ''}`).join(' · ')}
+            {fmtLegWeightLine(h.legs)}
           </div>
         ) : (
           <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 4 }}>detail pending</div>
@@ -418,32 +419,40 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
           {isMobile ? '← Back' : 'Close →'}
         </button>
         {canEdit && h.ticker !== 'CASH' && !editing && (
-          <>
+          <div style={{ position: 'relative', order: 1 }}>
             <button
-              onClick={() => setEditing(true)}
+              onClick={() => setEditMenuOpen((v) => !v)}
               style={{
-                fontSize: 12, color: 'var(--acc)', background: 'none',
-                border: '1px solid var(--border)', borderRadius: 5, cursor: 'pointer',
-                padding: '4px 10px', order: 1,
+                fontSize: 12, color: 'var(--acc)', background: editMenuOpen ? 'var(--s2)' : 'none',
+                border: '1px solid var(--border)', borderRadius: 5, cursor: 'pointer', padding: '4px 10px',
               }}
               onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
+              onMouseLeave={(e) => { if (!editMenuOpen) (e.currentTarget as HTMLElement).style.background = 'none'; }}
             >
-              ✎ Edit
+              ✎ Edit ▾
             </button>
-            <button
-              onClick={() => setManagingLegs(true)}
-              style={{
-                fontSize: 12, color: 'var(--acc)', background: 'none',
-                border: '1px solid var(--border)', borderRadius: 5, cursor: 'pointer',
-                padding: '4px 10px', order: 1,
-              }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
-            >
-              ⚙ Legs
-            </button>
-          </>
+            {editMenuOpen && (
+              <>
+                <div onClick={() => setEditMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+                <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 41, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, boxShadow: '0 8px 24px rgba(0,0,0,0.45)', minWidth: 160, overflow: 'hidden' }}>
+                  {[
+                    { label: '✎ Position fields', act: () => setEditing(true) },
+                    { label: '⚙ Legs', act: () => setManagingLegs(true) },
+                  ].map((it) => (
+                    <button
+                      key={it.label}
+                      onClick={() => { setEditMenuOpen(false); it.act(); }}
+                      style={{ display: 'block', width: '100%', textAlign: 'left', fontSize: 12, color: 'var(--text)', background: 'none', border: 'none', cursor: 'pointer', padding: '8px 12px' }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
+                    >
+                      {it.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         )}
       </div>
       {managingLegs && <LegEditor holding={h} onDone={() => setManagingLegs(false)} />}
