@@ -1,4 +1,28 @@
-# Workstream 2 — Routine SKILL.md Edits (DRAFT)
+# Workstream 2 — Routine SKILL.md Edits
+
+> **STATUS (2026-06-15): Phase 1 + Phase 2 APPLIED** to the out-of-repo SKILL.md files.
+> morning/afternoon on the event model; Friday reconciles legs from the snapshot; transcripts
+> unchanged. Two enhancements **beyond this spec**, added at the user's request:
+> (1) Graddox switched **Control Chrome → Claude in Chrome** (morning now runs silently like the
+> afternoon — Control Chrome takes over the visible browser); (2) an **early-portfolio-update
+> fallback** in morning + afternoon — if `updates-portfolio` posts a snapshot early (Thu/holiday),
+> they delegate to `stw-friday-weighting` (idempotent on its high-water mark). Also: unstated
+> entry/exit prices are **researched** (Yahoo/MarketWatch), not guessed.
+>
+> **Refinements (2026-06-15, second pass):**
+> - **Researched prices are flagged, not silent** — a short `(Source: Yahoo Finance)` marker in the
+>   run `digest` (shows in Portfolio Overview's "Latest Portfolio Changes") + a brief
+>   `leg_transactions.notes` audit line. The admin can overwrite a researched price with the real one
+>   anytime via the leg editor's edit form. A persistent per-leg badge would need a `legs` provenance
+>   column (deferred).
+> - **Portfolio-update fallback gated to Thu/Fri** — the snapshot effectively never posts before
+>   Thursday; Mon–Wed the daily runs skip the check (run `stw-friday-weighting` manually in the rare
+>   early case).
+> - **Host leg-lifecycle patterns codified** (from his high-vol de-risking): contract→shares
+>   **replacement** = close option + open shares (weight-neutral, NOT an exercise); **rolls** = close
+>   old + open new; option trims/legs aren't always alerted in live-notes → the **weekly snapshot is
+>   the leg source of record** (Friday reconciles).
+> **Remaining:** smoke-test one live run, then DB dump + apply 034/035.
 
 Companion to `cutover_change_checklist.md` (§Workstream 2) and `schema_migration_plan_v4.md`
 (§Workstream 2). **Nothing in here is applied** — the five cron skills live **out of this repo**
