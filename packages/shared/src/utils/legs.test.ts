@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   legUnrealizedPnlPct, legPnlPct, holdingPnlPct, holdingType,
-  legMarkReason, fmtLegInstrument, type Leg,
+  legMarkReason, fmtLegInstrument, computeRealizedPct, type Leg,
 } from './legs';
 
 // Minimal leg factory — only the fields the pure functions read.
@@ -83,6 +83,26 @@ describe('legMarkReason', () => {
     expect(legMarkReason(opt)?.title).toBe('Not priced yet');
     expect(legMarkReason({ ...opt, mark_price: 2 })).toBeNull();
     expect(legMarkReason(leg({ instrument_type: 'SHARES' }))).toBeNull();
+  });
+});
+
+describe('computeRealizedPct', () => {
+  it('matches the trigger formula for a winning long close', () => {
+    expect(computeRealizedPct(11.9, 18.15)).toBeCloseTo(52.52, 2); // AMZN 300C
+  });
+  it('books a loss', () => {
+    expect(computeRealizedPct(54, 21.15)).toBeCloseTo(-60.83, 2);  // KTOS 35C
+  });
+  it('flips sign for a short', () => {
+    expect(computeRealizedPct(100, 90, 'short')).toBeCloseTo(10, 5);
+  });
+  it('exit 0 (expired worthless) → −100% long', () => {
+    expect(computeRealizedPct(3.63, 0)).toBeCloseTo(-100, 5);
+  });
+  it('null on missing/zero entry', () => {
+    expect(computeRealizedPct(null, 5)).toBeNull();
+    expect(computeRealizedPct(0, 5)).toBeNull();
+    expect(computeRealizedPct(5, null)).toBeNull();
   });
 });
 

@@ -69,6 +69,19 @@ export function legUnrealizedPnlPct(leg: Leg, livePrice: number | null | undefin
   return ((mark - entry) / entry) * 100 * sign;
 }
 
+// Realized P&L % for a closed leg: (exit − entry) / entry × 100, flipped for shorts. Mirrors the
+// 030 leg-state trigger EXACTLY so the admin leg editor (which writes legs directly) and the
+// DB-derived value agree. EXPIRED_WORTHLESS → pass exit 0 → −100% long / +100% short.
+export function computeRealizedPct(
+  entry: number | null | undefined,
+  exit: number | null | undefined,
+  direction: Direction = 'long',
+): number | null {
+  if (entry == null || entry === 0 || exit == null) return null;
+  const sign = direction === 'short' ? -1 : 1;
+  return ((exit - entry) / entry) * 100 * sign;
+}
+
 // The P&L % to display for a leg in its current state:
 //   OPEN                          → unrealized (needs a live/mark price)
 //   CLOSED / EXPIRED_WORTHLESS    → booked realized_pnl_pct

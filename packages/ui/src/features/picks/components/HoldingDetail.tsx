@@ -9,6 +9,7 @@ import { useQuote } from '../../../hooks/useLivePrice';
 import { usePriceCacheStore } from '../../../store/priceCache';
 import { useCapabilities } from '../../../context/AppCapabilities';
 import { HoldingEditForm } from './HoldingEditForm';
+import { LegEditor } from './LegEditor';
 import { TransactionTimeline } from './TransactionTimeline';
 import { ConvictionTimeline } from './ConvictionTimeline';
 import { useHoldingTransactions } from '../useHoldingHistory';
@@ -60,6 +61,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
   const showHistory = canViewHistory || isAdmin;
   const { data: txData = [] } = useHoldingTransactions(showHistory && h.ticker !== 'CASH' ? h.ticker : '');
   const [editing, setEditing] = useState(false);
+  const [managingLegs, setManagingLegs] = useState(false);
 
   const quote       = useQuote(h.ticker);
   const fetchStatus = usePriceCacheStore((s) => s.fetchStatus);
@@ -416,20 +418,35 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
           {isMobile ? '← Back' : 'Close →'}
         </button>
         {canEdit && h.ticker !== 'CASH' && !editing && (
-          <button
-            onClick={() => setEditing(true)}
-            style={{
-              fontSize: 12, color: 'var(--acc)', background: 'none',
-              border: '1px solid var(--border)', borderRadius: 5, cursor: 'pointer',
-              padding: '4px 10px', order: isMobile ? 1 : 1,
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
-          >
-            ✎ Edit
-          </button>
+          <>
+            <button
+              onClick={() => setEditing(true)}
+              style={{
+                fontSize: 12, color: 'var(--acc)', background: 'none',
+                border: '1px solid var(--border)', borderRadius: 5, cursor: 'pointer',
+                padding: '4px 10px', order: 1,
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
+            >
+              ✎ Edit
+            </button>
+            <button
+              onClick={() => setManagingLegs(true)}
+              style={{
+                fontSize: 12, color: 'var(--acc)', background: 'none',
+                border: '1px solid var(--border)', borderRadius: 5, cursor: 'pointer',
+                padding: '4px 10px', order: 1,
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
+            >
+              ⚙ Legs
+            </button>
+          </>
         )}
       </div>
+      {managingLegs && <LegEditor holding={h} onDone={() => setManagingLegs(false)} />}
 
       <div style={{ padding: '8px 16px 24px', flex: 1 }}>
         {/* Header: ticker + name */}
