@@ -11,10 +11,12 @@
 
 ---
 
-## Current Status — staging deployed; ⚠️ `legs` data corrupted (handoff 2026-06-15)
+## Current Status — staging deployed; ✅ `legs` rebuilt + verified (2026-06-15)
 
 Active branch: `claude/picks-count-fixes` (off `staging`). Plan docs (all in `plans/`):
-- [`legs_rebuild.md`](plans/legs_rebuild.md) — **⚠️ live worklist**: per-ticker `legs` discrepancies + recovery plan + 6/12 snapshot
+- [`legs_rebuild_spec.md`](plans/legs_rebuild_spec.md) — **authoritative legs ledger + methodology** (the applied rebuild)
+- [`legs_rebuild_corrective.sql`](plans/legs_rebuild_corrective.sql) — the corrective SQL that was applied + verified
+- [`legs_rebuild.md`](plans/legs_rebuild.md) — *superseded* original discrepancy worklist + 6/12 snapshot
 - [`workstream2_routine_edits.md`](plans/workstream2_routine_edits.md) — line-level SKILL.md edits (Phase 1 done; Phase 2 pending)
 - [`cutover_runbook.md`](plans/cutover_runbook.md) · [`schema_migration_plan_v4.md`](plans/schema_migration_plan_v4.md) — migration history/spec
 
@@ -28,10 +30,15 @@ PR [#29](https://github.com/claudiachez/stw-companion/pull/29) (picks count fixe
   write AND which we now need as the `legs` recovery source). (Applied via SQL editor → `list_migrations`
   MCP shows none; infer from schema.)
 - **All 46 holdings categorized** (0 uncategorized). New `Hedge` category created (ARKK, SQQQ).
-- ⚠️ **`legs` table is corrupted** — `stw_backfill_2026.sql` mis-parsed it: missing legs, phantom legs,
-  wrong statuses/entries across most positions. App reads `legs` → Trades/per-leg P&L are wrong.
-  `holdings.position_detail` + `holding_transactions` are **intact and ARE the recovery source.**
-  Full per-ticker discrepancy report + plan in [`legs_rebuild.md`](plans/legs_rebuild.md).
+- ✅ **`legs` table REBUILT + verified (2026-06-15)** — was corrupted by `stw_backfill_2026.sql`. Rebuilt
+  from the **7 weekly snapshots (5/1–6/12)** + the **pre-redesign backup**
+  (`backups/stw_db_backup_2026-06-12_pre-redesign.json`) + host live-notes + researched option closing
+  prices. 62 legs across 38 tickers (33 open / 29 closed), 12 holding statuses corrected (SYNA flipped
+  Closed→held), phantoms dropped. Authoritative ledger + methodology in
+  [`legs_rebuild_spec.md`](plans/legs_rebuild_spec.md); the applied SQL is
+  [`legs_rebuild_corrective.sql`](plans/legs_rebuild_corrective.sql). All 62 legs + 15 status fixes
+  verified against prod (entry/exit/realized/status/weight). `holding_transactions` left intact.
+  (Old discrepancy worklist [`legs_rebuild.md`](plans/legs_rebuild.md) is superseded.)
 
 **Phase 1 SKILL.md edits — ALL 5 DONE ✅** (out-of-repo `~/Documents/Claude/Scheduled/*`). First live cron
 run = **9am ET 2026-06-15** (verification pending — see Next Steps #1).
@@ -57,15 +64,18 @@ Admin dev `.env.local` points at the **sandbox** DB, not prod.
 
 ## Next Steps
 
-1. **Verify the 9am ET cron run (2026-06-15).** Query prod: `signals` row has `trader_id`+`date`;
-   `run_log` rows carry `channel_id` (incl. a new `run_type='graddox'` row); `holdings` upserts hit the
-   composite PK (no duplicate ticker rows); `conviction_comments` carry `trader_id`. Fix routine edits if any fail.
+1. ✅ **DONE — 9am ET cron run (2026-06-15) verified clean.** Prod confirmed: `signals` 6/15 row carries
+   `trader_id` (Graddox) + `date`; `run_log` has a new `run_type='graddox'` row plus morning/afternoon, all
+   carrying `channel_id`; `holdings` = 46 rows / 46 unique tickers (no composite-PK duplicates);
+   `conviction_comments` carry `trader_id`. Morning + afternoon both ran. Routine edits work.
+   (Note: `run_log` has NO `trader_id` col; `signals` has NO `created_at` — order by `date`.)
 
-2. **Rebuild `legs` from corrected data (TOP PRIORITY).** User is manually rebuilding the discrepant
-   tickers in [`legs_rebuild.md`](plans/legs_rebuild.md) and will feed authoritative per-ticker leg lists.
-   Then: author a corrective SQL — rebuild `legs` + opening `leg_transactions` (one BUY per leg at cost
-   basis; per-leg weight = 90/10 default rule), and fix holding-level status corruption (e.g. SYNA
-   `Closed`→held). `holding_transactions` (the timeline) stays intact. **Keep 034/035 unapplied until legs verified.**
+2. ✅ **DONE — `legs` rebuilt + verified (2026-06-15).** Source: 7 weekly snapshots + pre-redesign
+   backup + host live-notes + researched option closes. [`legs_rebuild_corrective.sql`](plans/legs_rebuild_corrective.sql)
+   applied via SQL editor; 62 legs + 15 status fixes verified against prod. Ledger:
+   [`legs_rebuild_spec.md`](plans/legs_rebuild_spec.md). **034/035 still unapplied** (Phase 2 carve-out).
+   Minor follow-ups if ever needed: ADEA `30C Jun'26` exit is an estimate (1.50); IRDM 6/11 trim not
+   modeled as a separate event (single open leg at post-trim weight).
 
 3. **Build the admin leg/transaction editor** — add/edit/remove `legs` + `leg_transactions` from
    `HoldingDetail` (entry price, contract, weight, status, exercise). This is the user's "edit
