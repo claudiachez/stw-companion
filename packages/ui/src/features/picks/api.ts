@@ -120,3 +120,40 @@ export async function updateLegWeight(legId: string, weight: number | null): Pro
   const { error } = await getSupabase().from('legs').update({ weight }).eq('id', legId);
   if (error) throw error;
 }
+
+// ── Admin leg editor (add / edit / remove) ──────────────────────────────────────────────
+// Writes the `legs` row DIRECTLY — analogous to how HoldingEditForm writes `holdings`. The
+// app reads `legs` (not leg_transactions), and the 030 trigger only derives on a
+// leg_transaction INSERT (not on edit/delete), so a direct write is the predictable override
+// path. The routines + the rebuild SQL stay event-sourced; this is the manual correction tool.
+// `realized_pnl_pct` is computed by the caller via computeRealizedPct() from @stw/shared so it
+// always matches the trigger formula.
+
+// The admin-editable subset of a leg. trader_id/ticker are fixed (stamped on insert).
+export type LegEditableFields = Pick<
+  Leg,
+  | 'instrument_type' | 'option_strike' | 'option_expiry' | 'option_right'
+  | 'direction' | 'status' | 'entry_price' | 'weight'
+  | 'exit_price' | 'realized_pnl_pct' | 'close_reason' | 'opened_at' | 'closed_at'
+>;
+
+export async function insertLeg(ticker: string, fields: LegEditableFields): Promise<void> {
+  const trader_id = await getTraderId(STW);
+  const { error } = await getSupabase().from('legs').insert({ ...fields, ticker, trader_id });
+  if (error) throw error;
+}
+
+export async function updateLeg(legId: string, fields: LegEditableFields): Promise<void> {
+  const { error } = await getSupabase().from('legs').update(fields).eq('id', legId);
+  if (error) throw error;
+}
+
+// Remove a leg: clear any event-log rows first (FK leg_transactions.leg_id → legs.id), then the
+// leg itself.
+export async function deleteLeg(legId: string): Promise<void> {
+  const sb = getSupabase();
+  const { error: txErr } = await sb.from('leg_transactions').delete().eq('leg_id', legId);
+  if (txErr) throw txErr;
+  const { error } = await sb.from('legs').delete().eq('id', legId);
+  if (error) throw error;
+}

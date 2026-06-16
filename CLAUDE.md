@@ -77,9 +77,14 @@ Admin dev `.env.local` points at the **sandbox** DB, not prod.
    Minor follow-ups if ever needed: ADEA `30C Jun'26` exit is an estimate (1.50); IRDM 6/11 trim not
    modeled as a separate event (single open leg at post-trim weight).
 
-3. **Build the admin leg/transaction editor** — add/edit/remove `legs` + `leg_transactions` from
-   `HoldingDetail` (entry price, contract, weight, status, exercise). This is the user's "edit
-   positions/transactions without you" requirement; needed to reconcile flagged cases + maintain going forward.
+3. ✅ **DONE — admin leg editor (2026-06-15).** "⚙ Legs" button in `HoldingDetail` (admin/`canEdit`)
+   opens `LegEditor.tsx` — a modal to add/edit/remove `legs` (instrument, strike/expiry/right,
+   direction, entry, weight, status, exit). Writes `legs` **directly** (like `HoldingEditForm` writes
+   `holdings`) since the 030 trigger only derives on a `leg_transaction` INSERT, not edit/delete;
+   `realized_pnl_pct` computed via new `computeRealizedPct()` in `@stw/shared` (mirrors the trigger).
+   Verified end-to-end in the admin preview (add→list→delete round-trip vs sandbox, no errors).
+   Use it to refine the two soft spots (ADEA `30C Jun'26` exit estimate; IRDM trim). Note: editing
+   does NOT rewrite `leg_transactions` (the event log stays as the rebuild/routine wrote it).
 
 4. **Phase 2 routine edits** (after legs fixed): routines write `legs`/`leg_transactions` +
    `holding_transactions` events; `basket`→`category_id`; **Friday routine reconciles legs/contracts from
