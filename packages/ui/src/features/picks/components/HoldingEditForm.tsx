@@ -5,6 +5,8 @@ import type { Holding } from '../api';
 import { getSupabase } from '../../../lib/supabase';
 import { useCapabilities } from '../../../context/AppCapabilities';
 import { useCategories } from '../useCategories';
+import { LegsManager } from './LegEditor';
+import { errMsg } from '../../../lib/errMsg';
 
 const CONVICTIONS = [5, 4, 3, 2, 1, 0];
 const ACTIONS = ['New', 'Upsized', 'Trimmed', 'Hold', 'Closed'];
@@ -70,7 +72,7 @@ export function HoldingEditForm({ holding: h, onDone }: Props) {
       onEditHolding?.({ ...h, ...updates } as Holding);
       onDone();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errMsg(e));
     } finally {
       setSaving(false);
     }
@@ -79,7 +81,7 @@ export function HoldingEditForm({ holding: h, onDone }: Props) {
   return (
     <div style={{ background: 'var(--s2)', border: '1px solid var(--acc)', borderRadius: 6, padding: '12px 14px', marginBottom: 12 }}>
       <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--acc)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-        ✎ Edit Position Fields
+        ✎ Edit {h.ticker}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -120,7 +122,11 @@ export function HoldingEditForm({ holding: h, onDone }: Props) {
 
       {error && <div style={{ fontSize: 11, color: '#ef4444', marginTop: 10 }}>{error}</div>}
 
-      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+      {/* Legs live in the same editor — the position IS its legs. Position fields above save via
+          this Save button; each leg add/edit/remove below saves on its own. */}
+      {h.ticker !== 'CASH' && <LegsManager holding={h} />}
+
+      <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
         <button
           onClick={save}
           disabled={saving}

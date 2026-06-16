@@ -9,11 +9,6 @@ import { insertLeg, updateLeg, deleteLeg, type LegEditableFields } from '../api'
 import type { Holding } from '../api';
 import { errMsg } from '../../../lib/errMsg';
 
-interface Props {
-  holding: Holding;
-  onDone: () => void;
-}
-
 const labelStyle: React.CSSProperties = {
   fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase',
   letterSpacing: '0.1em', marginBottom: 3, display: 'block',
@@ -246,9 +241,10 @@ function LegForm({ ticker, leg, onSaved, onCancel }: { ticker: string; leg?: Leg
   );
 }
 
-// Admin leg/transaction editor — add / edit / remove the structured legs that drive the Trades
-// tab + per-leg P&L. Writes `legs` directly (see api.ts notes). Opened from HoldingDetail.
-export function LegEditor({ holding: h, onDone }: Props) {
+// Inline legs manager — add / edit / remove the structured legs that ARE the position. Embedded
+// in the Position editor (HoldingEditForm), not a separate modal: "the position is made of its
+// legs", so they're edited in one place. Writes `legs` directly (see api.ts notes).
+export function LegsManager({ holding: h }: { holding: Holding }) {
   const queryClient = useQueryClient();
   const [mode, setMode] = useState<'list' | 'add' | { editId: string }>('list');
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -277,77 +273,58 @@ export function LegEditor({ holding: h, onDone }: Props) {
   const editLeg = typeof mode === 'object' ? h.legs.find((l) => l.id === mode.editId) : undefined;
 
   return (
-    <div
-      onClick={onDone}
-      style={{
-        position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.55)',
-        display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
-        padding: '8vh 16px 16px', overflowY: 'auto',
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: '100%', maxWidth: 460, background: 'var(--surface)',
-          border: '1px solid var(--acc)', borderRadius: 10, padding: '16px 18px',
-          boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
-        }}
-      >
-        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--acc)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-          ⚙ Manage Legs — {h.ticker}
-        </div>
-        <div style={{ fontSize: 11, color: 'var(--t3)', marginBottom: 14 }}>
-          Add, edit, or remove the per-leg positions behind the Trades tab and P&amp;L.
-        </div>
-
-        {mode === 'add' || editLeg ? (
-          <LegForm
-            ticker={h.ticker}
-            leg={editLeg}
-            onCancel={() => setMode('list')}
-            onSaved={async () => { await refresh(); setMode('list'); }}
-          />
-        ) : (
-          <>
-            {legs.length === 0 ? (
-              <div style={{ fontSize: 12, color: 'var(--t3)' }}>No legs yet.</div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {legs.map((l) => {
-                  const pnl = legPnlPct(l, null);
-                  return (
-                    <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: 'var(--s2)', border: '1px solid var(--bsub)', borderRadius: 6 }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{fmtLegInstrument(l)}</div>
-                        <div style={{ fontSize: 10, color: 'var(--t3)' }}>
-                          {humanizeLegEnum(l.status)} · entry {l.entry_price ?? '–'}
-                          {(l.initial_weight != null || l.weight != null) && ` · ${l.initial_weight != null && l.initial_weight !== l.weight ? `${l.initial_weight}% → ` : ''}${l.weight ?? '–'}%`}
-                          {l.status !== 'OPEN' && pnl != null && ` · ${pnl >= 0 ? '+' : ''}${pnl.toFixed(1)}%`}
-                        </div>
-                      </div>
-                      <button onClick={() => setMode({ editId: l.id })} disabled={busyId === l.id} style={{ ...btnGhost, padding: '4px 10px' }}>Edit</button>
-                      <button
-                        onClick={() => remove(l)}
-                        disabled={busyId === l.id}
-                        style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 5, cursor: 'pointer', color: '#ef4444', fontSize: 12, padding: '4px 9px' }}
-                      >
-                        {busyId === l.id ? '…' : '✕'}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {error && <div style={{ fontSize: 11, color: '#ef4444', marginTop: 10 }}>{error}</div>}
-
-            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-              <button onClick={() => setMode('add')} style={btnPrimary}>＋ Add leg</button>
-              <button onClick={onDone} style={btnGhost}>Done</button>
-            </div>
-          </>
-        )}
+    <div style={{ marginTop: 14, borderTop: '1px dashed var(--border)', paddingTop: 12 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--t3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+        Legs — the position's share-lots &amp; option contracts
       </div>
+
+      {mode === 'add' || editLeg ? (
+        <LegForm
+          ticker={h.ticker}
+          leg={editLeg}
+          onCancel={() => setMode('list')}
+          onSaved={async () => { await refresh(); setMode('list'); }}
+        />
+      ) : (
+        <>
+          {legs.length === 0 ? (
+            <div style={{ fontSize: 12, color: 'var(--t3)' }}>No legs yet.</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {legs.map((l) => {
+                const pnl = legPnlPct(l, null);
+                return (
+                  <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: 'var(--surface)', border: '1px solid var(--bsub)', borderRadius: 6 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{fmtLegInstrument(l)}</div>
+                      <div style={{ fontSize: 10, color: 'var(--t3)' }}>
+                        {humanizeLegEnum(l.status)} · entry {l.entry_price ?? '–'}
+                        {(l.initial_weight != null || l.weight != null) && ` · ${l.initial_weight != null && l.initial_weight !== l.weight ? `${l.initial_weight}% → ` : ''}${l.weight ?? '–'}%`}
+                        {l.status !== 'OPEN' && pnl != null && ` · ${pnl >= 0 ? '+' : ''}${pnl.toFixed(1)}%`}
+                      </div>
+                    </div>
+                    <button onClick={() => setMode({ editId: l.id })} disabled={busyId === l.id} style={{ ...btnGhost, padding: '4px 10px' }}>Edit</button>
+                    <button
+                      onClick={() => remove(l)}
+                      disabled={busyId === l.id}
+                      title="Remove leg"
+                      style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 5, cursor: 'pointer', color: '#ef4444', fontSize: 12, padding: '4px 9px' }}
+                    >
+                      {busyId === l.id ? '…' : '✕'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {error && <div style={{ fontSize: 11, color: '#ef4444', marginTop: 10 }}>{error}</div>}
+
+          <div style={{ marginTop: 12 }}>
+            <button onClick={() => setMode('add')} style={btnPrimary}>＋ Add leg</button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

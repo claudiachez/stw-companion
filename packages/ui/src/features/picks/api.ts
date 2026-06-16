@@ -85,28 +85,11 @@ export async function fetchConvictionComments(ticker: string): Promise<Convictio
 
 // trader_id is stamped here (not in the forms) so the "app writes are STW" rule lives in
 // one place. NOT NULL after migration 026.
-export async function insertHoldingTransaction(
-  row: Omit<HoldingTransaction, 'id' | 'created_at' | 'trader_id'>
-): Promise<void> {
-  const trader_id = await getTraderId(STW);
-  // Idempotent on the dedupe key (migration 036): a manual entry + the routine processing the
-  // same event collapse to one row (last write wins) instead of duplicating.
-  const { error } = await getSupabase()
-    .from('holding_transactions')
-    .upsert({ ...row, trader_id }, { onConflict: 'ticker,trader_id,action,event_date' });
-  if (error) throw error;
-}
-
 export async function insertConvictionComment(
   row: Omit<ConvictionComment, 'id' | 'created_at' | 'trader_id'>
 ): Promise<void> {
   const trader_id = await getTraderId(STW);
   const { error } = await getSupabase().from('conviction_comments').insert({ ...row, trader_id });
-  if (error) throw error;
-}
-
-export async function deleteHoldingTransaction(id: number): Promise<void> {
-  const { error } = await getSupabase().from('holding_transactions').delete().eq('id', id);
   if (error) throw error;
 }
 
