@@ -8,6 +8,19 @@
 > fallback** in morning + afternoon — if `updates-portfolio` posts a snapshot early (Thu/holiday),
 > they delegate to `stw-friday-weighting` (idempotent on its high-water mark). Also: unstated
 > entry/exit prices are **researched** (Yahoo/MarketWatch), not guessed.
+>
+> **Refinements (2026-06-15, second pass):**
+> - **Researched prices are flagged, not silent** — a `leg_transactions.notes` audit line + a
+>   `(researched, not host-stated)` marker in the run `digest` (so the assumption shows in Portfolio
+>   Overview's "Latest Portfolio Changes"). A persistent per-leg badge would need a `legs` provenance
+>   column (deferred).
+> - **Portfolio-update fallback gated to Thu/Fri** — the snapshot effectively never posts before
+>   Thursday; Mon–Wed the daily runs skip the check (run `stw-friday-weighting` manually in the rare
+>   early case).
+> - **Host leg-lifecycle patterns codified** (from his high-vol de-risking): contract→shares
+>   **replacement** = close option + open shares (weight-neutral, NOT an exercise); **rolls** = close
+>   old + open new; option trims/legs aren't always alerted in live-notes → the **weekly snapshot is
+>   the leg source of record** (Friday reconciles).
 > **Remaining:** smoke-test one live run, then DB dump + apply 034/035.
 
 Companion to `cutover_change_checklist.md` (§Workstream 2) and `schema_migration_plan_v4.md`
