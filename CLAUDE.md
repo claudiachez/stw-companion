@@ -11,25 +11,24 @@
 
 ---
 
-## Current Status — staging deployed; ✅ `legs` rebuilt + verified (2026-06-15)
+## Current Status — admin position editor reworked + legs verified (handoff 2026-06-17)
 
-Active branch: `claude/picks-count-fixes` (off `staging`). Plan docs (all in `plans/`):
+On `staging` (all feature branches merged + deleted; clean tree). Plan docs (all in `plans/`):
 - [`legs_rebuild_spec.md`](plans/legs_rebuild_spec.md) — **authoritative legs ledger + methodology** (the applied rebuild)
 - [`legs_rebuild_corrective.sql`](plans/legs_rebuild_corrective.sql) — the corrective SQL that was applied + verified
-- [`legs_rebuild.md`](plans/legs_rebuild.md) — *superseded* original discrepancy worklist + 6/12 snapshot
-- [`workstream2_routine_edits.md`](plans/workstream2_routine_edits.md) — line-level SKILL.md edits (Phase 1 done; Phase 2 pending)
+- [`workstream2_routine_edits.md`](plans/workstream2_routine_edits.md) — line-level SKILL.md edits (Phase 1 + 2 applied)
 - [`cutover_runbook.md`](plans/cutover_runbook.md) · [`schema_migration_plan_v4.md`](plans/schema_migration_plan_v4.md) — migration history/spec
 
-**Deployed:** `staging` has PR [#28](https://github.com/claudiachez/stw-companion/pull/28) (migration + app) and
-PR [#29](https://github.com/claudiachez/stw-companion/pull/29) (picks count fixes + admin category dropdown), both merged.
-**`main`/prod app NOT deployed** (still pre-migration code). Confirm both staging Netlify builds are green.
+**Deployed:** PRs #28–#36 merged to `staging` (migration + app + legs rebuild + the admin **position editor** rework).
+**`main`/prod app NOT deployed** (still pre-migration code). Confirm staging Netlify builds are green.
 
 **Prod DB (`usmqbohcjcyszjxxvnqu`):**
-- Migrations **022–033 + 036 applied**. **034/035 NOT applied — DO NOT apply yet** (they drop deprecated
-  cols `position_detail`/`basket`/`last_pnl_*`/`ibkr_legs`/`exit_price`/etc., which Phase 1 routines still
-  write AND which we now need as the `legs` recovery source). (Applied via SQL editor → `list_migrations`
-  MCP shows none; infer from schema.)
-- **All 46 holdings categorized** (0 uncategorized). New `Hedge` category created (ARKK, SQQQ).
+- Migrations **022–033 + 036 + 037 applied**. **038 + 039 authored + merged — ⚠️ VERIFY/APPLY in prod:**
+  **039** (`legs.weight_overridden`) is **REQUIRED for the position editor's leg saves**; **038** fixes the
+  admin-write RLS on `holding_transactions`/`conviction_comments` (was a broken `auth.users` subquery).
+  **034/035 still NOT applied** (drop deprecated cols — gated on the Phase 2 routine smoke-test below).
+  (No `list_migrations` MCP — infer applied state from schema / the editor working.)
+- **All 46 holdings categorized.** New `Hedge` category (ARKK, SQQQ).
 - ✅ **`legs` table REBUILT + verified (2026-06-15)** — was corrupted by `stw_backfill_2026.sql`. Rebuilt
   from the **7 weekly snapshots (5/1–6/12)** + the **pre-redesign backup**
   (`backups/stw_db_backup_2026-06-12_pre-redesign.json`) + host live-notes + researched option closing
@@ -39,6 +38,22 @@ PR [#29](https://github.com/claudiachez/stw-companion/pull/29) (picks count fixe
   [`legs_rebuild_corrective.sql`](plans/legs_rebuild_corrective.sql). All 62 legs + 15 status fixes
   verified against prod (entry/exit/realized/status/weight). `holding_transactions` left intact.
   (Old discrepancy worklist [`legs_rebuild.md`](plans/legs_rebuild.md) is superseded.)
+
+**Admin position editor — REWORKED ✅ (2026-06-17, this session).** One `✎ Edit` → a single **modal**
+([`PositionEditor.tsx`](packages/ui/src/features/picks/components/PositionEditor.tsx)): holding fields +
+**position weight** (the input the host states weekly) + **directly-editable leg rows** (no per-leg Edit
+click) + one Save. Per-leg weights **derive 90/10** from the position weight (`deriveLegWeights` in
+`@stw/shared`); typing a leg weight **overrides + pins** it (`legs.weight_overridden`, migration 039 —
+the split *and the routines* must skip pinned legs). **Transaction History restored**
+([`LegTimeline.tsx`](packages/ui/src/features/picks/components/LegTimeline.tsx)) reading
+**`leg_transactions`** — the same source the legs derive from, so they can't disagree (the old bug was
+legs vs `holding_transactions`); shows both grains (position-level action per day + per-leg events).
+`holding_transactions` is fully **out of the UI** (TransactionTimeline/EventForm + their api fns removed).
+Data fixes applied to **prod** this session: SYNA `current_weight` 0→4.7; IRDM leg (3.4% / opened 2/27);
+deduped **20 phantom "New" `holding_transactions`**; re-backfilled `legs.initial_weight` from holding
+initials; `legs.opened_at` set to true opens (OSS Dec 19 2025, etc.). **Soft spot:**
+`leg_transactions.executed_at` still carries the rebuild's *proxy* dates, so the timeline's dates can lag
+the corrected `legs.opened_at` (see Next Steps).
 
 **Phase 1 SKILL.md edits — ALL 5 DONE ✅** (out-of-repo `~/Documents/Claude/Scheduled/*`). First live cron
 run = **9am ET 2026-06-15**, verified clean (Next Steps #1).
@@ -80,41 +95,31 @@ Admin dev `.env.local` points at the **sandbox** DB, not prod.
 
 ## Next Steps
 
-1. ✅ **DONE — 9am ET cron run (2026-06-15) verified clean.** Prod confirmed: `signals` 6/15 row carries
-   `trader_id` (Graddox) + `date`; `run_log` has a new `run_type='graddox'` row plus morning/afternoon, all
-   carrying `channel_id`; `holdings` = 46 rows / 46 unique tickers (no composite-PK duplicates);
-   `conviction_comments` carry `trader_id`. Morning + afternoon both ran. Routine edits work.
-   (Note: `run_log` has NO `trader_id` col; `signals` has NO `created_at` — order by `date`.)
+*(Done earlier — see Current Status: 9am cron verified, legs rebuilt+verified, admin position editor reworked, Phase 1+2 SKILL.md edits.)*
 
-2. ✅ **DONE — `legs` rebuilt + verified (2026-06-15).** Source: 7 weekly snapshots + pre-redesign
-   backup + host live-notes + researched option closes. [`legs_rebuild_corrective.sql`](plans/legs_rebuild_corrective.sql)
-   applied via SQL editor; 62 legs + 15 status fixes verified against prod. Ledger:
-   [`legs_rebuild_spec.md`](plans/legs_rebuild_spec.md). **034/035 still unapplied** (Phase 2 carve-out).
-   Minor follow-ups if ever needed: ADEA `30C Jun'26` exit is an estimate (1.50); IRDM 6/11 trim not
-   modeled as a separate event (single open leg at post-trim weight).
+1. **Apply migrations 038 + 039 to prod** via the Supabase SQL editor, then **verify the position editor
+   end-to-end on prod**: open `✎ Edit` on a holding → change the position weight (legs should re-derive
+   90/10) → add/edit/close a leg → Save → confirm legs update + the event shows in Transaction History.
+   **039 is required** or leg saves fail (`legs.weight_overridden` missing). Also confirm the staging
+   Netlify build for the merged PRs is green.
 
-3. ✅ **DONE — admin leg editor (2026-06-15).** "⚙ Legs" button in `HoldingDetail` (admin/`canEdit`)
-   opens `LegEditor.tsx` — a modal to add/edit/remove `legs` (instrument, strike/expiry/right,
-   direction, entry, weight, status, exit). Writes `legs` **directly** (like `HoldingEditForm` writes
-   `holdings`) since the 030 trigger only derives on a `leg_transaction` INSERT, not edit/delete;
-   `realized_pnl_pct` computed via new `computeRealizedPct()` in `@stw/shared` (mirrors the trigger).
-   Verified end-to-end in the admin preview (add→list→delete round-trip vs sandbox, no errors).
-   Use it to refine the two soft spots (ADEA `30C Jun'26` exit estimate; IRDM trim). Note: editing
-   does NOT rewrite `leg_transactions` (the event log stays as the rebuild/routine wrote it).
+2. **Routine follow-ups (out-of-repo `~/Documents/Claude/Scheduled/*` SKILL.md)** to match the new weight
+   model: routines must (a) **respect `legs.weight_overridden`** — skip pinned legs in the 90/10
+   redistribution; (b) treat the host's weekly **position weight as the input** and derive legs 90/10
+   (already the documented model); (c) keep writing **`leg_transactions`** (the timeline's source — already do).
 
-4. ✅ **DONE — Phase 2 routine edits (2026-06-15).** morning/afternoon on the event model
-   (`legs`/`leg_transactions`/`holding_transactions`; `basket`→`category_id`; close-via-SELL; 90/10;
-   research unstated prices); Friday reconciles legs from the snapshot; transcripts unchanged. Plus the
-   silent-browser (Graddox→Claude in Chrome) + early-portfolio-update fallback enhancements. See the
-   Current Status block above + [`workstream2_routine_edits.md`](plans/workstream2_routine_edits.md).
-   **NEXT (carries the column drop):** smoke-test one live run on the new model (a New + a Hold + a
-   Close — confirm legs/leg_transactions/holding_transactions land and `holdings` updates via triggers),
-   then take a DB dump and apply **034/035** (drops the deprecated cols). Until 034/035, the routines
-   simply stop writing those cols — no break.
+3. **Re-date `leg_transactions.executed_at`** to the true open/close dates (the rebuild used proxy dates,
+   so the LegTimeline's dates lag the corrected `legs.opened_at`). Either a corrective `UPDATE` (BUY
+   `executed_at` = `legs.opened_at`, close events = `legs.closed_at`) or have `LegTimeline` read leg dates.
 
-5. **Deferred:** admin **Manage** area (CRUD + activate/inactivate categories/traders/channels; move
-   basket colors into `categories.color`, retiring the hardcoded `baskets.ts` map); `$100k` notional
-   portfolio + SPY benchmark (`spy_daily` exists, migration 032).
+4. **Phase 2 cutover (drops the deprecated cols):** smoke-test ONE live routine run on the event model
+   (a New + a Hold + a Close — confirm `legs`/`leg_transactions`/`holding_transactions` land and `holdings`
+   updates via triggers), then take a DB dump and apply **034/035**. Until then the routines simply stop
+   writing those cols — no break.
+
+5. **Deferred:** admin **Manage** area (CRUD categories/traders/channels; move basket colors into
+   `categories.color`, retiring `baskets.ts`); `$100k` notional portfolio + SPY benchmark (`spy_daily`
+   exists, migration 032).
 
 ---
 
