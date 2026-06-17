@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import type { Holding } from '../api';
 import {
   TIERS, ACTION_VARS, bColor, fmtDateTime,
@@ -8,11 +8,9 @@ import {
 import { useQuote } from '../../../hooks/useLivePrice';
 import { usePriceCacheStore } from '../../../store/priceCache';
 import { useCapabilities } from '../../../context/AppCapabilities';
-import { HoldingEditForm } from './HoldingEditForm';
-import { LegEditor } from './LegEditor';
-import { TransactionTimeline } from './TransactionTimeline';
+import { PositionEditor } from './PositionEditor';
+import { LegTimeline } from './LegTimeline';
 import { ConvictionTimeline } from './ConvictionTimeline';
-import { useHoldingTransactions } from '../useHoldingHistory';
 
 function PriceEmptyState({ fetchStatus }: { fetchStatus: string }) {
   if (fetchStatus === 'fetching') return <div style={{ fontSize: 12, color: 'var(--t3)', fontStyle: 'italic' }}>Loading…</div>;
@@ -59,23 +57,7 @@ interface Props {
 export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = false, latestOptionsSync = null }: Props) {
   const { canEdit, canViewHistory, isAdmin } = useCapabilities();
   const showHistory = canViewHistory || isAdmin;
-  const { data: txData = [] } = useHoldingTransactions(showHistory && h.ticker !== 'CASH' ? h.ticker : '');
   const [editing, setEditing] = useState(false);
-  const [managingLegs, setManagingLegs] = useState(false);
-  const [editMenuOpen, setEditMenuOpen] = useState(false);
-  const editBtnRef = useRef<HTMLButtonElement>(null);
-  const [editMenuPos, setEditMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
-  function toggleEditMenu() {
-    const r = editBtnRef.current?.getBoundingClientRect();
-    if (r) {
-      const menuW = 170;
-      const vw = window.innerWidth || r.right + menuW; // guard against a 0 width
-      // left-anchor under the button, clamped so it never runs off either edge
-      const left = Math.max(8, Math.min(r.left, vw - menuW - 8));
-      setEditMenuPos({ top: r.bottom + 4, left });
-    }
-    setEditMenuOpen((v) => !v);
-  }
 
   const quote       = useQuote(h.ticker);
   const fetchStatus = usePriceCacheStore((s) => s.fetchStatus);
@@ -432,45 +414,20 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
           {isMobile ? '← Back' : 'Close →'}
         </button>
         {canEdit && h.ticker !== 'CASH' && !editing && (
-          <div style={{ order: 1 }}>
-            <button
-              ref={editBtnRef}
-              onClick={toggleEditMenu}
-              style={{
-                fontSize: 12, color: 'var(--acc)', background: editMenuOpen ? 'var(--s2)' : 'none',
-                border: '1px solid var(--border)', borderRadius: 5, cursor: 'pointer', padding: '4px 10px',
-              }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
-              onMouseLeave={(e) => { if (!editMenuOpen) (e.currentTarget as HTMLElement).style.background = 'none'; }}
-            >
-              ✎ Edit ▾
-            </button>
-            {editMenuOpen && (
-              <>
-                <div onClick={() => setEditMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 1000 }} />
-                {/* fixed (not absolute) so the panel's overflow can't clip it */}
-                <div style={{ position: 'fixed', top: editMenuPos.top, left: editMenuPos.left, zIndex: 1001, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, boxShadow: '0 8px 24px rgba(0,0,0,0.45)', minWidth: 160, overflow: 'hidden' }}>
-                  {[
-                    { label: '✎ Position fields', act: () => setEditing(true) },
-                    { label: '⚙ Legs', act: () => setManagingLegs(true) },
-                  ].map((it) => (
-                    <button
-                      key={it.label}
-                      onClick={() => { setEditMenuOpen(false); it.act(); }}
-                      style={{ display: 'block', width: '100%', textAlign: 'left', whiteSpace: 'nowrap', fontSize: 12, color: 'var(--text)', background: 'none', border: 'none', cursor: 'pointer', padding: '8px 12px' }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
-                    >
-                      {it.label}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
+          <button
+            onClick={() => setEditing(true)}
+            style={{
+              fontSize: 12, color: 'var(--acc)', background: 'none',
+              border: '1px solid var(--border)', borderRadius: 5, cursor: 'pointer',
+              padding: '4px 10px', order: 1,
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
+          >
+            ✎ Edit
+          </button>
         )}
       </div>
-      {managingLegs && <LegEditor holding={h} onDone={() => setManagingLegs(false)} />}
 
       <div style={{ padding: '8px 16px 24px', flex: 1 }}>
         {/* Header: ticker + name */}
@@ -508,8 +465,8 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
           </span>
         </div>
 
-        {/* Edit form (admin only, when toggled) */}
-        {editing && <HoldingEditForm holding={h} onDone={() => setEditing(false)} />}
+        {/* Edit — a single modal: position fields + legs together (admin only) */}
+        {editing && <PositionEditor holding={h} onDone={() => setEditing(false)} />}
 
         {/* Data card */}
         {h.ticker !== 'CASH' && (
@@ -605,10 +562,11 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
             <ConvictionTimeline ticker={h.ticker} currentConviction={h.conviction} />
           </HistorySection>
         )}
-        {/* Transaction History — moved to the bottom so it no longer interrupts the narrative */}
-        {showHistory && h.ticker !== 'CASH' && (txData.length > 0 || canEdit) && (
+        {/* Transaction History — the position's evolution, from leg_transactions (same source as the
+            legs, so they can't disagree): position-level action per day + the per-leg events under it. */}
+        {showHistory && h.ticker !== 'CASH' && (
           <HistorySection title="Transaction History">
-            <TransactionTimeline ticker={h.ticker} />
+            <LegTimeline ticker={h.ticker} />
           </HistorySection>
         )}
       </div>

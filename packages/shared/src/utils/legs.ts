@@ -26,8 +26,10 @@ export interface Leg {
   direction: Direction;
   status: LegStatus;
   entry_price: number | null;
-  weight: number | null;          // CURRENT per-leg weight (% of portfolio)
+  weight: number | null;          // CURRENT per-leg weight (% of portfolio) — derived from the
+                                  // position weight via the 90/10 rule unless weight_overridden
   initial_weight: number | null;  // ENTRY per-leg weight (migration 037)
+  weight_overridden: boolean;     // manual per-leg weight — pinned; the split + routine skip it (039)
   mark_price: number | null;
   mark_price_source: MarkPriceSource | null;
   mark_price_at: string | null;
@@ -81,6 +83,41 @@ export function computeRealizedPct(
   if (entry == null || entry === 0 || exit == null) return null;
   const sign = direction === 'short' ? -1 : 1;
   return ((exit - entry) / entry) * 100 * sign;
+}
+
+// Derive each leg's weight from the position (holding) weight via the host's split rule:
+//   mixed       → 90% across share-lots, 10% across option legs
+//   options-only→ even split across the option legs
+//   shares-only → 100% to the shares leg
+// A leg with `weight_overridden` is PINNED (keeps its own weight); the remainder of its bucket is
+// split across the non-overridden legs in that bucket. Returns { [legId]: weight }.
+type WeightLeg = Pick<Leg, 'id' | 'instrument_type' | 'weight' | 'weight_overridden'>;
+export function deriveLegWeights(positionWeight: number | null, legs: WeightLeg[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  const W = positionWeight ?? 0;
+  const shares = legs.filter((l) => l.instrument_type === 'SHARES');
+  const options = legs.filter((l) => l.instrument_type === 'OPTION');
+  const hasS = shares.length > 0;
+  const hasO = options.length > 0;
+
+  const splitBucket = (bucket: WeightLeg[], bucketWeight: number) => {
+    const pinned = bucket.filter((l) => l.weight_overridden);
+    const free = bucket.filter((l) => !l.weight_overridden);
+    const pinnedSum = pinned.reduce((s, l) => s + (l.weight ?? 0), 0);
+    const each = free.length > 0 ? Math.max(0, bucketWeight - pinnedSum) / free.length : 0;
+    for (const l of pinned) out[l.id] = l.weight ?? 0;
+    for (const l of free) out[l.id] = Math.round(each * 1000) / 1000;
+  };
+
+  if (hasS && hasO) {
+    splitBucket(shares, 0.9 * W);
+    splitBucket(options, 0.1 * W);
+  } else if (hasO) {
+    splitBucket(options, W);
+  } else {
+    splitBucket(shares, W);
+  }
+  return out;
 }
 
 // The P&L % to display for a leg in its current state:

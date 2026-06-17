@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   legUnrealizedPnlPct, legPnlPct, holdingPnlPct, holdingType,
-  legMarkReason, fmtLegInstrument, computeRealizedPct, humanizeLegEnum, type Leg,
+  legMarkReason, fmtLegInstrument, computeRealizedPct, humanizeLegEnum, deriveLegWeights, type Leg,
 } from './legs';
 
 // Minimal leg factory — only the fields the pure functions read.
@@ -9,7 +9,7 @@ function leg(over: Partial<Leg>): Leg {
   return {
     id: 'l1', ticker: 'X', trader_id: 't', parent_leg_id: null,
     instrument_type: 'SHARES', option_strike: null, option_expiry: null, option_right: null,
-    direction: 'long', status: 'OPEN', entry_price: null, weight: null, initial_weight: null,
+    direction: 'long', status: 'OPEN', entry_price: null, weight: null, initial_weight: null, weight_overridden: false,
     mark_price: null, mark_price_source: null, mark_price_at: null,
     exit_price: null, realized_pnl_pct: null, opened_at: null, closed_at: null, close_reason: null,
     ...over,
@@ -103,6 +103,30 @@ describe('computeRealizedPct', () => {
     expect(computeRealizedPct(null, 5)).toBeNull();
     expect(computeRealizedPct(0, 5)).toBeNull();
     expect(computeRealizedPct(5, null)).toBeNull();
+  });
+});
+
+describe('deriveLegWeights (90/10 split)', () => {
+  const wl = (id: string, t: 'SHARES' | 'OPTION', over = false, weight = 0) => ({ id, instrument_type: t, weight, weight_overridden: over });
+  it('shares-only → 100% to the shares leg', () => {
+    expect(deriveLegWeights(10.8, [wl('s', 'SHARES')])).toEqual({ s: 10.8 });
+  });
+  it('mixed → 90% shares / 10% split across options', () => {
+    const r = deriveLegWeights(6.5, [wl('s', 'SHARES'), wl('o1', 'OPTION'), wl('o2', 'OPTION')]);
+    expect(r.s).toBeCloseTo(5.85, 3);
+    expect(r.o1).toBeCloseTo(0.325, 3);
+    expect(r.o2).toBeCloseTo(0.325, 3);
+  });
+  it('options-only → even split', () => {
+    const r = deriveLegWeights(3.4, [wl('o1', 'OPTION'), wl('o2', 'OPTION')]);
+    expect(r.o1).toBeCloseTo(1.7, 3);
+    expect(r.o2).toBeCloseTo(1.7, 3);
+  });
+  it('pins an overridden leg and splits the remainder among the rest', () => {
+    const r = deriveLegWeights(6.5, [wl('s', 'SHARES'), wl('o1', 'OPTION', true, 0.5), wl('o2', 'OPTION')]);
+    expect(r.s).toBeCloseTo(5.85, 3);    // shares bucket unaffected
+    expect(r.o1).toBe(0.5);              // pinned
+    expect(r.o2).toBeCloseTo(0.15, 3);   // 0.65 options bucket − 0.5 pinned = 0.15 to the free leg
   });
 });
 

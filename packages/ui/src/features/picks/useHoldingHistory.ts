@@ -1,10 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
-import { fetchHoldingTransactions, fetchConvictionComments } from './api';
+import { fetchConvictionComments, fetchLegTransactions } from './api';
 
-export function useHoldingTransactions(ticker: string) {
+// The position's evolution timeline — every leg event (open/trim/close/…) for the ticker, from the
+// same source (`leg_transactions`) the legs derive from, so the timeline + legs can't disagree.
+export function useLegTransactions(ticker: string) {
   return useQuery({
-    queryKey: ['transactions', ticker],
-    queryFn: () => fetchHoldingTransactions(ticker),
+    queryKey: ['leg-transactions', ticker],
+    queryFn: () => fetchLegTransactions(ticker),
     staleTime: 30_000,
     enabled: !!ticker,
   });

@@ -1,6 +1,6 @@
 import { getSupabase } from '../../lib/supabase';
 import { getTraderId, STW } from '../traders/api';
-import type { HoldingTransaction, ConvictionComment, Leg } from '@stw/shared';
+import type { ConvictionComment, Leg } from '@stw/shared';
 
 export interface Holding {
   rank: number;
@@ -60,17 +60,6 @@ export async function fetchCategories(): Promise<Category[]> {
   return (data ?? []) as Category[];
 }
 
-export async function fetchHoldingTransactions(ticker: string): Promise<HoldingTransaction[]> {
-  const { data, error } = await getSupabase()
-    .from('holding_transactions')
-    .select('*')
-    .eq('ticker', ticker)
-    .order('event_date', { ascending: true });
-
-  if (error) throw error;
-  return (data ?? []) as HoldingTransaction[];
-}
-
 export async function fetchConvictionComments(ticker: string): Promise<ConvictionComment[]> {
   const { data, error } = await getSupabase()
     .from('conviction_comments')
@@ -85,28 +74,11 @@ export async function fetchConvictionComments(ticker: string): Promise<Convictio
 
 // trader_id is stamped here (not in the forms) so the "app writes are STW" rule lives in
 // one place. NOT NULL after migration 026.
-export async function insertHoldingTransaction(
-  row: Omit<HoldingTransaction, 'id' | 'created_at' | 'trader_id'>
-): Promise<void> {
-  const trader_id = await getTraderId(STW);
-  // Idempotent on the dedupe key (migration 036): a manual entry + the routine processing the
-  // same event collapse to one row (last write wins) instead of duplicating.
-  const { error } = await getSupabase()
-    .from('holding_transactions')
-    .upsert({ ...row, trader_id }, { onConflict: 'ticker,trader_id,action,event_date' });
-  if (error) throw error;
-}
-
 export async function insertConvictionComment(
   row: Omit<ConvictionComment, 'id' | 'created_at' | 'trader_id'>
 ): Promise<void> {
   const trader_id = await getTraderId(STW);
   const { error } = await getSupabase().from('conviction_comments').insert({ ...row, trader_id });
-  if (error) throw error;
-}
-
-export async function deleteHoldingTransaction(id: number): Promise<void> {
-  const { error } = await getSupabase().from('holding_transactions').delete().eq('id', id);
   if (error) throw error;
 }
 
@@ -133,7 +105,7 @@ export async function updateLegWeight(legId: string, weight: number | null): Pro
 export type LegEditableFields = Pick<
   Leg,
   | 'instrument_type' | 'option_strike' | 'option_expiry' | 'option_right'
-  | 'direction' | 'status' | 'entry_price' | 'weight' | 'initial_weight'
+  | 'direction' | 'status' | 'entry_price' | 'weight' | 'initial_weight' | 'weight_overridden'
   | 'exit_price' | 'realized_pnl_pct' | 'close_reason' | 'opened_at' | 'closed_at'
 >;
 
@@ -156,4 +128,62 @@ export async function deleteLeg(legId: string): Promise<void> {
   if (txErr) throw txErr;
   const { error } = await sb.from('legs').delete().eq('id', legId);
   if (error) throw error;
+}
+
+// ── leg_transactions: the single event log behind both the legs and the timeline ──────────────
+export interface LegEvent {
+  id: string;
+  leg_id: string;
+  action_type: 'BUY' | 'SELL' | 'EXERCISED' | 'EXPIRED';
+  price: number | null;
+  weight: number | null;
+  close_reason: string | null;
+  executed_at: string;
+  notes: string | null;
+  // embedded leg context (for the timeline display)
+  leg: {
+    ticker: string;
+    instrument_type: 'SHARES' | 'OPTION';
+    option_strike: number | null;
+    option_right: 'CALL' | 'PUT' | null;
+    option_expiry: string | null;
+  } | null;
+}
+
+// The position's evolution — every leg event for a ticker, oldest→newest. Joined to `legs` so the
+// timeline reads from the SAME source as the legs (no second, conflicting table).
+export async function fetchLegTransactions(ticker: string): Promise<LegEvent[]> {
+  const { data, error } = await getSupabase()
+    .from('leg_transactions')
+    .select('id,leg_id,action_type,price,weight,close_reason,executed_at,notes,leg:legs!inner(ticker,instrument_type,option_strike,option_right,option_expiry)')
+    .eq('leg.ticker', ticker)
+    .order('executed_at', { ascending: true });
+  if (error) throw error;
+  return (data ?? []) as unknown as LegEvent[];
+}
+
+export type LegEventInput = Pick<LegEvent, 'action_type' | 'price' | 'weight' | 'close_reason'> & {
+  executed_at: string;
+  notes?: string | null;
+};
+
+// Append an event to a leg (the editor logs the action so it shows in the timeline + drives state).
+export async function insertLegTransaction(legId: string, ev: LegEventInput): Promise<void> {
+  const trader_id = await getTraderId(STW);
+  const { error } = await getSupabase()
+    .from('leg_transactions')
+    .insert({ leg_id: legId, trader_id, ...ev });
+  if (error) throw error;
+}
+
+// Insert a leg and return its new id (needed to attach the opening event).
+export async function insertLegReturningId(ticker: string, fields: LegEditableFields): Promise<string> {
+  const trader_id = await getTraderId(STW);
+  const { data, error } = await getSupabase()
+    .from('legs')
+    .insert({ ...fields, ticker, trader_id })
+    .select('id')
+    .single();
+  if (error) throw error;
+  return (data as { id: string }).id;
 }

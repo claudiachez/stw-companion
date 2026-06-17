@@ -38,7 +38,6 @@ export type { Holding } from './features/picks/api';
 export type { SortMode } from './features/picks/useFilters';
 export { HoldingRow } from './features/picks/components/HoldingRow';
 export { HoldingDetail } from './features/picks/components/HoldingDetail';
-export { HoldingEditForm } from './features/picks/components/HoldingEditForm';
 export { FilterBar } from './features/picks/components/FilterBar';
 export { PortfolioDashboard } from './features/picks/components/PortfolioDashboard';
 export { useRecentChanges } from './features/picks/useRecentChanges';
