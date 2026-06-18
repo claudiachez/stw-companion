@@ -11,7 +11,9 @@
 -- Current weight is NOT managed here — it's derived at read time via deriveLegWeights(holdings
 -- .current_weight, …) honoring pins; `legs.weight` stores only the last-event/pinned weight.
 --
--- Requires 029/030 applied. Additive; safe alongside 038/039 and the pending 034/035.
+-- Requires 029/030 AND 037 (legs.initial_weight — the trigger writes it) + 039 (legs.weight_overridden,
+-- used app-side). The sandbox was at 036; apply 037 + 039 there first. Additive; safe alongside the
+-- pending 034/035.
 --
 -- Run in the Supabase SQL editor:
 --   https://supabase.com/dashboard/project/usmqbohcjcyszjxxvnqu/sql
