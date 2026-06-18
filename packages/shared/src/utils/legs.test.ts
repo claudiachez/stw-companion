@@ -106,27 +106,57 @@ describe('computeRealizedPct', () => {
   });
 });
 
-describe('deriveLegWeights (90/10 split)', () => {
-  const wl = (id: string, t: 'SHARES' | 'OPTION', over = false, weight = 0) => ({ id, instrument_type: t, weight, weight_overridden: over });
+describe('deriveLegWeights (90/10 equity:options, 20/80 short:long)', () => {
+  const wl = (id: string, t: 'SHARES' | 'OPTION', over = false, weight = 0, expiry: string | null = null) =>
+    ({ id, instrument_type: t, weight, weight_overridden: over, option_expiry: expiry });
   it('shares-only → 100% to the shares leg', () => {
     expect(deriveLegWeights(10.8, [wl('s', 'SHARES')])).toEqual({ s: 10.8 });
   });
-  it('mixed → 90% shares / 10% split across options', () => {
-    const r = deriveLegWeights(6.5, [wl('s', 'SHARES'), wl('o1', 'OPTION'), wl('o2', 'OPTION')]);
-    expect(r.s).toBeCloseTo(5.85, 3);
-    expect(r.o1).toBeCloseTo(0.325, 3);
-    expect(r.o2).toBeCloseTo(0.325, 3);
+  it('mixed → 90% shares / 10% options, options split 20/80 short:long by expiry', () => {
+    const r = deriveLegWeights(6.5, [
+      wl('s', 'SHARES'),
+      wl('oShort', 'OPTION', false, 0, '2026-06-19'),
+      wl('oLong', 'OPTION', false, 0, '2026-09-18'),
+    ]);
+    expect(r.s).toBeCloseTo(5.85, 3);        // 90% of 6.5
+    expect(r.oShort).toBeCloseTo(0.13, 3);   // 20% of the 0.65 options bucket
+    expect(r.oLong).toBeCloseTo(0.52, 3);    // 80% of 0.65
   });
-  it('options-only → even split', () => {
+  it('options-only, 2 legs with distinct expiries → 20/80 short:long', () => {
+    const r = deriveLegWeights(2.0, [wl('oShort', 'OPTION', false, 0, '2026-06-19'), wl('oLong', 'OPTION', false, 0, '2026-09-18')]);
+    expect(r.oShort).toBeCloseTo(0.4, 3);    // 20% of 2.0
+    expect(r.oLong).toBeCloseTo(1.6, 3);     // 80% of 2.0
+  });
+  it('options-only, >2 legs → even split', () => {
+    const r = deriveLegWeights(3.0, [wl('a', 'OPTION', false, 0, '2026-06-19'), wl('b', 'OPTION', false, 0, '2026-07-17'), wl('c', 'OPTION', false, 0, '2026-09-18')]);
+    expect(r.a).toBeCloseTo(1.0, 3);
+    expect(r.b).toBeCloseTo(1.0, 3);
+    expect(r.c).toBeCloseTo(1.0, 3);
+  });
+  it('options-only, 2 legs without/equal expiry → even split (no short:long order)', () => {
     const r = deriveLegWeights(3.4, [wl('o1', 'OPTION'), wl('o2', 'OPTION')]);
     expect(r.o1).toBeCloseTo(1.7, 3);
     expect(r.o2).toBeCloseTo(1.7, 3);
   });
-  it('pins an overridden leg and splits the remainder among the rest', () => {
-    const r = deriveLegWeights(6.5, [wl('s', 'SHARES'), wl('o1', 'OPTION', true, 0.5), wl('o2', 'OPTION')]);
+  it('pins an overridden option leg and splits the remainder among the rest', () => {
+    const r = deriveLegWeights(6.5, [
+      wl('s', 'SHARES'),
+      wl('o1', 'OPTION', true, 0.5, '2026-06-19'),
+      wl('o2', 'OPTION', false, 0, '2026-09-18'),
+    ]);
     expect(r.s).toBeCloseTo(5.85, 3);    // shares bucket unaffected
     expect(r.o1).toBe(0.5);              // pinned
     expect(r.o2).toBeCloseTo(0.15, 3);   // 0.65 options bucket − 0.5 pinned = 0.15 to the free leg
+  });
+  it('honors a custom equity:options ratio (ADEA 30:70) and short share', () => {
+    const r = deriveLegWeights(10.0, [
+      wl('s', 'SHARES'),
+      wl('oShort', 'OPTION', false, 0, '2026-06-19'),
+      wl('oLong', 'OPTION', false, 0, '2026-09-18'),
+    ], { equityPct: 0.3 });
+    expect(r.s).toBeCloseTo(3.0, 3);         // 30% equity
+    expect(r.oShort).toBeCloseTo(1.4, 3);    // 20% of the 7.0 options bucket
+    expect(r.oLong).toBeCloseTo(5.6, 3);     // 80% of 7.0
   });
 });
 
