@@ -138,6 +138,11 @@ Inputs: `positionWeight`, legs (`instrument_type`, `option_expiry`, `weight`, `w
 Minimal admin route: edit `equity_options_default` + `options_short_long_default`. (Seeds the broader
 "Manage" area deferred in CLAUDE.md Next Steps #5 — kept narrow for now.)
 
+> **Decision (2026-06-18):** leg add/edit/trim/close lives ONLY in the ledger (one edit surface).
+> The modal shows open legs read-only. The inline 2-line leg-edit form in the modal is **deferred** to
+> a future feature (revisit only if day-to-day use proves it's needed — it reopens the multi-lot
+> "set current weight" ambiguity, which the per-lot ledger avoids).
+
 ### PositionEditor (rewrite — events-only)
 - Shows position fields + **open legs only**.
 - Per-leg form, 2 lines:
