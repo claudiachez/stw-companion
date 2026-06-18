@@ -566,7 +566,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
             legs, so they can't disagree): position-level action per day + the per-leg events under it. */}
         {showHistory && h.ticker !== 'CASH' && (
           <HistorySection title="Transaction History">
-            <LegTimeline ticker={h.ticker} />
+            <LegTimeline ticker={h.ticker} legs={h.legs} />
           </HistorySection>
         )}
       </div>
