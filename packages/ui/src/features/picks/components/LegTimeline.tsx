@@ -35,7 +35,7 @@ function displayAction(ev: LegEvent): ActionLabel | string {
   return 'New';
 }
 function actionColor(label: string): string {
-  if (label === 'Closed' || label === 'Expired') return '#ef4444';
+  if (label === 'Closed' || label === 'Expired') return 'var(--t2)'; // muted — a closed leg is de-emphasized
   if (label === 'Trimmed') return 'var(--c3)';
   if (label === 'Exercised') return '#3b82f6';
   return 'var(--acc)'; // New / Upsized
@@ -67,9 +67,15 @@ export function LegTimeline({ ticker, legs = [] }: { ticker: string; legs?: Leg[
   const { data: events = [], isLoading } = useLegTransactions(ticker);
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<'all' | 'open' | 'closed'>('all');
+
+  // which legs are still open → used to dim/filter their rows
+  const openLegIds = useMemo(() => new Set(legs.filter((l) => l.status === 'OPEN').map((l) => l.id)), [legs]);
+  const isRowOpen = (e: LegEvent) => openLegIds.has(e.leg_id);
 
   // newest first; count events per leg (to guard deleting a leg's only event)
-  const rows = useMemo(() => [...events].sort((a, b) => b.executed_at.localeCompare(a.executed_at) || b.id.localeCompare(a.id)), [events]);
+  const sorted = useMemo(() => [...events].sort((a, b) => b.executed_at.localeCompare(a.executed_at) || b.id.localeCompare(a.id)), [events]);
+  const rows = sorted.filter((e) => filter === 'all' || (filter === 'open' ? isRowOpen(e) : !isRowOpen(e)));
   const eventCountByLeg = useMemo(() => {
     const m = new Map<string, number>();
     for (const e of events) m.set(e.leg_id, (m.get(e.leg_id) ?? 0) + 1);
@@ -93,15 +99,26 @@ export function LegTimeline({ ticker, legs = [] }: { ticker: string; legs?: Leg[
 
   return (
     <div>
-      {canEdit && !adding && <AddButton onClick={() => setAdding(true)} />}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+        {canEdit && !adding && <AddButton onClick={() => setAdding(true)} inline />}
+        <div style={{ display: 'flex', gap: 0, border: '1px solid var(--border)', borderRadius: 5, overflow: 'hidden' }}>
+          {(['all', 'open', 'closed'] as const).map((f) => (
+            <button key={f} onClick={() => setFilter(f)}
+              style={{ fontSize: 11, padding: '3px 10px', border: 'none', cursor: 'pointer', textTransform: 'capitalize',
+                background: filter === f ? 'var(--acc)' : 'transparent', color: filter === f ? '#fff' : 'var(--t2)' }}>
+              {f}
+            </button>
+          ))}
+        </div>
+      </div>
       {addForm}
 
       {isMobile ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {rows.map((e) => editingId === e.id
             ? <EventForm key={e.id} ticker={ticker} legs={legs} event={e} onDone={() => setEditingId(null)} />
-            : <MobileCard key={e.id} ev={e} canEdit={canEdit} onlyEvent={eventCountByLeg.get(e.leg_id) === 1}
-                onEdit={() => setEditingId(e.id)} onDeleted={() => {}} ticker={ticker} />)}
+            : <MobileCard key={e.id} ev={e} canEdit={canEdit} dim={!isRowOpen(e)} onlyEvent={eventCountByLeg.get(e.leg_id) === 1}
+                onEdit={() => setEditingId(e.id)} ticker={ticker} />)}
         </div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
@@ -119,7 +136,7 @@ export function LegTimeline({ ticker, legs = [] }: { ticker: string; legs?: Leg[
                   <EventForm ticker={ticker} legs={legs} event={e} onDone={() => setEditingId(null)} />
                 </td></tr>
               ) : (
-                <DesktopRow key={e.id} ev={e} canEdit={canEdit} onlyEvent={eventCountByLeg.get(e.leg_id) === 1}
+                <DesktopRow key={e.id} ev={e} canEdit={canEdit} dim={!isRowOpen(e)} onlyEvent={eventCountByLeg.get(e.leg_id) === 1}
                   onEdit={() => setEditingId(e.id)} ticker={ticker} />
               ))}
             </tbody>
@@ -130,9 +147,9 @@ export function LegTimeline({ ticker, legs = [] }: { ticker: string; legs?: Leg[
   );
 }
 
-function AddButton({ onClick }: { onClick: () => void }) {
+function AddButton({ onClick, inline = false }: { onClick: () => void; inline?: boolean }) {
   return (
-    <button onClick={onClick} style={{ marginBottom: 10, padding: '5px 12px', borderRadius: 5, border: '1px dashed var(--border)', cursor: 'pointer', background: 'none', color: 'var(--acc)', fontSize: 12, fontWeight: 600 }}>
+    <button onClick={onClick} style={{ marginBottom: inline ? 0 : 10, padding: '5px 12px', borderRadius: 5, border: '1px dashed var(--border)', cursor: 'pointer', background: 'none', color: 'var(--acc)', fontSize: 12, fontWeight: 600 }}>
       ＋ Add event
     </button>
   );
@@ -147,14 +164,15 @@ function useDeleteEvent(ticker: string) {
   };
 }
 
-function DesktopRow({ ev, canEdit, onlyEvent, onEdit, ticker }: { ev: LegEvent; canEdit: boolean; onlyEvent: boolean; onEdit: () => void; ticker: string }) {
+function DesktopRow({ ev, canEdit, dim, onlyEvent, onEdit, ticker }: { ev: LegEvent; canEdit: boolean; dim: boolean; onlyEvent: boolean; onEdit: () => void; ticker: string }) {
   const del = useDeleteEvent(ticker);
   const label = displayAction(ev);
+  const rowOpacity = dim ? 0.5 : 1;  // closed-leg rows are de-emphasized
   return (
-    <tr style={{ borderBottom: '1px solid var(--bsub)' }}>
+    <tr style={{ borderBottom: '1px solid var(--bsub)', opacity: rowOpacity }}>
       <td style={td}>{fmtDay(ev.executed_at)}</td>
       <td style={{ ...td, fontWeight: 700, color: actionColor(label) }}>{label}</td>
-      <td style={{ ...td, color: 'var(--text)' }}>{detailLabel(ev)}</td>
+      <td style={{ ...td, color: dim ? 'var(--t2)' : 'var(--text)' }}>{detailLabel(ev)}</td>
       <td style={td}>{usd(ev.price)}</td>
       <td style={td}>{pct(ev.weight)}</td>
       <td style={{ ...td, maxWidth: 280, whiteSpace: 'normal' }}>{ev.notes}</td>
@@ -168,11 +186,11 @@ function DesktopRow({ ev, canEdit, onlyEvent, onEdit, ticker }: { ev: LegEvent; 
   );
 }
 
-function MobileCard({ ev, canEdit, onlyEvent, onEdit, ticker }: { ev: LegEvent; canEdit: boolean; onlyEvent: boolean; onEdit: () => void; onDeleted: () => void; ticker: string }) {
+function MobileCard({ ev, canEdit, dim, onlyEvent, onEdit, ticker }: { ev: LegEvent; canEdit: boolean; dim: boolean; onlyEvent: boolean; onEdit: () => void; ticker: string }) {
   const del = useDeleteEvent(ticker);
   const label = displayAction(ev);
   return (
-    <div style={{ background: 'var(--s2)', border: '1px solid var(--bsub)', borderRadius: 6, padding: 10 }}>
+    <div style={{ background: 'var(--s2)', border: '1px solid var(--bsub)', borderRadius: 6, padding: 10, opacity: dim ? 0.5 : 1 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
         <span style={{ fontWeight: 700, color: actionColor(label), fontSize: 12 }}>{label}</span>
         <span style={{ fontSize: 11, color: 'var(--t3)' }}>{fmtDay(ev.executed_at)}</span>

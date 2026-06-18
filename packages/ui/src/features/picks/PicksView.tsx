@@ -58,6 +58,7 @@ export function PicksView() {
   const setFetchStatus = usePriceCacheStore((s) => s.setFetchStatus);
   const priceCache = usePriceCacheStore((s) => s.cache);
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
+  const [detailExpanded, setDetailExpanded] = useState(false);  // widen the detail panel (hide the list)
   // Active sub-tab; seeds from the user's saved default (localStorage-instant, profile-synced).
   const [activeTab, setActiveTab] = useState<PicksTab>(() => coercePicksTab(usePicksTabStore.getState().defaultTab));
   const isMobile = useIsMobile();
@@ -262,7 +263,8 @@ export function PicksView() {
                 overflowY: 'auto',
                 borderRight: selected ? '1px solid var(--border)' : 'none',
                 transition: 'flex 0.25s ease',
-                flex: selected ? '0 0 42%' : 1,
+                flex: selected ? (detailExpanded ? '0 0 0%' : '0 0 42%') : 1,
+                ...(selected && detailExpanded ? { visibility: 'hidden' as const } : {}),
               }}
             >
               {sorted.length === 0
@@ -274,7 +276,9 @@ export function PicksView() {
                 <HoldingDetail
                   holding={selected}
                   totalCount={holdings.length}
-                  onClose={() => setSelectedTicker(null)}
+                  onClose={() => { setSelectedTicker(null); setDetailExpanded(false); }}
+                  expanded={detailExpanded}
+                  onToggleExpand={() => setDetailExpanded((v) => !v)}
                   latestOptionsSync={latestOptionsSync}
                 />
               </div>

@@ -68,7 +68,7 @@ export function PositionEditor({ holding: h, onDone }: Props) {
             <select style={field} value={lastAction} onChange={(e) => setLastAction(e.target.value)}>{ACTIONS.map((a) => <option key={a} value={a}>{a}</option>)}</select></div>
           <div><label style={label}>Category</label>
             <select style={field} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}><option value="">— Uncategorized —</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-          <div><label style={label}>Action Date</label>
+          <div><label style={label}>Last Action Date</label>
             <input style={field} type="date" value={actionDate} onChange={(e) => setActionDate(e.target.value)} /></div>
           <div><label style={label}>Initial Position Weight %</label>
             <input style={field} type="number" step="0.1" min="0" value={initialWeight} placeholder="opening size" onChange={(e) => setInitialWeight(e.target.value)} /></div>
@@ -107,11 +107,19 @@ export function PositionEditor({ holding: h, onDone }: Props) {
   );
 }
 
+function fmtOpenDate(s: string | null): string {
+  if (!s) return '';
+  const [y, m, d] = s.slice(0, 10).split('-');
+  const mon = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][parseInt(m, 10)] ?? '';
+  return `${mon} ${parseInt(d, 10)}, '${y.slice(2)}`;
+}
+
 function OpenLegRow({ leg }: { leg: Leg }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, background: 'var(--s2)', border: '1px solid var(--bsub)', borderRadius: 6, padding: '6px 10px', fontSize: 12 }}>
       <span style={{ color: 'var(--text)', fontWeight: 600 }}>
         {leg.instrument_type === 'SHARES' ? 'Shares' : fmtLegInstrument(leg)}
+        {leg.opened_at && <span style={{ color: 'var(--t3)', fontWeight: 400, marginLeft: 6 }}>· opened {fmtOpenDate(leg.opened_at)}</span>}
       </span>
       <span style={{ color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>
         {leg.entry_price != null ? `entry $${leg.entry_price}` : ''}

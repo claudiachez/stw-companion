@@ -50,11 +50,14 @@ interface Props {
   totalCount: number;
   onClose: () => void;
   isMobile?: boolean;
+  /** Desktop: widen the detail panel (hide the list). */
+  expanded?: boolean;
+  onToggleExpand?: () => void;
   /** Newest IBKR options-sync time across the portfolio; lets us flag a stale price. */
   latestOptionsSync?: Date | null;
 }
 
-export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = false, latestOptionsSync = null }: Props) {
+export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = false, expanded = false, onToggleExpand, latestOptionsSync = null }: Props) {
   const { canEdit, canViewHistory, isAdmin } = useCapabilities();
   const showHistory = canViewHistory || isAdmin;
   const [editing, setEditing] = useState(false);
@@ -434,6 +437,21 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
             onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
           >
             ✎ Edit
+          </button>
+        )}
+        {!isMobile && onToggleExpand && (
+          <button
+            onClick={onToggleExpand}
+            title={expanded ? 'Retract panel' : 'Expand panel'}
+            style={{
+              fontSize: 12, color: 'var(--t2)', background: 'none',
+              border: '1px solid var(--border)', borderRadius: 5, cursor: 'pointer',
+              padding: '4px 10px', order: 0,
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
+          >
+            {expanded ? '⤡ Retract' : '⤢ Expand'}
           </button>
         )}
       </div>
