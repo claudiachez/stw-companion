@@ -3,7 +3,7 @@ import type { Holding } from '../api';
 import {
   TIERS, ACTION_VARS, bColor, fmtDateTime,
   holdingType, holdingPnlPct, legIsOpen, legUnrealizedPnlPct, legMarkReason,
-  fmtOptionExpiry, fmtLegInstrument, positionWeight,
+  fmtOptionExpiry, fmtLegWeightLine,
 } from '@stw/shared';
 import { useQuote } from '../../../hooks/useLivePrice';
 import { usePriceCacheStore } from '../../../store/priceCache';
@@ -213,30 +213,22 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
   }
 
   function renderWeightCol(withBorder = true) {
-    const pw = positionWeight(h.legs);  // derived from the open legs (the source of truth)
     return (
       <div style={{ flex: 1, ...(withBorder ? colBorder : {}) }}>
         <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>
           Entry · Current Weight
         </div>
         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
-          {pw.initial != null ? `${pw.initial}%` : '—'}
+          {h.initial_weight != null ? `${h.initial_weight.toFixed(1)}%` : '—'}
           <span style={{ color: 'var(--t3)', fontWeight: 400, margin: '0 4px' }}>→</span>
-          {pw.current != null ? `${pw.current}%` : '—'}
+          {h.current_weight != null ? `${h.current_weight.toFixed(1)}%` : '—'}
         </div>
-        {openLegs.length > 0 ? (
-          /* one OPEN leg per line — closed legs live in Transaction History */
-          <div style={{ fontSize: isMobile ? 11 : 10, color: 'var(--t2)', marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {openLegs.map((l) => (
-              <div key={l.id} style={{ fontVariantNumeric: 'tabular-nums' }}>
-                {l.weight != null && <span style={{ color: 'var(--text)', fontWeight: 600 }}>{l.weight}% </span>}
-                {l.instrument_type === 'SHARES' ? 'Shares' : fmtLegInstrument(l)}
-                {l.instrument_type === 'SHARES' && l.entry_price != null ? ` @ $${l.entry_price}` : ''}
-              </div>
-            ))}
+        {h.legs.length > 0 ? (
+          <div style={{ fontSize: isMobile ? 11 : 10, color: 'var(--t2)', marginTop: 4, lineHeight: 1.5 }}>
+            {fmtLegWeightLine(h.legs)}
           </div>
         ) : (
-          <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 4 }}>no open legs</div>
+          <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 4 }}>detail pending</div>
         )}
       </div>
     );
