@@ -138,8 +138,7 @@ export interface LegEvent {
   weight: number | null;           // a BUY's lot, or a SELL's remaining (0 on full close)
   close_reason: string | null;
   executed_at: string;
-  host_quote: string | null;       // the host's verbatim words ("Position Change")
-  notes: string | null;            // the curator's annotation
+  notes: string | null;            // the host's words (routine-written); the admin can append context
   // embedded leg context (for the timeline display)
   leg: {
     ticker: string;
@@ -151,7 +150,7 @@ export interface LegEvent {
 }
 
 const LEG_EVENT_COLS =
-  'id,leg_id,action_type,action_label,price,weight,close_reason,executed_at,host_quote,notes';
+  'id,leg_id,action_type,action_label,price,weight,close_reason,executed_at,notes';
 
 // The position's evolution — every leg event for a ticker, oldest→newest. Joined to `legs` so the
 // timeline reads from the SAME source as the legs (no second, conflicting table).
@@ -167,7 +166,6 @@ export async function fetchLegTransactions(ticker: string): Promise<LegEvent[]> 
 
 export type LegEventInput = Pick<LegEvent, 'action_type' | 'action_label' | 'price' | 'weight' | 'close_reason'> & {
   executed_at: string;
-  host_quote?: string | null;
   notes?: string | null;
 };
 

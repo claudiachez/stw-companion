@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { TIERS, fmtLegInstrument, legIsOpen, type Leg } from '@stw/shared';
+import { TIERS, fmtLegInstrument, legIsOpen, positionWeight, type Leg } from '@stw/shared';
 import type { Holding } from '../api';
 import { getSupabase } from '../../../lib/supabase';
 import { useCategories } from '../useCategories';
@@ -24,13 +24,16 @@ export function PositionEditor({ holding: h, onDone }: Props) {
   const [lastAction, setLastAction] = useState(h.last_action ?? 'Hold');
   const [actionDate, setActionDate] = useState(h.action_date ?? '');
   const [categoryId, setCategoryId] = useState(h.category_id ?? '');
-  const [initialWeight, setInitialWeight] = useState(h.initial_weight != null ? String(h.initial_weight) : '');
-  const [currentWeight, setCurrentWeight] = useState(h.current_weight != null ? String(h.current_weight) : '');
   const [equityPct, setEquityPct] = useState(h.equity_pct != null ? String(Math.round(h.equity_pct * 100)) : '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   const openLegs = h.legs.filter(legIsOpen);
+  // Position weight is DERIVED from the open legs (the legs are the source of truth; the position
+  // is their sum). Shown read-only; persisted to current_weight on save so the rest of the app
+  // (sorting, filters) stays consistent.
+  const pw = positionWeight(h.legs);
+  const fmtW = (n: number | null) => (n != null ? `${n}%` : '—');
 
   async function save() {
     setSaving(true); setError('');
@@ -40,8 +43,9 @@ export function PositionEditor({ holding: h, onDone }: Props) {
       const { error: hErr } = await sb.from('holdings').update({
         conviction: Number(conviction), last_action: lastAction, action_date: actionDate || null,
         category_id: categoryId || null,
-        initial_weight: initialWeight === '' ? null : parseFloat(initialWeight),
-        current_weight: currentWeight === '' ? null : parseFloat(currentWeight),
+        // position weight derives from the open legs; reconcile the stored fields to that sum.
+        current_weight: pw.current,
+        initial_weight: h.initial_weight ?? pw.initial,
         equity_pct: eq,
       }).eq('ticker', h.ticker);
       if (hErr) throw hErr;
@@ -70,13 +74,14 @@ export function PositionEditor({ holding: h, onDone }: Props) {
           <div><label style={label}>Action Date</label>
             <input style={field} type="date" value={actionDate} onChange={(e) => setActionDate(e.target.value)} /></div>
           <div><label style={label}>Initial Position Weight %</label>
-            <input style={field} type="number" step="0.1" min="0" value={initialWeight} placeholder="—" onChange={(e) => setInitialWeight(e.target.value)} /></div>
+            <div style={{ ...field, background: 'var(--s2)', color: 'var(--t2)' }}>{fmtW(pw.initial)}</div></div>
           <div><label style={label}>Current Position Weight %</label>
-            <input style={field} type="number" step="0.1" min="0" value={currentWeight} placeholder="—" onChange={(e) => setCurrentWeight(e.target.value)} /></div>
+            <div style={{ ...field, background: 'var(--s2)', color: 'var(--text)', fontWeight: 600 }}>{fmtW(pw.current)}</div></div>
           <div><label style={label}>Equity % of split</label>
             <input style={field} type="number" step="1" min="0" max="100" value={equityPct} placeholder="default" onChange={(e) => setEquityPct(e.target.value)} /></div>
         </div>
         <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 6 }}>
+          Position weight is the sum of the open legs (initial = Σ entry weights, current = Σ current weights).
           Equity % sets this position’s equity:options split (e.g. 30 → 30:70); blank uses the Config default (90:10).
         </div>
 

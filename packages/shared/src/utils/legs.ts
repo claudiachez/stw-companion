@@ -156,6 +156,23 @@ export function deriveLegWeights(
   return out;
 }
 
+// Position-level weight = the sum over OPEN legs (the legs are the source of truth; the position
+// weight is their sum). `initial` = Σ open legs' entry weight; `current` = Σ open legs' current
+// weight. Null when there are no open legs (or none carry that weight).
+export function positionWeight(legs: Leg[]): { initial: number | null; current: number | null } {
+  const open = legs.filter(legIsOpen);
+  const sum = (f: (l: Leg) => number | null | undefined): number | null => {
+    let any = false;
+    let total = 0;
+    for (const l of open) {
+      const v = f(l);
+      if (v != null) { any = true; total += v; }
+    }
+    return any ? Math.round(total * 1000) / 1000 : null;
+  };
+  return { initial: sum((l) => l.initial_weight), current: sum((l) => l.weight) };
+}
+
 // The P&L % to display for a leg in its current state:
 //   OPEN                          → unrealized (needs a live/mark price)
 //   CLOSED / EXPIRED_WORTHLESS    → booked realized_pnl_pct

@@ -2,7 +2,7 @@
 --
 -- See plans/legs_event_sourcing_redesign.md. The editor will write ONLY `leg_transactions` (the diary);
 -- `legs` becomes a pure projection the trigger derives by replaying the diary. This migration:
---   (a) adds the diary's two text columns (`host_quote`, `action_label`);
+--   (a) adds the diary's editable display verb (`action_label`); the host's words use `notes`;
 --   (b) adds `holdings.equity_pct` (per-position equity:options ratio; null → Config default);
 --   (c) creates `app_config` (the admin Configuration page's tunable split defaults);
 --   (d) rewrites the leg-sync trigger to fire on INSERT/UPDATE/DELETE and to book realized P&L on
@@ -20,9 +20,9 @@
 
 begin;
 
--- ── (a) leg_transactions: the host's words + an editable display verb ──────────────────────────
+-- ── (a) leg_transactions: an editable display verb (the host's words live in the existing `notes`
+--        column — one notes field the routine writes and the admin can append to).
 alter table public.leg_transactions
-  add column if not exists host_quote   text,
   add column if not exists action_label text;
 
 alter table public.leg_transactions

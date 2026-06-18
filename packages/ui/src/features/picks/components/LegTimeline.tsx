@@ -41,15 +41,11 @@ function actionColor(label: string): string {
   return 'var(--acc)'; // New / Upsized
 }
 
-function assetType(ev: LegEvent): string {
+// One "Details" cell: "Shares" for a share lot, "$30C Sep '26" for an option leg.
+function detailLabel(ev: LegEvent): string {
   const l = ev.leg;
   if (!l) return '—';
   if (l.instrument_type === 'SHARES') return 'Shares';
-  return l.option_right === 'PUT' ? 'Put' : 'Call';
-}
-function optionDetail(ev: LegEvent): string {
-  const l = ev.leg;
-  if (!l || l.instrument_type === 'SHARES') return '';
   const right = l.option_right === 'PUT' ? 'P' : 'C';
   return `$${l.option_strike}${right} ${fmtOptionExpiry(l.option_expiry)}`.trim();
 }
@@ -112,14 +108,14 @@ export function LegTimeline({ ticker, legs = [] }: { ticker: string; legs?: Leg[
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                <th style={th}>Date</th><th style={th}>Action</th><th style={th}>Asset</th>
+                <th style={th}>Date</th><th style={th}>Action</th>
                 <th style={th}>Details</th><th style={th}>Price</th><th style={th}>Weight</th>
-                <th style={th}>His words</th><th style={th}>Notes</th>{canEdit && <th style={th} />}
+                <th style={th}>Notes</th>{canEdit && <th style={th} />}
               </tr>
             </thead>
             <tbody>
               {rows.map((e) => editingId === e.id ? (
-                <tr key={e.id}><td colSpan={canEdit ? 9 : 8} style={{ padding: '6px 0' }}>
+                <tr key={e.id}><td colSpan={canEdit ? 7 : 6} style={{ padding: '6px 0' }}>
                   <EventForm ticker={ticker} legs={legs} event={e} onDone={() => setEditingId(null)} />
                 </td></tr>
               ) : (
@@ -158,12 +154,10 @@ function DesktopRow({ ev, canEdit, onlyEvent, onEdit, ticker }: { ev: LegEvent; 
     <tr style={{ borderBottom: '1px solid var(--bsub)' }}>
       <td style={td}>{fmtDay(ev.executed_at)}</td>
       <td style={{ ...td, fontWeight: 700, color: actionColor(label) }}>{label}</td>
-      <td style={td}>{assetType(ev)}</td>
-      <td style={{ ...td, color: 'var(--text)' }}>{optionDetail(ev)}</td>
+      <td style={{ ...td, color: 'var(--text)' }}>{detailLabel(ev)}</td>
       <td style={td}>{usd(ev.price)}</td>
       <td style={td}>{pct(ev.weight)}</td>
-      <td style={{ ...td, maxWidth: 220, whiteSpace: 'normal' }}>{ev.host_quote}</td>
-      <td style={{ ...td, maxWidth: 200, whiteSpace: 'normal', fontStyle: 'italic', color: 'var(--t3)' }}>{ev.notes}</td>
+      <td style={{ ...td, maxWidth: 280, whiteSpace: 'normal' }}>{ev.notes}</td>
       {canEdit && (
         <td style={{ ...td, whiteSpace: 'nowrap' }}>
           <button style={iconBtn} title="Edit" onClick={onEdit}>✎</button>{' '}
@@ -177,7 +171,6 @@ function DesktopRow({ ev, canEdit, onlyEvent, onEdit, ticker }: { ev: LegEvent; 
 function MobileCard({ ev, canEdit, onlyEvent, onEdit, ticker }: { ev: LegEvent; canEdit: boolean; onlyEvent: boolean; onEdit: () => void; onDeleted: () => void; ticker: string }) {
   const del = useDeleteEvent(ticker);
   const label = displayAction(ev);
-  const detail = optionDetail(ev);
   return (
     <div style={{ background: 'var(--s2)', border: '1px solid var(--bsub)', borderRadius: 6, padding: 10 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
@@ -185,11 +178,10 @@ function MobileCard({ ev, canEdit, onlyEvent, onEdit, ticker }: { ev: LegEvent; 
         <span style={{ fontSize: 11, color: 'var(--t3)' }}>{fmtDay(ev.executed_at)}</span>
       </div>
       <div style={{ fontSize: 12, color: 'var(--text)', marginTop: 2 }}>
-        {assetType(ev)}{detail ? ` · ${detail}` : ''}
+        {detailLabel(ev)}
         <span style={{ color: 'var(--t3)' }}> · {usd(ev.price)} · {pct(ev.weight)}</span>
       </div>
-      {ev.host_quote && <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 4 }}>{ev.host_quote}</div>}
-      {ev.notes && <div style={{ fontSize: 11, color: 'var(--t3)', fontStyle: 'italic', marginTop: 2 }}>{ev.notes}</div>}
+      {ev.notes && <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 4 }}>{ev.notes}</div>}
       {canEdit && (
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
           <button style={iconBtn} onClick={onEdit}>✎ Edit</button>
@@ -227,7 +219,6 @@ function EventForm({ ticker, legs, event, onDone }: { ticker: string; legs: Leg[
   const [date, setDate] = useState(event ? event.executed_at.slice(0, 10) : new Date().toISOString().slice(0, 10));
   const [price, setPrice] = useState(event?.price != null ? String(event.price) : '');
   const [weight, setWeight] = useState(event?.weight != null ? String(event.weight) : '');
-  const [hostQuote, setHostQuote] = useState(event?.host_quote ?? '');
   const [notes, setNotes] = useState(event?.notes ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -257,7 +248,6 @@ function EventForm({ ticker, legs, event, onDone }: { ticker: string; legs: Leg[
         weight: weightLocked ? 0 : num(weight),
         close_reason: null,
         executed_at: `${date}T12:00:00+00:00`,
-        host_quote: hostQuote.trim() || null,
         notes: notes.trim() || null,
       };
       if (editing) await updateLegTransaction(event!.id, input);
@@ -314,10 +304,8 @@ function EventForm({ ticker, legs, event, onDone }: { ticker: string; legs: Leg[
         <div><label style={lbl}>{weightLabel}</label>
           <input style={fld} type="number" step="0.1" value={weightLocked ? '0' : weight} disabled={weightLocked} onChange={(e) => setWeight(e.target.value)} /></div>
       </div>
-      <div style={{ marginTop: 8 }}><label style={lbl}>His words (position change)</label>
-        <input style={fld} value={hostQuote} onChange={(e) => setHostQuote(e.target.value)} /></div>
-      <div style={{ marginTop: 8 }}><label style={lbl}>Notes</label>
-        <input style={fld} value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
+      <div style={{ marginTop: 8 }}><label style={lbl}>Notes (his words — append your own context)</label>
+        <textarea style={{ ...fld, minHeight: 48, resize: 'vertical' }} value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
 
       {error && <div style={{ fontSize: 11, color: '#ef4444', marginTop: 8 }}>{error}</div>}
       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>

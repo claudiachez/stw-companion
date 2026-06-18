@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   legUnrealizedPnlPct, legPnlPct, holdingPnlPct, holdingType,
-  legMarkReason, fmtLegInstrument, computeRealizedPct, humanizeLegEnum, deriveLegWeights, type Leg,
+  legMarkReason, fmtLegInstrument, computeRealizedPct, humanizeLegEnum, deriveLegWeights,
+  positionWeight, type Leg,
 } from './legs';
 
 // Minimal leg factory — only the fields the pure functions read.
@@ -157,6 +158,21 @@ describe('deriveLegWeights (90/10 equity:options, 20/80 short:long)', () => {
     expect(r.s).toBeCloseTo(3.0, 3);         // 30% equity
     expect(r.oShort).toBeCloseTo(1.4, 3);    // 20% of the 7.0 options bucket
     expect(r.oLong).toBeCloseTo(5.6, 3);     // 80% of 7.0
+  });
+});
+
+describe('positionWeight (Σ over open legs)', () => {
+  const leg = (status: string, initial: number | null, weight: number | null) =>
+    ({ id: Math.random().toString(), status, initial_weight: initial, weight } as unknown as Leg);
+  it('sums only OPEN legs (ADEA: shares 0.6→2.0 + $35C 2.0; the two $30C closed)', () => {
+    const legs = [
+      leg('CLOSED', 0.6, 0), leg('CLOSED', 1.4, 0),
+      leg('OPEN', 2.0, 2.0), leg('OPEN', 0.6, 2.0),
+    ];
+    expect(positionWeight(legs)).toEqual({ initial: 2.6, current: 4.0 });
+  });
+  it('null when there are no open legs', () => {
+    expect(positionWeight([leg('CLOSED', 1, 0)])).toEqual({ initial: null, current: null });
   });
 });
 
