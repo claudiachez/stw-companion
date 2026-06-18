@@ -161,7 +161,7 @@ function DesktopRow({ ev, canEdit, onlyEvent, onEdit, ticker }: { ev: LegEvent; 
       {canEdit && (
         <td style={{ ...td, whiteSpace: 'nowrap' }}>
           <button style={iconBtn} title="Edit" onClick={onEdit}>✎</button>{' '}
-          <button style={{ ...iconBtn, color: '#ef4444' }} title="Delete" onClick={() => confirmDelete(del, ev.id, onlyEvent)}>🗑</button>
+          <button style={{ ...iconBtn, color: '#ef4444' }} title="Delete" onClick={() => confirmDelete(del, ev.id, onlyEvent)}>✕</button>
         </td>
       )}
     </tr>
@@ -185,7 +185,7 @@ function MobileCard({ ev, canEdit, onlyEvent, onEdit, ticker }: { ev: LegEvent; 
       {canEdit && (
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
           <button style={iconBtn} onClick={onEdit}>✎ Edit</button>
-          <button style={{ ...iconBtn, color: '#ef4444' }} onClick={() => confirmDelete(del, ev.id, onlyEvent)}>🗑 Delete</button>
+          <button style={{ ...iconBtn, color: '#ef4444' }} onClick={() => confirmDelete(del, ev.id, onlyEvent)}>✕ Delete</button>
         </div>
       )}
     </div>
@@ -304,7 +304,7 @@ function EventForm({ ticker, legs, event, onDone }: { ticker: string; legs: Leg[
         <div><label style={lbl}>{weightLabel}</label>
           <input style={fld} type="number" step="0.1" value={weightLocked ? '0' : weight} disabled={weightLocked} onChange={(e) => setWeight(e.target.value)} /></div>
       </div>
-      <div style={{ marginTop: 8 }}><label style={lbl}>Notes (his words — append your own context)</label>
+      <div style={{ marginTop: 8 }}><label style={lbl}>Notes</label>
         <textarea style={{ ...fld, minHeight: 48, resize: 'vertical' }} value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
 
       {error && <div style={{ fontSize: 11, color: '#ef4444', marginTop: 8 }}>{error}</div>}

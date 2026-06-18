@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { TIERS, fmtLegInstrument, legIsOpen, type Leg } from '@stw/shared';
+import { TIERS, fmtLegInstrument, legIsOpen, positionWeight, type Leg } from '@stw/shared';
 import type { Holding } from '../api';
 import { getSupabase } from '../../../lib/supabase';
 import { useCategories } from '../useCategories';
@@ -25,12 +25,13 @@ export function PositionEditor({ holding: h, onDone }: Props) {
   const [actionDate, setActionDate] = useState(h.action_date ?? '');
   const [categoryId, setCategoryId] = useState(h.category_id ?? '');
   const [initialWeight, setInitialWeight] = useState(h.initial_weight != null ? String(h.initial_weight) : '');
-  const [currentWeight, setCurrentWeight] = useState(h.current_weight != null ? String(h.current_weight) : '');
   const [equityPct, setEquityPct] = useState(h.equity_pct != null ? String(Math.round(h.equity_pct * 100)) : '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   const openLegs = h.legs.filter(legIsOpen);
+  // Current position weight = Σ open legs (derived). Initial = the host's stated opening (you enter it).
+  const curWeight = positionWeight(h.legs).current;
 
   async function save() {
     setSaving(true); setError('');
@@ -41,7 +42,7 @@ export function PositionEditor({ holding: h, onDone }: Props) {
         conviction: Number(conviction), last_action: lastAction, action_date: actionDate || null,
         category_id: categoryId || null,
         initial_weight: initialWeight === '' ? null : parseFloat(initialWeight),
-        current_weight: currentWeight === '' ? null : parseFloat(currentWeight),
+        current_weight: curWeight,   // derived from the open legs
         equity_pct: eq,
       }).eq('ticker', h.ticker);
       if (hErr) throw hErr;
@@ -70,13 +71,14 @@ export function PositionEditor({ holding: h, onDone }: Props) {
           <div><label style={label}>Action Date</label>
             <input style={field} type="date" value={actionDate} onChange={(e) => setActionDate(e.target.value)} /></div>
           <div><label style={label}>Initial Position Weight %</label>
-            <input style={field} type="number" step="0.1" min="0" value={initialWeight} placeholder="—" onChange={(e) => setInitialWeight(e.target.value)} /></div>
+            <input style={field} type="number" step="0.1" min="0" value={initialWeight} placeholder="opening size" onChange={(e) => setInitialWeight(e.target.value)} /></div>
           <div><label style={label}>Current Position Weight %</label>
-            <input style={field} type="number" step="0.1" min="0" value={currentWeight} placeholder="—" onChange={(e) => setCurrentWeight(e.target.value)} /></div>
+            <div style={{ ...field, background: 'var(--s2)', color: 'var(--text)', fontWeight: 600 }}>{curWeight != null ? `${curWeight}%` : '—'}</div></div>
           <div><label style={label}>Equity % of split</label>
             <input style={field} type="number" step="1" min="0" max="100" value={equityPct} placeholder="default" onChange={(e) => setEquityPct(e.target.value)} /></div>
         </div>
         <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 6 }}>
+          Initial = the position’s size at first open (you enter it). Current = the sum of the open legs (auto).
           Equity % sets this position’s equity:options split (e.g. 30 → 30:70); blank uses the Config default (90:10).
         </div>
 
