@@ -11,115 +11,86 @@
 
 ---
 
-## Current Status — admin position editor reworked + legs verified (handoff 2026-06-17)
+## Current Status — legs/transaction-history → true event-sourcing (handoff 2026-06-18)
 
-On `staging` (all feature branches merged + deleted; clean tree). Plan docs (all in `plans/`):
-- [`legs_rebuild_spec.md`](plans/legs_rebuild_spec.md) — **authoritative legs ledger + methodology** (the applied rebuild)
-- [`legs_rebuild_corrective.sql`](plans/legs_rebuild_corrective.sql) — the corrective SQL that was applied + verified
-- [`workstream2_routine_edits.md`](plans/workstream2_routine_edits.md) — line-level SKILL.md edits (Phase 1 + 2 applied)
-- [`cutover_runbook.md`](plans/cutover_runbook.md) · [`schema_migration_plan_v4.md`](plans/schema_migration_plan_v4.md) — migration history/spec
+**Active branch: `claude/legs-event-sourcing`** (off `staging`, pushed, **NOT merged/PR'd**). Authoritative
+spec: [`plans/legs_event_sourcing_redesign.md`](plans/legs_event_sourcing_redesign.md). Read it first.
 
-**Deployed:** PRs #28–#36 merged to `staging` (migration + app + legs rebuild + the admin **position editor** rework).
-**`main`/prod app NOT deployed** (still pre-migration code). Confirm staging Netlify builds are green.
+**Why:** the old editor was split-brain — it wrote BOTH `legs` (directly) and `leg_transactions`, which
+fought on save, diverged, and stamped synthetic dates. Now committed to **true event-sourcing**:
+`leg_transactions` (**the diary**) is the only hand-written source; `legs` (**the scoreboard**) is a pure
+trigger-derived projection. The editor + ledger write ONLY events.
 
-**Prod DB (`usmqbohcjcyszjxxvnqu`):**
-- Migrations **022–033 + 036 + 037 applied**. **038 + 039 authored + merged — ⚠️ VERIFY/APPLY in prod:**
-  **039** (`legs.weight_overridden`) is **REQUIRED for the position editor's leg saves**; **038** fixes the
-  admin-write RLS on `holding_transactions`/`conviction_comments` (was a broken `auth.users` subquery).
-  **034/035 still NOT applied** (drop deprecated cols — gated on the Phase 2 routine smoke-test below).
-  (No `list_migrations` MCP — infer applied state from schema / the editor working.)
-- **All 46 holdings categorized.** New `Hedge` category (ARKK, SQQQ).
-- ✅ **`legs` table REBUILT + verified (2026-06-15)** — was corrupted by `stw_backfill_2026.sql`. Rebuilt
-  from the **7 weekly snapshots (5/1–6/12)** + the **pre-redesign backup**
-  (`backups/stw_db_backup_2026-06-12_pre-redesign.json`) + host live-notes + researched option closing
-  prices. 62 legs across 38 tickers (33 open / 29 closed), 12 holding statuses corrected (SYNA flipped
-  Closed→held), phantoms dropped. Authoritative ledger + methodology in
-  [`legs_rebuild_spec.md`](plans/legs_rebuild_spec.md); the applied SQL is
-  [`legs_rebuild_corrective.sql`](plans/legs_rebuild_corrective.sql). All 62 legs + 15 status fixes
-  verified against prod (entry/exit/realized/status/weight). `holding_transactions` left intact.
-  (Old discrepancy worklist [`legs_rebuild.md`](plans/legs_rebuild.md) is superseded.)
+**Weight model (host-confirmed):** a diary row's `weight` = that leg's **lot** (BUY) or **remaining**
+(SELL, 0 on full close). **BUYs accumulate** → `legs.weight = Σ BUY lots − sells`. Open legs **sum to the
+position weight**. So **Current position weight = Σ open legs (computed)**; **Initial position weight =
+the host's stated opening size (you type it; editable field)**. The 90:10 (equity:options) / 20:80
+(short:long) split is only the **default** for computing lots when the host gives a total with no per-leg
+detail — held in `app_config`, with a per-position override on `holdings.equity_pct`.
 
-**Admin position editor — REWORKED ✅ (2026-06-17, this session).** One `✎ Edit` → a single **modal**
-([`PositionEditor.tsx`](packages/ui/src/features/picks/components/PositionEditor.tsx)): holding fields +
-**position weight** (the input the host states weekly) + **directly-editable leg rows** (no per-leg Edit
-click) + one Save. Per-leg weights **derive 90/10** from the position weight (`deriveLegWeights` in
-`@stw/shared`); typing a leg weight **overrides + pins** it (`legs.weight_overridden`, migration 039 —
-the split *and the routines* must skip pinned legs). **Transaction History restored**
-([`LegTimeline.tsx`](packages/ui/src/features/picks/components/LegTimeline.tsx)) reading
-**`leg_transactions`** — the same source the legs derive from, so they can't disagree (the old bug was
-legs vs `holding_transactions`); shows both grains (position-level action per day + per-leg events).
-`holding_transactions` is fully **out of the UI** (TransactionTimeline/EventForm + their api fns removed).
-Data fixes applied to **prod** this session: SYNA `current_weight` 0→4.7; IRDM leg (3.4% / opened 2/27);
-deduped **20 phantom "New" `holding_transactions`**; re-backfilled `legs.initial_weight` from holding
-initials; `legs.opened_at` set to true opens (OSS Dec 19 2025, etc.). **Soft spot:**
-`leg_transactions.executed_at` still carries the rebuild's *proxy* dates, so the timeline's dates can lag
-the corrected `legs.opened_at` (see Next Steps).
+**Phase 1 DONE ✅ + verified on SANDBOX** (`040_sandbox_verify.sql`):
+- **Migration `040_legs_event_sourcing.sql`** — `leg_transactions += action_label`; `holdings +=
+  equity_pct`; new `app_config` table (split defaults 0.90 / 0.20); **trigger 030 rewritten** to fire on
+  INSERT/UPDATE/DELETE, replay the diary, accumulate BUY lots, and **book realized on trims** (slice-weighted).
+  Requires **037 + 039** first. (`host_quote` was added then removed — Notes is the single field.)
+- `@stw/shared`: `deriveLegWeights` rewritten (90:10 / 20:80, expiry-aware, pins preserved) + new
+  `positionWeight()` (Σ open legs). 45 tests green.
 
-**Phase 1 SKILL.md edits — ALL 5 DONE ✅** (out-of-repo `~/Documents/Claude/Scheduled/*`). First live cron
-run = **9am ET 2026-06-15**, verified clean (Next Steps #1).
+**Phase 2 DONE ✅ + verified on SANDBOX (browser):**
+- **`PositionEditor`** = position fields + `equity_pct`; **Current weight computed** (read-only), **Initial
+  weight editable**; open legs shown read-only (leg CRUD lives in the ledger — one edit surface).
+  "Last Action Date" label; each open leg shows its open date.
+- **`LegTimeline` = editable Transaction History ledger** (writes only `leg_transactions`): `+ Add event`
+  (incl. new legs: Instrument {Shares/Call/Put} + Direction {Long/Short}), per-row ✎/✕ edit/delete,
+  columns **Date · Action · Details · Price · Weight · Notes** (Details holds "Shares"/`$30C Sep '26`;
+  one **Notes** column), newest-first, table on desktop / cards on mobile, **open/closed/all toggle**,
+  **closed-leg rows dimmed** + "Closed"/"Expired" muted gray.
+- **Resizable split** in `PicksView` — drag the divider between the list and the detail (15–80%).
+- typecheck + 45 tests + both builds green.
 
-**Phase 2 SKILL.md edits — DONE ✅ (2026-06-15), pending a live smoke-test + 034/035.** Out-of-repo:
-- `stw-morning-run` / `stw-afternoon-run`: rewritten to the **event model** — write `legs` +
-  `leg_transactions` + `holding_transactions` (trigger-derived); stop writing
-  `last_action`/`current_weight`/`position_detail`/`exit_*`; `basket`→`category_id` (resolve/create);
-  close = `SELL` leg_transaction (no `exit_*` on holdings); **90/10** weight default; **unstated
-  entry/exit price → research that day's close (Yahoo/MarketWatch), don't guess**.
-- `stw-friday-weighting`: weight-only `holding_transactions {Hold}` + **reconciles legs from the
-  snapshot** (the leg source of record).
-- `stw-transcripts`: no change (only writes surviving cols; docs already clean).
-- **Two enhancements beyond the spec:** (a) Graddox switched **Control Chrome → Claude in Chrome** so the
-  morning run is silent like the afternoon (Control Chrome = visible takeover; Claude in Chrome =
-  silent); (b) **early-portfolio-update fallback** added to morning + afternoon — if `updates-portfolio`
-  has a new snapshot (host posts Thu/holiday early), they delegate to `stw-friday-weighting`;
-  idempotent on its high-water mark (whoever processes it first claims it; later runs skip).
-- **REMAINING:** smoke-test one live run on the new model, then DB dump + apply **034/035**.
+**DB state:**
+- **PROD (`usmqbohcjcyszjxxvnqu`):** 022–033 + 036 + 037 applied. **038 + 039 + 040 NOT applied to prod.**
+- **SANDBOX (`uolabcgbnrkhzpwuvzlk`):** 037 + 039 catch-up + **040 applied this session**. Admin dev
+  `.env.local` → sandbox, so **localhost reads/writes the sandbox directly**. Test rows present:
+  `ZZADEA` / `ZZT1` / `ZZT2`. `plans/zzadea_populate.sql` seeds ZZADEA's holding fields + notes (host to run).
 
-**App code (PR #29 verified in admin preview):** count fixes (CASH excluded from Ticker Details tab count;
-FilterBar total respects "Show closed"); web "Re-run the sync." gated to admin; admin Edit form has a
-Category dropdown (`category_id`). typecheck + 30 tests + both builds green.
+**Decisions locked (see spec):** event-sourced; ledger-only leg editing (inline modal editing **deferred**);
+one Notes column; trims book realized; >2 option legs split even; ledger newest-first.
 
-**Key new insight (drives Phase 2):** the host does NOT announce every leg in the daily feed (e.g. SYNA
-`$85C Sep'26` only in the weekly snapshot). → the **Friday routine must reconcile legs/contracts from the
-weekly snapshot, not just weights.**
+**New plan docs (`plans/`):** `legs_event_sourcing_redesign.md` (spec) · `040_sandbox_verify.sql` (trigger
+test) · `legs_inspect.sql` (inspect legs/diary) · `zzadea_populate.sql` (seed test fixture) ·
+`leg_transactions_redate.sql` (superseded by the clean import for open positions).
 
-**Tooling note:** `pnpm` not on PATH; use `corepack pnpm …` or the shim at `~/.local/bin/pnpm`.
-Admin dev `.env.local` points at the **sandbox** DB, not prod.
-
-**Key design decisions (this migration):**
-- Size-less %-P&L model: no share/contract counts. `legs` store `entry_price` + per-leg `weight` + `mark_price`/`exit_price`/`realized_pnl_pct`. P&L is always a %. Per-leg weight stated in chat, else 90/10 default (mixed: 90% shares / 10% options; options-only: even split; shares-only: 100%).
-- `leg_transactions` is a quantity-free event log → trigger 030 derives leg state (replay-safe).
-- Exercise: option → `EXERCISED`; SHARES leg spawned at `strike + premium` (`parent_leg_id`).
-- Trigger 031: `holding_transactions` → `holdings`. Trigger 033 (rewrite of 016): dedupe guard breaks the 031↔033 loop.
-- Apply order: **033 immediately after 026** at cutover.
-- Sandbox (`uolabcgbnrkhzpwuvzlk`) holds full 022–036 + sample data for reference.
+**Tooling:** `pnpm` not on PATH — use `corepack pnpm …` or `~/.local/bin/pnpm`. No local Postgres (can't
+run DDL locally — apply migrations via the Supabase SQL editor). Prod service key (read-only checks) at
+`~/Documents/Claude/Scheduled/.supabase-service-key`. Sandbox anon key in `apps/admin/.env.local`.
 
 ## Next Steps
 
-*(Done earlier — see Current Status: 9am cron verified, legs rebuilt+verified, admin position editor reworked, Phase 1+2 SKILL.md edits.)*
+1. **Clean-slate import (needs the host's Excel).** Host is rebuilding **all OPEN positions** as Excel
+   ledgers (the ADEA-sample format). Plan: wipe `leg_transactions` + open `legs`, **keep closed legs**
+   (synthesize a minimal BUY+close diary), import open positions → trigger derives everything. **Open Q to
+   resolve:** weekly truth-up when a restated total ≠ Σ lots (scale / implied-lot / flag). Supersedes
+   `leg_transactions_redate.sql` for open positions.
 
-1. **Apply migrations 038 + 039 to prod** via the Supabase SQL editor, then **verify the position editor
-   end-to-end on prod**: open `✎ Edit` on a holding → change the position weight (legs should re-derive
-   90/10) → add/edit/close a leg → Save → confirm legs update + the event shows in Transaction History.
-   **039 is required** or leg saves fail (`legs.weight_overridden` missing). Also confirm the staging
-   Netlify build for the merged PRs is green.
+2. **Phase 3 — detail data card P&L split (NOT done; only the weight layout is done).** Show **Open P&L +
+   Closed P&L** in the card; Closed P&L appears when any leg is closed **or trimmed**; weight it by
+   `initial_weight` (fully-closed legs have current weight 0). Keep P&L Breakdown to OPEN legs only.
 
-2. **Routine follow-ups (out-of-repo `~/Documents/Claude/Scheduled/*` SKILL.md)** to match the new weight
-   model: routines must (a) **respect `legs.weight_overridden`** — skip pinned legs in the 90/10
-   redistribution; (b) treat the host's weekly **position weight as the input** and derive legs 90/10
-   (already the documented model); (c) keep writing **`leg_transactions`** (the timeline's source — already do).
+3. **Phase 4 — admin Config page** editing `app_config` (`equity_options_default`,
+   `options_short_long_default`); wire the routines (and any default-split path) to read `app_config` +
+   `holdings.equity_pct`.
 
-3. **Re-date `leg_transactions.executed_at`** to the true open/close dates (the rebuild used proxy dates,
-   so the LegTimeline's dates lag the corrected `legs.opened_at`). Either a corrective `UPDATE` (BUY
-   `executed_at` = `legs.opened_at`, close events = `legs.closed_at`) or have `LegTimeline` read leg dates.
+4. **Phase 5 — routines (out-of-repo `~/Documents/Claude/Scheduled/*`)** for the event model: write
+   `action_label`; the host's words go in **`notes`** (one field); **lot semantics** (BUYs accumulate, a
+   SELL's weight = remaining); respect the weekly-truth-up decision from #1.
 
-4. **Phase 2 cutover (drops the deprecated cols):** smoke-test ONE live routine run on the event model
-   (a New + a Hold + a Close — confirm `legs`/`leg_transactions`/`holding_transactions` land and `holdings`
-   updates via triggers), then take a DB dump and apply **034/035**. Until then the routines simply stop
-   writing those cols — no break.
+5. **Apply migrations 038 + 039 + 040 to PROD** (when ready to ship) — 040 requires 037 + 039 — then
+   verify the editor + ledger end-to-end on prod. Then PR `claude/legs-event-sourcing` → `staging`.
 
-5. **Deferred:** admin **Manage** area (CRUD categories/traders/channels; move basket colors into
-   `categories.color`, retiring `baskets.ts`); `$100k` notional portfolio + SPY benchmark (`spy_daily`
-   exists, migration 032).
+6. **Deferred:** auto-compute "initial = size at first open" (currently entered by hand; revisit after
+   import has correct dates); inline leg editing in the modal; **034/035** (drop deprecated cols — after
+   Phase 5); admin **Manage** area; `$100k` notional + SPY benchmark (`spy_daily`, migration 032).
 
 ---
 
