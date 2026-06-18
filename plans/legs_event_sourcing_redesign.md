@@ -68,8 +68,10 @@ Key-value, single source for tunable defaults; read at **write** time (applied f
 - Fire on **INSERT, UPDATE, DELETE** (today: INSERT only) so editing/deleting a diary row recomputes
   the scoreboard. DELETE uses `OLD.leg_id`.
 - Replay all of a leg's events in `(executed_at, id)` order and derive:
-  - `entry_price` = price of first BUY; `opened_at` = first BUY time.
-  - `weight` = weight on the **latest** event (BUY/SELL/REWEIGHT all carry post-event weight).
+  - `entry_price` = price of first BUY; `opened_at` = first BUY time; `initial_weight` = first BUY lot.
+  - `weight` = **Σ BUY lots − sells** (running total). A **BUY ADDS its lot** (so two buys of 0.6% +
+    1.4% make the leg 2.0%); a **SELL's weight is the leg's remaining** amount (0 on a full close).
+    The per-row weight is the lot/remaining as the host stated it — never a running total.
   - `status` = OPEN unless the latest event is a full close / expire / exercise.
   - **Realized (incl. trims), computed in the replay loop:** for each SELL/EXPIRED, slice weight =
     prior running weight − this event's weight, slice % = `(price − entry)/entry × sign` (EXPIRED = −100%
@@ -88,21 +90,26 @@ Key-value, single source for tunable defaults; read at **write** time (applied f
 Two stored, immutable INITIAL weights + a derived CURRENT weight at each grain. The weekly truth-up
 never touches initial.
 
+**Per-leg weight is the granular truth and the diary lots SUM to it; the position weight is their sum.**
+The 90:10 / 20:80 split is the **default used to compute lot weights when the host states only a total** —
+once lots are explicit (the rebuild case), the leg weight is just `Σ lots − sells`, no derivation.
+
 | | Initial weight | Current weight |
 |---|---|---|
-| **Position** (`holdings`) | `initial_weight` — **write-once** (trigger 031), set when the position opens. | `current_weight` — the host's stated position weight; the weekly routine + editor update it. |
-| **Leg** (`legs`) | `initial_weight` (037) — snapshot at open, never auto-changed by trims. | `weight` — **derived** from `holdings.current_weight` via `deriveLegWeights` (+ `equity_pct`, short:long, pins). |
-| **Diary row** (`leg_transactions`) | — | `weight` — the leg's weight **at the moment of that trade** (immutable historical snapshot → the ledger's Weight column). |
+| **Position** (`holdings`) | `initial_weight` — **write-once** (trigger 031), set when the position opens. | `current_weight` — the host's stated total; equals (and is reconciled to) the sum of open-leg weights. |
+| **Leg** (`legs`) | `initial_weight` (037) = the **first BUY lot**. | `weight` = **Σ BUY lots − sells** (trigger 040). Trims reduce it; a full close → 0. |
+| **Diary row** (`leg_transactions`) | — | `weight` = that event's **lot** (BUY) or **remaining** (SELL), as the host stated it. Immutable → the ledger's Weight column. |
 
 Consequences:
-- **Weekly weighting = a position-level update only.** The Friday routine sets `holdings.current_weight`
-  (historized via the existing `holding_transactions` 'Hold' path); per-leg current weights re-derive.
-  **No per-leg reweight events, no ledger noise, and initial weight is never lost.**
-- **Trims are the exception that pins.** A trim is a real trade (SELL, weight>0): it sets the trimmed
-  leg's current `weight` explicitly (pinned, `weight_overridden`) and books its realized slice; the
-  remaining position weight redistributes across the non-pinned legs.
-- **The ledger's Weight column is per-trade and immutable** — a `New` row keeps the leg's entry weight
-  forever; the detail view shows `initial → current` per leg from the stored initial + derived current.
+- **Leg weight comes from the diary lots** (Σ BUY − sells), so the open legs always sum to the position
+  weight by construction. `holdings.current_weight` is reconciled to that sum (no independent drift).
+- **Trims** are real trades (SELL with remaining>0): they reduce the leg and book the slice's realized.
+- **The ledger's Weight column is per-event and immutable** — a `New` row keeps its lot forever; the
+  detail view shows `initial → current` per leg from the stored initial + the summed current.
+- **OPEN QUESTION (weekly truth-up):** when the Friday snapshot restates a position total that no longer
+  equals the sum of lots, do we (a) scale the open lots proportionally, (b) treat the delta as an
+  implied add/trim lot, or (c) just flag the mismatch for manual edit? (The 90:10/20:80 split only
+  applies when the host gives a total with no per-leg detail.) — resolve before Phase 5 (routines).
 
 ---
 

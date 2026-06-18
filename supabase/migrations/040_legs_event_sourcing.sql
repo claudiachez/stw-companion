@@ -67,8 +67,9 @@ create policy "app_config_write_admin" on public.app_config
 -- Replays ALL of a leg's events in (executed_at, id) order, so it is order-independent and
 -- replay-safe (an edit or delete recomputes from scratch).
 --   entry_price/opened_at = first BUY ; status/exit/closed = the latest closing event
---   initial_weight        = first BUY weight (tracks the diary; edit the opening row to change it)
---   weight                = the latest event's weight (the at-trade snapshot; pins/derivation live in the app)
+--   initial_weight        = first BUY lot (tracks the diary; edit the opening row to change it)
+--   weight                = Σ BUY lots − sells (the leg's CURRENT total weight). BUYs ADD their lot;
+--                           a SELL's weight is the leg's remaining weight (0 on a full close).
 --   realized_pnl_pct      = slice-weighted avg over SELL/EXPIRED events (slice = prior weight − this weight),
 --                           so a trimmed-but-open leg carries realized from its trims
 create or replace function fn_sync_leg_from_transaction()
@@ -80,8 +81,7 @@ declare
   v_entry   numeric := null;
   v_opened  timestamptz := null;
   v_init    numeric := null;
-  v_cur     numeric := null;
-  v_prevw   numeric := 0;
+  v_run     numeric := 0;   -- running leg weight: BUYs ADD their lot; SELL sets the remaining amount
   v_status  text := 'OPEN';
   v_exit    numeric := null;
   v_closed  timestamptz := null;
@@ -103,42 +103,45 @@ begin
     select * from public.leg_transactions where leg_id = v_leg order by executed_at, id
   loop
     if r.action_type = 'BUY' then
+      -- a BUY ADDS its lot to the running leg weight (multiple buys accumulate). The per-row
+      -- weight is that lot's size as the host stated it, never a running total.
       if v_first then
         v_entry := r.price; v_opened := r.executed_at; v_init := r.weight; v_first := false;
       end if;
       v_status := 'OPEN'; v_exit := null; v_closed := null; v_reason := null;
-      v_prevw  := coalesce(r.weight, v_prevw);
+      v_run := v_run + coalesce(r.weight, 0);
 
     elsif r.action_type = 'SELL' then
+      -- a SELL's weight is the leg's REMAINING weight after the sell (0 on a full close); the
+      -- slice sold = running − remaining, and that slice books realized %.
       if v_entry is not null and v_entry <> 0 then
-        v_slice := greatest(0, v_prevw - coalesce(r.weight, 0));
+        v_slice := greatest(0, v_run - coalesce(r.weight, 0));
         if v_slice > 0 then
           v_rtotal  := v_rtotal + v_slice * ((r.price - v_entry) / v_entry * 100 * v_sign);
           v_rweight := v_rweight + v_slice;
         end if;
       end if;
-      v_prevw := coalesce(r.weight, 0);
-      if coalesce(r.weight, 0) = 0 then
+      v_run := coalesce(r.weight, 0);
+      if v_run = 0 then
         v_status := 'CLOSED'; v_exit := r.price; v_closed := r.executed_at; v_reason := r.close_reason;
       else
         v_status := 'OPEN'; v_exit := null; v_closed := null; v_reason := null;  -- trim
       end if;
 
     elsif r.action_type = 'EXPIRED' then
-      if v_entry is not null and v_entry <> 0 and v_prevw > 0 then
-        v_rtotal  := v_rtotal + v_prevw * ((0 - v_entry) / v_entry * 100 * v_sign);  -- −100% long
-        v_rweight := v_rweight + v_prevw;
+      if v_entry is not null and v_entry <> 0 and v_run > 0 then
+        v_rtotal  := v_rtotal + v_run * ((0 - v_entry) / v_entry * 100 * v_sign);  -- −100% long
+        v_rweight := v_rweight + v_run;
       end if;
-      v_prevw  := 0;
+      v_run    := 0;
       v_status := 'EXPIRED_WORTHLESS'; v_exit := 0; v_closed := r.executed_at;
       v_reason := coalesce(r.close_reason, 'EXPIRED_WORTHLESS');
 
     elsif r.action_type = 'EXERCISED' then
-      v_prevw  := 0;
+      v_run    := 0;
       v_status := 'EXERCISED'; v_exit := null; v_closed := r.executed_at; v_reason := 'EXERCISED';
       -- realized stays null: value transfers to the spawned shares leg
     end if;
-    v_cur := r.weight;
   end loop;
 
   if v_rweight > 0 then v_realized := v_rtotal / v_rweight; end if;
@@ -146,8 +149,8 @@ begin
   update public.legs set
     entry_price      = v_entry,
     opened_at        = v_opened,
-    initial_weight   = v_init,   -- = first BUY's weight; edit the opening row to change it
-    weight           = v_cur,
+    initial_weight   = v_init,   -- = first BUY's lot; edit the opening row to change it
+    weight           = v_run,    -- = Σ BUY lots − sells (the leg's current total weight)
     status           = v_status,
     exit_price       = v_exit,
     realized_pnl_pct = v_realized,
