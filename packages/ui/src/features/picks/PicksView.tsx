@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useHoldings } from './useHoldings';
 import { useFiltersStore, applyFilters, sortFlat, sortByPnl } from './useFilters';
 import { usePicksTabStore, coercePicksTab, PICKS_TAB_LABELS, type PicksTab } from './usePicksTab';
@@ -58,7 +58,29 @@ export function PicksView() {
   const setFetchStatus = usePriceCacheStore((s) => s.setFetchStatus);
   const priceCache = usePriceCacheStore((s) => s.cache);
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
-  const [detailExpanded, setDetailExpanded] = useState(false);  // widen the detail panel (hide the list)
+  // Resizable split: the list pane's width as a % of the row; user drags the divider to set it.
+  const splitRef = useRef<HTMLDivElement>(null);
+  const [listPct, setListPct] = useState(42);
+  const [dragging, setDragging] = useState(false);
+  const startResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setDragging(true);
+    document.body.style.userSelect = 'none';
+    const onMove = (ev: MouseEvent) => {
+      const rect = splitRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const pct = ((ev.clientX - rect.left) / rect.width) * 100;
+      setListPct(Math.min(80, Math.max(15, pct)));
+    };
+    const onUp = () => {
+      setDragging(false);
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  };
   // Active sub-tab; seeds from the user's saved default (localStorage-instant, profile-synced).
   const [activeTab, setActiveTab] = useState<PicksTab>(() => coercePicksTab(usePicksTabStore.getState().defaultTab));
   const isMobile = useIsMobile();
@@ -257,14 +279,15 @@ export function PicksView() {
             </div>
           )
         ) : (
-          <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+          <div ref={splitRef} style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
             <div
               style={{
                 overflowY: 'auto',
-                borderRight: selected ? '1px solid var(--border)' : 'none',
-                transition: 'flex 0.25s ease',
-                flex: selected ? (detailExpanded ? '0 0 0%' : '0 0 42%') : 1,
-                ...(selected && detailExpanded ? { visibility: 'hidden' as const } : {}),
+                flexBasis: selected ? `${listPct}%` : 'auto',
+                flexGrow: selected ? 0 : 1,
+                flexShrink: 0,
+                minWidth: 0,
+                ...(dragging ? {} : { transition: 'flex-basis 0.15s ease' }),
               }}
             >
               {sorted.length === 0
@@ -272,16 +295,26 @@ export function PicksView() {
                 : listContent}
             </div>
             {selected && (
-              <div style={{ flex: 1, overflow: 'hidden', background: 'var(--bg)' }}>
-                <HoldingDetail
-                  holding={selected}
-                  totalCount={holdings.length}
-                  onClose={() => { setSelectedTicker(null); setDetailExpanded(false); }}
-                  expanded={detailExpanded}
-                  onToggleExpand={() => setDetailExpanded((v) => !v)}
-                  latestOptionsSync={latestOptionsSync}
+              <>
+                {/* Draggable divider — click and drag to set the split width */}
+                <div
+                  onMouseDown={startResize}
+                  title="Drag to resize"
+                  style={{
+                    flexShrink: 0, width: 6, cursor: 'col-resize',
+                    background: dragging ? 'var(--acc)' : 'var(--border)',
+                    borderLeft: '1px solid var(--bsub)', borderRight: '1px solid var(--bsub)',
+                  }}
                 />
-              </div>
+                <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', background: 'var(--bg)' }}>
+                  <HoldingDetail
+                    holding={selected}
+                    totalCount={holdings.length}
+                    onClose={() => setSelectedTicker(null)}
+                    latestOptionsSync={latestOptionsSync}
+                  />
+                </div>
+              </>
             )}
           </div>
         )
