@@ -2,8 +2,8 @@ import { useState } from 'react';
 import type { Holding } from '../api';
 import {
   TIERS, ACTION_VARS, bColor, fmtDateTime,
-  holdingType, holdingPnlPct, legIsOpen, legUnrealizedPnlPct, legMarkReason,
-  fmtOptionExpiry, fmtLegWeightLine,
+  holdingType, holdingPnlPct, closedPnlPct, closedPnlContribution, legIsOpen, legUnrealizedPnlPct, legMarkReason,
+  fmtOptionExpiry, fmtLegInstrument, displayInitialWeight,
 } from '@stw/shared';
 import { useQuote } from '../../../hooks/useLivePrice';
 import { usePriceCacheStore } from '../../../store/priceCache';
@@ -78,16 +78,23 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
 
   // ── Legs (the %-P&L source of truth) ──────────────────────
   const openLegs   = h.legs.filter(legIsOpen);
-  const closedLegs = h.legs.filter((l) => !legIsOpen(l));
   const optionLegs = h.legs.filter((l) => l.instrument_type === 'OPTION');
   const shareLegs  = h.legs.filter((l) => l.instrument_type === 'SHARES');
-  const validLegs  = optionLegs.filter((l) => l.mark_price != null); // priced by IBKR
-
-  // ── P&L — weight-weighted across legs ─────────────────────
-  const pnlPct     = holdingPnlPct(openLegs, livePrice);
-  const equityPnl  = holdingPnlPct(shareLegs, livePrice);
-  const optionsPnl = holdingPnlPct(optionLegs, livePrice);
-  const pnlColor   = pnlPct != null ? (pnlPct >= 0 ? '#16A34A' : '#DC2626') : undefined;
+  // ── P&L — split by asset class so a big option return never reads as a position move ─────────
+  // OPEN (unrealized), per asset class — only the still-open legs of each kind. The P&L Breakdown
+  // (open-only per spec) reads off these too, so closed legs never show as "not priced".
+  const openShareLegs  = openLegs.filter((l) => l.instrument_type === 'SHARES');
+  const openOptionLegs = openLegs.filter((l) => l.instrument_type === 'OPTION');
+  const validLegs  = openOptionLegs.filter((l) => l.mark_price != null); // open + priced by IBKR
+  const sumW = (ls: typeof openLegs) => ls.reduce((s, l) => s + (l.weight ?? 0), 0);
+  const openSharesPnl  = holdingPnlPct(openShareLegs, livePrice);
+  const openOptionsPnl = holdingPnlPct(openOptionLegs, livePrice);
+  // CLOSED (realized), per asset: weighted return % + its portfolio contribution (return × sold weight).
+  const closedSharesPnl    = closedPnlPct(shareLegs);
+  const closedOptionsPnl   = closedPnlPct(optionLegs);
+  const closedSharesContrib  = closedPnlContribution(shareLegs);
+  const closedOptionsContrib = closedPnlContribution(optionLegs);
+  const pnlCol = (v: number | null | undefined) => (v != null && v >= 0 ? '#16A34A' : v != null ? '#DC2626' : undefined);
 
   // Newest OPTION leg mark across this holding → the "IBKR · <time>" stamp + stale flag.
   const newestMarkAt = optionLegs.reduce<Date | null>((acc, l) => {
@@ -155,80 +162,87 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
     );
   }
 
-  const isClosed = h.last_action === 'Closed';
-
-  function renderClosedPnlCol(withBorder = true) {
-    // Weighted realized % across the closed legs.
-    const exitPct = holdingPnlPct(closedLegs, livePrice);
-    const exitColor = exitPct != null ? (exitPct >= 0 ? '#16A34A' : '#DC2626') : undefined;
+  // One "Shares/Options +X%" line. `lot` (open) shows the open weight; `contrib` (closed) shows the
+  // portfolio contribution. Exactly one of lot/contrib is passed.
+  function assetPnlRow(name: string, pct: number, lot: number | null, contrib: number | null) {
     return (
-      <div style={{ flex: 1, ...(withBorder ? colBorder : {}) }}>
-        <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>
-          Close P&L
-        </div>
-        {exitPct != null ? (
-          <>
-            <div style={{ fontSize: 20, fontWeight: 700, color: exitColor, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
-              {exitPct >= 0 ? '+' : ''}{exitPct.toFixed(1)}%
-            </div>
-            <div style={{ fontSize: 9, color: 'var(--t3)', marginTop: 4, opacity: 0.8 }}>Realized</div>
-          </>
-        ) : (
-          <div style={{ fontSize: 12, color: 'var(--t3)' }}>Position closed</div>
-        )}
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 12, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+        <span style={{ color: 'var(--t2)' }}>{name}</span>
+        <span>
+          <span style={{ color: pnlCol(pct), fontWeight: 700 }}>{pct >= 0 ? '+' : ''}{pct.toFixed(1)}%</span>
+          {lot != null && <span style={{ color: 'var(--t3)' }}> ({lot.toFixed(1)}% lot)</span>}
+          {contrib != null && <span style={{ color: 'var(--t3)' }}> ({contrib >= 0 ? '+' : ''}{contrib.toFixed(2)}%)</span>}
+        </span>
       </div>
     );
   }
 
   function renderPnlCol(withBorder = true) {
-    if (isClosed) return renderClosedPnlCol(withBorder);
-    const label = pType === 'mixed' ? 'Avg P&L' : 'Open P&L';
     const srcLines = pnlSrcLines();
+    const hasOpenPnl   = openSharesPnl != null || openOptionsPnl != null;
+    const hasClosedPnl = closedSharesPnl != null || closedOptionsPnl != null;
+    const subHdr: React.CSSProperties = { fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em' };
     return (
       <div style={{ flex: 1, ...(withBorder ? colBorder : {}) }}>
-        <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>
-          {label}
-        </div>
-        {pnlPct != null ? (
+        {openLegs.length > 0 && (
           <>
-            <div style={{ fontSize: 20, fontWeight: 700, color: pnlColor, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
-              {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%
-            </div>
-            {pType === 'options' && optionLegs.length > 0 && (
-              <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>
-                {validLegs.length} of {optionLegs.length} leg{optionLegs.length > 1 ? 's' : ''} priced
-              </div>
+            <div style={{ ...subHdr, marginBottom: 3 }}>Open P&L</div>
+            {hasOpenPnl ? (
+              <>
+                {openSharesPnl  != null && assetPnlRow('Shares',  openSharesPnl,  sumW(openShareLegs),  null)}
+                {openOptionsPnl != null && assetPnlRow('Options', openOptionsPnl, sumW(openOptionLegs), null)}
+                {srcLines.map((line, i) => (
+                  <div key={i} style={{ fontSize: 9, color: line.stale ? 'var(--c3)' : 'var(--t3)', marginTop: i === 0 ? 4 : 1, opacity: line.stale ? 1 : 0.8 }}>{line.text}</div>
+                ))}
+              </>
+            ) : (
+              (pType === 'options' || pType === 'mixed')
+                ? <div style={{ fontSize: 12, color: 'var(--t3)' }}>No IBKR data</div>
+                : <PriceEmptyState fetchStatus={fetchStatus} />
             )}
-            {srcLines.map((line, i) => (
-              <div key={i} style={{ fontSize: 9, color: line.stale ? 'var(--c3)' : 'var(--t3)', marginTop: i === 0 ? 4 : 1, opacity: line.stale ? 1 : 0.8 }}>{line.text}</div>
-            ))}
           </>
-        ) : (
-          (pType === 'options' || pType === 'mixed')
-            ? <div style={{ fontSize: 12, color: 'var(--t3)' }}>No IBKR data</div>
-            : <PriceEmptyState fetchStatus={fetchStatus} />
         )}
+        {hasClosedPnl && (
+          <div style={{ marginTop: openLegs.length > 0 ? 8 : 0 }}>
+            <div style={{ ...subHdr, marginBottom: 3 }}>Closed <span style={{ textTransform: 'none', letterSpacing: 0 }}>(Portfolio Contribution %)</span></div>
+            {closedSharesPnl  != null && assetPnlRow('Shares',  closedSharesPnl,  null, closedSharesContrib)}
+            {closedOptionsPnl != null && assetPnlRow('Options', closedOptionsPnl, null, closedOptionsContrib)}
+          </div>
+        )}
+        {openLegs.length === 0 && !hasClosedPnl && <div style={{ fontSize: 12, color: 'var(--t3)' }}>Position closed</div>}
       </div>
     );
   }
 
   function renderWeightCol(withBorder = true) {
+    // Initial = Σ the open legs' lots (the size actually deployed, from the diary); for a fully-closed
+    // position it falls back to the closed legs' entry lots so it still shows the original size.
+    // Current = holdings.current_weight — the live portfolio weight the routines restate.
+    const initWeight = displayInitialWeight(h.legs);
+    const curWeight  = h.current_weight;
     return (
       <div style={{ flex: 1, ...(withBorder ? colBorder : {}) }}>
         <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>
-          Entry · Current Weight
+          Initial · Current Weight
         </div>
         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
-          {h.initial_weight != null ? `${h.initial_weight.toFixed(1)}%` : '—'}
+          {initWeight != null ? `${initWeight}%` : '—'}
           <span style={{ color: 'var(--t3)', fontWeight: 400, margin: '0 4px' }}>→</span>
-          {h.current_weight != null ? `${h.current_weight.toFixed(1)}%` : '—'}
+          {curWeight != null ? `${curWeight}%` : '—'}
         </div>
-        {h.legs.length > 0 ? (
-          <div style={{ fontSize: isMobile ? 11 : 10, color: 'var(--t2)', marginTop: 4, lineHeight: 1.5 }}>
-            {fmtLegWeightLine(h.legs)}
+        {openLegs.length > 0 ? (
+          /* one OPEN leg per line — closed legs live in Transaction History */
+          <div style={{ fontSize: isMobile ? 11 : 10, color: 'var(--t2)', marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {openLegs.map((l) => (
+              <div key={l.id} style={{ fontVariantNumeric: 'tabular-nums' }}>
+                {l.weight != null && <span style={{ color: 'var(--text)', fontWeight: 600 }}>{l.weight}% </span>}
+                {l.instrument_type === 'SHARES' ? 'Shares' : fmtLegInstrument(l)}
+                {l.instrument_type === 'SHARES' && l.entry_price != null ? ` @ $${l.entry_price}` : ''}
+              </div>
+            ))}
           </div>
         ) : (
-          <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 4 }}>detail pending</div>
+          <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 4 }}>no open legs</div>
         )}
       </div>
     );
@@ -236,7 +250,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
 
   function renderPnlBreakdown() {
     if (pType !== 'mixed') return null;
-    if (equityPnl == null && optionsPnl == null) return null;
+    if (openSharesPnl == null && openOptionsPnl == null) return null;
     return (
       <div style={{ background: 'var(--s2)', border: '1px solid var(--bsub)', borderRadius: 6, padding: '10px 12px', marginBottom: 12 }}>
         <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>
@@ -244,22 +258,22 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
         </div>
         {/* Shares 25% · Options 25% · Options Detail 50% (stacks on mobile). */}
         <div style={{ display: 'flex', flexWrap: isMobile ? 'wrap' : 'nowrap', gap: isMobile ? 10 : 0, alignItems: 'flex-start' }}>
-          {equityPnl != null && (
+          {openSharesPnl != null && (
             <div style={{ flex: isMobile ? '1 1 40%' : '0 0 25%' }}>
               <div style={{ fontSize: 9, color: 'var(--t3)', marginBottom: 3 }}>Shares</div>
-              <div style={{ fontSize: 17, fontWeight: 700, color: equityPnl >= 0 ? '#16A34A' : '#DC2626', fontVariantNumeric: 'tabular-nums' }}>
-                {equityPnl >= 0 ? '+' : ''}{equityPnl.toFixed(1)}%
+              <div style={{ fontSize: 17, fontWeight: 700, color: openSharesPnl >= 0 ? '#16A34A' : '#DC2626', fontVariantNumeric: 'tabular-nums' }}>
+                {openSharesPnl >= 0 ? '+' : ''}{openSharesPnl.toFixed(1)}%
               </div>
-              {shareLegs[0]?.entry_price != null && (
-                <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>from ${shareLegs[0].entry_price!.toFixed(2)}</div>
+              {openShareLegs[0]?.entry_price != null && (
+                <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>from ${openShareLegs[0].entry_price!.toFixed(2)}</div>
               )}
             </div>
           )}
-          {optionsPnl != null && (
-            <div style={{ flex: isMobile ? '1 1 40%' : '0 0 25%', ...(equityPnl != null && !isMobile ? colBorder : {}) }}>
+          {openOptionsPnl != null && (
+            <div style={{ flex: isMobile ? '1 1 40%' : '0 0 25%', ...(openSharesPnl != null && !isMobile ? colBorder : {}) }}>
               <div style={{ fontSize: 9, color: 'var(--t3)', marginBottom: 3 }}>Options</div>
-              <div style={{ fontSize: 17, fontWeight: 700, color: optionsPnl >= 0 ? '#16A34A' : '#DC2626', fontVariantNumeric: 'tabular-nums' }}>
-                {optionsPnl >= 0 ? '+' : ''}{optionsPnl.toFixed(1)}%
+              <div style={{ fontSize: 17, fontWeight: 700, color: openOptionsPnl >= 0 ? '#16A34A' : '#DC2626', fontVariantNumeric: 'tabular-nums' }}>
+                {openOptionsPnl >= 0 ? '+' : ''}{openOptionsPnl.toFixed(1)}%
               </div>
               {validLegs.length > 0 && (
                 <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>
@@ -268,7 +282,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
               )}
             </div>
           )}
-          {optionLegs.length > 0 && (
+          {openOptionLegs.length > 0 && (
             <div style={{ flex: isMobile ? '1 1 100%' : '1 1 50%', ...(isMobile ? { borderTop: '1px solid var(--border)', paddingTop: 10 } : colBorder) }}>
               <div style={{ fontSize: 9, color: 'var(--t3)', marginBottom: 3 }}>Options Detail</div>
               {renderLegRowsCompact()}
@@ -284,7 +298,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
   function renderLegRowsCompact() {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {optionLegs.map((leg) => {
+        {openOptionLegs.map((leg) => {
           const right       = leg.option_right === 'PUT' ? 'P' : 'C';
           const pnl         = legUnrealizedPnlPct(leg, livePrice);
           const mark        = leg.mark_price;
@@ -331,7 +345,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
   function renderLegRows() {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {optionLegs.map((leg) => {
+        {openOptionLegs.map((leg) => {
             const right       = leg.option_right === 'PUT' ? 'P' : 'C';
             const pnl         = legUnrealizedPnlPct(leg, livePrice);
             const mark        = leg.mark_price;
@@ -385,7 +399,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
 
   // Options-only positions: legs as their own section (mixed renders them in breakdown).
   function renderLegsSection() {
-    if (pType !== 'options' || optionLegs.length === 0) return null;
+    if (pType !== 'options' || openOptionLegs.length === 0) return null;
     return (
       <div style={{ marginBottom: 12 }}>
         <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>
@@ -566,7 +580,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
             legs, so they can't disagree): position-level action per day + the per-leg events under it. */}
         {showHistory && h.ticker !== 'CASH' && (
           <HistorySection title="Transaction History">
-            <LegTimeline ticker={h.ticker} />
+            <LegTimeline ticker={h.ticker} legs={h.legs} />
           </HistorySection>
         )}
       </div>

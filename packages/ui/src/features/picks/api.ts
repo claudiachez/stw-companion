@@ -13,6 +13,7 @@ export interface Holding {
   action_date: string | null;
   initial_weight: number | null;
   current_weight: number | null;
+  equity_pct: number | null;   // per-position equity:options split (0–1); null → Config default (040)
   summary: string | null;
   bullets: string[] | null;
   dd_updated_at: string | null;   // when DD/thesis/conviction was last refreshed (runs + stream)
@@ -94,19 +95,16 @@ export async function updateLegWeight(legId: string, weight: number | null): Pro
 }
 
 // ── Admin leg editor (add / edit / remove) ──────────────────────────────────────────────
-// Writes the `legs` row DIRECTLY — analogous to how HoldingEditForm writes `holdings`. The
-// app reads `legs` (not leg_transactions), and the 030 trigger only derives on a
-// leg_transaction INSERT (not on edit/delete), so a direct write is the predictable override
-// path. The routines + the rebuild SQL stay event-sourced; this is the manual correction tool.
-// `realized_pnl_pct` is computed by the caller via computeRealizedPct() from @stw/shared so it
-// always matches the trigger formula.
+// Event-sourced (migration 040): a leg's STATE — entry_price, weight, status, exit_price,
+// realized_pnl_pct, opened_at/closed_at, initial_weight — is derived by trigger 030 from the
+// leg's `leg_transactions` and must NEVER be hand-written. These functions write only the leg's
+// STRUCTURAL identity (instrument / strike / expiry / right / direction); everything else flows
+// through leg_transactions (see insert/update/deleteLegTransaction below).
 
-// The admin-editable subset of a leg. trader_id/ticker are fixed (stamped on insert).
+// The admin-editable subset of a leg = its structural identity only. trader_id/ticker are fixed.
 export type LegEditableFields = Pick<
   Leg,
-  | 'instrument_type' | 'option_strike' | 'option_expiry' | 'option_right'
-  | 'direction' | 'status' | 'entry_price' | 'weight' | 'initial_weight' | 'weight_overridden'
-  | 'exit_price' | 'realized_pnl_pct' | 'close_reason' | 'opened_at' | 'closed_at'
+  'instrument_type' | 'option_strike' | 'option_expiry' | 'option_right' | 'direction'
 >;
 
 export async function insertLeg(ticker: string, fields: LegEditableFields): Promise<void> {
@@ -135,11 +133,12 @@ export interface LegEvent {
   id: string;
   leg_id: string;
   action_type: 'BUY' | 'SELL' | 'EXERCISED' | 'EXPIRED';
+  action_label: string | null;     // host-facing verb: New / Upsized / Trimmed / Closed / Exercised / Expired
   price: number | null;
-  weight: number | null;
+  weight: number | null;           // a BUY's lot, or a SELL's remaining (0 on full close)
   close_reason: string | null;
   executed_at: string;
-  notes: string | null;
+  notes: string | null;            // the host's words (routine-written); the admin can append context
   // embedded leg context (for the timeline display)
   leg: {
     ticker: string;
@@ -150,29 +149,45 @@ export interface LegEvent {
   } | null;
 }
 
+const LEG_EVENT_COLS =
+  'id,leg_id,action_type,action_label,price,weight,close_reason,executed_at,notes';
+
 // The position's evolution — every leg event for a ticker, oldest→newest. Joined to `legs` so the
 // timeline reads from the SAME source as the legs (no second, conflicting table).
 export async function fetchLegTransactions(ticker: string): Promise<LegEvent[]> {
   const { data, error } = await getSupabase()
     .from('leg_transactions')
-    .select('id,leg_id,action_type,price,weight,close_reason,executed_at,notes,leg:legs!inner(ticker,instrument_type,option_strike,option_right,option_expiry)')
+    .select(`${LEG_EVENT_COLS},leg:legs!inner(ticker,instrument_type,option_strike,option_right,option_expiry)`)
     .eq('leg.ticker', ticker)
     .order('executed_at', { ascending: true });
   if (error) throw error;
   return (data ?? []) as unknown as LegEvent[];
 }
 
-export type LegEventInput = Pick<LegEvent, 'action_type' | 'price' | 'weight' | 'close_reason'> & {
+export type LegEventInput = Pick<LegEvent, 'action_type' | 'action_label' | 'price' | 'weight' | 'close_reason'> & {
   executed_at: string;
   notes?: string | null;
 };
 
-// Append an event to a leg (the editor logs the action so it shows in the timeline + drives state).
+// Append an event to a leg. The 040 trigger re-derives the leg's state from all its events.
 export async function insertLegTransaction(legId: string, ev: LegEventInput): Promise<void> {
   const trader_id = await getTraderId(STW);
   const { error } = await getSupabase()
     .from('leg_transactions')
     .insert({ leg_id: legId, trader_id, ...ev });
+  if (error) throw error;
+}
+
+// Edit an existing diary row — the trigger replays and re-derives the leg (so the scoreboard and
+// the ledger can never disagree).
+export async function updateLegTransaction(id: string, fields: Partial<LegEventInput>): Promise<void> {
+  const { error } = await getSupabase().from('leg_transactions').update(fields).eq('id', id);
+  if (error) throw error;
+}
+
+// Delete a diary row (the DELETE trigger re-derives from the remaining events).
+export async function deleteLegTransaction(id: string): Promise<void> {
+  const { error } = await getSupabase().from('leg_transactions').delete().eq('id', id);
   if (error) throw error;
 }
 

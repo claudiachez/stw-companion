@@ -85,39 +85,106 @@ export function computeRealizedPct(
   return ((exit - entry) / entry) * 100 * sign;
 }
 
-// Derive each leg's weight from the position (holding) weight via the host's split rule:
-//   mixed       → 90% across share-lots, 10% across option legs
-//   options-only→ even split across the option legs
-//   shares-only → 100% to the shares leg
-// A leg with `weight_overridden` is PINNED (keeps its own weight); the remainder of its bucket is
-// split across the non-overridden legs in that bucket. Returns { [legId]: weight }.
-type WeightLeg = Pick<Leg, 'id' | 'instrument_type' | 'weight' | 'weight_overridden'>;
-export function deriveLegWeights(positionWeight: number | null, legs: WeightLeg[]): Record<string, number> {
+// Default split ratios (overridable per position / via the admin Config page). See
+// plans/legs_event_sourcing_redesign.md → Weight model.
+export const DEFAULT_EQUITY_PCT = 0.9;   // mixed positions: 90% equity / 10% options
+export const DEFAULT_SHORT_SHARE = 0.2;  // options bucket, exactly 2 legs: 20% short-dated / 80% long
+
+// Derive each leg's CURRENT weight from the position (holding) weight via the host's split rule:
+//   shares-only  → 100% to the shares leg(s)
+//   mixed        → `equityPct` (default 90%) across share-lots, the remainder across option legs
+//   options-only → split across the option legs
+// Within the OPTIONS bucket: exactly 2 free legs with distinct expiries split `shortShare`/(1−shortShare)
+// by expiry (nearest = short); otherwise an even split. A leg with `weight_overridden` is PINNED (keeps
+// its own weight); the remainder of its bucket splits across the non-pinned legs. Returns { [legId]: weight }.
+type WeightLeg = Pick<Leg, 'id' | 'instrument_type' | 'weight' | 'weight_overridden'> & {
+  option_expiry?: string | null;
+};
+interface SplitConfig { equityPct?: number; shortShare?: number; }
+export function deriveLegWeights(
+  positionWeight: number | null,
+  legs: WeightLeg[],
+  config: SplitConfig = {},
+): Record<string, number> {
+  const equityPct = config.equityPct ?? DEFAULT_EQUITY_PCT;
+  const shortShare = config.shortShare ?? DEFAULT_SHORT_SHARE;
   const out: Record<string, number> = {};
   const W = positionWeight ?? 0;
   const shares = legs.filter((l) => l.instrument_type === 'SHARES');
   const options = legs.filter((l) => l.instrument_type === 'OPTION');
   const hasS = shares.length > 0;
   const hasO = options.length > 0;
+  const round = (n: number) => Math.round(n * 1000) / 1000;
 
-  const splitBucket = (bucket: WeightLeg[], bucketWeight: number) => {
+  // Even split across the free (non-pinned) legs of a bucket, after reserving pinned weights.
+  const splitEven = (bucket: WeightLeg[], bucketWeight: number) => {
     const pinned = bucket.filter((l) => l.weight_overridden);
     const free = bucket.filter((l) => !l.weight_overridden);
     const pinnedSum = pinned.reduce((s, l) => s + (l.weight ?? 0), 0);
     const each = free.length > 0 ? Math.max(0, bucketWeight - pinnedSum) / free.length : 0;
     for (const l of pinned) out[l.id] = l.weight ?? 0;
-    for (const l of free) out[l.id] = Math.round(each * 1000) / 1000;
+    for (const l of free) out[l.id] = round(each);
+  };
+
+  // Options bucket: short:long for exactly 2 free legs with distinct expiries, else even.
+  const splitOptions = (bucket: WeightLeg[], bucketWeight: number) => {
+    const pinned = bucket.filter((l) => l.weight_overridden);
+    const free = bucket.filter((l) => !l.weight_overridden);
+    const pinnedSum = pinned.reduce((s, l) => s + (l.weight ?? 0), 0);
+    for (const l of pinned) out[l.id] = l.weight ?? 0;
+    const rem = Math.max(0, bucketWeight - pinnedSum);
+    const distinct2 =
+      free.length === 2 && free[0].option_expiry && free[1].option_expiry &&
+      free[0].option_expiry !== free[1].option_expiry;
+    if (distinct2) {
+      const [short, long] = [...free].sort((a, b) => (a.option_expiry! < b.option_expiry! ? -1 : 1));
+      out[short.id] = round(rem * shortShare);
+      out[long.id] = round(rem * (1 - shortShare));
+    } else {
+      splitEven(free, rem);  // free-only: pinned already assigned + reserved above
+    }
   };
 
   if (hasS && hasO) {
-    splitBucket(shares, 0.9 * W);
-    splitBucket(options, 0.1 * W);
+    splitEven(shares, equityPct * W);
+    splitOptions(options, (1 - equityPct) * W);
   } else if (hasO) {
-    splitBucket(options, W);
+    splitOptions(options, W);
   } else {
-    splitBucket(shares, W);
+    splitEven(shares, W);
   }
   return out;
+}
+
+// Position-level weight = the sum over OPEN legs (the legs are the source of truth; the position
+// weight is their sum). `initial` = Σ open legs' entry weight; `current` = Σ open legs' current
+// weight. Null when there are no open legs (or none carry that weight).
+export function positionWeight(legs: Leg[]): { initial: number | null; current: number | null } {
+  const open = legs.filter(legIsOpen);
+  const sum = (f: (l: Leg) => number | null | undefined): number | null => {
+    let any = false;
+    let total = 0;
+    for (const l of open) {
+      const v = f(l);
+      if (v != null) { any = true; total += v; }
+    }
+    return any ? Math.round(total * 1000) / 1000 : null;
+  };
+  return { initial: sum((l) => l.initial_weight), current: sum((l) => l.weight) };
+}
+
+// The position's "Initial Position Weight" to display in the editor: Σ the open legs' current lots
+// (= positionWeight().current). When the position is fully closed (no open legs), fall back to Σ the
+// closed legs' entry lots, so a closed position still shows its original size instead of a blank.
+export function displayInitialWeight(legs: Leg[]): number | null {
+  const open = positionWeight(legs).current;
+  if (open != null) return open;
+  let any = false;
+  let total = 0;
+  for (const l of legs) {
+    if (l.initial_weight != null) { any = true; total += l.initial_weight; }
+  }
+  return any ? Math.round(total * 1000) / 1000 : null;
 }
 
 // The P&L % to display for a leg in its current state:
@@ -144,6 +211,48 @@ export function holdingPnlPct(legs: Leg[], livePrice: number | null | undefined)
     wPnl += w * pnl;
   }
   return wSum > 0 ? wPnl / wSum : null;
+}
+
+// Realized "Closed P&L" %: weight-weighted average of each leg's booked `realized_pnl_pct`, weighted by
+// `initial_weight`. A closed leg's CURRENT weight is 0, so `holdingPnlPct` (which weights by current
+// weight) can't measure it — this uses the entry lot instead. Includes fully-closed/expired legs AND
+// trimmed-but-open legs (any leg that has booked realized). Returns null when nothing is realized yet.
+export function closedPnlPct(legs: Leg[]): number | null {
+  let wSum = 0;
+  let wPnl = 0;
+  for (const leg of legs) {
+    const pnl = leg.realized_pnl_pct;
+    const w = leg.initial_weight;
+    if (pnl == null || w == null || w === 0) continue;
+    wSum += w;
+    wPnl += w * pnl;
+  }
+  return wSum > 0 ? wPnl / wSum : null;
+}
+
+// Whether a holding has any booked realized P&L (a closed/expired leg or a trim) → drives showing the
+// Closed P&L figure alongside Open P&L.
+export function hasClosedPnl(legs: Leg[]): boolean {
+  return legs.some((l) => l.realized_pnl_pct != null && l.initial_weight != null && l.initial_weight !== 0);
+}
+
+// Closed P&L's CONTRIBUTION to the portfolio, in weight points: realized % × the weight actually sold
+// (initial lot − what's still open), summed across legs. A +600% trim on a 0.6%-of-portfolio slice
+// contributes +3.6 points, even though the leg itself returned +600%. This is what stops a big option
+// return from reading like a position-level move. Returns null when nothing is realized.
+export function closedPnlContribution(legs: Leg[]): number | null {
+  let any = false;
+  let total = 0;
+  for (const leg of legs) {
+    const pnl = leg.realized_pnl_pct;
+    const init = leg.initial_weight;
+    if (pnl == null || init == null) continue;
+    const sold = init - (leg.weight ?? 0); // fully-closed leg: weight 0 → whole lot; trim: the sold slice
+    if (sold <= 0) continue;
+    any = true;
+    total += (pnl / 100) * sold;
+  }
+  return any ? Math.round(total * 100) / 100 : null;
 }
 
 // Classify a holding from its legs (replaces positionType(position_detail)). Mixed = both a

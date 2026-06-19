@@ -14,9 +14,11 @@ interface Props {
   maxWeight: number;
   onClick: () => void;
   isUserHeld?: boolean;
+  /** Narrow list pane (split dragged small): drop the secondary badges so nothing overlaps. */
+  compact?: boolean;
 }
 
-export function HoldingRow({ holding: h, isSelected, maxWeight, onClick, isUserHeld }: Props) {
+export function HoldingRow({ holding: h, isSelected, maxWeight, onClick, isUserHeld, compact = false }: Props) {
   const quote = useQuote(h.ticker);
   const tier = TIERS[h.conviction] ?? TIERS[0];
   const basketColor = bColor(h.basket);
@@ -54,17 +56,18 @@ export function HoldingRow({ holding: h, isSelected, maxWeight, onClick, isUserH
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 1 }}>
           <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text)' }}>{h.ticker}</span>
-          {/* Basket tag */}
-          <span style={{
-            fontSize: 10, padding: '1px 5px', borderRadius: 4,
-            background: basketColor + '18', color: basketColor, border: `1px solid ${basketColor}28`,
-          }}>
-            {h.basket}
-          </span>
-          {/* Action badge */}
-          {action && (
+          {/* Secondary badges drop out when the list pane is too narrow to fit them (compact). */}
+          {!compact && (
             <span style={{
-              fontSize: 10, fontWeight: 600, padding: '1px 5px', borderRadius: 4,
+              fontSize: 10, padding: '1px 5px', borderRadius: 4, flexShrink: 0, whiteSpace: 'nowrap',
+              background: basketColor + '18', color: basketColor, border: `1px solid ${basketColor}28`,
+            }}>
+              {h.basket}
+            </span>
+          )}
+          {!compact && action && (
+            <span style={{
+              fontSize: 10, fontWeight: 600, padding: '1px 5px', borderRadius: 4, flexShrink: 0, whiteSpace: 'nowrap',
               color: action.color, background: action.bg,
             }}>
               {h.last_action}

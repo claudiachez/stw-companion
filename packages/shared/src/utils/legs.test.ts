@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   legUnrealizedPnlPct, legPnlPct, holdingPnlPct, holdingType,
-  legMarkReason, fmtLegInstrument, computeRealizedPct, humanizeLegEnum, deriveLegWeights, type Leg,
+  legMarkReason, fmtLegInstrument, computeRealizedPct, humanizeLegEnum, deriveLegWeights,
+  positionWeight, displayInitialWeight, closedPnlPct, hasClosedPnl, closedPnlContribution, type Leg,
 } from './legs';
 
 // Minimal leg factory — only the fields the pure functions read.
@@ -106,27 +107,119 @@ describe('computeRealizedPct', () => {
   });
 });
 
-describe('deriveLegWeights (90/10 split)', () => {
-  const wl = (id: string, t: 'SHARES' | 'OPTION', over = false, weight = 0) => ({ id, instrument_type: t, weight, weight_overridden: over });
+describe('deriveLegWeights (90/10 equity:options, 20/80 short:long)', () => {
+  const wl = (id: string, t: 'SHARES' | 'OPTION', over = false, weight = 0, expiry: string | null = null) =>
+    ({ id, instrument_type: t, weight, weight_overridden: over, option_expiry: expiry });
   it('shares-only → 100% to the shares leg', () => {
     expect(deriveLegWeights(10.8, [wl('s', 'SHARES')])).toEqual({ s: 10.8 });
   });
-  it('mixed → 90% shares / 10% split across options', () => {
-    const r = deriveLegWeights(6.5, [wl('s', 'SHARES'), wl('o1', 'OPTION'), wl('o2', 'OPTION')]);
-    expect(r.s).toBeCloseTo(5.85, 3);
-    expect(r.o1).toBeCloseTo(0.325, 3);
-    expect(r.o2).toBeCloseTo(0.325, 3);
+  it('mixed → 90% shares / 10% options, options split 20/80 short:long by expiry', () => {
+    const r = deriveLegWeights(6.5, [
+      wl('s', 'SHARES'),
+      wl('oShort', 'OPTION', false, 0, '2026-06-19'),
+      wl('oLong', 'OPTION', false, 0, '2026-09-18'),
+    ]);
+    expect(r.s).toBeCloseTo(5.85, 3);        // 90% of 6.5
+    expect(r.oShort).toBeCloseTo(0.13, 3);   // 20% of the 0.65 options bucket
+    expect(r.oLong).toBeCloseTo(0.52, 3);    // 80% of 0.65
   });
-  it('options-only → even split', () => {
+  it('options-only, 2 legs with distinct expiries → 20/80 short:long', () => {
+    const r = deriveLegWeights(2.0, [wl('oShort', 'OPTION', false, 0, '2026-06-19'), wl('oLong', 'OPTION', false, 0, '2026-09-18')]);
+    expect(r.oShort).toBeCloseTo(0.4, 3);    // 20% of 2.0
+    expect(r.oLong).toBeCloseTo(1.6, 3);     // 80% of 2.0
+  });
+  it('options-only, >2 legs → even split', () => {
+    const r = deriveLegWeights(3.0, [wl('a', 'OPTION', false, 0, '2026-06-19'), wl('b', 'OPTION', false, 0, '2026-07-17'), wl('c', 'OPTION', false, 0, '2026-09-18')]);
+    expect(r.a).toBeCloseTo(1.0, 3);
+    expect(r.b).toBeCloseTo(1.0, 3);
+    expect(r.c).toBeCloseTo(1.0, 3);
+  });
+  it('options-only, 2 legs without/equal expiry → even split (no short:long order)', () => {
     const r = deriveLegWeights(3.4, [wl('o1', 'OPTION'), wl('o2', 'OPTION')]);
     expect(r.o1).toBeCloseTo(1.7, 3);
     expect(r.o2).toBeCloseTo(1.7, 3);
   });
-  it('pins an overridden leg and splits the remainder among the rest', () => {
-    const r = deriveLegWeights(6.5, [wl('s', 'SHARES'), wl('o1', 'OPTION', true, 0.5), wl('o2', 'OPTION')]);
+  it('pins an overridden option leg and splits the remainder among the rest', () => {
+    const r = deriveLegWeights(6.5, [
+      wl('s', 'SHARES'),
+      wl('o1', 'OPTION', true, 0.5, '2026-06-19'),
+      wl('o2', 'OPTION', false, 0, '2026-09-18'),
+    ]);
     expect(r.s).toBeCloseTo(5.85, 3);    // shares bucket unaffected
     expect(r.o1).toBe(0.5);              // pinned
     expect(r.o2).toBeCloseTo(0.15, 3);   // 0.65 options bucket − 0.5 pinned = 0.15 to the free leg
+  });
+  it('honors a custom equity:options ratio (ADEA 30:70) and short share', () => {
+    const r = deriveLegWeights(10.0, [
+      wl('s', 'SHARES'),
+      wl('oShort', 'OPTION', false, 0, '2026-06-19'),
+      wl('oLong', 'OPTION', false, 0, '2026-09-18'),
+    ], { equityPct: 0.3 });
+    expect(r.s).toBeCloseTo(3.0, 3);         // 30% equity
+    expect(r.oShort).toBeCloseTo(1.4, 3);    // 20% of the 7.0 options bucket
+    expect(r.oLong).toBeCloseTo(5.6, 3);     // 80% of 7.0
+  });
+});
+
+describe('positionWeight (Σ over open legs)', () => {
+  const leg = (status: string, initial: number | null, weight: number | null) =>
+    ({ id: Math.random().toString(), status, initial_weight: initial, weight } as unknown as Leg);
+  it('sums only OPEN legs (ADEA: shares 0.6→2.0 + $35C 2.0; the two $30C closed)', () => {
+    const legs = [
+      leg('CLOSED', 0.6, 0), leg('CLOSED', 1.4, 0),
+      leg('OPEN', 2.0, 2.0), leg('OPEN', 0.6, 2.0),
+    ];
+    expect(positionWeight(legs)).toEqual({ initial: 2.6, current: 4.0 });
+  });
+  it('null when there are no open legs', () => {
+    expect(positionWeight([leg('CLOSED', 1, 0)])).toEqual({ initial: null, current: null });
+  });
+});
+
+describe('displayInitialWeight (open lots, or closed legs entry when fully closed)', () => {
+  const leg = (status: string, initial: number | null, weight: number | null) =>
+    ({ id: Math.random().toString(), status, initial_weight: initial, weight } as unknown as Leg);
+  it('uses Σ open legs current lots while any leg is open', () => {
+    expect(displayInitialWeight([leg('CLOSED', 0.6, 0), leg('OPEN', 2.0, 2.0)])).toBe(2.0);
+  });
+  it('falls back to Σ closed legs entry lots when fully closed (ARKK)', () => {
+    expect(displayInitialWeight([leg('CLOSED', 1.0, 0)])).toBe(1.0);
+    expect(displayInitialWeight([leg('CLOSED', 0.5, 0), leg('EXPIRED', 1.5, 0)])).toBe(2.0);
+  });
+  it('null when fully closed and no entry lots are recorded', () => {
+    expect(displayInitialWeight([leg('CLOSED', null, 0)])).toBeNull();
+  });
+});
+
+describe('closedPnlPct (realized, weighted by initial lot)', () => {
+  const cleg = (initial: number | null, realized: number | null) =>
+    ({ id: Math.random().toString(), initial_weight: initial, realized_pnl_pct: realized } as unknown as Leg);
+  it('weights each leg by its initial lot (closed legs have current weight 0)', () => {
+    // -100% on a 0.6 lot + +50% on a 1.4 lot → (0.6*-100 + 1.4*50)/2.0 = +5%
+    expect(closedPnlPct([cleg(0.6, -100), cleg(1.4, 50)])).toBeCloseTo(5, 6);
+  });
+  it('ignores legs with no realized P&L (still open, untrimmed)', () => {
+    expect(closedPnlPct([cleg(2.0, null), cleg(1.0, 20)])).toBeCloseTo(20, 6);
+  });
+  it('null when nothing is realized', () => {
+    expect(closedPnlPct([cleg(2.0, null)])).toBeNull();
+    expect(hasClosedPnl([cleg(2.0, null)])).toBe(false);
+    expect(hasClosedPnl([cleg(2.0, -100)])).toBe(true);
+  });
+});
+
+describe('closedPnlContribution (portfolio weight points)', () => {
+  const leg = (initial: number, realized: number | null, weight = 0) =>
+    ({ id: Math.random().toString(), initial_weight: initial, realized_pnl_pct: realized, weight } as unknown as Leg);
+  it('weights realized by the sold slice (IRDM: +600% on the 0.6 trimmed slice = +3.6)', () => {
+    expect(closedPnlContribution([leg(1.5, 600, 0.9)])).toBeCloseTo(3.6, 6);
+  });
+  it('fully-closed leg (weight 0) uses the whole lot', () => {
+    // -100% on a 1.0 lot fully closed = -1.0 points
+    expect(closedPnlContribution([leg(1.0, -100, 0)])).toBeCloseTo(-1.0, 6);
+  });
+  it('null when nothing realized', () => {
+    expect(closedPnlContribution([leg(2.0, null, 2.0)])).toBeNull();
   });
 });
 
