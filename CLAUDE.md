@@ -104,35 +104,44 @@ NOT touch conviction; the 6/18 stars OSS/VPG/SYNA/VIAV/NBIS/ENS/AMKR/LEU/AMZN/TS
 run DDL locally — apply migrations via the Supabase SQL editor). Prod service key (read-only checks) at
 `~/Documents/Claude/Scheduled/.supabase-service-key`. Sandbox anon key in `apps/admin/.env.local`.
 
+**Phase 5 DONE ✅ (2026-06-19) — routines on the 040 event model** (out-of-repo
+`~/Documents/Claude/Scheduled/*`; SKILL.md edits, not committed). All four updated:
+- **morning + afternoon:** STEP 2.3 / STEP 3 rewritten — diary `leg_transactions` (`action_label` +
+  `notes`=host's verbatim words) + **direct `holdings` PATCH** of `last_action`/`action_date`/
+  `current_weight`; **`holding_transactions` path retired** (the still-live 033 trigger auto-logs a
+  harmless audit row). **Lot semantics:** BUY weight = lot **added**, SELL = **remaining** (cost basis).
+  **Split (90:10 / 20:80 from `app_config` + `holdings.equity_pct`) is initial-sizing fallback only —
+  existing legs are NEVER re-split.** Upsize = keep existing legs, add the increment to the **named**
+  leg (FIVN worked example baked in). Contract→shares = close option at real exit (never $0) + new
+  shares leg **inherits the replaced leg's weight** (net-neutral); same-day close+open keeps the
+  position open (`last_action` = the opening verb). Trim uses **cost-basis remaining**; an appreciated
+  winner stated only in market % → **flag**, don't guess. `action_date` = the host's action date,
+  written only by a real action.
+- **friday-weighting:** direct `current_weight` PATCH (no `Hold` rows); **truth-up mismatch (snapshot ≠
+  Σ lots, e.g. IRDM +600%) → flag, never rewrite lots**; legs reconcile adds missing only; **new STEP
+  4d status-aging** — `action_date` older than the **previous** snapshot → `last_action='Hold'`
+  (`action_date` preserved); Closed/Expired terminal.
+- **transcripts:** conviction note — routine-owned, **mutable both ways on an explicit signal incl.
+  promoting a Legacy (0)**; never inferred from sizing.
+- **One-time SQL applied (PROD + sandbox):** `plans/conviction_618_stars.sql` (8 stars → tier 5;
+  AMZN/TSLA stay 0) + `plans/fix_fivn_shares_weight.sql` (FIVN shares lot 3.5→2.5, net-neutral 6.0%).
+- **PENDING (host, in the desktop app):** delete the stale **`gradoxx-daily-summary`** Cowork schedule
+  — it duplicates morning PART 1's Graddox and the CLI can't reach it (see `memory/`). Smoke-test the
+  routines on their next live runs.
+
 ## Next Steps
 
-1. **Run `revert_legacy_category.sql` on PROD** (one-liner left from this session — see DB state) and
-   **merge the PR** (`claude/legs-event-sourcing` → `staging`, #37). Decide whether the staging Netlify
-   deploy points at sandbox or prod before relying on it.
+1. **Phase 4 — admin Config + Manage area** — spec'd in
+   [`plans/phase4_admin_manage.md`](plans/phase4_admin_manage.md). Config page edits `app_config`
+   (`equity_options_default` / `options_short_long_default`); `useAppConfig` read hook in `@stw/ui`
+   (note: `deriveLegWeights` has **no call sites** today, so app-side split-wiring is forward-looking).
+   Manage area: **categories CRUD** (delete-guarded), **traders read-only**. One "Manage" nav entry,
+   admin-local. No migrations expected.
 
-2. **Phase 5 — routines (out-of-repo `~/Documents/Claude/Scheduled/*`) on the event model** — THE BIG
-   NEXT TASK. Update the 3 daily/Friday routines to write the diary, not the old `holdings`-direct model:
-   - Write `leg_transactions` rows with **`action_label`** (New/Upsized/Trimmed/Closed/Exercised/Expired)
-     and the host's words in **`notes`**; let the 040 trigger derive `legs`. **Lot semantics:** BUYs
-     accumulate (each lot adds), a SELL's weight = the leg's **remaining** (0 on a full close).
-   - Set holding-level **`last_action`/`action_date`** from the latest diary event (ties → keep-open;
-     Expired → Closed), **`conviction`** (the routines own it — 6/18 stars OSS/VPG/SYNA/VIAV/NBIS/ENS/
-     AMKR/LEU/AMZN/TSLA → tier 5; AMZN/TSLA are Legacy = tier 6 though — clarify with host), and
-     **baskets** from the portfolio-update sector groupings.
-   - **Status-lifecycle aging = ROUTINE-ONLY, no UI change** (confirmed: `ActionBadge` renders nothing
-     for `Hold`). When a position's `action_date` is older than the **2nd portfolio update** after it
-     (opened Mon → New through that Friday, drops the next Friday), the routine writes
-     `last_action='Hold'` and the badge disappears. Closed stays Closed (terminal).
-   - **Weekly truth-up (the hard open question):** the Friday snapshot restates `current_weight`; when the
-     restated total ≠ Σ lots (IRDM-style appreciated trims, market-remaining > Σ lots), do the cost-basis
-     translation. `current_weight` is routine-owned from Monday. Read `app_config` + `holdings.equity_pct`
-     for the 90:10 / 20:80 default split; respect `weight_overridden` pins.
+2. **034/035 (drop deprecated cols)** — Phase 5 was the gate; apply **after the routines are confirmed
+   clean on a live run** + a fresh DB dump. Drops `position_detail`/`exit_*`/`basket` etc.
 
-3. **Phase 4 — admin Config page** editing `app_config` (`equity_options_default`,
-   `options_short_long_default`); wire the routines + any default-split path to read it.
-
-4. **Deferred:** inline leg editing in the modal; **034/035** (drop deprecated cols — after Phase 5);
-   admin **Manage** area (categories/traders CRUD); `$100k` notional + SPY benchmark (`spy_daily`,
+3. **Deferred:** inline leg editing in the modal; `$100k` notional + SPY benchmark (`spy_daily`,
    migration 032).
 
 ---
