@@ -69,13 +69,20 @@ contribution. `closedPnlPct` + `closedPnlContribution` + `hasClosedPnl` in `@stw
 - **`revert_legacy_category.sql` applied** — removed the mistaken "Legacy Positions" category;
   AMZN/HOOD/TSLA are Uncategorized (Legacy is their **conviction tier**, not a sector).
 
-**DB state:**
-- **PROD (`usmqbohcjcyszjxxvnqu`):** 022–033 + 036 + 037 applied. **038 + 039 + 040 + import +
-  post-import fix NOT applied to prod.**
-- **SANDBOX (`uolabcgbnrkhzpwuvzlk`):** 037 + 039 + 040 + `import_open_positions.sql` +
-  `post_import_holdings_fix.sql` + `revert_legacy_category.sql` all applied. Admin dev `.env.local` →
-  sandbox, so **localhost reads/writes the sandbox directly**. 25 tickers / 42 legs; every position
-  reconciles to the 6/18 portfolio update. Test rows (`ZZADEA`/`ZZT1`/`ZZT2`) deleted; legacy/closed kept.
+**DB state — BOTH environments now on the event model (2026-06-19):**
+- **PROD (`usmqbohcjcyszjxxvnqu`):** 038 + 039 + 040 + the import + `post_import_holdings_fix.sql`
+  applied. **Verified: 42 legs / 60 diary rows**, last_action/action_date/baskets correct, reconciles to
+  6/18. **STILL TODO on PROD: run `revert_legacy_category.sql`** — PROD has a *pre-existing* "Legacy
+  Positions" category (old system) that AMZN/HOOD/TSLA still use; the env-agnostic revert clears it.
+  Conviction on PROD is left to the routines (some cores not yet tier 5).
+- **SANDBOX (`uolabcgbnrkhzpwuvzlk`):** same scripts + the revert all applied. Admin dev `.env.local` →
+  sandbox, so **localhost reads/writes the sandbox directly**. 25 tickers / 42 legs.
+- **PROD import gotchas (baked into `plans/prod_import/*` + the SQL files):** (1) PROD's STW
+  `trader_id` = `64a779f9-13ba-4cb4-824b-d70dcab3a49b` (sandbox = `9ec36b89-…`); seeds now resolve the
+  trader **by name**. (2) The Supabase SQL editor threw "Failed to fetch" on the one big import — it was
+  split into 9 small files in **`plans/prod_import/`** (run `1_wipe` → `8_legs` → `9_weights` in order).
+  (3) The wipe deletes **all** legs (PROD carried 28 stale ones from the old 029/030 system) with the
+  `trg_leg_transactions_sync` trigger disabled during the delete.
 
 **Decisions locked (see spec):** event-sourced; ledger-only leg editing (inline modal editing **deferred**);
 one Notes column; trims book realized; >2 option legs split even; ledger newest-first; **a "convert to
@@ -99,30 +106,32 @@ run DDL locally — apply migrations via the Supabase SQL editor). Prod service 
 
 ## Next Steps
 
-1. **Merge the PR.** `claude/legs-event-sourcing` → `staging` is open (Phases 1–3 + import + post-import
-   fix). Review/merge. **Then ship to PROD:** apply, in order, **038 + 039 + 040** (040 requires 037 + 039)
-   + **`import_open_positions.sql`** + **`post_import_holdings_fix.sql`** + **`revert_legacy_category.sql`**
-   to PROD (`usmqbohcjcyszjxxvnqu`), then verify editor + ledger end-to-end. (Decide whether the staging
-   Netlify deploy points at sandbox or prod before relying on it.)
+1. **Run `revert_legacy_category.sql` on PROD** (one-liner left from this session — see DB state) and
+   **merge the PR** (`claude/legs-event-sourcing` → `staging`, #37). Decide whether the staging Netlify
+   deploy points at sandbox or prod before relying on it.
 
-2. **Status-lifecycle aging — STILL TODO (the one open item from Next Step #2).** Host rule: a status
-   badge persists from the action day **until the 2nd portfolio update after it** (opened Mon → shows New
-   through that Friday's snapshot, drops the Friday after). Needs its own design: how the **UI** ages a
-   badge out to "Hold" (uses portfolio-update/Friday dates), and how the **routines** encode it. After
-   this lands, SYNA/AMKR/VIAV/ENS (whose derived `last_action` dates are old) age to "Hold" correctly.
+2. **Phase 5 — routines (out-of-repo `~/Documents/Claude/Scheduled/*`) on the event model** — THE BIG
+   NEXT TASK. Update the 3 daily/Friday routines to write the diary, not the old `holdings`-direct model:
+   - Write `leg_transactions` rows with **`action_label`** (New/Upsized/Trimmed/Closed/Exercised/Expired)
+     and the host's words in **`notes`**; let the 040 trigger derive `legs`. **Lot semantics:** BUYs
+     accumulate (each lot adds), a SELL's weight = the leg's **remaining** (0 on a full close).
+   - Set holding-level **`last_action`/`action_date`** from the latest diary event (ties → keep-open;
+     Expired → Closed), **`conviction`** (the routines own it — 6/18 stars OSS/VPG/SYNA/VIAV/NBIS/ENS/
+     AMKR/LEU/AMZN/TSLA → tier 5; AMZN/TSLA are Legacy = tier 6 though — clarify with host), and
+     **baskets** from the portfolio-update sector groupings.
+   - **Status-lifecycle aging = ROUTINE-ONLY, no UI change** (confirmed: `ActionBadge` renders nothing
+     for `Hold`). When a position's `action_date` is older than the **2nd portfolio update** after it
+     (opened Mon → New through that Friday, drops the next Friday), the routine writes
+     `last_action='Hold'` and the badge disappears. Closed stays Closed (terminal).
+   - **Weekly truth-up (the hard open question):** the Friday snapshot restates `current_weight`; when the
+     restated total ≠ Σ lots (IRDM-style appreciated trims, market-remaining > Σ lots), do the cost-basis
+     translation. `current_weight` is routine-owned from Monday. Read `app_config` + `holdings.equity_pct`
+     for the 90:10 / 20:80 default split; respect `weight_overridden` pins.
 
 3. **Phase 4 — admin Config page** editing `app_config` (`equity_options_default`,
-   `options_short_long_default`); wire the routines (and any default-split path) to read `app_config` +
-   `holdings.equity_pct`.
+   `options_short_long_default`); wire the routines + any default-split path to read it.
 
-4. **Phase 5 — routines (out-of-repo `~/Documents/Claude/Scheduled/*`)** for the event model: write
-   `action_label`; host's words go in **`notes`**; **lot semantics** (BUYs accumulate, SELL weight =
-   remaining); set `last_action`/`action_date`/**conviction** (routines own it — the 6/18 stars)/baskets;
-   encode the status-lifecycle rule (#2); resolve the **weekly truth-up** — when the Friday snapshot
-   restates a position total ≠ Σ lots (IRDM-style appreciated trims, market-remaining > Σ lots), do the
-   cost-basis translation. `current_weight` is routine-owned from Monday.
-
-5. **Deferred:** inline leg editing in the modal; **034/035** (drop deprecated cols — after Phase 5);
+4. **Deferred:** inline leg editing in the modal; **034/035** (drop deprecated cols — after Phase 5);
    admin **Manage** area (categories/traders CRUD); `$100k` notional + SPY benchmark (`spy_daily`,
    migration 032).
 

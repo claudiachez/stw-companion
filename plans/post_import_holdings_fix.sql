@@ -10,7 +10,7 @@
 
 do $$
 declare
-  tid uuid := '9ec36b89-6bf7-4ac7-a729-fe149d95d5c3';  -- STW trader
+  tid uuid := (select id from public.traders where name = 'STW');  -- STW trader (env-agnostic)
 begin
   ---------------------------------------------------------------------------
   -- Item 4a: ensure the three new sector categories exist (match by exact name)

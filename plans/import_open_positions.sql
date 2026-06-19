@@ -1,11 +1,17 @@
 -- IMPORT: reconciled open positions (generated from STW Transaction Ledger.xlsx). Apply in SANDBOX.
 -- The 040 trigger derives entry/exit/status/initial_weight/weight/realized from these diary rows.
 begin;
-delete from public.leg_transactions where leg_id in (select id from public.legs where ticker in ('ZZADEA','ZZT1','ZZT2'));
-delete from public.legs where ticker in ('ZZADEA','ZZT1','ZZT2');
-delete from public.holdings where ticker in ('ZZADEA','ZZT1','ZZT2');
+-- Full clean slate: wipe ALL legs + diary so the end state is exactly the 42 imported legs
+-- (matches SANDBOX = 25 tickers / 42 legs). PROD still carried 28 stale legs from the old
+-- 029/030 system; the previous scoped delete would have left them orphaned with empty diaries.
+-- Disable the sync trigger during the wipe so deleting each diary row does NOT replay the
+-- trigger (109 replays = the likely cause of the SQL-editor "Failed to fetch" timeout).
+-- Holdings rows are NOT deleted (kept for closed/legacy tickers) except the ZZ test rows.
+alter table public.leg_transactions disable trigger trg_leg_transactions_sync;
 delete from public.leg_transactions;
-delete from public.legs where ticker in ('ADEA','ARKK','ARRY','BB','BDC','CRNC','CXDO','FIVN','GDYN','IRDM','MITK','RNG','SHLS','SYNA','TE','VLN','LEU','OSS','AMKR','VPG','CTS','VIAV','NBIS','ENS','FPS');
+delete from public.legs;
+delete from public.holdings where ticker in ('ZZADEA','ZZT1','ZZT2');
+alter table public.leg_transactions enable trigger trg_leg_transactions_sync;
 
 -- ADEA
 with l as (insert into public.legs (ticker,trader_id,instrument_type,option_strike,option_expiry,option_right,direction) values ('ADEA','9ec36b89-6bf7-4ac7-a729-fe149d95d5c3','OPTION',30.0,'2026-06-19','CALL','long') returning id)
