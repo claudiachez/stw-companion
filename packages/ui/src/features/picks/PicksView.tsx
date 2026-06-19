@@ -62,6 +62,18 @@ export function PicksView() {
   const splitRef = useRef<HTMLDivElement>(null);
   const [listPct, setListPct] = useState(42);
   const [dragging, setDragging] = useState(false);
+  // When the list pane is narrow (split dragged small), rows drop their secondary badges so nothing
+  // overlaps. Measured live so it tracks both the divider and window resizes.
+  const listPaneRef = useRef<HTMLDivElement>(null);
+  const [listW, setListW] = useState(Infinity);
+  useEffect(() => {
+    const el = listPaneRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(([e]) => setListW(e.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [selectedTicker]);
+  const listCompact = listW < 240;
   const startResize = (e: React.MouseEvent) => {
     e.preventDefault();
     setDragging(true);
@@ -190,6 +202,7 @@ export function PicksView() {
             maxWeight={maxWeight}
             onClick={() => setSelectedTicker(h.ticker === selectedTicker ? null : h.ticker)}
             isUserHeld={heldTickers.has(h.ticker)}
+            compact={listCompact}
           />
         )),
       ];
@@ -206,6 +219,7 @@ export function PicksView() {
           maxWeight={maxWeight}
           onClick={() => setSelectedTicker(h.ticker === selectedTicker ? null : h.ticker)}
           isUserHeld={heldTickers.has(h.ticker)}
+          compact={listCompact}
         />
       ));
 
@@ -281,8 +295,12 @@ export function PicksView() {
         ) : (
           <div ref={splitRef} style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
             <div
+              ref={listPaneRef}
               style={{
-                overflowY: 'auto',
+                // hidden-X clips list content at the divider; own stacking context (relative + zIndex 0)
+                // keeps the sticky tier header (zIndex 2) from painting over the detail pane.
+                overflow: 'hidden auto',
+                position: 'relative', zIndex: 0,
                 flexBasis: selected ? `${listPct}%` : 'auto',
                 flexGrow: selected ? 0 : 1,
                 flexShrink: 0,
@@ -306,7 +324,7 @@ export function PicksView() {
                     borderLeft: '1px solid var(--bsub)', borderRight: '1px solid var(--bsub)',
                   }}
                 />
-                <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', background: 'var(--bg)' }}>
+                <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', position: 'relative', zIndex: 0, background: 'var(--bg)' }}>
                   <HoldingDetail
                     holding={selected}
                     totalCount={holdings.length}

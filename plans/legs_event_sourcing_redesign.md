@@ -94,15 +94,23 @@ never touches initial.
 The 90:10 / 20:80 split is the **default used to compute lot weights when the host states only a total** —
 once lots are explicit (the rebuild case), the leg weight is just `Σ lots − sells`, no derivation.
 
+> **CORRECTION 2026-06-18 (host-confirmed, shipped):** at the **position** grain the two displayed
+> numbers are: **Initial = Σ the open legs' lots** (computed = `positionWeight().current`; tracks current
+> lots, so it falls after a trim) and **Current = `holdings.current_weight`** — the live weight the
+> routines restate weekly, **NOT** reconciled to Σ legs (they can legitimately differ — see the weekly
+> truth-up open question). The old "Position Initial = `holdings.initial_weight` write-once / Current =
+> Σ legs" row below is superseded. `holdings.initial_weight` is no longer displayed or written by the
+> editor; the hand-typed Initial field was removed. The leg + diary rows are unchanged.
+
 | | Initial weight | Current weight |
 |---|---|---|
-| **Position** (`holdings`) | `initial_weight` — **write-once** (trigger 031), set when the position opens. | `current_weight` — the host's stated total; equals (and is reconciled to) the sum of open-leg weights. |
+| **Position** (`holdings`) | ~~`initial_weight` write-once~~ → **Σ open legs' lots** (computed; see correction above). | ~~Σ open-leg weights~~ → **`holdings.current_weight`** (routine-written; see correction above). |
 | **Leg** (`legs`) | `initial_weight` (037) = the **first BUY lot**. | `weight` = **Σ BUY lots − sells** (trigger 040). Trims reduce it; a full close → 0. |
 | **Diary row** (`leg_transactions`) | — | `weight` = that event's **lot** (BUY) or **remaining** (SELL), as the host stated it. Immutable → the ledger's Weight column. |
 
 Consequences:
-- **Leg weight comes from the diary lots** (Σ BUY − sells), so the open legs always sum to the position
-  weight by construction. `holdings.current_weight` is reconciled to that sum (no independent drift).
+- **Leg weight comes from the diary lots** (Σ BUY − sells); the position **Initial** = their sum. The
+  position **Current** is the routines' live restatement and may differ from Σ legs (weekly truth-up Q).
 - **Trims** are real trades (SELL with remaining>0): they reduce the leg and book the slice's realized.
 - **The ledger's Weight column is per-event and immutable** — a `New` row keeps its lot forever; the
   detail view shows `initial → current` per leg from the stored initial + the summed current.

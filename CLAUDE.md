@@ -11,20 +11,26 @@
 
 ---
 
-## Current Status — legs/transaction-history → true event-sourcing (handoff 2026-06-18)
+## Current Status — legs/transaction-history → true event-sourcing (handoff 2026-06-19)
 
-**Active branch: `claude/legs-event-sourcing`** (off `staging`, pushed, **NOT merged/PR'd**). Authoritative
-spec: [`plans/legs_event_sourcing_redesign.md`](plans/legs_event_sourcing_redesign.md). Read it first.
+**Active branch: `claude/legs-event-sourcing`** (off `staging`, pushed, **PR'd → `staging`**, not yet
+merged). Authoritative spec: [`plans/legs_event_sourcing_redesign.md`](plans/legs_event_sourcing_redesign.md).
+Read it first. **Phases 1–3 done + verified on SANDBOX; the clean import + the post-import holdings fix
+(Next Step #2) are applied to SANDBOX.** Everything below works end-to-end on localhost (→ sandbox).
 
 **Why:** the old editor was split-brain — it wrote BOTH `legs` (directly) and `leg_transactions`, which
 fought on save, diverged, and stamped synthetic dates. Now committed to **true event-sourcing**:
 `leg_transactions` (**the diary**) is the only hand-written source; `legs` (**the scoreboard**) is a pure
 trigger-derived projection. The editor + ledger write ONLY events.
 
-**Weight model (host-confirmed):** a diary row's `weight` = that leg's **lot** (BUY) or **remaining**
-(SELL, 0 on full close). **BUYs accumulate** → `legs.weight = Σ BUY lots − sells`. Open legs **sum to the
-position weight**. So **Current position weight = Σ open legs (computed)**; **Initial position weight =
-the host's stated opening size (you type it; editable field)**. The 90:10 (equity:options) / 20:80
+**Weight model (host-confirmed, corrected 2026-06-18):** a diary row's `weight` = that leg's **lot**
+(BUY) or **remaining** (SELL, 0 on full close). **BUYs accumulate** → `legs.weight = Σ BUY lots − sells`.
+So **Initial position weight = Σ open legs' lots** (computed from the diary = `positionWeight().current`;
+tracks current lots, falls after a trim) and **Current position weight = `holdings.current_weight`** —
+the live weight **the routines restate weekly** (NOT Σ legs). Both display read-only in the editor; the
+hand-typed `initial_weight` field is gone and the editor no longer writes `initial_weight`/`current_weight`
+(routines own current; legs own initial). The earlier "Current = Σ open legs; Initial = typed" wording was
+wrong — host confirmed the swap. The 90:10 (equity:options) / 20:80
 (short:long) split is only the **default** for computing lots when the host gives a total with no per-leg
 detail — held in `app_config`, with a per-position override on `holdings.equity_pct`.
 
@@ -46,20 +52,46 @@ detail — held in `app_config`, with a per-position override on `holdings.equit
   one **Notes** column), newest-first, table on desktop / cards on mobile, **open/closed/all toggle**,
   **closed-leg rows dimmed** + "Closed"/"Expired" muted gray.
 - **Resizable split** in `PicksView` — drag the divider between the list and the detail (15–80%).
-- typecheck + 45 tests + both builds green.
+
+**Phase 3 DONE ✅ + verified on SANDBOX (CXDO/IRDM):** detail-card P&L split per asset class, never
+blended — **Open** shows Shares/Options return + lot; **Closed** shows per-asset return + portfolio
+contribution. `closedPnlPct` + `closedPnlContribution` + `hasClosedPnl` in `@stw/shared`.
+
+**Post-import holdings fix (Next Step #2) DONE ✅ on SANDBOX:**
+- **`last_action`/`action_date` derived from each ticker's latest diary event** (`plans/post_import_holdings_fix.sql`).
+  Same-day conversion ties (ADEA/CXDO/FIVN/GDYN/SHLS) resolve to the keep-open `New`; `Expired` →
+  `Closed` at the holding level (last_action has no "Expired"). AMZN/HOOD/TSLA have no legs → skipped.
+- **Baskets/categories** assigned from the 6/18 sector groupings; 3 new categories created
+  (**AI Fraud / Verified Identity**, **Space & Satellite**, **Nuclear**); **IRDM moved Defense → Space & Satellite**.
+- **Initial weight for fully-closed positions** now shows the closed legs' entry lots instead of blank —
+  new shared helper **`displayInitialWeight`** wired into BOTH `HoldingDetail` (detail card) and
+  `PositionEditor`. ARKK reads `1% → 0%`. 54 tests + typecheck green.
+- **`revert_legacy_category.sql` applied** — removed the mistaken "Legacy Positions" category;
+  AMZN/HOOD/TSLA are Uncategorized (Legacy is their **conviction tier**, not a sector).
 
 **DB state:**
-- **PROD (`usmqbohcjcyszjxxvnqu`):** 022–033 + 036 + 037 applied. **038 + 039 + 040 NOT applied to prod.**
-- **SANDBOX (`uolabcgbnrkhzpwuvzlk`):** 037 + 039 catch-up + **040 applied this session**. Admin dev
-  `.env.local` → sandbox, so **localhost reads/writes the sandbox directly**. Test rows present:
-  `ZZADEA` / `ZZT1` / `ZZT2`. `plans/zzadea_populate.sql` seeds ZZADEA's holding fields + notes (host to run).
+- **PROD (`usmqbohcjcyszjxxvnqu`):** 022–033 + 036 + 037 applied. **038 + 039 + 040 + import +
+  post-import fix NOT applied to prod.**
+- **SANDBOX (`uolabcgbnrkhzpwuvzlk`):** 037 + 039 + 040 + `import_open_positions.sql` +
+  `post_import_holdings_fix.sql` + `revert_legacy_category.sql` all applied. Admin dev `.env.local` →
+  sandbox, so **localhost reads/writes the sandbox directly**. 25 tickers / 42 legs; every position
+  reconciles to the 6/18 portfolio update. Test rows (`ZZADEA`/`ZZT1`/`ZZT2`) deleted; legacy/closed kept.
 
 **Decisions locked (see spec):** event-sourced; ledger-only leg editing (inline modal editing **deferred**);
-one Notes column; trims book realized; >2 option legs split even; ledger newest-first.
+one Notes column; trims book realized; >2 option legs split even; ledger newest-first; **a "convert to
+shares" close is a real cash sale → book the option's actual exit price as realized P&L, never $0** (host
+2026-06-18); **ledger Action verb = bold green for OPEN-leg events, plain gray for CLOSED-leg events**;
+**P&L is split by asset class (Shares vs Options), never blended** — Open shows per-asset return + lot;
+Closed shows per-asset return + **portfolio contribution** (return × sold weight), so a +600% option on a
+thin slice reads as its true ~+3.6% portfolio impact (host 2026-06-18). P&L Breakdown is open-legs-only.
+**"Legacy" is a conviction tier (Tier 6 / `c0`), NOT a sector/category** (host 2026-06-19). **Conviction is
+owned by the routines** — set in the streaming run, never in a seed/migration (so the post-import fix does
+NOT touch conviction; the 6/18 stars OSS/VPG/SYNA/VIAV/NBIS/ENS/AMKR/LEU/AMZN/TSLA are the routines' job).
 
-**New plan docs (`plans/`):** `legs_event_sourcing_redesign.md` (spec) · `040_sandbox_verify.sql` (trigger
-test) · `legs_inspect.sql` (inspect legs/diary) · `zzadea_populate.sql` (seed test fixture) ·
-`leg_transactions_redate.sql` (superseded by the clean import for open positions).
+**New plan docs (`plans/`):** `legs_event_sourcing_redesign.md` (spec) · `import_open_positions.sql`
+(clean open-position import) · `post_import_holdings_fix.sql` (Next Step #2 seed) ·
+`revert_legacy_category.sql` (drops the bad Legacy category) · `040_sandbox_verify.sql` (trigger test) ·
+`legs_inspect.sql` (inspect legs/diary) · `zzadea_populate.sql` (seed test fixture).
 
 **Tooling:** `pnpm` not on PATH — use `corepack pnpm …` or `~/.local/bin/pnpm`. No local Postgres (can't
 run DDL locally — apply migrations via the Supabase SQL editor). Prod service key (read-only checks) at
@@ -67,30 +99,32 @@ run DDL locally — apply migrations via the Supabase SQL editor). Prod service 
 
 ## Next Steps
 
-1. **Clean-slate import (needs the host's Excel).** Host is rebuilding **all OPEN positions** as Excel
-   ledgers (the ADEA-sample format). Plan: wipe `leg_transactions` + open `legs`, **keep closed legs**
-   (synthesize a minimal BUY+close diary), import open positions → trigger derives everything. **Open Q to
-   resolve:** weekly truth-up when a restated total ≠ Σ lots (scale / implied-lot / flag). Supersedes
-   `leg_transactions_redate.sql` for open positions.
+1. **Merge the PR.** `claude/legs-event-sourcing` → `staging` is open (Phases 1–3 + import + post-import
+   fix). Review/merge. **Then ship to PROD:** apply, in order, **038 + 039 + 040** (040 requires 037 + 039)
+   + **`import_open_positions.sql`** + **`post_import_holdings_fix.sql`** + **`revert_legacy_category.sql`**
+   to PROD (`usmqbohcjcyszjxxvnqu`), then verify editor + ledger end-to-end. (Decide whether the staging
+   Netlify deploy points at sandbox or prod before relying on it.)
 
-2. **Phase 3 — detail data card P&L split (NOT done; only the weight layout is done).** Show **Open P&L +
-   Closed P&L** in the card; Closed P&L appears when any leg is closed **or trimmed**; weight it by
-   `initial_weight` (fully-closed legs have current weight 0). Keep P&L Breakdown to OPEN legs only.
+2. **Status-lifecycle aging — STILL TODO (the one open item from Next Step #2).** Host rule: a status
+   badge persists from the action day **until the 2nd portfolio update after it** (opened Mon → shows New
+   through that Friday's snapshot, drops the Friday after). Needs its own design: how the **UI** ages a
+   badge out to "Hold" (uses portfolio-update/Friday dates), and how the **routines** encode it. After
+   this lands, SYNA/AMKR/VIAV/ENS (whose derived `last_action` dates are old) age to "Hold" correctly.
 
 3. **Phase 4 — admin Config page** editing `app_config` (`equity_options_default`,
    `options_short_long_default`); wire the routines (and any default-split path) to read `app_config` +
    `holdings.equity_pct`.
 
 4. **Phase 5 — routines (out-of-repo `~/Documents/Claude/Scheduled/*`)** for the event model: write
-   `action_label`; the host's words go in **`notes`** (one field); **lot semantics** (BUYs accumulate, a
-   SELL's weight = remaining); respect the weekly-truth-up decision from #1.
+   `action_label`; host's words go in **`notes`**; **lot semantics** (BUYs accumulate, SELL weight =
+   remaining); set `last_action`/`action_date`/**conviction** (routines own it — the 6/18 stars)/baskets;
+   encode the status-lifecycle rule (#2); resolve the **weekly truth-up** — when the Friday snapshot
+   restates a position total ≠ Σ lots (IRDM-style appreciated trims, market-remaining > Σ lots), do the
+   cost-basis translation. `current_weight` is routine-owned from Monday.
 
-5. **Apply migrations 038 + 039 + 040 to PROD** (when ready to ship) — 040 requires 037 + 039 — then
-   verify the editor + ledger end-to-end on prod. Then PR `claude/legs-event-sourcing` → `staging`.
-
-6. **Deferred:** auto-compute "initial = size at first open" (currently entered by hand; revisit after
-   import has correct dates); inline leg editing in the modal; **034/035** (drop deprecated cols — after
-   Phase 5); admin **Manage** area; `$100k` notional + SPY benchmark (`spy_daily`, migration 032).
+5. **Deferred:** inline leg editing in the modal; **034/035** (drop deprecated cols — after Phase 5);
+   admin **Manage** area (categories/traders CRUD); `$100k` notional + SPY benchmark (`spy_daily`,
+   migration 032).
 
 ---
 

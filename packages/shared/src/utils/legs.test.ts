@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   legUnrealizedPnlPct, legPnlPct, holdingPnlPct, holdingType,
   legMarkReason, fmtLegInstrument, computeRealizedPct, humanizeLegEnum, deriveLegWeights,
-  positionWeight, type Leg,
+  positionWeight, displayInitialWeight, closedPnlPct, hasClosedPnl, closedPnlContribution, type Leg,
 } from './legs';
 
 // Minimal leg factory — only the fields the pure functions read.
@@ -173,6 +173,53 @@ describe('positionWeight (Σ over open legs)', () => {
   });
   it('null when there are no open legs', () => {
     expect(positionWeight([leg('CLOSED', 1, 0)])).toEqual({ initial: null, current: null });
+  });
+});
+
+describe('displayInitialWeight (open lots, or closed legs entry when fully closed)', () => {
+  const leg = (status: string, initial: number | null, weight: number | null) =>
+    ({ id: Math.random().toString(), status, initial_weight: initial, weight } as unknown as Leg);
+  it('uses Σ open legs current lots while any leg is open', () => {
+    expect(displayInitialWeight([leg('CLOSED', 0.6, 0), leg('OPEN', 2.0, 2.0)])).toBe(2.0);
+  });
+  it('falls back to Σ closed legs entry lots when fully closed (ARKK)', () => {
+    expect(displayInitialWeight([leg('CLOSED', 1.0, 0)])).toBe(1.0);
+    expect(displayInitialWeight([leg('CLOSED', 0.5, 0), leg('EXPIRED', 1.5, 0)])).toBe(2.0);
+  });
+  it('null when fully closed and no entry lots are recorded', () => {
+    expect(displayInitialWeight([leg('CLOSED', null, 0)])).toBeNull();
+  });
+});
+
+describe('closedPnlPct (realized, weighted by initial lot)', () => {
+  const cleg = (initial: number | null, realized: number | null) =>
+    ({ id: Math.random().toString(), initial_weight: initial, realized_pnl_pct: realized } as unknown as Leg);
+  it('weights each leg by its initial lot (closed legs have current weight 0)', () => {
+    // -100% on a 0.6 lot + +50% on a 1.4 lot → (0.6*-100 + 1.4*50)/2.0 = +5%
+    expect(closedPnlPct([cleg(0.6, -100), cleg(1.4, 50)])).toBeCloseTo(5, 6);
+  });
+  it('ignores legs with no realized P&L (still open, untrimmed)', () => {
+    expect(closedPnlPct([cleg(2.0, null), cleg(1.0, 20)])).toBeCloseTo(20, 6);
+  });
+  it('null when nothing is realized', () => {
+    expect(closedPnlPct([cleg(2.0, null)])).toBeNull();
+    expect(hasClosedPnl([cleg(2.0, null)])).toBe(false);
+    expect(hasClosedPnl([cleg(2.0, -100)])).toBe(true);
+  });
+});
+
+describe('closedPnlContribution (portfolio weight points)', () => {
+  const leg = (initial: number, realized: number | null, weight = 0) =>
+    ({ id: Math.random().toString(), initial_weight: initial, realized_pnl_pct: realized, weight } as unknown as Leg);
+  it('weights realized by the sold slice (IRDM: +600% on the 0.6 trimmed slice = +3.6)', () => {
+    expect(closedPnlContribution([leg(1.5, 600, 0.9)])).toBeCloseTo(3.6, 6);
+  });
+  it('fully-closed leg (weight 0) uses the whole lot', () => {
+    // -100% on a 1.0 lot fully closed = -1.0 points
+    expect(closedPnlContribution([leg(1.0, -100, 0)])).toBeCloseTo(-1.0, 6);
+  });
+  it('null when nothing realized', () => {
+    expect(closedPnlContribution([leg(2.0, null, 2.0)])).toBeNull();
   });
 });
 

@@ -7,9 +7,11 @@
 update public.holdings set
   last_action    = 'Upsized',       -- Status
   action_date    = '2026-06-01',    -- Last Action Date (the $35C upsize)
-  initial_weight = 2.0,             -- position's size at first open (the original 2% on 5/15)
+  current_weight = 5.3,             -- Current = the live weight the routines restate weekly
   equity_pct     = 0.30             -- ADEA equity:options = 30:70
 where ticker = 'ZZADEA';
+-- Note: initial_weight is no longer displayed — Initial now derives from Σ the open legs' lots
+-- (the diary), not a hand-typed holdings field. Left untouched here.
 
 -- 2) The host's words into each event's Notes (matched by leg + action + date)
 update public.leg_transactions lt set notes = c.note
@@ -27,3 +29,18 @@ join (values
   and coalesce(l.option_expiry, '1900-01-01')  = coalesce(c.expiry, '1900-01-01')
 where lt.leg_id = l.id and l.ticker = 'ZZADEA'
   and lt.action_type = c.atype and lt.executed_at::date = c.edate;
+
+-- 3) Real exit prices on the "convert to shares" closes (host decision 2026-06-18: a conversion is a
+-- genuine cash sale → book the option's actual sale value as realized, NOT $0). The 040 trigger
+-- re-derives legs.exit_price + realized_pnl_pct. (Illustrative test values; real positions get true
+-- prices from the Excel import.) $30C Jun 1.50→2.40 = +60%; $30C Sep 3.58→2.90 = −19%; weighted by
+-- initial lot (0.6 / 1.4) → Closed P&L ≈ +4.7%.
+update public.leg_transactions lt set price = c.exit
+from public.legs l
+join (values
+  (30::numeric, '2026-06-19'::date, '2026-05-15'::date, 2.40::numeric),
+  (30,          '2026-09-18',       '2026-06-12',       2.90)
+) as c(strike, expiry, edate, exit)
+  on l.option_strike = c.strike and l.option_expiry = c.expiry
+where lt.leg_id = l.id and l.ticker = 'ZZADEA'
+  and lt.action_type = 'SELL' and lt.executed_at::date = c.edate;

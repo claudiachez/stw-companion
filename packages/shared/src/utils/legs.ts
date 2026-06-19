@@ -173,6 +173,20 @@ export function positionWeight(legs: Leg[]): { initial: number | null; current: 
   return { initial: sum((l) => l.initial_weight), current: sum((l) => l.weight) };
 }
 
+// The position's "Initial Position Weight" to display in the editor: Σ the open legs' current lots
+// (= positionWeight().current). When the position is fully closed (no open legs), fall back to Σ the
+// closed legs' entry lots, so a closed position still shows its original size instead of a blank.
+export function displayInitialWeight(legs: Leg[]): number | null {
+  const open = positionWeight(legs).current;
+  if (open != null) return open;
+  let any = false;
+  let total = 0;
+  for (const l of legs) {
+    if (l.initial_weight != null) { any = true; total += l.initial_weight; }
+  }
+  return any ? Math.round(total * 1000) / 1000 : null;
+}
+
 // The P&L % to display for a leg in its current state:
 //   OPEN                          → unrealized (needs a live/mark price)
 //   CLOSED / EXPIRED_WORTHLESS    → booked realized_pnl_pct
@@ -197,6 +211,48 @@ export function holdingPnlPct(legs: Leg[], livePrice: number | null | undefined)
     wPnl += w * pnl;
   }
   return wSum > 0 ? wPnl / wSum : null;
+}
+
+// Realized "Closed P&L" %: weight-weighted average of each leg's booked `realized_pnl_pct`, weighted by
+// `initial_weight`. A closed leg's CURRENT weight is 0, so `holdingPnlPct` (which weights by current
+// weight) can't measure it — this uses the entry lot instead. Includes fully-closed/expired legs AND
+// trimmed-but-open legs (any leg that has booked realized). Returns null when nothing is realized yet.
+export function closedPnlPct(legs: Leg[]): number | null {
+  let wSum = 0;
+  let wPnl = 0;
+  for (const leg of legs) {
+    const pnl = leg.realized_pnl_pct;
+    const w = leg.initial_weight;
+    if (pnl == null || w == null || w === 0) continue;
+    wSum += w;
+    wPnl += w * pnl;
+  }
+  return wSum > 0 ? wPnl / wSum : null;
+}
+
+// Whether a holding has any booked realized P&L (a closed/expired leg or a trim) → drives showing the
+// Closed P&L figure alongside Open P&L.
+export function hasClosedPnl(legs: Leg[]): boolean {
+  return legs.some((l) => l.realized_pnl_pct != null && l.initial_weight != null && l.initial_weight !== 0);
+}
+
+// Closed P&L's CONTRIBUTION to the portfolio, in weight points: realized % × the weight actually sold
+// (initial lot − what's still open), summed across legs. A +600% trim on a 0.6%-of-portfolio slice
+// contributes +3.6 points, even though the leg itself returned +600%. This is what stops a big option
+// return from reading like a position-level move. Returns null when nothing is realized.
+export function closedPnlContribution(legs: Leg[]): number | null {
+  let any = false;
+  let total = 0;
+  for (const leg of legs) {
+    const pnl = leg.realized_pnl_pct;
+    const init = leg.initial_weight;
+    if (pnl == null || init == null) continue;
+    const sold = init - (leg.weight ?? 0); // fully-closed leg: weight 0 → whole lot; trim: the sold slice
+    if (sold <= 0) continue;
+    any = true;
+    total += (pnl / 100) * sold;
+  }
+  return any ? Math.round(total * 100) / 100 : null;
 }
 
 // Classify a holding from its legs (replaces positionType(position_detail)). Mixed = both a

@@ -34,12 +34,6 @@ function displayAction(ev: LegEvent): ActionLabel | string {
   if (ev.action_type === 'SELL') return (ev.weight ?? 0) === 0 ? 'Closed' : 'Trimmed';
   return 'New';
 }
-function actionColor(label: string): string {
-  if (label === 'Closed' || label === 'Expired') return 'var(--t2)'; // muted — a closed leg is de-emphasized
-  if (label === 'Trimmed') return 'var(--c3)';
-  if (label === 'Exercised') return '#3b82f6';
-  return 'var(--acc)'; // New / Upsized
-}
 
 // One "Details" cell: "Shares" for a share lot, "$30C Sep '26" for an option leg.
 function detailLabel(ev: LegEvent): string {
@@ -171,7 +165,8 @@ function DesktopRow({ ev, canEdit, dim, onlyEvent, onEdit, ticker }: { ev: LegEv
   return (
     <tr style={{ borderBottom: '1px solid var(--bsub)', opacity: rowOpacity }}>
       <td style={td}>{fmtDay(ev.executed_at)}</td>
-      <td style={{ ...td, fontWeight: 700, color: actionColor(label) }}>{label}</td>
+      {/* Open-leg events read bold + green; closed-leg rows go plain gray like the rest of the row. */}
+      <td style={{ ...td, ...(dim ? {} : { fontWeight: 700, color: 'var(--acc)' }) }}>{label}</td>
       <td style={{ ...td, color: dim ? 'var(--t2)' : 'var(--text)' }}>{detailLabel(ev)}</td>
       <td style={td}>{usd(ev.price)}</td>
       <td style={td}>{pct(ev.weight)}</td>
@@ -192,7 +187,7 @@ function MobileCard({ ev, canEdit, dim, onlyEvent, onEdit, ticker }: { ev: LegEv
   return (
     <div style={{ background: 'var(--s2)', border: '1px solid var(--bsub)', borderRadius: 6, padding: 10, opacity: dim ? 0.5 : 1 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-        <span style={{ fontWeight: 700, color: actionColor(label), fontSize: 12 }}>{label}</span>
+        <span style={{ fontSize: 12, ...(dim ? { color: 'var(--t2)' } : { fontWeight: 700, color: 'var(--acc)' }) }}>{label}</span>
         <span style={{ fontSize: 11, color: 'var(--t3)' }}>{fmtDay(ev.executed_at)}</span>
       </div>
       <div style={{ fontSize: 12, color: 'var(--text)', marginTop: 2 }}>

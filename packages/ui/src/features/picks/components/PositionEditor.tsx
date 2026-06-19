@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { TIERS, fmtLegInstrument, legIsOpen, positionWeight, type Leg } from '@stw/shared';
+import { TIERS, displayInitialWeight, fmtLegInstrument, legIsOpen, type Leg } from '@stw/shared';
 import type { Holding } from '../api';
 import { getSupabase } from '../../../lib/supabase';
 import { useCategories } from '../useCategories';
@@ -24,14 +24,16 @@ export function PositionEditor({ holding: h, onDone }: Props) {
   const [lastAction, setLastAction] = useState(h.last_action ?? 'Hold');
   const [actionDate, setActionDate] = useState(h.action_date ?? '');
   const [categoryId, setCategoryId] = useState(h.category_id ?? '');
-  const [initialWeight, setInitialWeight] = useState(h.initial_weight != null ? String(h.initial_weight) : '');
   const [equityPct, setEquityPct] = useState(h.equity_pct != null ? String(Math.round(h.equity_pct * 100)) : '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   const openLegs = h.legs.filter(legIsOpen);
-  // Current position weight = Σ open legs (derived). Initial = the host's stated opening (you enter it).
-  const curWeight = positionWeight(h.legs).current;
+  // Initial = Σ open legs' lots (derived from the diary). Current = holdings.current_weight, the live
+  // weight the routines restate weekly — owned by them, so the editor only displays it (never writes it).
+  // For a fully-closed position (no open legs) Initial falls back to the closed legs' entry lots.
+  const initWeight = displayInitialWeight(h.legs);
+  const curWeight  = h.current_weight;
 
   async function save() {
     setSaving(true); setError('');
@@ -41,9 +43,9 @@ export function PositionEditor({ holding: h, onDone }: Props) {
       const { error: hErr } = await sb.from('holdings').update({
         conviction: Number(conviction), last_action: lastAction, action_date: actionDate || null,
         category_id: categoryId || null,
-        initial_weight: initialWeight === '' ? null : parseFloat(initialWeight),
-        current_weight: curWeight,   // derived from the open legs
         equity_pct: eq,
+        // initial_weight / current_weight are NOT written here: Initial derives from the diary lots,
+        // Current is owned by the routines. Editing legs (the ledger) is the only way to move weight.
       }).eq('ticker', h.ticker);
       if (hErr) throw hErr;
       await queryClient.invalidateQueries({ queryKey: ['holdings'] });
@@ -71,14 +73,15 @@ export function PositionEditor({ holding: h, onDone }: Props) {
           <div><label style={label}>Last Action Date</label>
             <input style={field} type="date" value={actionDate} onChange={(e) => setActionDate(e.target.value)} /></div>
           <div><label style={label}>Initial Position Weight %</label>
-            <input style={field} type="number" step="0.1" min="0" value={initialWeight} placeholder="opening size" onChange={(e) => setInitialWeight(e.target.value)} /></div>
+            <div style={{ ...field, background: 'var(--s2)', color: 'var(--text)', fontWeight: 600 }}>{initWeight != null ? `${initWeight}%` : '—'}</div></div>
           <div><label style={label}>Current Position Weight %</label>
             <div style={{ ...field, background: 'var(--s2)', color: 'var(--text)', fontWeight: 600 }}>{curWeight != null ? `${curWeight}%` : '—'}</div></div>
           <div><label style={label}>Equity % of split</label>
             <input style={field} type="number" step="1" min="0" max="100" value={equityPct} placeholder="default" onChange={(e) => setEquityPct(e.target.value)} /></div>
         </div>
         <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 6 }}>
-          Initial = the position’s size at first open (you enter it). Current = the sum of the open legs (auto).
+          Initial = the sum of the open legs’ lots (from the diary). Current = the live weight the routines
+          restate weekly. Both auto-derive — move weight by editing legs in Transaction History.
           Equity % sets this position’s equity:options split (e.g. 30 → 30:70); blank uses the Config default (90:10).
         </div>
 
