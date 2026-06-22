@@ -1,5 +1,14 @@
 # STW Companion — Claude Code Guide
 
+> **⚠️ START HERE — branch.** All active work lives on **`staging`**. **`main` is ~53 commits behind**
+> (old pre-event-sourcing baseline: migrations stop at 021, no `plans/` event-sourcing docs, stale
+> CLAUDE.md). **A fresh clone or a remote/cloud session defaults to `main` and will see the OLD repo** —
+> if migrations stop at 021 or `plans/legs_event_sourcing_redesign.md` is missing, you are on `main`.
+> **First command every session:** `git fetch origin && git checkout staging && git pull --ff-only`.
+> Feature branches cut from `staging`, PR to `staging`. `main` is promoted only by an approved
+> staging→main PR. (Note: `memory/` lives in local `~/.claude/`, NOT in the repo — never reference it in
+> a prompt meant for a remote session; put anything a future session needs into the repo.)
+
 ## Ground Rules
 - If instructions seem to conflict, **always ask before doing anything**
 - Never force-push or reset `staging` or `main`
@@ -13,10 +22,11 @@
 
 ## Current Status — legs/transaction-history → true event-sourcing (handoff 2026-06-19)
 
-**Active branch: `claude/legs-event-sourcing`** (off `staging`, pushed, **PR'd → `staging`**, not yet
-merged). Authoritative spec: [`plans/legs_event_sourcing_redesign.md`](plans/legs_event_sourcing_redesign.md).
-Read it first. **Phases 1–3 done + verified on SANDBOX; the clean import + the post-import holdings fix
-(Next Step #2) are applied to SANDBOX.** Everything below works end-to-end on localhost (→ sandbox).
+**All event-sourcing work is MERGED to `staging`** (PRs #37/#38/#39). The active line is now `staging`
+itself; Phases 1–5 are done (details below). Authoritative spec:
+[`plans/legs_event_sourcing_redesign.md`](plans/legs_event_sourcing_redesign.md). **Phases 1–3 verified on
+SANDBOX; clean import + post-import holdings fix applied to BOTH PROD + SANDBOX** (see DB state). The next
+code task is **Phase 4** (see Next Steps).
 
 **Why:** the old editor was split-brain — it wrote BOTH `legs` (directly) and `leg_transactions`, which
 fought on save, diverged, and stamped synthetic dates. Now committed to **true event-sourcing**:
