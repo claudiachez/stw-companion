@@ -26,7 +26,7 @@
 Phases 1–5 shipped; the deprecated-column cleanup (migrations **034 + 035 + 041**) was applied and
 **verified on BOTH PROD and SANDBOX** — all 14 columns dropped, rows intact, the app's category-derived
 `basket` and leg-embed query return clean. Routines were reviewed (all 4 write only the new path) and a
-PROD logical backup was taken (`~/Documents/Claude/db-backups/`, local) before the drops. `staging` was
+PROD logical backup was taken (local, gitignored `backups/` — `*_pre-coldrop.json`) before the drops. `staging` was
 promoted to `main`. The next work is **Phase 4** + other forward features (see Next Steps) — the
 event-sourcing schema work itself is complete; do not reopen it.
 
