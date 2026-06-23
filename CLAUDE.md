@@ -20,13 +20,33 @@
 
 ---
 
-## Current Status — legs/transaction-history → true event-sourcing (handoff 2026-06-19)
+## Current Status — dashboard + trades polish shipped; Phase 4 is next (handoff 2026-06-23)
 
-**All event-sourcing work is MERGED to `staging`** (PRs #37/#38/#39). The active line is now `staging`
-itself; Phases 1–5 are done (details below). Authoritative spec:
-[`plans/legs_event_sourcing_redesign.md`](plans/legs_event_sourcing_redesign.md). **Phases 1–3 verified on
-SANDBOX; clean import + post-import holdings fix applied to BOTH PROD + SANDBOX** (see DB state). The next
-code task is **Phase 4** (see Next Steps).
+**Latest (2026-06-23, PR #40 MERGED to `staging`) — Portfolio Overview + Trades polish:**
+- **Portfolio Overview** ([`PortfolioDashboard.tsx`](packages/ui/src/features/picks/components/PortfolioDashboard.tsx)):
+  "New Webinar Analysis" → **"Conviction Notes Updates"** with a full `fmtDateTime` "Updated:" stamp in
+  the header ([`useLatestWebinar.ts`](packages/ui/src/features/picks/useLatestWebinar.ts) now selects
+  `created_at`); "Latest Portfolio Changes" date moved into the header + green (`--acc`) border; Unpriced
+  Legs / Stale Prices titles moved OUTSIDE their cards (shared `SectionHeader`); the "Run the IBKR sync"
+  hint is now **admin-only**.
+- **Trades tab** ([`TradesTable.tsx`](packages/ui/src/features/picks/components/TradesTable.tsx) +
+  [`TradesFilterBar.tsx`](packages/ui/src/features/picks/components/TradesFilterBar.tsx) +
+  [`useTradesFilters.ts`](packages/ui/src/features/picks/useTradesFilters.ts)): independent filter state,
+  bar chrome matching the Ticker Details `FilterBar` ("All Baskets", full-bleed); **Open/Closed/All toggle**,
+  Type (Shares/Options), Sector, trade-specific Sort (default **Opened newest**, + Closed newest/oldest);
+  added **Contribution %** (closed) + **Opened/Closed date** columns; **column set follows the toggle**
+  (Open hides closed-only cols + vice-versa).
+- **Readability:** green-accent filled buttons/toggle standardized to **white** text (was black, low-contrast).
+- **SANDBOX data cleanup (DB, not code):** deleted **30 orphan `legs`** (status=OPEN, no `leg_transactions`,
+  `entry_price` null) that a seed/import had inserted directly — they showed as phantom "open" trades on
+  Closed holdings. Sandbox now **42 legs, 0 orphans**. PROD was already clean (45 legs, 0 orphans).
+  ⚠️ Re-running the old `plans/*import*`/seed scripts can re-introduce them (they write `legs` directly
+  instead of via the diary) — fix the seed if you re-seed.
+
+**All event-sourcing work is MERGED to `staging`** (PRs #37/#38/#39). Phases 1–5 are done (details below).
+Authoritative spec: [`plans/legs_event_sourcing_redesign.md`](plans/legs_event_sourcing_redesign.md).
+**Phases 1–3 verified on SANDBOX; clean import + post-import holdings fix applied to BOTH PROD + SANDBOX**
+(see DB state). The next code task is **Phase 4** (see Next Steps) — not started.
 
 **Why:** the old editor was split-brain — it wrote BOTH `legs` (directly) and `leg_transactions`, which
 fought on save, diverged, and stamped synthetic dates. Now committed to **true event-sourcing**:
@@ -70,7 +90,9 @@ contribution. `closedPnlPct` + `closedPnlContribution` + `hasClosedPnl` in `@stw
 **Post-import holdings fix (Next Step #2) DONE ✅ on SANDBOX:**
 - **`last_action`/`action_date` derived from each ticker's latest diary event** (`plans/post_import_holdings_fix.sql`).
   Same-day conversion ties (ADEA/CXDO/FIVN/GDYN/SHLS) resolve to the keep-open `New`; `Expired` →
-  `Closed` at the holding level (last_action has no "Expired"). AMZN/HOOD/TSLA have no legs → skipped.
+  `Closed` at the holding level (last_action has no "Expired"). (At import time AMZN/HOOD/TSLA had no
+  legs and were skipped — but that was a transient state, NOT a rule; **the host has since added real
+  legs to the legacy names on PROD (2026-06-23)**. See the legacy-positions decision below.)
 - **Baskets/categories** assigned from the 6/18 sector groupings; 3 new categories created
   (**AI Fraud / Verified Identity**, **Space & Satellite**, **Nuclear**); **IRDM moved Defense → Space & Satellite**.
 - **Initial weight for fully-closed positions** now shows the closed legs' entry lots instead of blank —
@@ -101,7 +123,11 @@ shares" close is a real cash sale → book the option's actual exit price as rea
 **P&L is split by asset class (Shares vs Options), never blended** — Open shows per-asset return + lot;
 Closed shows per-asset return + **portfolio contribution** (return × sold weight), so a +600% option on a
 thin slice reads as its true ~+3.6% portfolio impact (host 2026-06-18). P&L Breakdown is open-legs-only.
-**"Legacy" is a conviction tier (Tier 6 / `c0`), NOT a sector/category** (host 2026-06-19). **Conviction is
+**"Legacy" is a conviction tier (Tier 6 / `c0`), NOT a sector/category** (host 2026-06-19). **Legacy /
+low-conviction does NOT mean "no legs/data"** — every position the host actually holds carries leg +
+transaction data regardless of tier, **especially while still open**; the host added real legs to the
+legacy names (AMZN/HOOD/TSLA) on PROD (host 2026-06-23). So a tier-0 holding with open legs is normal —
+never treat low conviction as a reason to leave a held position without legs. **Conviction is
 owned by the routines** — set in the streaming run, never in a seed/migration (so the post-import fix does
 NOT touch conviction; the 6/18 stars OSS/VPG/SYNA/VIAV/NBIS/ENS/AMKR/LEU/AMZN/TSLA are the routines' job).
 
@@ -156,6 +182,12 @@ run DDL locally — apply migrations via the Supabase SQL editor). Prod service 
 
 3. **Deferred:** inline leg editing in the modal; `$100k` notional + SPY benchmark (`spy_daily`,
    migration 032).
+
+**Known gap (not blocking):** the **"Latest Portfolio Changes"** Overview block can't render against
+SANDBOX because the `recent_changes` view (migration 008) was never applied there — `useRecentChanges`
+errors and the block hides. PROD has the view (block renders fine). Apply 008 to sandbox if you want to
+verify that block locally. (The webinar "Conviction Notes Updates" block uses the same `SectionHeader`
+mechanism and does render, so the pattern is verified.)
 
 ---
 
@@ -392,6 +424,18 @@ standing rule: when you render a ticker, link it without being asked.
 ### Counts
 "Positions" counts exclude the `CASH` balance row (it's not a position) and reflect the
 active filter (closed hidden by default). The FilterBar count shows `N of {total}`.
+
+### UI consistency (standing rules, host 2026-06-23)
+- **White text on green.** Any filled `--acc`/green button or active toggle uses **white** text, never
+  black/dark (black-on-green is low-contrast). Match the existing Save buttons (`color: '#fff'`).
+- **Sibling tabs read as one app.** The Trades filter bar mirrors the Ticker Details `FilterBar` chrome
+  (full-bleed surface bar, same control styling, same wording — e.g. "All Baskets", not "All Sectors").
+  When you add a filter/list/blotter surface, reuse the established chrome rather than inventing a new look.
+- **Overview blocks share one header pattern.** Title lives OUTSIDE the card via `SectionHeader`, with an
+  optional right-aligned `Updated: {fmtDateTime}` stamp — used by the webinar, changes, unpriced, and
+  stale blocks. Don't put a block's title or its date inside the card.
+- **Admin-only action hints.** Instructions a subscriber can't act on (e.g. "Run the IBKR sync") render
+  only when `canEdit`; the explanation still shows to everyone.
 
 ---
 
