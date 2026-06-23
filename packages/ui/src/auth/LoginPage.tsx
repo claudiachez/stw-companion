@@ -103,7 +103,7 @@ export function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="bg-acc text-black font-semibold rounded-lg px-4 py-2.5 text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+              className="bg-acc text-white font-semibold rounded-lg px-4 py-2.5 text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
             >
               {loading ? '...' : mode === 'login' ? 'Sign In' : 'Create Account'}
             </button>

@@ -129,7 +129,7 @@ export function ConvictionCommentForm({ ticker, currentConviction, onDone }: Pro
           disabled={saving}
           style={{
             padding: '6px 14px', borderRadius: 5, border: 'none', cursor: 'pointer',
-            background: 'var(--acc)', color: '#000', fontSize: 12, fontWeight: 600,
+            background: 'var(--acc)', color: '#fff', fontSize: 12, fontWeight: 600,
             opacity: saving ? 0.6 : 1,
           }}
         >

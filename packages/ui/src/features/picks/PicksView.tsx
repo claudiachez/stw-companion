@@ -265,9 +265,10 @@ export function PicksView() {
         </div>
       )}
 
-      {/* Trades — full-width blotter */}
+      {/* Trades — full-width blotter. TradesTable owns its own layout (full-bleed filter bar +
+          padded scroll area), mirroring the FilterBar + list of the Ticker Details tab. */}
       {activeTab === 'trades' && (
-        <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)', padding: isMobile ? '14px 12px' : '20px 24px' }}>
+        <div style={{ flex: 1, overflow: 'hidden', background: 'var(--bg)' }}>
           <TradesTable holdings={holdings} onSelectTicker={selectTicker} />
         </div>
       )}

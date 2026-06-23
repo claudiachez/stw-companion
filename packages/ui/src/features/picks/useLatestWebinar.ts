@@ -4,6 +4,9 @@ import { getSupabase } from '../../lib/supabase';
 export interface WebinarUpdate {
   /** YYYY-MM-DD of the most recent streaming-sourced conviction batch. */
   eventDate: string;
+  /** When that batch was written (newest `created_at` in the batch) — drives the full
+   *  `fmtDateTime` "Updated:" stamp on the dashboard. Null if no row carried one. */
+  updatedAt: string | null;
   /** Distinct tickers whose conviction note was refreshed in that batch. */
   tickers: string[];
 }
@@ -33,24 +36,28 @@ export function useLatestWebinar() {
     queryFn: async () => {
       const { data, error } = await getSupabase()
         .from('conviction_comments')
-        .select('ticker, event_date')
+        .select('ticker, event_date, created_at')
         .eq('source', 'streaming')
         .is('user_id', null)
         .order('event_date', { ascending: false })
         .limit(60);
       if (error) throw error;
 
-      const rows = (data ?? []) as { ticker: string; event_date: string }[];
+      const rows = (data ?? []) as { ticker: string; event_date: string; created_at: string | null }[];
       if (rows.length === 0) return null;
 
       const eventDate = rows[0].event_date;
       const ageMs = Date.now() - new Date(eventDate + 'T00:00:00').getTime();
       if (ageMs > RECENCY_DAYS * 86_400_000) return null; // older than the recency window
 
-      const tickers = Array.from(
-        new Set(rows.filter((r) => r.event_date === eventDate).map((r) => r.ticker)),
-      );
-      return { eventDate, tickers };
+      const batch = rows.filter((r) => r.event_date === eventDate);
+      const tickers = Array.from(new Set(batch.map((r) => r.ticker)));
+      // Newest write time in the batch — the webinar's ingest moment, shown as the "Updated" stamp.
+      const updatedAt = batch.reduce<string | null>((acc, r) => {
+        if (!r.created_at) return acc;
+        return !acc || r.created_at > acc ? r.created_at : acc;
+      }, null);
+      return { eventDate, updatedAt, tickers };
     },
     staleTime: 5 * 60 * 1000,
   });
