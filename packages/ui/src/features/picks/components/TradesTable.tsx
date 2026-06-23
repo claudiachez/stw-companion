@@ -158,6 +158,12 @@ export function TradesTable({ holdings, onSelectTicker }: Props) {
   const trades = useMemo(() => applyTradeFilters(allTrades, filters), [allTrades, filters]);
   const today = new Date().toISOString().slice(0, 10);
 
+  // Column visibility follows the Open/Closed/All toggle so each view only shows columns that
+  // apply. Open-only columns (Current P&L, Days Open) are noise once everything is closed; closed-only
+  // columns (Closed date, Close price, realized P&L, Contribution, Duration) are noise while open.
+  const showOpenCols   = filters.openClosed !== 'closed'; // open or all
+  const showClosedCols = filters.openClosed !== 'open';   // closed or all
+
   const td: React.CSSProperties = {
     padding: '9px 13px', borderBottom: '1px solid var(--bsub)',
     verticalAlign: 'middle', lineHeight: 1.4, whiteSpace: 'nowrap',
@@ -197,14 +203,14 @@ export function TradesTable({ holdings, onSelectTicker }: Props) {
                   <th style={th}>Ticker</th>
                   {!isMobile && <th style={th}>Opened</th>}
                   <th style={thR}>Open</th>
-                  {!isMobile && <th style={th}>Closed</th>}
-                  {!isMobile && <th style={thR}>Close</th>}
+                  {!isMobile && showClosedCols && <th style={th}>Closed</th>}
+                  {!isMobile && showClosedCols && <th style={thR}>Close</th>}
                   <th style={th}>Type</th>
-                  <th style={thR}>Current P&amp;L</th>
-                  <th style={thR}>P&amp;L</th>
-                  {!isMobile && <th style={thR}>Contribution</th>}
-                  {!isMobile && <th style={thR}>Days Open</th>}
-                  {!isMobile && <th style={thR}>Duration</th>}
+                  {showOpenCols && <th style={thR}>Current P&amp;L</th>}
+                  {showClosedCols && <th style={thR}>P&amp;L</th>}
+                  {!isMobile && showClosedCols && <th style={thR}>Contribution</th>}
+                  {!isMobile && showOpenCols && <th style={thR}>Days Open</th>}
+                  {!isMobile && showClosedCols && <th style={thR}>Duration</th>}
                   {canEdit && <th style={thR}></th>}
                 </tr>
               </thead>
@@ -223,14 +229,14 @@ export function TradesTable({ holdings, onSelectTicker }: Props) {
                       </td>
                       {!isMobile && <td style={{ ...td, color: 'var(--t2)' }}>{fmtTradeDate(t.openDate)}</td>}
                       <td style={{ ...tdR, color: 'var(--t2)' }}>{money(t.openPrice)}</td>
-                      {!isMobile && <td style={{ ...td, color: t.isOpen ? 'var(--t3)' : 'var(--t2)' }}>{t.isOpen ? '—' : fmtTradeDate(t.closeDate)}</td>}
-                      {!isMobile && <td style={{ ...tdR, color: 'var(--t2)' }}>{money(t.closePrice)}</td>}
+                      {!isMobile && showClosedCols && <td style={{ ...td, color: t.isOpen ? 'var(--t3)' : 'var(--t2)' }}>{t.isOpen ? '—' : fmtTradeDate(t.closeDate)}</td>}
+                      {!isMobile && showClosedCols && <td style={{ ...tdR, color: 'var(--t2)' }}>{money(t.closePrice)}</td>}
                       <td style={{ ...td, color: 'var(--t2)', textTransform: 'capitalize' }}>{t.direction}</td>
-                      <td style={{ ...tdR, color: cur.color, fontWeight: 600 }}>{cur.text}</td>
-                      <td style={{ ...tdR, color: real.color, fontWeight: 600 }}>{real.text}</td>
-                      {!isMobile && <td style={{ ...tdR, color: contrib.color, fontWeight: 600 }}>{contrib.text}</td>}
-                      {!isMobile && <td style={{ ...tdR, color: 'var(--t3)' }}>{days(t.isOpen ? daysBetween(t.openDate, today) : null)}</td>}
-                      {!isMobile && <td style={{ ...tdR, color: 'var(--t3)' }}>{days(t.isOpen ? null : daysBetween(t.openDate, t.closeDate))}</td>}
+                      {showOpenCols && <td style={{ ...tdR, color: cur.color, fontWeight: 600 }}>{cur.text}</td>}
+                      {showClosedCols && <td style={{ ...tdR, color: real.color, fontWeight: 600 }}>{real.text}</td>}
+                      {!isMobile && showClosedCols && <td style={{ ...tdR, color: contrib.color, fontWeight: 600 }}>{contrib.text}</td>}
+                      {!isMobile && showOpenCols && <td style={{ ...tdR, color: 'var(--t3)' }}>{days(t.isOpen ? daysBetween(t.openDate, today) : null)}</td>}
+                      {!isMobile && showClosedCols && <td style={{ ...tdR, color: 'var(--t3)' }}>{days(t.isOpen ? null : daysBetween(t.openDate, t.closeDate))}</td>}
                       {canEdit && (
                         <td style={tdR}>
                           <button
