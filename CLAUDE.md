@@ -235,7 +235,7 @@ apps/
   admin/                     admin shell: no paywall, Edit + Users + IBKR
     ibkr_proxy.py            local IBKR writer (run on your machine, not deployed)
     netlify.toml             (Netlify base dir = apps/admin)
-supabase/migrations/         001..021 — single source of truth for DB schema/RLS
+supabase/migrations/         001..041 — single source of truth for DB schema/RLS
 CLAUDE.md                    this file
 ```
 
@@ -310,13 +310,19 @@ OAuth on web does a full-page redirect).
 ## Database (Supabase)
 
 - Project: `usmqbohcjcyszjxxvnqu.supabase.co`; client created per-app and injected into `@stw/ui`.
-- `supabase/migrations/` is the single source of truth (021 migrations to date).
+- `supabase/migrations/` is the single source of truth (through **041**).
   **Claude authors migrations; you apply them** via the Supabase SQL editor / `supabase db push`.
+- **Local DB backups → gitignored `backups/`** (never committed — may carry PII), named
+  `<date>_<purpose>.json` (e.g. `*_pre-coldrop.json`). Take a fresh logical snapshot of the
+  affected tables before any destructive migration (column/table drop). The Supabase MCP has no
+  `pg_dump`; pull tables via the REST API with the service key, or `select json_agg(...)`.
 - Tables: `holdings`, `graddox`, `graddox_levels`, `profiles`, `tiers`, `run_log`,
-  `user_positions`, `holding_transactions`, `conviction_comments`.
+  `user_positions`, `holding_transactions`, `conviction_comments`, plus the event-sourced
+  `legs` / `leg_transactions`, `categories`, `traders`, `app_config`.
   RLS on `holdings`/`graddox` restricts writes to `cc@claudiachez.com`. `user_positions`
   uses user-owned RLS — each subscriber reads and writes only their own rows.
-  The admin IBKR proxy is the only writer of `last_pnl_*` / `ibkr_legs` on `holdings`.
+  The admin IBKR proxy now prices STW's option legs and writes **`legs.mark_price`** (the old
+  `last_pnl_*` / `ibkr_legs` columns on `holdings` were dropped in 034).
 - **Transaction History is auto-logged by a DB trigger** (`stw_log_holding_transaction`,
   migration 016): any non-`Hold` change to a `holdings` row's `last_action`/`action_date`
   writes a `holding_transactions` row — so every writer (admin Edit form *and* the external
@@ -332,7 +338,7 @@ repo**. Know who writes what before you reason about freshness or "why is this r
 
 | Table | Primary writer | Notes |
 |---|---|---|
-| `holdings` | **the routines** (see next section) | core position rows; admin Edit form also writes; admin IBKR proxy writes only `last_pnl_*`/`ibkr_legs` |
+| `holdings` | **the routines** (see next section) | core position rows (`last_action`/`action_date`/`current_weight`/thesis/conviction/`category_id`); admin Edit form also writes. Per-leg sizing + prices live on `legs`/`leg_transactions`, not here |
 | `graddox` / `graddox_levels` | **morning routine** (Graddox step) | GEX signal bias + levels |
 | `conviction_comments` | **the routines** + `stw-transcripts` | explicit appends; `source` = `discord` or `streaming`; admin/users can also add notes |
 | `holding_transactions` | **DB trigger** (no client) | auto-logged from any `holdings` write; never written directly by app or routine |
@@ -354,7 +360,7 @@ The apps render data that an external ingestion engine writes on a schedule. Thi
 checked into this repo** — it is a set of Claude cowork cron tasks at
 `~/Documents/Claude/Scheduled/<id>/SKILL.md` (thin shims under `~/.claude/scheduled-tasks/`). It is
 documented here because the Supabase schema is the contract between it (writer) and the apps
-(readers); changing a table or the `position_detail` format affects both sides.
+(readers); changing a table or the `legs`/`leg_transactions` event-sourced schema affects both sides.
 
 **Mechanism (shared by every routine):**
 - Reads Discord via **Claude in Chrome** (the user's own account — not a bot; the user isn't a server admin).
@@ -366,15 +372,15 @@ documented here because the Supabase schema is the contract between it (writer) 
 
 | Routine | Cadence | Reads (Discord channel) | Writes |
 |---|---|---|---|
-| `stw-morning-run` | 9am wkdays | Graddox → `live-notes-portfolio` → (fallback) `stream-library-stw` | `graddox`, `graddox_levels`, `holdings`, `conviction_comments`, `run_log` |
-| `stw-afternoon-run` | 3pm wkdays | `live-notes-portfolio` → (fallback) `stream-library-stw` | `holdings`, `conviction_comments`, `run_log` |
+| `stw-morning-run` | 9am wkdays | Graddox → `live-notes-portfolio` → (fallback) `stream-library-stw` | `graddox`, `graddox_levels`, `legs`, `leg_transactions`, `holdings`, `conviction_comments`, `run_log` |
+| `stw-afternoon-run` | 3pm wkdays | `live-notes-portfolio` → (fallback) `stream-library-stw` | `legs`, `leg_transactions`, `holdings`, `conviction_comments`, `run_log` |
 | `stw-friday-weighting` | 5pm Fri | `updates-portfolio` (weekly full snapshot) | `holdings` (weights only), `run_log` |
 | `stw-transcripts` | manual (+ daily fallback) | `stream-library-stw` (webinar recording) | methodology `.md` (local), `holdings`, `conviction_comments`, `run_log` |
 
 **Daily flow (morning / afternoon):**
 1. Read `live-notes-portfolio` — the host's real-time buy / sell / upsize / trim calls **and** his DD/thesis (he posts thesis here, not in a separate channel).
-2. For each changed ticker, **upsert `holdings`** on the `ticker` PK — `last_action` (`New`/`Upsized`/`Trimmed`/`Hold`/`Closed`), `current_weight`, and `position_detail` normalized to the canonical leg form (`Common @ $X + $STRIKE[C|P] MON 'YY @ $entry`, one `@` per leg) so the Picks **Trades** tab can parse each leg/lot. On a Close, also snapshot `exit_price`/`exit_pnl_pct` (from a stated exit or a Finnhub quote).
-3. That `holdings` write **auto-fires the DB trigger** → a `holding_transactions` row (no client code).
+2. For each changed ticker, write the **event-sourced** path (post-Phase-5): a `leg_transactions` **diary** row per leg event (`BUY`/`SELL`/etc. with `action_label`, `price`, `weight`=lot/remaining, `notes`=host's words) — the 040 trigger derives the `legs` scoreboard (status, entry/exit, realized P&L) — then a **direct `holdings` PATCH** of `last_action`/`action_date`/`current_weight` only. No `position_detail`/`exit_*` blob is written (those columns were dropped in 034/035).
+3. That `holdings` PATCH **auto-fires the 033 trigger** → a harmless `holding_transactions` audit row (no client code; the routines never write that table directly).
 4. For notable commentary, **append a `conviction_comments` row** (`source='discord'`) → becomes "Latest Comments"; refresh `holdings.summary`/`bullets` + `dd_updated_at` only when the durable thesis actually changed.
 5. Write the `run_log` mark, including a multi-line **`digest`** → rendered as "Latest Portfolio Changes" in the Overview.
 6. **Recording fallback:** if `stream-library-stw` has an unprocessed recording, delegate to `stw-transcripts`. (Morning also runs the Graddox GEX step first → `graddox`/`graddox_levels`.)
@@ -390,9 +396,11 @@ documented here because the Supabase schema is the contract between it (writer) 
 ### Admin — local option pricer
 `apps/admin/ibkr_proxy.py` is a **local** Flask server (`localhost:8765`, self-signed
 TLS) that talks to IB Gateway (`127.0.0.1:4001`) via `ib_insync`. The admin browser
-calls it to price **STW's** option legs (arbitrary contracts, not just held positions),
-then writes `last_pnl_pct` / `last_pnl_at` / `ibkr_legs` to `holdings` in Supabase.
-Web only **reads** those columns. Run it locally with IB Gateway connected; never deployed.
+calls it to price **STW's** option legs (arbitrary contracts, not just held positions);
+the browser then writes the per-leg **`legs.mark_price`** / `mark_price_at` (`mark_price_source='IBKR'`)
+to Supabase — the proxy itself never writes Supabase. (Pre-event-sourcing this wrote `last_pnl_*` /
+`ibkr_legs` on `holdings`; those columns were dropped in 034.) Run it locally with IB Gateway
+connected; never deployed.
 
 The proxy batches snapshots for speed, then **retries any leg the batch returned empty,
 one at a time** (concurrent frozen snapshots occasionally drop an illiquid contract).
