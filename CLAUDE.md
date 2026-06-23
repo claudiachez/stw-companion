@@ -1,13 +1,13 @@
 # STW Companion — Claude Code Guide
 
-> **⚠️ START HERE — branch.** All active work lives on **`staging`**. **`main` is ~53 commits behind**
-> (old pre-event-sourcing baseline: migrations stop at 021, no `plans/` event-sourcing docs, stale
-> CLAUDE.md). **A fresh clone or a remote/cloud session defaults to `main` and will see the OLD repo** —
-> if migrations stop at 021 or `plans/legs_event_sourcing_redesign.md` is missing, you are on `main`.
-> **First command every session:** `git fetch origin && git checkout staging && git pull --ff-only`.
+> **⚠️ START HERE — branch.** **`staging` is the active trunk** — all feature work happens here.
+> As of **2026-06-23** `main` was brought **level with `staging`** (the event-sourcing migration plan
+> was completed and promoted), so a fresh clone is current — migrations run to **041**; if migrations
+> stop at 021 you are on a stale checkout, re-sync. **First command every session:**
+> `git fetch origin && git checkout staging && git pull --ff-only`.
 > Feature branches cut from `staging`, PR to `staging`. `main` is promoted only by an approved
-> staging→main PR. (Note: `memory/` lives in local `~/.claude/`, NOT in the repo — never reference it in
-> a prompt meant for a remote session; put anything a future session needs into the repo.)
+> staging→main PR (= a production deploy). (Note: `memory/` lives in local `~/.claude/`, NOT in the repo —
+> never reference it in a prompt meant for a remote session; put anything a future session needs into the repo.)
 
 ## Ground Rules
 - If instructions seem to conflict, **always ask before doing anything**
@@ -20,9 +20,17 @@
 
 ---
 
-## Current Status — dashboard + trades polish shipped; Phase 4 is next (handoff 2026-06-23)
+## Current Status — event-sourcing migration CLOSED + promoted to main; Phase 4 is next (handoff 2026-06-23)
 
-**Latest (2026-06-23, PR #40 MERGED to `staging`) — Portfolio Overview + Trades polish:**
+**✅ PLAN CLOSED (2026-06-23) — legs/transaction-history event-sourcing migration is DONE and on `main`.**
+Phases 1–5 shipped; the deprecated-column cleanup (migrations **034 + 035 + 041**) was applied and
+**verified on BOTH PROD and SANDBOX** — all 14 columns dropped, rows intact, the app's category-derived
+`basket` and leg-embed query return clean. Routines were reviewed (all 4 write only the new path) and a
+PROD logical backup was taken (`~/Documents/Claude/db-backups/`, local) before the drops. `staging` was
+promoted to `main`. The next work is **Phase 4** + other forward features (see Next Steps) — the
+event-sourcing schema work itself is complete; do not reopen it.
+
+**Latest (2026-06-23, PRs #40–#42 MERGED to `staging`) — Portfolio Overview + Trades polish:**
 - **Portfolio Overview** ([`PortfolioDashboard.tsx`](packages/ui/src/features/picks/components/PortfolioDashboard.tsx)):
   "New Webinar Analysis" → **"Conviction Notes Updates"** with a full `fmtDateTime` "Updated:" stamp in
   the header ([`useLatestWebinar.ts`](packages/ui/src/features/picks/useLatestWebinar.ts) now selects
@@ -177,11 +185,15 @@ run DDL locally — apply migrations via the Supabase SQL editor). Prod service 
    Manage area: **categories CRUD** (delete-guarded), **traders read-only**. One "Manage" nav entry,
    admin-local. No migrations expected.
 
-2. **034/035 (drop deprecated cols)** — Phase 5 was the gate; apply **after the routines are confirmed
-   clean on a live run** + a fresh DB dump. Drops `position_detail`/`exit_*`/`basket` etc.
+2. ✅ **DONE — deprecated-column cleanup (034 / 035 / 041).** Applied + verified on PROD + SANDBOX
+   (2026-06-23). Dropped 9 cols from `holdings` (`position_detail`/`last_*`/`ibkr_legs`/`exit_*`/`basket`)
+   and 5 from `holding_transactions` (`position_detail`/`price`/`pnl_pct`/`leg`/`direction`). The
+   event-sourcing migration plan is **closed** — nothing pending. (`holding_transactions` survives as the
+   trigger-written audit log; full table retirement was never in scope.)
 
-3. **Deferred:** inline leg editing in the modal; `$100k` notional + SPY benchmark (`spy_daily`,
-   migration 032).
+3. **Future features (not migration work):** inline 2-line leg editing in the modal (deferred until
+   day-to-day use proves it's needed); `$100k` notional + SPY benchmark (the `spy_daily` table from
+   migration 032 already exists; the population cron + benchmark UI are unbuilt).
 
 **Known gap (not blocking):** the **"Latest Portfolio Changes"** Overview block can't render against
 SANDBOX because the `recent_changes` view (migration 008) was never applied there — `useRecentChanges`
