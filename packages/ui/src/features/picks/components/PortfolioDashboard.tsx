@@ -99,13 +99,6 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
   const totalWeight = Object.values(sectorMap).reduce((s, v) => s + v, 0);
   const sectors = Object.entries(sectorMap).sort((a, b) => b[1] - a[1]);
 
-  // Last updated across all holdings
-  const lastUpdated = holdings.reduce<Date | null>((acc, h) => {
-    if (!h.updated_at) return acc;
-    const d = new Date(h.updated_at);
-    return !acc || d > acc ? d : acc;
-  }, null);
-
   // Options data freshness = newest IBKR leg mark across all holdings.
   const optionsSynced = holdings.reduce<Date | null>((acc, h) => {
     for (const leg of h.legs) {
@@ -257,21 +250,15 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
         </div>
       )}
 
-      {/* Data freshness — distinct from the changes digest above */}
-      <div style={{ marginTop: latestChange?.digest ? 12 : 24, fontSize: 11, color: 'var(--t3)', display: 'flex', flexDirection: 'column', gap: 3 }}>
-        {lastUpdated && (
-          <div>
-            Holdings data synced:{' '}
-            <span style={{ color: 'var(--t2)' }}>{fmtDateTime(lastUpdated)}</span>
-          </div>
-        )}
-        {optionsSynced && (
-          <div>
-            Options data synced:{' '}
-            <span style={{ color: 'var(--t2)' }}>{fmtDateTime(optionsSynced)}</span>
-          </div>
-        )}
-      </div>
+      {/* Options-mark freshness (IBKR). Holdings recency is already conveyed by the "Latest Portfolio
+          Changes" block above — a separate "Holdings data synced" line read as stale/contradictory
+          (it's last-CHANGED, not last-run), so it was removed. */}
+      {optionsSynced && (
+        <div style={{ marginTop: latestChange?.digest ? 12 : 24, fontSize: 11, color: 'var(--t3)' }}>
+          Options data synced:{' '}
+          <span style={{ color: 'var(--t2)' }}>{fmtDateTime(optionsSynced)}</span>
+        </div>
+      )}
 
       {/* Unpriced option legs — surfaced so they don't have to be hunted one-by-one. Title lives
           OUTSIDE the card (matches the blocks above). The "Run the IBKR sync" hint is admin-only —
