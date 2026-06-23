@@ -135,9 +135,12 @@ run DDL locally — apply migrations via the Supabase SQL editor). Prod service 
   promoting a Legacy (0)**; never inferred from sizing.
 - **One-time SQL applied (PROD + sandbox):** `plans/conviction_618_stars.sql` (8 stars → tier 5;
   AMZN/TSLA stay 0) + `plans/fix_fivn_shares_weight.sql` (FIVN shares lot 3.5→2.5, net-neutral 6.0%).
-- **PENDING (host, in the desktop app):** delete the stale **`gradoxx-daily-summary`** Cowork schedule
-  — it duplicates morning PART 1's Graddox and the CLI can't reach it (see `memory/`). Smoke-test the
-  routines on their next live runs.
+- **PENDING (host) — NOT a repo task, doesn't affect the apps:** the stale **`gradoxx-daily-summary`**
+  Cowork scheduled task (duplicates morning PART 1's Graddox) is an **orphaned backend object** — it
+  still fires ~9am but has no working delete UI (absent from Cowork→Scheduled; its task page 404s; the
+  delete API is desktop-client-gated). Task UUID `8377c152-0ffa-474d-9ec0-2281a92edb26`, org Claudia Chez
+  `aea1699f-e0b8-4ed4-80b9-4abb5d0a7711`; the underlying skill is `skill_01UY6zPNf9Do8eR4voyUvtm6`. Being
+  cleared via Anthropic support / desktop skill-delete. Also smoke-test the routines on their next live runs.
 
 ## Next Steps
 
