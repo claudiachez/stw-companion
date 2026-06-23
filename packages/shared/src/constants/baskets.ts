@@ -12,6 +12,7 @@ export const BASKET_COLORS: Record<string, string> = {
   'Defense':                        '#a78bfa',
   'AI Fraud / Verified Identity':   '#22d3ee',
   'Nuclear':                        '#fbbf24',
+  'Hedge':                          '#14b8a6',
   'Legacy Positions':               '#6b7280',
 };
 

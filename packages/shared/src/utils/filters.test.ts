@@ -1,12 +1,23 @@
 import { describe, it, expect } from 'vitest';
 import { applyFilters, sortFlat, sortByPnl, type FilterCriteria, type FilterableHolding } from './filters';
+import type { Leg } from './legs';
 
 const blank: FilterCriteria = { search: '', basket: '', tier: '', status: '', type: '' };
+
+function legOf(instrument: 'SHARES' | 'OPTION'): Leg {
+  return {
+    id: 'l', ticker: 'X', trader_id: 't', parent_leg_id: null, instrument_type: instrument,
+    option_strike: instrument === 'OPTION' ? 30 : null, option_expiry: instrument === 'OPTION' ? '2026-01-16' : null,
+    option_right: instrument === 'OPTION' ? 'CALL' : null, direction: 'long', status: 'OPEN',
+    entry_price: 1, weight: 1, initial_weight: 1, weight_overridden: false, mark_price: null, mark_price_source: null, mark_price_at: null,
+    exit_price: null, realized_pnl_pct: null, opened_at: null, closed_at: null, close_reason: null,
+  };
+}
 
 function h(over: Partial<FilterableHolding>): FilterableHolding {
   return {
     ticker: 'AAA', name: 'Alpha', basket: 'Defense', conviction: 3,
-    last_action: 'Hold', position_detail: 'Common @ $10', rank: 1,
+    last_action: 'Hold', legs: [legOf('SHARES')], rank: 1,
     action_date: '2026-01-01', current_weight: 5,
     ...over,
   };
@@ -14,9 +25,9 @@ function h(over: Partial<FilterableHolding>): FilterableHolding {
 
 describe('applyFilters', () => {
   const rows = [
-    h({ ticker: 'NVDA', name: 'Nvidia',  basket: 'Defense',            conviction: 5, last_action: 'New',    position_detail: 'Common @ $100' }),
-    h({ ticker: 'PLTR', name: 'Palantir', basket: 'Defense',           conviction: 4, last_action: 'Hold',   position_detail: '$30C Jan 26 @ $2' }),
-    h({ ticker: 'NUKE', name: 'NuScale',  basket: 'Nuclear',           conviction: 3, last_action: 'Closed', position_detail: null }),
+    h({ ticker: 'NVDA', name: 'Nvidia',  basket: 'Defense', conviction: 5, last_action: 'New',    legs: [legOf('SHARES')] }),
+    h({ ticker: 'PLTR', name: 'Palantir', basket: 'Defense', conviction: 4, last_action: 'Hold',   legs: [legOf('OPTION')] }),
+    h({ ticker: 'NUKE', name: 'NuScale',  basket: 'Nuclear', conviction: 3, last_action: 'Closed', legs: [] }),
   ];
 
   it('no criteria → returns all', () => {

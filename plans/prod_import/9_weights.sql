@@ -1,0 +1,32 @@
+-- PROD import part 9/9: current_weight from the 6/18 portfolio. Run LAST.
+begin;
+-- current_weight from todays portfolio update
+update public.holdings set current_weight=11.3 where ticker='OSS';
+update public.holdings set current_weight=7.6 where ticker='VPG';
+update public.holdings set current_weight=5.3 where ticker='SYNA';
+update public.holdings set current_weight=2.0 where ticker='CTS';
+update public.holdings set current_weight=13.3 where ticker='VIAV';
+update public.holdings set current_weight=5.1 where ticker='NBIS';
+update public.holdings set current_weight=3.1 where ticker='BDC';
+update public.holdings set current_weight=2.2 where ticker='GDYN';
+update public.holdings set current_weight=8.3 where ticker='ENS';
+update public.holdings set current_weight=6.6 where ticker='TE';
+update public.holdings set current_weight=3.8 where ticker='SHLS';
+update public.holdings set current_weight=2.8 where ticker='FPS';
+update public.holdings set current_weight=13.0 where ticker='AMKR';
+update public.holdings set current_weight=4.3 where ticker='ADEA';
+update public.holdings set current_weight=5.9 where ticker='FIVN';
+update public.holdings set current_weight=3.9 where ticker='CRNC';
+update public.holdings set current_weight=3.1 where ticker='CXDO';
+update public.holdings set current_weight=5.8 where ticker='MITK';
+update public.holdings set current_weight=2.9 where ticker='IRDM';
+update public.holdings set current_weight=1.7 where ticker='LEU';
+update public.holdings set current_weight=0 where ticker='ARKK';
+update public.holdings set current_weight=0 where ticker='ARRY';
+update public.holdings set current_weight=0 where ticker='BB';
+update public.holdings set current_weight=0 where ticker='RNG';
+update public.holdings set current_weight=0 where ticker='VLN';
+update public.holdings set current_weight=0.7 where ticker='AMZN';
+update public.holdings set current_weight=0.9 where ticker='HOOD';
+update public.holdings set current_weight=0.7 where ticker='TSLA';
+commit;

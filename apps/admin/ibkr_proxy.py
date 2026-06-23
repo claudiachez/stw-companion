@@ -83,9 +83,11 @@ def status():
 # ── Option prices ────────────────────────────────────────
 async def _price_options(specs):
     """
-    specs: list of {symbol, strike, right, expiry, entry}
+    specs: list of {leg_id, symbol, strike, right, expiry, entry}
       expiry: 'YYYYMM' (monthly) or 'YYYYMMDD' (weekly/specific)
-    Returns same list enriched with price, bid, ask, mid, pnl_pct, pnl_dol.
+    Returns the same list (incl. leg_id, echoed) enriched with price, bid, ask, mid,
+    pnl_pct, pnl_dol. This is a pricer only — the caller persists each `price` as the
+    leg's mark_price (mark_price_source='IBKR'); the proxy never writes to Supabase.
     """
     ib = IB()
     try:
@@ -139,7 +141,7 @@ async def _price_options(specs):
 
         # ── Pass 3: still-unresolved stragglers → ask IB what exists (rare; serial) ──
         # For a month-only leg, pick the monthly (3rd-Friday match, else latest listed);
-        # otherwise leave it unpriced and report the candidates so position_detail can be fixed.
+        # otherwise leave it unpriced and report the candidates so the leg's expiry can be fixed.
         for e in entries:
             if e['valid']:
                 continue

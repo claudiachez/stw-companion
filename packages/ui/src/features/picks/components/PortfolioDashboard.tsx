@@ -1,27 +1,33 @@
-import { bColor, parseCostBasis, positionType, resolvePnl, mergeLegs, legPriceReason, fmtDateTime } from '@stw/shared';
+import { bColor, holdingPnlPct, holdingType, legMarkReason, fmtLegInstrument, fmtDateTime } from '@stw/shared';
 import { usePriceCacheStore } from '../../../store/priceCache';
 import { useRecentChanges } from '../useRecentChanges';
 import { useLatestWebinar } from '../useLatestWebinar';
 import { TickerLink } from '../../../primitives/TickerLink';
 import { useIsMobile } from '../../../hooks/useIsMobile';
+import { useCapabilities } from '../../../context/AppCapabilities';
 import type { Holding } from '../api';
-
-const LEG_MONTHS = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-// "202608" / "20260815" → "Aug '26" for the unpriced-legs summary.
-function legExpiry(e: string): string {
-  if (!e || e.length < 6) return e || '';
-  return `${LEG_MONTHS[parseInt(e.slice(4, 6), 10)] ?? ''} '${e.slice(2, 4)}`;
-}
 
 interface DashboardProps {
   holdings: Holding[];
   onSelectTicker?: (ticker: string) => void;
 }
 
-// Date-only display for a conviction event_date (no time component) — matches ConvictionTimeline.
-function fmtEventDate(d: string): string {
-  return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+// Section header: an uppercase label with an optional right-aligned "Updated:" stamp. Used by
+// every Overview block so the title (and its date, when present) live OUTSIDE the card and read
+// consistently — same structure for the webinar, changes, unpriced, and stale blocks.
+function SectionHeader({ title, color = 'var(--t3)', updatedAt }: { title: React.ReactNode; color?: string; updatedAt?: Date | null }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
+      <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color }}>
+        {title}
+      </div>
+      {updatedAt && (
+        <div style={{ fontSize: 11, color: 'var(--t3)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+          Updated: <span style={{ color: 'var(--t2)' }}>{fmtDateTime(updatedAt)}</span>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // Render a digest string with any known ticker rendered as a clickable link.
@@ -51,6 +57,9 @@ function renderDigest(
 // ── Portfolio dashboard (shown when no ticker selected) ───────
 export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps) {
   const isMobile = useIsMobile();
+  // Only the admin can act on a stale price (re-run the IBKR sync); subscribers can't, so
+  // the "Re-run the sync." instruction is admin-only — the explanation still shows to everyone.
+  const { canEdit } = useCapabilities();
   const cache = usePriceCacheStore((s) => s.cache);
   const { data: changes } = useRecentChanges(1);
   const latestChange = changes?.[0] ?? null;
@@ -58,15 +67,10 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
 
   const active = holdings.filter((h) => h.ticker !== 'CASH' && h.last_action !== 'Closed');
 
-  // Avg P&L across positions with a resolvable return — shares (live price vs cost),
-  // options (IBKR last_pnl_pct), and mixed (blended), via the shared resolver.
+  // Avg P&L across positions with a resolvable return — each holding's weight-weighted P&L
+  // across its legs (shares ride the live quote, options their stored IBKR mark).
   const pnlValues = active
-    .map((h) => resolvePnl({
-      positionType: positionType(h.position_detail),
-      price: cache[h.ticker]?.c ?? null,
-      costBasis: parseCostBasis(h.position_detail),
-      optionsPnlPct: h.last_pnl_pct,
-    }).pnlPct)
+    .map((h) => holdingPnlPct(h.legs, cache[h.ticker]?.c ?? null))
     .filter((v): v is number => v != null);
   const avgPnl = pnlValues.length > 0
     ? pnlValues.reduce((s, v) => s + v, 0) / pnlValues.length
@@ -78,7 +82,7 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
   let optionsWeight = 0;
   active.forEach((h) => {
     const w = h.current_weight ?? h.initial_weight ?? 0;
-    const t = positionType(h.position_detail);
+    const t = holdingType(h.legs);
     if (t === 'options') optionsWeight += w;
     else if (w > 0) equityWeight += w; // shares, mixed, or unclassified
   });
@@ -95,44 +99,36 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
   const totalWeight = Object.values(sectorMap).reduce((s, v) => s + v, 0);
   const sectors = Object.entries(sectorMap).sort((a, b) => b[1] - a[1]);
 
-  // Last updated across all holdings
-  const lastUpdated = holdings.reduce<Date | null>((acc, h) => {
-    if (!h.updated_at) return acc;
-    const d = new Date(h.updated_at);
-    return !acc || d > acc ? d : acc;
-  }, null);
-
-  // Options data freshness = newest IBKR pricing (last_pnl_at) across holdings.
+  // Options data freshness = newest IBKR leg mark across all holdings.
   const optionsSynced = holdings.reduce<Date | null>((acc, h) => {
-    if (!h.last_pnl_at) return acc;
-    const d = new Date(h.last_pnl_at);
-    return !acc || d > acc ? d : acc;
+    for (const leg of h.legs) {
+      if (!leg.mark_price_at) continue;
+      const d = new Date(leg.mark_price_at);
+      if (!acc || d > acc) acc = d;
+    }
+    return acc;
   }, null);
 
-  // Portfolio-wide unpriced legs: parsed from position_detail but with no IBKR price.
+  // Portfolio-wide unpriced option legs: open OPTION legs with no IBKR mark yet.
   const unpricedLegs = holdings.flatMap((h) => {
     if (h.ticker === 'CASH' || h.last_action === 'Closed') return [];
-    return mergeLegs(h.position_detail ?? '', h.ticker, h.ibkr_legs)
-      .filter((l) => l.price == null)
-      .map((l) => ({
-        ticker: h.ticker,
-        label: `$${l.strike}${l.right} ${legExpiry(l.expiry)}`,
-        reason: legPriceReason(l),
-      }));
+    return h.legs
+      .filter((l) => l.instrument_type === 'OPTION' && l.status === 'OPEN' && l.mark_price == null)
+      .map((l) => ({ ticker: h.ticker, label: fmtLegInstrument(l), reason: legMarkReason(l) }));
   });
 
-  // Stale prices: a ticker priced in a PRIOR sync but not the latest one shows an old
-  // price (the last sync failed for it). last_pnl_at is per-ticker and stamped with the
-  // sync time on success, so any priced ticker older than the newest options sync is stale.
+  // Stale prices: an option leg marked in a PRIOR sync but not the latest one shows an old
+  // price. mark_price_at is per-leg and stamped on a successful sync, so any priced leg older
+  // than the newest mark is stale.
   const stalePrices = holdings.flatMap((h) => {
-    if (h.ticker === 'CASH' || h.last_action === 'Closed') return [];
-    if (!h.last_pnl_at || !optionsSynced) return [];
-    const at = new Date(h.last_pnl_at);
-    if (at.getTime() >= optionsSynced.getTime()) return []; // refreshed in the latest sync
-    const priced = mergeLegs(h.position_detail ?? '', h.ticker, h.ibkr_legs)
-      .filter((l) => l.price != null);
-    if (!priced.length) return []; // no live price to be stale — it's in Unpriced instead
-    const legs = priced.map((l) => `$${l.strike}${l.right} ${legExpiry(l.expiry)}`).join(', ');
+    if (h.ticker === 'CASH' || h.last_action === 'Closed' || !optionsSynced) return [];
+    const stale = h.legs.filter(
+      (l) => l.instrument_type === 'OPTION' && l.mark_price != null && l.mark_price_at != null &&
+        new Date(l.mark_price_at).getTime() < optionsSynced.getTime(),
+    );
+    if (!stale.length) return [];
+    const at = new Date(stale[0].mark_price_at!);
+    const legs = stale.map((l) => fmtLegInstrument(l)).join(', ');
     return [{ ticker: h.ticker, label: `priced ${fmtDateTime(at)}: ${legs}` }];
   });
 
@@ -216,12 +212,13 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
       {/* Right column — activity + data status */}
       <div>
 
-      {/* New webinar analysis — which positions had conviction notes refreshed by the latest stream */}
+      {/* Conviction Notes Updates — which positions had conviction notes refreshed by the latest stream */}
       {webinar && webinar.tickers.length > 0 && (
         <div style={{ marginTop: isMobile ? 28 : 0 }}>
-          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 10 }}>
-            New Webinar Analysis
-          </div>
+          <SectionHeader
+            title="Conviction Notes Updates"
+            updatedAt={webinar.updatedAt ? new Date(webinar.updatedAt) : null}
+          />
           <div style={{
             padding: '12px 14px', borderRadius: 8,
             background: 'var(--s2)', border: '1px solid var(--acc)',
@@ -235,9 +232,6 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
                 <TickerLink key={t} ticker={t} onSelect={onSelectTicker} />
               ))}
             </div>
-            <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 10 }}>
-              {fmtEventDate(webinar.eventDate)}
-            </div>
           </div>
         </div>
       )}
@@ -245,54 +239,40 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
       {/* Latest portfolio changes (digest) */}
       {latestChange?.digest && (
         <div style={{ marginTop: 28 }}>
-          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 10 }}>
-            Latest Portfolio Changes
-          </div>
+          <SectionHeader title="Latest Portfolio Changes" updatedAt={changeAt} />
           <div style={{
             padding: '12px 14px', borderRadius: 8,
-            background: 'var(--s2)', border: '1px solid var(--bsub)',
+            background: 'var(--s2)', border: '1px solid var(--acc)',
             fontSize: 13, color: 'var(--t2)', lineHeight: 1.6, whiteSpace: 'pre-wrap',
           }}>
             {renderDigest(latestChange.digest, tickerSet, onSelectTicker)}
           </div>
-          {changeAt && (
-            <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 8 }}>
-              Updated:{' '}
-              <span style={{ color: 'var(--t2)' }}>{fmtDateTime(changeAt)}</span>
-            </div>
-          )}
         </div>
       )}
 
-      {/* Data freshness — distinct from the changes digest above */}
-      <div style={{ marginTop: latestChange?.digest ? 12 : 24, fontSize: 11, color: 'var(--t3)', display: 'flex', flexDirection: 'column', gap: 3 }}>
-        {lastUpdated && (
-          <div>
-            Holdings data synced:{' '}
-            <span style={{ color: 'var(--t2)' }}>{fmtDateTime(lastUpdated)}</span>
-          </div>
-        )}
-        {optionsSynced && (
-          <div>
-            Options data synced:{' '}
-            <span style={{ color: 'var(--t2)' }}>{fmtDateTime(optionsSynced)}</span>
-          </div>
-        )}
-      </div>
+      {/* Options-mark freshness (IBKR). Holdings recency is already conveyed by the "Latest Portfolio
+          Changes" block above — a separate "Holdings data synced" line read as stale/contradictory
+          (it's last-CHANGED, not last-run), so it was removed. */}
+      {optionsSynced && (
+        <div style={{ marginTop: latestChange?.digest ? 12 : 24, fontSize: 11, color: 'var(--t3)' }}>
+          Options data synced:{' '}
+          <span style={{ color: 'var(--t2)' }}>{fmtDateTime(optionsSynced)}</span>
+        </div>
+      )}
 
-      {/* Unpriced option legs — surfaced so they don't have to be hunted one-by-one */}
+      {/* Unpriced option legs — surfaced so they don't have to be hunted one-by-one. Title lives
+          OUTSIDE the card (matches the blocks above). The "Run the IBKR sync" hint is admin-only —
+          subscribers can't run the sync, so it would just confuse them. */}
       {unpricedLegs.length > 0 && (
-        <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 6, background: 'var(--s2)', border: '1px solid var(--bsub)' }}>
-          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--c3)', marginBottom: 5 }}>
-            ⚠ Unpriced Legs ({unpricedLegs.length})
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--t2)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ marginTop: 18 }}>
+          <SectionHeader title={`⚠ Unpriced Legs (${unpricedLegs.length})`} color="var(--c3)" />
+          <div style={{ padding: '8px 10px', borderRadius: 6, background: 'var(--s2)', border: '1px solid var(--bsub)', fontSize: 11, color: 'var(--t2)', display: 'flex', flexDirection: 'column', gap: 4 }}>
             {unpricedLegs.map((u, i) => (
               <div key={i}>
                 <TickerLink ticker={u.ticker} onSelect={onSelectTicker} /> {u.label}
                 {u.reason && (
                   <span style={{ color: 'var(--t3)' }}>
-                    {' — '}{u.reason.title}{u.reason.hint ? ` (${u.reason.hint})` : ''}
+                    {' — '}{u.reason.title}{canEdit && u.reason.hint ? ` (${u.reason.hint})` : ''}
                   </span>
                 )}
               </div>
@@ -301,19 +281,20 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
         </div>
       )}
 
-      {/* Stale prices — priced before, but the latest sync didn't refresh them (still showing old prices) */}
+      {/* Stale prices — priced before, but the latest sync didn't refresh them (still showing old
+          prices). Title outside the card, consistent with Unpriced Legs above. */}
       {stalePrices.length > 0 && (
-        <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 6, background: 'var(--s2)', border: '1px solid var(--bsub)' }}>
-          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--c2)', marginBottom: 5 }}>
-            ◷ Stale Prices ({stalePrices.length})
-          </div>
+        <div style={{ marginTop: 18 }}>
+          <SectionHeader title={`◷ Stale Prices (${stalePrices.length})`} color="var(--c2)" />
+          <div style={{ padding: '8px 10px', borderRadius: 6, background: 'var(--s2)', border: '1px solid var(--bsub)' }}>
           <div style={{ fontSize: 11, color: 'var(--t2)', lineHeight: 1.6 }}>
             {stalePrices.map((s, i) => (
               <span key={i}>{i > 0 ? '  ·  ' : ''}<TickerLink ticker={s.ticker} onSelect={onSelectTicker} /> — {s.label}</span>
             ))}
           </div>
           <div style={{ fontSize: 9, color: 'var(--t3)', marginTop: 4 }}>
-            Showing prices from an earlier sync — the latest IBKR sync didn't refresh these. Re-run the sync.
+            Showing prices from an earlier sync — the latest IBKR sync didn't refresh these.{canEdit ? ' Re-run the sync.' : ''}
+          </div>
           </div>
         </div>
       )}

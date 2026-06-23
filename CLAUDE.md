@@ -1,5 +1,14 @@
 # STW Companion — Claude Code Guide
 
+> **⚠️ START HERE — branch.** **`staging` is the active trunk** — all feature work happens here.
+> As of **2026-06-23** `main` was brought **level with `staging`** (the event-sourcing migration plan
+> was completed and promoted), so a fresh clone is current — migrations run to **041**; if migrations
+> stop at 021 you are on a stale checkout, re-sync. **First command every session:**
+> `git fetch origin && git checkout staging && git pull --ff-only`.
+> Feature branches cut from `staging`, PR to `staging`. `main` is promoted only by an approved
+> staging→main PR (= a production deploy). (Note: `memory/` lives in local `~/.claude/`, NOT in the repo —
+> never reference it in a prompt meant for a remote session; put anything a future session needs into the repo.)
+
 ## Ground Rules
 - If instructions seem to conflict, **always ask before doing anything**
 - Never force-push or reset `staging` or `main`
@@ -8,6 +17,189 @@
 - **Every timestamp uses `fmtDateTime` from `@stw/shared`** — never `toLocaleString`/`toLocaleTimeString` or a local date helper (see Conventions → Timestamps)
 - **All UI changes must work on mobile** — design for ≤390px first; test layouts at narrow width before pushing
 - **After ~10 commits in a chat**, run the Session Close routine (see section below)
+
+---
+
+## Current Status — event-sourcing migration CLOSED + promoted to main; Phase 4 is next (handoff 2026-06-23)
+
+**✅ PLAN CLOSED (2026-06-23) — legs/transaction-history event-sourcing migration is DONE and on `main`.**
+Phases 1–5 shipped; the deprecated-column cleanup (migrations **034 + 035 + 041**) was applied and
+**verified on BOTH PROD and SANDBOX** — all 14 columns dropped, rows intact, the app's category-derived
+`basket` and leg-embed query return clean. Routines were reviewed (all 4 write only the new path) and a
+PROD logical backup was taken (`~/Documents/Claude/db-backups/`, local) before the drops. `staging` was
+promoted to `main`. The next work is **Phase 4** + other forward features (see Next Steps) — the
+event-sourcing schema work itself is complete; do not reopen it.
+
+**Latest (2026-06-23, PRs #40–#42 MERGED to `staging`) — Portfolio Overview + Trades polish:**
+- **Portfolio Overview** ([`PortfolioDashboard.tsx`](packages/ui/src/features/picks/components/PortfolioDashboard.tsx)):
+  "New Webinar Analysis" → **"Conviction Notes Updates"** with a full `fmtDateTime` "Updated:" stamp in
+  the header ([`useLatestWebinar.ts`](packages/ui/src/features/picks/useLatestWebinar.ts) now selects
+  `created_at`); "Latest Portfolio Changes" date moved into the header + green (`--acc`) border; Unpriced
+  Legs / Stale Prices titles moved OUTSIDE their cards (shared `SectionHeader`); the "Run the IBKR sync"
+  hint is now **admin-only**.
+- **Trades tab** ([`TradesTable.tsx`](packages/ui/src/features/picks/components/TradesTable.tsx) +
+  [`TradesFilterBar.tsx`](packages/ui/src/features/picks/components/TradesFilterBar.tsx) +
+  [`useTradesFilters.ts`](packages/ui/src/features/picks/useTradesFilters.ts)): independent filter state,
+  bar chrome matching the Ticker Details `FilterBar` ("All Baskets", full-bleed); **Open/Closed/All toggle**,
+  Type (Shares/Options), Sector, trade-specific Sort (default **Opened newest**, + Closed newest/oldest);
+  added **Contribution %** (closed) + **Opened/Closed date** columns; **column set follows the toggle**
+  (Open hides closed-only cols + vice-versa).
+- **Readability:** green-accent filled buttons/toggle standardized to **white** text (was black, low-contrast).
+- **SANDBOX data cleanup (DB, not code):** deleted **30 orphan `legs`** (status=OPEN, no `leg_transactions`,
+  `entry_price` null) that a seed/import had inserted directly — they showed as phantom "open" trades on
+  Closed holdings. Sandbox now **42 legs, 0 orphans**. PROD was already clean (45 legs, 0 orphans).
+  ⚠️ Re-running the old `plans/*import*`/seed scripts can re-introduce them (they write `legs` directly
+  instead of via the diary) — fix the seed if you re-seed.
+
+**All event-sourcing work is MERGED to `staging`** (PRs #37/#38/#39). Phases 1–5 are done (details below).
+Authoritative spec: [`plans/legs_event_sourcing_redesign.md`](plans/legs_event_sourcing_redesign.md).
+**Phases 1–3 verified on SANDBOX; clean import + post-import holdings fix applied to BOTH PROD + SANDBOX**
+(see DB state). The next code task is **Phase 4** (see Next Steps) — not started.
+
+**Why:** the old editor was split-brain — it wrote BOTH `legs` (directly) and `leg_transactions`, which
+fought on save, diverged, and stamped synthetic dates. Now committed to **true event-sourcing**:
+`leg_transactions` (**the diary**) is the only hand-written source; `legs` (**the scoreboard**) is a pure
+trigger-derived projection. The editor + ledger write ONLY events.
+
+**Weight model (host-confirmed, corrected 2026-06-18):** a diary row's `weight` = that leg's **lot**
+(BUY) or **remaining** (SELL, 0 on full close). **BUYs accumulate** → `legs.weight = Σ BUY lots − sells`.
+So **Initial position weight = Σ open legs' lots** (computed from the diary = `positionWeight().current`;
+tracks current lots, falls after a trim) and **Current position weight = `holdings.current_weight`** —
+the live weight **the routines restate weekly** (NOT Σ legs). Both display read-only in the editor; the
+hand-typed `initial_weight` field is gone and the editor no longer writes `initial_weight`/`current_weight`
+(routines own current; legs own initial). The earlier "Current = Σ open legs; Initial = typed" wording was
+wrong — host confirmed the swap. The 90:10 (equity:options) / 20:80
+(short:long) split is only the **default** for computing lots when the host gives a total with no per-leg
+detail — held in `app_config`, with a per-position override on `holdings.equity_pct`.
+
+**Phase 1 DONE ✅ + verified on SANDBOX** (`040_sandbox_verify.sql`):
+- **Migration `040_legs_event_sourcing.sql`** — `leg_transactions += action_label`; `holdings +=
+  equity_pct`; new `app_config` table (split defaults 0.90 / 0.20); **trigger 030 rewritten** to fire on
+  INSERT/UPDATE/DELETE, replay the diary, accumulate BUY lots, and **book realized on trims** (slice-weighted).
+  Requires **037 + 039** first. (`host_quote` was added then removed — Notes is the single field.)
+- `@stw/shared`: `deriveLegWeights` rewritten (90:10 / 20:80, expiry-aware, pins preserved) + new
+  `positionWeight()` (Σ open legs). 45 tests green.
+
+**Phase 2 DONE ✅ + verified on SANDBOX (browser):**
+- **`PositionEditor`** = position fields + `equity_pct`; **Current weight computed** (read-only), **Initial
+  weight editable**; open legs shown read-only (leg CRUD lives in the ledger — one edit surface).
+  "Last Action Date" label; each open leg shows its open date.
+- **`LegTimeline` = editable Transaction History ledger** (writes only `leg_transactions`): `+ Add event`
+  (incl. new legs: Instrument {Shares/Call/Put} + Direction {Long/Short}), per-row ✎/✕ edit/delete,
+  columns **Date · Action · Details · Price · Weight · Notes** (Details holds "Shares"/`$30C Sep '26`;
+  one **Notes** column), newest-first, table on desktop / cards on mobile, **open/closed/all toggle**,
+  **closed-leg rows dimmed** + "Closed"/"Expired" muted gray.
+- **Resizable split** in `PicksView` — drag the divider between the list and the detail (15–80%).
+
+**Phase 3 DONE ✅ + verified on SANDBOX (CXDO/IRDM):** detail-card P&L split per asset class, never
+blended — **Open** shows Shares/Options return + lot; **Closed** shows per-asset return + portfolio
+contribution. `closedPnlPct` + `closedPnlContribution` + `hasClosedPnl` in `@stw/shared`.
+
+**Post-import holdings fix (Next Step #2) DONE ✅ on SANDBOX:**
+- **`last_action`/`action_date` derived from each ticker's latest diary event** (`plans/post_import_holdings_fix.sql`).
+  Same-day conversion ties (ADEA/CXDO/FIVN/GDYN/SHLS) resolve to the keep-open `New`; `Expired` →
+  `Closed` at the holding level (last_action has no "Expired"). (At import time AMZN/HOOD/TSLA had no
+  legs and were skipped — but that was a transient state, NOT a rule; **the host has since added real
+  legs to the legacy names on PROD (2026-06-23)**. See the legacy-positions decision below.)
+- **Baskets/categories** assigned from the 6/18 sector groupings; 3 new categories created
+  (**AI Fraud / Verified Identity**, **Space & Satellite**, **Nuclear**); **IRDM moved Defense → Space & Satellite**.
+- **Initial weight for fully-closed positions** now shows the closed legs' entry lots instead of blank —
+  new shared helper **`displayInitialWeight`** wired into BOTH `HoldingDetail` (detail card) and
+  `PositionEditor`. ARKK reads `1% → 0%`. 54 tests + typecheck green.
+- **`revert_legacy_category.sql` applied** — removed the mistaken "Legacy Positions" category;
+  AMZN/HOOD/TSLA are Uncategorized (Legacy is their **conviction tier**, not a sector).
+
+**DB state — BOTH environments now on the event model (2026-06-19):**
+- **PROD (`usmqbohcjcyszjxxvnqu`):** 038 + 039 + 040 + the import + `post_import_holdings_fix.sql`
+  applied. **Verified: 42 legs / 60 diary rows**, last_action/action_date/baskets correct, reconciles to
+  6/18. **STILL TODO on PROD: run `revert_legacy_category.sql`** — PROD has a *pre-existing* "Legacy
+  Positions" category (old system) that AMZN/HOOD/TSLA still use; the env-agnostic revert clears it.
+  Conviction on PROD is left to the routines (some cores not yet tier 5).
+- **SANDBOX (`uolabcgbnrkhzpwuvzlk`):** same scripts + the revert all applied. Admin dev `.env.local` →
+  sandbox, so **localhost reads/writes the sandbox directly**. 25 tickers / 42 legs.
+- **PROD import gotchas (baked into `plans/prod_import/*` + the SQL files):** (1) PROD's STW
+  `trader_id` = `64a779f9-13ba-4cb4-824b-d70dcab3a49b` (sandbox = `9ec36b89-…`); seeds now resolve the
+  trader **by name**. (2) The Supabase SQL editor threw "Failed to fetch" on the one big import — it was
+  split into 9 small files in **`plans/prod_import/`** (run `1_wipe` → `8_legs` → `9_weights` in order).
+  (3) The wipe deletes **all** legs (PROD carried 28 stale ones from the old 029/030 system) with the
+  `trg_leg_transactions_sync` trigger disabled during the delete.
+
+**Decisions locked (see spec):** event-sourced; ledger-only leg editing (inline modal editing **deferred**);
+one Notes column; trims book realized; >2 option legs split even; ledger newest-first; **a "convert to
+shares" close is a real cash sale → book the option's actual exit price as realized P&L, never $0** (host
+2026-06-18); **ledger Action verb = bold green for OPEN-leg events, plain gray for CLOSED-leg events**;
+**P&L is split by asset class (Shares vs Options), never blended** — Open shows per-asset return + lot;
+Closed shows per-asset return + **portfolio contribution** (return × sold weight), so a +600% option on a
+thin slice reads as its true ~+3.6% portfolio impact (host 2026-06-18). P&L Breakdown is open-legs-only.
+**"Legacy" is a conviction tier (Tier 6 / `c0`), NOT a sector/category** (host 2026-06-19). **Legacy /
+low-conviction does NOT mean "no legs/data"** — every position the host actually holds carries leg +
+transaction data regardless of tier, **especially while still open**; the host added real legs to the
+legacy names (AMZN/HOOD/TSLA) on PROD (host 2026-06-23). So a tier-0 holding with open legs is normal —
+never treat low conviction as a reason to leave a held position without legs. **Conviction is
+owned by the routines** — set in the streaming run, never in a seed/migration (so the post-import fix does
+NOT touch conviction; the 6/18 stars OSS/VPG/SYNA/VIAV/NBIS/ENS/AMKR/LEU/AMZN/TSLA are the routines' job).
+
+**New plan docs (`plans/`):** `legs_event_sourcing_redesign.md` (spec) · `import_open_positions.sql`
+(clean open-position import) · `post_import_holdings_fix.sql` (Next Step #2 seed) ·
+`revert_legacy_category.sql` (drops the bad Legacy category) · `040_sandbox_verify.sql` (trigger test) ·
+`legs_inspect.sql` (inspect legs/diary) · `zzadea_populate.sql` (seed test fixture).
+
+**Tooling:** `pnpm` not on PATH — use `corepack pnpm …` or `~/.local/bin/pnpm`. No local Postgres (can't
+run DDL locally — apply migrations via the Supabase SQL editor). Prod service key (read-only checks) at
+`~/Documents/Claude/Scheduled/.supabase-service-key`. Sandbox anon key in `apps/admin/.env.local`.
+
+**Phase 5 DONE ✅ (2026-06-19) — routines on the 040 event model** (out-of-repo
+`~/Documents/Claude/Scheduled/*`; SKILL.md edits, not committed). All four updated:
+- **morning + afternoon:** STEP 2.3 / STEP 3 rewritten — diary `leg_transactions` (`action_label` +
+  `notes`=host's verbatim words) + **direct `holdings` PATCH** of `last_action`/`action_date`/
+  `current_weight`; **`holding_transactions` path retired** (the still-live 033 trigger auto-logs a
+  harmless audit row). **Lot semantics:** BUY weight = lot **added**, SELL = **remaining** (cost basis).
+  **Split (90:10 / 20:80 from `app_config` + `holdings.equity_pct`) is initial-sizing fallback only —
+  existing legs are NEVER re-split.** Upsize = keep existing legs, add the increment to the **named**
+  leg (FIVN worked example baked in). Contract→shares = close option at real exit (never $0) + new
+  shares leg **inherits the replaced leg's weight** (net-neutral); same-day close+open keeps the
+  position open (`last_action` = the opening verb). Trim uses **cost-basis remaining**; an appreciated
+  winner stated only in market % → **flag**, don't guess. `action_date` = the host's action date,
+  written only by a real action.
+- **friday-weighting:** direct `current_weight` PATCH (no `Hold` rows); **truth-up mismatch (snapshot ≠
+  Σ lots, e.g. IRDM +600%) → flag, never rewrite lots**; legs reconcile adds missing only; **new STEP
+  4d status-aging** — `action_date` older than the **previous** snapshot → `last_action='Hold'`
+  (`action_date` preserved); Closed/Expired terminal.
+- **transcripts:** conviction note — routine-owned, **mutable both ways on an explicit signal incl.
+  promoting a Legacy (0)**; never inferred from sizing.
+- **One-time SQL applied (PROD + sandbox):** `plans/conviction_618_stars.sql` (8 stars → tier 5;
+  AMZN/TSLA stay 0) + `plans/fix_fivn_shares_weight.sql` (FIVN shares lot 3.5→2.5, net-neutral 6.0%).
+- **PENDING (host) — NOT a repo task, doesn't affect the apps:** the stale **`gradoxx-daily-summary`**
+  Cowork scheduled task (duplicates morning PART 1's Graddox) is an **orphaned backend object** — it
+  still fires ~9am but has no working delete UI (absent from Cowork→Scheduled; its task page 404s; the
+  delete API is desktop-client-gated). Task UUID `8377c152-0ffa-474d-9ec0-2281a92edb26`, org Claudia Chez
+  `aea1699f-e0b8-4ed4-80b9-4abb5d0a7711`; the underlying skill is `skill_01UY6zPNf9Do8eR4voyUvtm6`. Being
+  cleared via Anthropic support / desktop skill-delete. Also smoke-test the routines on their next live runs.
+
+## Next Steps
+
+1. **Phase 4 — admin Config + Manage area** — spec'd in
+   [`plans/phase4_admin_manage.md`](plans/phase4_admin_manage.md). Config page edits `app_config`
+   (`equity_options_default` / `options_short_long_default`); `useAppConfig` read hook in `@stw/ui`
+   (note: `deriveLegWeights` has **no call sites** today, so app-side split-wiring is forward-looking).
+   Manage area: **categories CRUD** (delete-guarded), **traders read-only**. One "Manage" nav entry,
+   admin-local. No migrations expected.
+
+2. ✅ **DONE — deprecated-column cleanup (034 / 035 / 041).** Applied + verified on PROD + SANDBOX
+   (2026-06-23). Dropped 9 cols from `holdings` (`position_detail`/`last_*`/`ibkr_legs`/`exit_*`/`basket`)
+   and 5 from `holding_transactions` (`position_detail`/`price`/`pnl_pct`/`leg`/`direction`). The
+   event-sourcing migration plan is **closed** — nothing pending. (`holding_transactions` survives as the
+   trigger-written audit log; full table retirement was never in scope.)
+
+3. **Future features (not migration work):** inline 2-line leg editing in the modal (deferred until
+   day-to-day use proves it's needed); `$100k` notional + SPY benchmark (the `spy_daily` table from
+   migration 032 already exists; the population cron + benchmark UI are unbuilt).
+
+**Known gap (not blocking):** the **"Latest Portfolio Changes"** Overview block can't render against
+SANDBOX because the `recent_changes` view (migration 008) was never applied there — `useRecentChanges`
+errors and the block hides. PROD has the view (block renders fine). Apply 008 to sandbox if you want to
+verify that block locally. (The webinar "Conviction Notes Updates" block uses the same `SectionHeader`
+mechanism and does render, so the pattern is verified.)
 
 ---
 
@@ -141,7 +333,7 @@ repo**. Know who writes what before you reason about freshness or "why is this r
 | Table | Primary writer | Notes |
 |---|---|---|
 | `holdings` | **the routines** (see next section) | core position rows; admin Edit form also writes; admin IBKR proxy writes only `last_pnl_*`/`ibkr_legs` |
-| `graddox` / `graddox_levels` | **morning routine** (Gradoxx step) | GEX signal bias + levels |
+| `graddox` / `graddox_levels` | **morning routine** (Graddox step) | GEX signal bias + levels |
 | `conviction_comments` | **the routines** + `stw-transcripts` | explicit appends; `source` = `discord` or `streaming`; admin/users can also add notes |
 | `holding_transactions` | **DB trigger** (no client) | auto-logged from any `holdings` write; never written directly by app or routine |
 | `run_log` | **the routines** | ingestion audit + high-water mark; newest `digest` → "Latest Portfolio Changes" |
@@ -174,7 +366,7 @@ documented here because the Supabase schema is the contract between it (writer) 
 
 | Routine | Cadence | Reads (Discord channel) | Writes |
 |---|---|---|---|
-| `stw-morning-run` | 9am wkdays | Gradoxx → `live-notes-portfolio` → (fallback) `stream-library-stw` | `graddox`, `graddox_levels`, `holdings`, `conviction_comments`, `run_log` |
+| `stw-morning-run` | 9am wkdays | Graddox → `live-notes-portfolio` → (fallback) `stream-library-stw` | `graddox`, `graddox_levels`, `holdings`, `conviction_comments`, `run_log` |
 | `stw-afternoon-run` | 3pm wkdays | `live-notes-portfolio` → (fallback) `stream-library-stw` | `holdings`, `conviction_comments`, `run_log` |
 | `stw-friday-weighting` | 5pm Fri | `updates-portfolio` (weekly full snapshot) | `holdings` (weights only), `run_log` |
 | `stw-transcripts` | manual (+ daily fallback) | `stream-library-stw` (webinar recording) | methodology `.md` (local), `holdings`, `conviction_comments`, `run_log` |
@@ -185,7 +377,7 @@ documented here because the Supabase schema is the contract between it (writer) 
 3. That `holdings` write **auto-fires the DB trigger** → a `holding_transactions` row (no client code).
 4. For notable commentary, **append a `conviction_comments` row** (`source='discord'`) → becomes "Latest Comments"; refresh `holdings.summary`/`bullets` + `dd_updated_at` only when the durable thesis actually changed.
 5. Write the `run_log` mark, including a multi-line **`digest`** → rendered as "Latest Portfolio Changes" in the Overview.
-6. **Recording fallback:** if `stream-library-stw` has an unprocessed recording, delegate to `stw-transcripts`. (Morning also runs the Gradoxx GEX step first → `graddox`/`graddox_levels`.)
+6. **Recording fallback:** if `stream-library-stw` has an unprocessed recording, delegate to `stw-transcripts`. (Morning also runs the Graddox GEX step first → `graddox`/`graddox_levels`.)
 
 **Weekly flow (Friday):** read the full-portfolio snapshot from `updates-portfolio` and **truth-up every holding's `current_weight`** to match it (this is the weighting source of record; daily calls only nudge weights). A ticker in `holdings` but absent from the snapshot is flagged, not auto-closed.
 
@@ -244,6 +436,18 @@ standing rule: when you render a ticker, link it without being asked.
 ### Counts
 "Positions" counts exclude the `CASH` balance row (it's not a position) and reflect the
 active filter (closed hidden by default). The FilterBar count shows `N of {total}`.
+
+### UI consistency (standing rules, host 2026-06-23)
+- **White text on green.** Any filled `--acc`/green button or active toggle uses **white** text, never
+  black/dark (black-on-green is low-contrast). Match the existing Save buttons (`color: '#fff'`).
+- **Sibling tabs read as one app.** The Trades filter bar mirrors the Ticker Details `FilterBar` chrome
+  (full-bleed surface bar, same control styling, same wording — e.g. "All Baskets", not "All Sectors").
+  When you add a filter/list/blotter surface, reuse the established chrome rather than inventing a new look.
+- **Overview blocks share one header pattern.** Title lives OUTSIDE the card via `SectionHeader`, with an
+  optional right-aligned `Updated: {fmtDateTime}` stamp — used by the webinar, changes, unpriced, and
+  stale blocks. Don't put a block's title or its date inside the card.
+- **Admin-only action hints.** Instructions a subscriber can't act on (e.g. "Run the IBKR sync") render
+  only when `canEdit`; the explanation still shows to everyone.
 
 ---
 
