@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useHoldings } from './useHoldings';
 import { useFiltersStore, applyFilters, sortFlat, sortByPnl } from './useFilters';
 import { usePicksTabStore, coercePicksTab, PICKS_TAB_LABELS, type PicksTab } from './usePicksTab';
@@ -103,6 +104,20 @@ export function PicksView() {
     setSelectedTicker(ticker);
     if (ticker) setActiveTab('positions');
   }
+
+  // Cross-route deep link: another page (e.g. My Portfolio) can navigate to
+  // `/picks?ticker=XYZ` to open a holding's detail. Consume the param once, then
+  // strip it so a refresh/back doesn't re-open it.
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const t = searchParams.get('ticker');
+    if (!t) return;
+    selectTicker(t.toUpperCase());
+    const next = new URLSearchParams(searchParams);
+    next.delete('ticker');
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!finnhubKey || holdings.length === 0) return;

@@ -5,6 +5,12 @@ import { useSyncPortfolio } from './useSyncPortfolio';
 import { useHoldings } from '../picks/useHoldings';
 import { ConvictionBadge } from '../picks/components/ConvictionBadge';
 import { LoadingSpinner } from '../../primitives/LoadingSpinner';
+import { TickerLink } from '../../primitives/TickerLink';
+import {
+  PortfolioFilterBar,
+  DEFAULT_PORTFOLIO_FILTERS,
+  type PortfolioFilters,
+} from './PortfolioFilterBar';
 import type { UserPosition } from './api';
 import { cleanUnderlying } from './api';
 import { fmtDateTime } from '@stw/shared';
@@ -31,6 +37,30 @@ function fmtExpiry(exp: string | null): string {
 function pnlColor(pnl: number | null): string {
   if (pnl === null) return 'var(--t2)';
   return pnl >= 0 ? '#16A34A' : '#DC2626';
+}
+
+// ── aggregation ───────────────────────────────────────────────
+
+interface PortfolioGroup {
+  underlying:     string;
+  positions:      UserPosition[];
+  netPnl:         number;
+  marketValue:    number;   // Σ mark · |qty| · multiplier
+  costBasis:      number;
+  isStwPick:      boolean;
+  stwConviction:  number | null;
+  hasStock:       boolean;
+  hasOption:      boolean;
+}
+
+function positionMarketValue(p: UserPosition): number {
+  return (p.mark_price ?? 0) * Math.abs(p.quantity ?? 0) * p.multiplier;
+}
+
+function positionCostBasis(p: UserPosition): number {
+  if (p.avg_cost != null) return p.avg_cost * Math.abs(p.quantity ?? 0) * p.multiplier;
+  // Fall back to (market value − unrealized P&L) when avg cost is missing.
+  return positionMarketValue(p) - (p.unrealized_pnl ?? 0);
 }
 
 // ── sub-components ────────────────────────────────────────────
@@ -93,29 +123,29 @@ function LegRow({ pos, showPnl }: LegRowProps) {
 }
 
 interface GroupRowProps {
-  underlying: string;
-  positions: UserPosition[];
-  stwConviction: number | null;
+  group: PortfolioGroup;
   isExpanded: boolean;
   onToggle: () => void;
+  onSelectTicker: (ticker: string) => void;
   showPnl: boolean;
 }
 
-function GroupRow({ underlying, positions, stwConviction, isExpanded, onToggle, showPnl }: GroupRowProps) {
-  const netPnl = positions.reduce((sum, p) => sum + (p.unrealized_pnl ?? 0), 0);
-  // Mark value = sum of markPrice * |qty| * multiplier
-  const totalMark = positions.reduce((sum, p) => sum + (p.mark_price ?? 0) * Math.abs(p.quantity ?? 0) * p.multiplier, 0);
+function GroupRow({ group, isExpanded, onToggle, onSelectTicker, showPnl }: GroupRowProps) {
+  const { underlying, positions, netPnl, marketValue, isStwPick, stwConviction } = group;
 
   return (
     <>
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={onToggle}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}
         style={{
           width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center',
           gap: 8, padding: '10px 14px',
           borderBottom: '1px solid var(--bsub)',
           background: isExpanded ? 'var(--c5bg)' : 'var(--surface)',
-          cursor: 'pointer', border: 'none',
+          cursor: 'pointer',
           borderTop: '1px solid var(--border)',
         }}
         onMouseEnter={(e) => { if (!isExpanded) (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
@@ -131,9 +161,16 @@ function GroupRow({ underlying, positions, stwConviction, isExpanded, onToggle, 
 
         {/* Left group: ticker + badges — shrinks so P&L always fits */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0, overflow: 'hidden' }}>
-          <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', flexShrink: 0 }}>
-            {underlying}
-          </span>
+          {isStwPick ? (
+            // Stop propagation so tapping the ticker opens its detail instead of toggling the row.
+            <span onClick={(e) => e.stopPropagation()} style={{ flexShrink: 0 }}>
+              <TickerLink ticker={underlying} onSelect={onSelectTicker} style={{ fontSize: 14, fontWeight: 700 }} />
+            </span>
+          ) : (
+            <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', flexShrink: 0 }}>
+              {underlying}
+            </span>
+          )}
           {stwConviction !== null && (
             <ConvictionBadge level={stwConviction} />
           )}
@@ -148,17 +185,96 @@ function GroupRow({ underlying, positions, stwConviction, isExpanded, onToggle, 
             <div style={{ fontSize: 13, fontWeight: 600, color: pnlColor(netPnl), fontVariantNumeric: 'tabular-nums' }}>
               {fmtMoney(netPnl)}
             </div>
-            {totalMark > 0 && (
+            {marketValue > 0 && (
               <div style={{ fontSize: 10, color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>
-                {fmtMoney(totalMark)} mkt
+                {fmtMoney(marketValue)} mkt
               </div>
             )}
           </div>
         )}
-      </button>
+      </div>
 
       {isExpanded && positions.map((p) => <LegRow key={p.id} pos={p} showPnl={showPnl} />)}
     </>
+  );
+}
+
+// ── summary header ────────────────────────────────────────────
+
+interface SummaryProps {
+  groups: PortfolioGroup[];
+  showPnl: boolean;
+}
+
+function Stat({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
+  return (
+    <div style={{ flex: '1 1 96px', minWidth: 96 }}>
+      <div style={{ fontSize: 10, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: color ?? 'var(--text)', fontVariantNumeric: 'tabular-nums', lineHeight: 1.2 }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: color ?? 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>{sub}</div>}
+    </div>
+  );
+}
+
+function PortfolioSummary({ groups, showPnl }: SummaryProps) {
+  const totals = useMemo(() => {
+    let marketValue = 0, pnl = 0, costBasis = 0, legs = 0, stwPicks = 0, lowConviction = 0;
+    for (const g of groups) {
+      marketValue += g.marketValue;
+      pnl += g.netPnl;
+      costBasis += g.costBasis;
+      legs += g.positions.length;
+      if (g.isStwPick) {
+        stwPicks += 1;
+        // Concern (1) or Waning (2) — a heads-up that STW's conviction is low/declining.
+        if (g.stwConviction === 1 || g.stwConviction === 2) lowConviction += 1;
+      }
+    }
+    const pnlPct = costBasis > 0 ? (pnl / costBasis) * 100 : null;
+    return { marketValue, pnl, pnlPct, legs, stwPicks, lowConviction };
+  }, [groups]);
+
+  const positionCount = groups.length;
+
+  return (
+    <div style={{ margin: 16, marginBottom: 12 }}>
+      <div style={{
+        display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap',
+        padding: '14px 16px', borderRadius: 8,
+        background: 'var(--surface)', border: '1px solid var(--border)',
+      }}>
+        {showPnl && (
+          <>
+            <Stat label="Market Value" value={fmtMoney(totals.marketValue)} />
+            <Stat
+              label="Unrealized P&L"
+              value={fmtMoney(totals.pnl)}
+              sub={totals.pnlPct !== null ? fmtPct(totals.pnlPct) : undefined}
+              color={pnlColor(totals.pnl)}
+            />
+          </>
+        )}
+        <Stat
+          label="Positions"
+          value={String(positionCount)}
+          sub={`${totals.legs} leg${totals.legs === 1 ? '' : 's'}`}
+        />
+      </div>
+
+      {/* STW-overlap callout */}
+      {positionCount > 0 && (
+        <div style={{ fontSize: 11, color: 'var(--t2)', padding: '8px 4px 0', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <span>
+            <strong style={{ color: 'var(--text)' }}>{totals.stwPicks}</strong> of {positionCount} {positionCount === 1 ? 'position is' : 'positions are'} an STW pick
+          </span>
+          {totals.lowConviction > 0 && (
+            <span style={{ color: 'var(--c1)' }}>
+              · ⚠ {totals.lowConviction} with low / declining conviction
+            </span>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -172,6 +288,7 @@ export function PortfolioPage() {
   const { sync, isSyncing, syncError, lastResult } = useSyncPortfolio();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [showPnl, setShowPnl] = useState(true);
+  const [filters, setFilters] = useState<PortfolioFilters>(DEFAULT_PORTFOLIO_FILTERS);
 
   const isConnected = !!(settings?.ibkr_flex_token && settings?.ibkr_query_id);
 
@@ -181,16 +298,54 @@ export function PortfolioPage() {
     [stwHoldings],
   );
 
-  // Group positions by underlying, normalising any OCC symbols still in the DB
-  const groups = useMemo(() => {
+  // Group positions by underlying, normalising any OCC symbols still in the DB,
+  // and derive each group's aggregates once.
+  const allGroups = useMemo<PortfolioGroup[]>(() => {
     const map = new Map<string, UserPosition[]>();
     for (const p of positions) {
       const key = cleanUnderlying(p.underlying);
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(p);
     }
-    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [positions]);
+    return Array.from(map.entries()).map(([underlying, legs]) => ({
+      underlying,
+      positions: legs,
+      netPnl: legs.reduce((s, p) => s + (p.unrealized_pnl ?? 0), 0),
+      marketValue: legs.reduce((s, p) => s + positionMarketValue(p), 0),
+      costBasis: legs.reduce((s, p) => s + positionCostBasis(p), 0),
+      isStwPick: stwMap.has(underlying),
+      stwConviction: stwMap.has(underlying) ? (stwMap.get(underlying) ?? null) : null,
+      hasStock: legs.some((p) => p.asset_class !== 'OPT'),
+      hasOption: legs.some((p) => p.asset_class === 'OPT'),
+    }));
+  }, [positions, stwMap]);
+
+  // Filtered + sorted view (the summary reads the full portfolio, not the filtered set).
+  const visibleGroups = useMemo<PortfolioGroup[]>(() => {
+    const filtered = allGroups.filter((g) => {
+      if (filters.stwOnly && !g.isStwPick) return false;
+      if (filters.type === 'stocks' && !g.hasStock) return false;
+      if (filters.type === 'options' && !g.hasOption) return false;
+      return true;
+    });
+    const dir = filters.sort.endsWith('_asc') ? 1 : -1;
+    return [...filtered].sort((a, b) => {
+      switch (filters.sort) {
+        case 'pnl_desc':
+        case 'pnl_asc':
+          return (a.netPnl - b.netPnl) * dir;
+        case 'value_desc':
+        case 'value_asc':
+          return (a.marketValue - b.marketValue) * dir;
+        case 'az':
+          return a.underlying.localeCompare(b.underlying);
+        case 'za':
+          return b.underlying.localeCompare(a.underlying);
+        default:
+          return 0;
+      }
+    });
+  }, [allGroups, filters]);
 
   // Last synced timestamp: most recent across all positions
   const lastSynced = useMemo(() => {
@@ -208,6 +363,8 @@ export function PortfolioPage() {
       return next;
     });
   }
+
+  const onSelectTicker = (ticker: string) => navigate(`/picks?ticker=${encodeURIComponent(ticker)}`);
 
   return (
     <div style={{ height: '100%', overflowY: 'auto' }}>
@@ -313,24 +470,40 @@ export function PortfolioPage() {
         </div>
       )}
 
-      {/* Accordion */}
-      {groups.length > 0 && (
-        <div style={{
-          margin: 16, borderRadius: 8, overflow: 'hidden',
-          border: '1px solid var(--border)',
-        }}>
-          {groups.map(([underlying, legs]) => (
-            <GroupRow
-              key={underlying}
-              underlying={underlying}
-              positions={legs}
-              stwConviction={stwMap.has(underlying) ? (stwMap.get(underlying) ?? null) : null}
-              isExpanded={expanded.has(underlying)}
-              onToggle={() => toggleGroup(underlying)}
-              showPnl={showPnl}
-            />
-          ))}
-        </div>
+      {/* Summary + filter + accordion */}
+      {allGroups.length > 0 && (
+        <>
+          <PortfolioSummary groups={allGroups} showPnl={showPnl} />
+
+          <PortfolioFilterBar
+            filters={filters}
+            onChange={setFilters}
+            filtered={visibleGroups.length}
+            total={allGroups.length}
+          />
+
+          {visibleGroups.length > 0 ? (
+            <div style={{
+              margin: 16, borderRadius: 8, overflow: 'hidden',
+              border: '1px solid var(--border)',
+            }}>
+              {visibleGroups.map((g) => (
+                <GroupRow
+                  key={g.underlying}
+                  group={g}
+                  isExpanded={expanded.has(g.underlying)}
+                  onToggle={() => toggleGroup(g.underlying)}
+                  onSelectTicker={onSelectTicker}
+                  showPnl={showPnl}
+                />
+              ))}
+            </div>
+          ) : (
+            <div style={{ margin: 16, padding: '20px', textAlign: 'center', fontSize: 13, color: 'var(--t3)' }}>
+              No positions match your filters.
+            </div>
+          )}
+        </>
       )}
     </div>
     </div>
