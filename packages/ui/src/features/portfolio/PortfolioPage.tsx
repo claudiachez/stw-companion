@@ -20,6 +20,13 @@ function fmtMoney(n: number | null): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
 }
 
+// Compact money for the big summary stats so large books fit a narrow stat card
+// (e.g. $1.2M, -$3.4K) — full precision is still shown in the per-position rows.
+function fmtMoneyCompact(n: number | null): string {
+  if (n === null) return '—';
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 }).format(n);
+}
+
 function fmtPct(n: number | null): string {
   if (n === null) return '—';
   return `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`;
@@ -36,7 +43,7 @@ function fmtExpiry(exp: string | null): string {
 
 function pnlColor(pnl: number | null): string {
   if (pnl === null) return 'var(--t2)';
-  return pnl >= 0 ? '#16A34A' : '#DC2626';
+  return pnl >= 0 ? '#22c55e' : '#ef4444';
 }
 
 // ── aggregation ───────────────────────────────────────────────
@@ -47,6 +54,9 @@ interface PortfolioGroup {
   netPnl:         number;
   marketValue:    number;   // Σ mark · |qty| · multiplier
   costBasis:      number;
+  sharesValue:    number;   // market value of stock legs
+  optionsValue:   number;   // market value of option legs
+  optionsRisk:    number;   // capital at risk in options (premium / cost basis)
   isStwPick:      boolean;
   stwConviction:  number | null;
   hasStock:       boolean;
@@ -122,15 +132,56 @@ function LegRow({ pos, showPnl }: LegRowProps) {
   );
 }
 
+// Per-position metrics revealed on expand: Shares : Options allocation (by market value)
+// and, for any options, the capital at risk + its potential portfolio impact (% of the
+// whole book). Mirrors the app's "portfolio contribution" framing (a thin slice reads as
+// its true portfolio impact, not the headline option number).
+function PositionMetrics({ group, portfolioValue, showPnl }: { group: PortfolioGroup; portfolioValue: number; showPnl: boolean }) {
+  const splitTotal = group.sharesValue + group.optionsValue;
+  const sharesPct = splitTotal > 0 ? Math.round((group.sharesValue / splitTotal) * 100) : null;
+  const optionsPct = sharesPct !== null ? 100 - sharesPct : null;
+  const hasBoth = group.hasStock && group.hasOption;
+  const impactPct = portfolioValue > 0 ? (group.optionsRisk / portfolioValue) * 100 : null;
+
+  const showRisk = group.hasOption && showPnl;
+  if (!hasBoth && !showRisk) return null;
+
+  return (
+    <div style={{
+      display: 'flex', flexWrap: 'wrap', gap: '3px 16px',
+      padding: '8px 14px 8px 36px',
+      background: 'var(--bg)', borderBottom: '1px solid var(--bsub)',
+      fontSize: 11, color: 'var(--t3)',
+    }}>
+      {hasBoth && (
+        <span>
+          Shares : Options{' '}
+          <strong style={{ color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>{sharesPct} : {optionsPct}</strong>
+        </span>
+      )}
+      {showRisk && (
+        <span>
+          Options risk{' '}
+          <strong style={{ color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(group.optionsRisk)}</strong>
+          {impactPct !== null && (
+            <> · <strong style={{ color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>{impactPct.toFixed(1)}%</strong> of portfolio</>
+          )}
+        </span>
+      )}
+    </div>
+  );
+}
+
 interface GroupRowProps {
   group: PortfolioGroup;
+  portfolioValue: number;
   isExpanded: boolean;
   onToggle: () => void;
   onSelectTicker: (ticker: string) => void;
   showPnl: boolean;
 }
 
-function GroupRow({ group, isExpanded, onToggle, onSelectTicker, showPnl }: GroupRowProps) {
+function GroupRow({ group, portfolioValue, isExpanded, onToggle, onSelectTicker, showPnl }: GroupRowProps) {
   const { underlying, positions, netPnl, marketValue, isStwPick, stwConviction } = group;
 
   return (
@@ -194,29 +245,32 @@ function GroupRow({ group, isExpanded, onToggle, onSelectTicker, showPnl }: Grou
         )}
       </div>
 
-      {isExpanded && positions.map((p) => <LegRow key={p.id} pos={p} showPnl={showPnl} />)}
+      {isExpanded && (
+        <>
+          <PositionMetrics group={group} portfolioValue={portfolioValue} showPnl={showPnl} />
+          {positions.map((p) => <LegRow key={p.id} pos={p} showPnl={showPnl} />)}
+        </>
+      )}
     </>
   );
 }
 
 // ── summary header ────────────────────────────────────────────
 
-interface SummaryProps {
-  groups: PortfolioGroup[];
-  showPnl: boolean;
-}
-
-function Stat({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
+// Stat card matching the Portfolio Overview tab: big number + muted label below,
+// on the --s2 / --bsub surface. Keeps the two tabs reading as one app.
+function StatCard({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
-    <div style={{ flex: '1 1 96px', minWidth: 96 }}>
-      <div style={{ fontSize: 10, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
-      <div style={{ fontSize: 18, fontWeight: 700, color: color ?? 'var(--text)', fontVariantNumeric: 'tabular-nums', lineHeight: 1.2 }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: color ?? 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>{sub}</div>}
+    <div style={{ flex: 1, minWidth: 96, padding: '14px 16px', borderRadius: 8, background: 'var(--s2)', border: '1px solid var(--bsub)' }}>
+      <div style={{ fontSize: 28, fontWeight: 700, color: color ?? 'var(--text)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+        {value}
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>{label}</div>
     </div>
   );
 }
 
-function PortfolioSummary({ groups, showPnl }: SummaryProps) {
+function PortfolioSummary({ groups, showPnl }: { groups: PortfolioGroup[]; showPnl: boolean }) {
   const totals = useMemo(() => {
     let marketValue = 0, pnl = 0, costBasis = 0, legs = 0, stwPicks = 0, lowConviction = 0;
     for (const g of groups) {
@@ -238,32 +292,23 @@ function PortfolioSummary({ groups, showPnl }: SummaryProps) {
 
   return (
     <div style={{ margin: 16, marginBottom: 12 }}>
-      <div style={{
-        display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap',
-        padding: '14px 16px', borderRadius: 8,
-        background: 'var(--surface)', border: '1px solid var(--border)',
-      }}>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         {showPnl && (
           <>
-            <Stat label="Market Value" value={fmtMoney(totals.marketValue)} />
-            <Stat
-              label="Unrealized P&L"
-              value={fmtMoney(totals.pnl)}
-              sub={totals.pnlPct !== null ? fmtPct(totals.pnlPct) : undefined}
+            <StatCard label="Market Value" value={fmtMoneyCompact(totals.marketValue)} />
+            <StatCard
+              label={totals.pnlPct !== null ? `${fmtPct(totals.pnlPct)} return` : 'Unrealized P&L'}
+              value={fmtMoneyCompact(totals.pnl)}
               color={pnlColor(totals.pnl)}
             />
           </>
         )}
-        <Stat
-          label="Positions"
-          value={String(positionCount)}
-          sub={`${totals.legs} leg${totals.legs === 1 ? '' : 's'}`}
-        />
+        <StatCard label={`${totals.legs} leg${totals.legs === 1 ? '' : 's'}`} value={String(positionCount)} />
       </div>
 
       {/* STW-overlap callout */}
       {positionCount > 0 && (
-        <div style={{ fontSize: 11, color: 'var(--t2)', padding: '8px 4px 0', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        <div style={{ fontSize: 11, color: 'var(--t2)', padding: '10px 2px 0', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           <span>
             <strong style={{ color: 'var(--text)' }}>{totals.stwPicks}</strong> of {positionCount} {positionCount === 1 ? 'position is' : 'positions are'} an STW pick
           </span>
@@ -307,18 +352,30 @@ export function PortfolioPage() {
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(p);
     }
-    return Array.from(map.entries()).map(([underlying, legs]) => ({
-      underlying,
-      positions: legs,
-      netPnl: legs.reduce((s, p) => s + (p.unrealized_pnl ?? 0), 0),
-      marketValue: legs.reduce((s, p) => s + positionMarketValue(p), 0),
-      costBasis: legs.reduce((s, p) => s + positionCostBasis(p), 0),
-      isStwPick: stwMap.has(underlying),
-      stwConviction: stwMap.has(underlying) ? (stwMap.get(underlying) ?? null) : null,
-      hasStock: legs.some((p) => p.asset_class !== 'OPT'),
-      hasOption: legs.some((p) => p.asset_class === 'OPT'),
-    }));
+    return Array.from(map.entries()).map(([underlying, legs]) => {
+      const optionLegs = legs.filter((p) => p.asset_class === 'OPT');
+      const stockLegs = legs.filter((p) => p.asset_class !== 'OPT');
+      return {
+        underlying,
+        positions: legs,
+        netPnl: legs.reduce((s, p) => s + (p.unrealized_pnl ?? 0), 0),
+        marketValue: legs.reduce((s, p) => s + positionMarketValue(p), 0),
+        costBasis: legs.reduce((s, p) => s + positionCostBasis(p), 0),
+        sharesValue: stockLegs.reduce((s, p) => s + positionMarketValue(p), 0),
+        optionsValue: optionLegs.reduce((s, p) => s + positionMarketValue(p), 0),
+        optionsRisk: optionLegs.reduce((s, p) => s + positionCostBasis(p), 0),
+        isStwPick: stwMap.has(underlying),
+        stwConviction: stwMap.has(underlying) ? (stwMap.get(underlying) ?? null) : null,
+        hasStock: stockLegs.length > 0,
+        hasOption: optionLegs.length > 0,
+      };
+    });
   }, [positions, stwMap]);
+
+  const portfolioValue = useMemo(
+    () => allGroups.reduce((s, g) => s + g.marketValue, 0),
+    [allGroups],
+  );
 
   // Filtered + sorted view (the summary reads the full portfolio, not the filtered set).
   const visibleGroups = useMemo<PortfolioGroup[]>(() => {
@@ -491,6 +548,7 @@ export function PortfolioPage() {
                 <GroupRow
                   key={g.underlying}
                   group={g}
+                  portfolioValue={portfolioValue}
                   isExpanded={expanded.has(g.underlying)}
                   onToggle={() => toggleGroup(g.underlying)}
                   onSelectTicker={onSelectTicker}
