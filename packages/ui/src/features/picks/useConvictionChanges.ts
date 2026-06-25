@@ -13,6 +13,8 @@ export interface ConvictionChange {
   dir: ChangeDir;
   /** The batch comment, for a one-line "why" snippet. */
   comment: string;
+  /** Discord/stream message URL of the batch comment (042) → the row's source icon. */
+  sourceUrl: string | null;
 }
 
 export interface ConvictionBatch {
@@ -32,6 +34,7 @@ interface Row {
   comment: string;
   created_at: string | null;
   source: string;
+  source_url: string | null;
 }
 
 /** Minimal holding shape needed to tell a genuinely-new position from a first-time note. */
@@ -83,7 +86,7 @@ function classify(rows: Row[], holdings: HoldingRef[]): ConvictionBatch | null {
         batchMs - new Date(h.action_date + 'T00:00:00').getTime() >= -7 * 86_400_000;
       dir = openedRecently ? 'new' : 'same';
     }
-    return { ticker: b.ticker, level, prevLevel, dir, comment: b.comment };
+    return { ticker: b.ticker, level, prevLevel, dir, comment: b.comment, sourceUrl: b.source_url };
   });
 
   const order: Record<ChangeDir, number> = { up: 0, down: 1, new: 2, same: 3 };
@@ -113,7 +116,7 @@ export function useConvictionChanges(holdings: HoldingRef[]): ConvictionBatch | 
     queryFn: async () => {
       const { data, error } = await getSupabase()
         .from('conviction_comments')
-        .select('ticker, event_date, conviction_level, comment, created_at, source')
+        .select('ticker, event_date, conviction_level, comment, created_at, source, source_url')
         .is('user_id', null)
         .order('event_date', { ascending: false })
         .order('created_at', { ascending: false })
