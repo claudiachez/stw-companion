@@ -23,8 +23,14 @@ const FOLLOWED_TRADERS = ['STW'];
 const POS = '#22c55e';
 const NEG = '#ef4444';
 
-// right-side column widths (desktop table layout) — shared by the header + rows so they line up
+// desktop grouped-view column widths — shared by the column header + rows so they line up
 const COL = { ret: 58, pnl: 80, val: 92 };
+
+// flat-table cell styles — copied from the Trades blotter so the two tables read identically
+const th: React.CSSProperties = { textAlign: 'left', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--t3)', background: 'var(--s2)', padding: '7px 13px', borderBottom: '1px solid var(--bsub)', whiteSpace: 'nowrap' };
+const thR: React.CSSProperties = { ...th, textAlign: 'right' };
+const td: React.CSSProperties = { padding: '9px 13px', borderBottom: '1px solid var(--bsub)', verticalAlign: 'middle', lineHeight: 1.4, whiteSpace: 'nowrap' };
+const tdR: React.CSSProperties = { ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' };
 
 function fmtMoney(n: number | null): string {
   if (n === null) return '—';
@@ -38,6 +44,9 @@ function fmtPct(n: number | null): string {
   if (n === null) return '—';
   return `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`;
 }
+function fmtPrice(n: number | null): string {
+  return n != null ? `$${n.toFixed(2)}` : '—';
+}
 function fmtExpiry(exp: string | null): string {
   if (!exp) return '';
   const y = exp.slice(0, 4), m = exp.slice(4, 6), d = exp.slice(6, 8);
@@ -48,7 +57,16 @@ function pnlColor(pnl: number | null): string {
   return pnl >= 0 ? POS : NEG;
 }
 
-// ── aggregation ───────────────────────────────────────────────
+const posMV = (p: UserPosition) => (p.mark_price ?? 0) * Math.abs(p.quantity ?? 0) * p.multiplier;
+const posCost = (p: UserPosition) => (p.avg_cost != null ? p.avg_cost * Math.abs(p.quantity ?? 0) * p.multiplier : posMV(p) - (p.unrealized_pnl ?? 0));
+
+// "Common" (stock) or "$35C Sep '26" (option) — the per-leg instrument label, mirroring Trades.
+function instrumentLabel(p: UserPosition): string {
+  if (p.asset_class !== 'OPT') return 'Common';
+  return `$${p.strike}${p.put_call} ${fmtExpiry(p.expiry)}`;
+}
+
+// ── aggregation (grouped view) ────────────────────────────────
 
 interface PortfolioGroup {
   underlying:    string;
@@ -62,15 +80,12 @@ interface PortfolioGroup {
   optionsRisk:   number;
   optionCount:   number;
   isTailed:      boolean;
-  traders:       string[];      // followed traders that hold this as a pick
-  conviction:    number | null; // pick conviction (single-trader today)
-  basket:        string;        // pick sector/basket (for the basket filter)
+  traders:       string[];
+  conviction:    number | null;
+  basket:        string;
   hasStock:      boolean;
   hasOption:     boolean;
 }
-
-const posMV = (p: UserPosition) => (p.mark_price ?? 0) * Math.abs(p.quantity ?? 0) * p.multiplier;
-const posCost = (p: UserPosition) => (p.avg_cost != null ? p.avg_cost * Math.abs(p.quantity ?? 0) * p.multiplier : posMV(p) - (p.unrealized_pnl ?? 0));
 
 function composition(g: PortfolioGroup): string {
   if (g.hasStock && g.optionCount) return `Shares + ${g.optionCount} option${g.optionCount > 1 ? 's' : ''}`;
@@ -78,7 +93,70 @@ function composition(g: PortfolioGroup): string {
   return 'Shares';
 }
 
-// ── leg row (expanded) ────────────────────────────────────────
+// trader badge shown next to a tailed ticker
+function TraderBadge({ trader }: { trader: string }) {
+  return <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4, color: 'var(--acc)', background: 'var(--c5bg)', border: '1px solid var(--c5b)', flexShrink: 0 }}>{trader}</span>;
+}
+
+// ── flat table (default view) ─────────────────────────────────
+
+interface LegRowData {
+  p: UserPosition;
+  underlying: string;
+  isTailed: boolean;
+  traders: string[];
+  conviction: number | null;
+}
+
+function FlatLegRow({ row, onSelectTicker, showPnl, isMobile }: { row: LegRowData; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean }) {
+  const { p, underlying, isTailed, traders } = row;
+  const qty = p.quantity ?? 0;
+  const direction = qty < 0 ? 'Short' : 'Long';
+  return (
+    <tr>
+      <td style={td}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {isTailed
+            ? <TickerLink ticker={underlying} onSelect={onSelectTicker} />
+            : <span style={{ fontWeight: 600, color: 'var(--text)' }}>{underlying}</span>}
+          {isTailed && traders.map((t) => <TraderBadge key={t} trader={t} />)}
+        </div>
+        <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 1 }}>{instrumentLabel(p)}</div>
+      </td>
+      {!isMobile && <td style={{ ...td, color: 'var(--t2)' }}>{direction}</td>}
+      {!isMobile && showPnl && <td style={{ ...tdR, color: 'var(--t2)' }}>{fmtPrice(p.avg_cost)}</td>}
+      {!isMobile && showPnl && <td style={{ ...tdR, color: 'var(--t2)' }}>{fmtPrice(p.mark_price)}</td>}
+      {!isMobile && showPnl && <td style={{ ...tdR, color: 'var(--t2)' }}>{fmtMoney(posMV(p))}</td>}
+      {showPnl && <td style={{ ...tdR, color: pnlColor(p.unrealized_pnl_pct), fontWeight: 600 }}>{fmtPct(p.unrealized_pnl_pct)}</td>}
+      {showPnl && <td style={{ ...tdR, color: pnlColor(p.unrealized_pnl), fontWeight: 600 }}>{fmtMoney(p.unrealized_pnl)}</td>}
+    </tr>
+  );
+}
+
+function FlatTable({ rows, onSelectTicker, showPnl, isMobile }: { rows: LegRowData[]; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean }) {
+  return (
+    <div style={{ overflowX: 'auto', paddingBottom: 9 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+        <thead>
+          <tr>
+            <th style={th}>Ticker</th>
+            {!isMobile && <th style={th}>Type</th>}
+            {!isMobile && showPnl && <th style={thR}>Avg Cost</th>}
+            {!isMobile && showPnl && <th style={thR}>Mark</th>}
+            {!isMobile && showPnl && <th style={thR}>Value</th>}
+            {showPnl && <th style={thR}>Return</th>}
+            {showPnl && <th style={thR}>P&L</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => <FlatLegRow key={r.p.id} row={r} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} />)}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ── grouped view (accordion, on "Group by ticker") ────────────
 
 function LegRow({ pos, showPnl }: { pos: UserPosition; showPnl: boolean }) {
   const isOpt = pos.asset_class === 'OPT';
@@ -128,15 +206,12 @@ function PositionMetrics({ group, portfolioValue, showPnl }: { group: PortfolioG
   );
 }
 
-// ── position row ──────────────────────────────────────────────
-
 function GroupRow({ group, portfolioValue, isExpanded, onToggle, onSelectTicker, showPnl, isMobile }: {
   group: PortfolioGroup; portfolioValue: number; isExpanded: boolean; onToggle: () => void;
   onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean;
 }) {
   const { underlying, netPnl, returnPct, marketValue, isTailed, traders, conviction } = group;
   const accent = conviction !== null ? (TIERS[conviction]?.color ?? 'var(--border)') : 'var(--border)';
-
   return (
     <>
       <div
@@ -148,7 +223,6 @@ function GroupRow({ group, portfolioValue, isExpanded, onToggle, onSelectTicker,
       >
         <span style={{ fontSize: 9, color: 'var(--t3)', flexShrink: 0, width: 8, textAlign: 'center', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s', display: 'inline-block' }}>▶</span>
         <div style={{ width: 3, height: 30, borderRadius: 2, flexShrink: 0, background: accent }} />
-
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 1 }}>
             {isTailed ? (
@@ -158,14 +232,11 @@ function GroupRow({ group, portfolioValue, isExpanded, onToggle, onSelectTicker,
             ) : (
               <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text)', flexShrink: 0 }}>{underlying}</span>
             )}
-            {isTailed && traders.map((t) => (
-              <span key={t} style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4, color: 'var(--acc)', background: 'var(--c5bg)', border: '1px solid var(--c5b)', flexShrink: 0 }}>{t}</span>
-            ))}
+            {isTailed && traders.map((t) => <TraderBadge key={t} trader={t} />)}
             {conviction !== null && <ConvictionBadge level={conviction} />}
           </div>
           <div style={{ fontSize: 11, color: 'var(--t2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{composition(group)}</div>
         </div>
-
         {showPnl && (isMobile ? (
           <div style={{ flexShrink: 0, textAlign: 'right' }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: pnlColor(netPnl), fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(netPnl)}</div>
@@ -179,7 +250,6 @@ function GroupRow({ group, portfolioValue, isExpanded, onToggle, onSelectTicker,
           </>
         ))}
       </div>
-
       {isExpanded && (
         <>
           <PositionMetrics group={group} portfolioValue={portfolioValue} showPnl={showPnl} />
@@ -190,22 +260,12 @@ function GroupRow({ group, portfolioValue, isExpanded, onToggle, onSelectTicker,
   );
 }
 
-// section + column headers inside the positions card
-function SectionHead({ label, count }: { label: string; count: number }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', background: 'var(--s2)', borderTop: '1px solid var(--bsub)', borderBottom: '1px solid var(--bsub)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.09em', color: 'var(--t2)' }}>
-      <span>{label}</span>
-      <span style={{ marginLeft: 'auto', color: 'var(--t3)' }}>{count}</span>
-    </div>
-  );
-}
-
 // ── summary stat cards ────────────────────────────────────────
 
-function StatCard({ label, value, color, title }: { label: string; value: string; color?: string; title?: string }) {
+function StatCard({ label, value, color, title, children }: { label: string; value?: string; color?: string; title?: string; children?: React.ReactNode }) {
   return (
     <div title={title} style={{ flex: 1, minWidth: 104, padding: '14px 16px', borderRadius: 8, background: 'var(--s2)', border: '1px solid var(--bsub)' }}>
-      <div style={{ fontSize: 26, fontWeight: 700, color: color ?? 'var(--text)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+      {children ?? <div style={{ fontSize: 26, fontWeight: 700, color: color ?? 'var(--text)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{value}</div>}
       <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>{label}</div>
     </div>
   );
@@ -213,20 +273,24 @@ function StatCard({ label, value, color, title }: { label: string; value: string
 
 function PortfolioSummary({ groups, showPnl }: { groups: PortfolioGroup[]; showPnl: boolean }) {
   const t = useMemo(() => {
-    let mv = 0, pnl = 0, cost = 0, legs = 0, optRisk = 0, tailed = 0, low = 0;
+    let mv = 0, pnl = 0, cost = 0, legs = 0, sharesVal = 0, optVal = 0, optRisk = 0, tailed = 0, low = 0;
     const traderCount: Record<string, number> = {};
     for (const g of groups) {
-      mv += g.marketValue; pnl += g.netPnl; cost += g.costBasis; legs += g.positions.length; optRisk += g.optionsRisk;
+      mv += g.marketValue; pnl += g.netPnl; cost += g.costBasis; legs += g.positions.length;
+      sharesVal += g.sharesValue; optVal += g.optionsValue; optRisk += g.optionsRisk;
       if (g.isTailed) {
         tailed += 1;
         for (const tr of g.traders) traderCount[tr] = (traderCount[tr] ?? 0) + 1;
         if (g.conviction === 1 || g.conviction === 2) low += 1;
       }
     }
+    const split = sharesVal + optVal;
+    const equityPct = split > 0 ? Math.round((sharesVal / split) * 100) : null;
     return {
       mv, pnl, legs, optRisk, tailed, low, traderCount,
       retPct: cost > 0 ? (pnl / cost) * 100 : null,
       riskPct: mv > 0 ? (optRisk / mv) * 100 : null,
+      equityPct, optionsPct: equityPct !== null ? 100 - equityPct : null,
     };
   }, [groups]);
 
@@ -235,7 +299,7 @@ function PortfolioSummary({ groups, showPnl }: { groups: PortfolioGroup[]; showP
 
   return (
     <>
-      {/* Order: Legs · Market Value · Return · Options */}
+      {/* Order: Legs · Market Value · Return · Equity:Options · Options at risk */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         <StatCard label={`${t.legs} leg${t.legs === 1 ? '' : 's'}`} value={String(positionCount)} title="Open positions (grouped by underlying)" />
         {showPnl && <StatCard label="Market Value" value={fmtMoneyCompact(t.mv)} />}
@@ -247,6 +311,13 @@ function PortfolioSummary({ groups, showPnl }: { groups: PortfolioGroup[]; showP
             title="Unrealized P&L on your currently-open positions (IBKR mark vs your average cost) — not a weekly/monthly figure."
           />
         )}
+        <StatCard label="Equity : Options (by market value)" title="Share of current market value held as equity vs options — same basis as the Stock Picks Overview.">
+          <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', lineHeight: 1 }}>
+            <span style={{ fontSize: 26, fontWeight: 700, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{t.equityPct ?? '—'}</span>
+            <span style={{ fontSize: 16, color: 'var(--t3)', marginBottom: 1 }}>:</span>
+            <span style={{ fontSize: 26, fontWeight: 700, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>{t.optionsPct ?? '—'}</span>
+          </div>
+        </StatCard>
         {showPnl && (
           <StatCard
             label={t.riskPct !== null ? `${t.riskPct.toFixed(1)}% of book at risk` : 'Options'}
@@ -256,7 +327,6 @@ function PortfolioSummary({ groups, showPnl }: { groups: PortfolioGroup[]; showP
         )}
       </div>
 
-      {/* Tailed-picks callout (trader-aware) */}
       {positionCount > 0 && (
         <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           <span><strong style={{ color: 'var(--text)' }}>{t.tailed}</strong> of {positionCount} {positionCount === 1 ? 'position' : 'positions'} {t.tailed === 1 ? 'matches' : 'match'} a tailed pick{traderSummary ? ` (${traderSummary})` : ''}</span>
@@ -295,8 +365,6 @@ export function PortfolioPage() {
   // ticker → followed-trader pick (conviction + basket). Single trader today; structured for more.
   const pickMap = useMemo(() => {
     const m = new Map<string, { conviction: number | null; basket: string; traders: string[] }>();
-    // stwHoldings are STW's picks today; tag with the first followed trader. When more traders
-    // are wired, merge each trader's holdings into this map (accumulating `traders`).
     for (const h of stwHoldings) {
       m.set(h.ticker, { conviction: h.conviction ?? null, basket: h.basket ?? '', traders: [FOLLOWED_TRADERS[0]] });
     }
@@ -317,9 +385,7 @@ export function PortfolioPage() {
       const netPnl = legs.reduce((s, p) => s + (p.unrealized_pnl ?? 0), 0);
       const costBasis = legs.reduce((s, p) => s + posCost(p), 0);
       return {
-        underlying,
-        positions: legs,
-        netPnl,
+        underlying, positions: legs, netPnl,
         returnPct: costBasis > 0 ? (netPnl / costBasis) * 100 : null,
         marketValue: legs.reduce((s, p) => s + posMV(p), 0),
         costBasis,
@@ -343,18 +409,21 @@ export function PortfolioPage() {
     [allGroups],
   );
 
-  const visibleGroups = useMemo<PortfolioGroup[]>(() => {
+  const matchFilters = (underlying: string, isTailed: boolean, basket: string, isOpt: boolean) => {
     const q = filters.search.trim().toUpperCase();
-    const filtered = allGroups.filter((g) => {
-      if (filters.tailedOnly && !g.isTailed) return false;
-      if (filters.type === 'stocks' && !g.hasStock) return false;
-      if (filters.type === 'options' && !g.hasOption) return false;
-      if (filters.basket && g.basket !== filters.basket) return false;
-      if (q && !g.underlying.toUpperCase().includes(q)) return false;
-      return true;
-    });
-    const dir = filters.sort.endsWith('_asc') ? 1 : -1;
-    const nl = (v: number | null) => (v == null ? Number.NEGATIVE_INFINITY : v);
+    if (filters.tailedOnly && !isTailed) return false;
+    if (filters.type === 'stocks' && isOpt) return false;
+    if (filters.type === 'options' && !isOpt) return false;
+    if (filters.basket && basket !== filters.basket) return false;
+    if (q && !underlying.toUpperCase().includes(q)) return false;
+    return true;
+  };
+  const dir = filters.sort.endsWith('_asc') ? 1 : -1;
+  const nl = (v: number | null) => (v == null ? Number.NEGATIVE_INFINITY : v);
+
+  // grouped view rows
+  const visibleGroups = useMemo<PortfolioGroup[]>(() => {
+    const filtered = allGroups.filter((g) => matchFilters(g.underlying, g.isTailed, g.basket, g.hasOption && !g.hasStock));
     return [...filtered].sort((a, b) => {
       switch (filters.sort) {
         case 'pnl_desc': case 'pnl_asc': return (a.netPnl - b.netPnl) * dir;
@@ -365,10 +434,28 @@ export function PortfolioPage() {
         default: return 0;
       }
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allGroups, filters]);
 
-  const tailedGroups = visibleGroups.filter((g) => g.isTailed);
-  const otherGroups = visibleGroups.filter((g) => !g.isTailed);
+  // flat per-leg rows (default view)
+  const visibleLegs = useMemo<LegRowData[]>(() => {
+    const rows = positions.map((p) => {
+      const underlying = cleanUnderlying(p.underlying);
+      const pick = pickMap.get(underlying);
+      return { p, underlying, isTailed: !!pick, traders: pick?.traders ?? [], conviction: pick?.conviction ?? null, basket: pick?.basket ?? '' };
+    }).filter((r) => matchFilters(r.underlying, r.isTailed, r.basket, r.p.asset_class === 'OPT'));
+    return rows.sort((a, b) => {
+      switch (filters.sort) {
+        case 'pnl_desc': case 'pnl_asc': return (nl(a.p.unrealized_pnl) - nl(b.p.unrealized_pnl)) * dir;
+        case 'ret_desc': case 'ret_asc': return (nl(a.p.unrealized_pnl_pct) - nl(b.p.unrealized_pnl_pct)) * dir;
+        case 'value_desc': case 'value_asc': return (posMV(a.p) - posMV(b.p)) * dir;
+        case 'az': return a.underlying.localeCompare(b.underlying) || instrumentLabel(a.p).localeCompare(instrumentLabel(b.p));
+        case 'za': return b.underlying.localeCompare(a.underlying) || instrumentLabel(a.p).localeCompare(instrumentLabel(b.p));
+        default: return 0;
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [positions, pickMap, filters]);
 
   const lastSynced = useMemo(() => {
     if (lastResult) return lastResult.lastSyncedAt;
@@ -382,29 +469,26 @@ export function PortfolioPage() {
   const onSelectTicker = (t: string) => navigate(`/picks?ticker=${encodeURIComponent(t)}`);
 
   const hasPositions = allGroups.length > 0;
+  const grouped = filters.groupByTicker;
+  const visibleCount = grouped ? visibleGroups.length : visibleLegs.length;
+  const totalCount = grouped ? allGroups.length : positions.length;
   const pad = isMobile ? '14px 12px' : '20px 24px';
-
-  const renderRows = (rows: PortfolioGroup[]) => rows.map((g) => (
-    <GroupRow key={g.underlying} group={g} portfolioValue={portfolioValue}
-      isExpanded={expanded.has(g.underlying)} onToggle={() => toggleGroup(g.underlying)}
-      onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} />
-  ));
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Combined bar: synced stamp + filters (scroll) on the left, eye + Sync pinned right */}
+      {/* Combined bar: filters scroll on the left; synced stamp (right-aligned) + eye + Sync pinned right */}
       <div style={{ display: 'flex', alignItems: 'center', background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', flexShrink: 0 }}>
         <div style={{ flex: 1, minWidth: 0, overflowX: 'auto', WebkitOverflowScrolling: 'touch' as never }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', minWidth: 'max-content' }}>
-            <span style={{ fontSize: 11, color: 'var(--t3)', whiteSpace: 'nowrap', marginRight: 2 }}>
-              {lastSynced ? `Synced ${fmtDateTime(lastSynced)}` : 'Not synced'}
-            </span>
             {isConnected && hasPositions && (
-              <PortfolioFilterBar filters={filters} onChange={setFilters} baskets={baskets} filtered={visibleGroups.length} total={allGroups.length} />
+              <PortfolioFilterBar filters={filters} onChange={setFilters} baskets={baskets} filtered={visibleCount} total={totalCount} />
             )}
           </div>
         </div>
-        <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '0 12px', borderLeft: '1px solid var(--bsub)' }}>
+        <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, padding: '0 12px', borderLeft: '1px solid var(--bsub)' }}>
+          {!isMobile && lastSynced && (
+            <span style={{ fontSize: 11, color: 'var(--t3)', whiteSpace: 'nowrap' }}>Synced {fmtDateTime(lastSynced)}</span>
+          )}
           {hasPositions && (
             <button onClick={() => setShowPnl((v) => !v)} title={showPnl ? 'Hide P&L' : 'Show P&L'}
               style={{ width: 34, height: 34, borderRadius: 6, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: '1px solid var(--border)', color: showPnl ? 'var(--t2)' : 'var(--t3)', cursor: 'pointer', flexShrink: 0 }}>
@@ -440,32 +524,31 @@ export function PortfolioPage() {
             <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', boxShadow: 'var(--shadow)' }}>
               <div style={{ padding: '8px 13px', background: 'var(--s2)', borderBottom: '1px solid var(--bsub)', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.09em', color: 'var(--t2)' }}>📊 Positions</span>
-                <span style={{ fontSize: 10, color: 'var(--t3)', marginLeft: 'auto' }}>{visibleGroups.length}</span>
+                <span style={{ fontSize: 10, color: 'var(--t3)', marginLeft: 'auto' }}>{visibleCount}</span>
               </div>
 
-              {/* Column header (desktop, P&L shown) */}
-              {!isMobile && showPnl && visibleGroups.length > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--t3)' }}>
-                  <span style={{ width: 8, flexShrink: 0 }} />
-                  <span style={{ width: 3, flexShrink: 0 }} />
-                  <span style={{ flex: 1 }}>Ticker</span>
-                  <span style={{ width: COL.ret, textAlign: 'right', flexShrink: 0 }}>Return</span>
-                  <span style={{ width: COL.pnl, textAlign: 'right', flexShrink: 0 }}>P&L</span>
-                  <span style={{ width: COL.val, textAlign: 'right', flexShrink: 0 }}>Value</span>
-                </div>
-              )}
-
-              {visibleGroups.length === 0 ? (
+              {visibleCount === 0 ? (
                 <p style={{ fontSize: 11, color: 'var(--t3)', padding: '12px 13px' }}>No positions match your filters.</p>
-              ) : tailedGroups.length > 0 && otherGroups.length > 0 ? (
+              ) : grouped ? (
                 <>
-                  <SectionHead label="Tailed picks" count={tailedGroups.length} />
-                  {renderRows(tailedGroups)}
-                  <SectionHead label="Other holdings" count={otherGroups.length} />
-                  {renderRows(otherGroups)}
+                  {!isMobile && showPnl && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--t3)' }}>
+                      <span style={{ width: 8, flexShrink: 0 }} />
+                      <span style={{ width: 3, flexShrink: 0 }} />
+                      <span style={{ flex: 1 }}>Ticker</span>
+                      <span style={{ width: COL.ret, textAlign: 'right', flexShrink: 0 }}>Return</span>
+                      <span style={{ width: COL.pnl, textAlign: 'right', flexShrink: 0 }}>P&L</span>
+                      <span style={{ width: COL.val, textAlign: 'right', flexShrink: 0 }}>Value</span>
+                    </div>
+                  )}
+                  {visibleGroups.map((g) => (
+                    <GroupRow key={g.underlying} group={g} portfolioValue={portfolioValue}
+                      isExpanded={expanded.has(g.underlying)} onToggle={() => toggleGroup(g.underlying)}
+                      onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} />
+                  ))}
                 </>
               ) : (
-                renderRows(visibleGroups)
+                <FlatTable rows={visibleLegs} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} />
               )}
             </div>
           </>
