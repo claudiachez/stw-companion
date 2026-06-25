@@ -17,8 +17,8 @@ overlap. After this spec, each holds one non-overlapping thing.
 
 | Surface (UI) | Backing field | Owner routine(s) | Cardinality | Job — answers the question |
 |---|---|---|---|---|
-| **Highlight box** (boxed line under the conviction bar) | `holdings.summary` | thesis-refresh path (all 3 routines) | 1 | *The durable "why he's in it"* — survives across every comment and trade |
-| **Key Points** (diamond bullets) | `holdings.bullets` | thesis-refresh path (all 3 routines) | 1 set | *The durable thesis pillars* — same survival test as summary |
+| **Highlight box** (boxed line under the conviction bar) | `holdings.summary` | thesis-refresh path (all 3 routines) | 1 | *The durable "why he's in it," as one synthesized prose paragraph* — the narrative argument; survives across every comment and trade |
+| **Key Points** (diamond bullets) | `holdings.bullets` | thesis-refresh path (all 3 routines) | 1 set | *The durable supporting detail the paragraph doesn't already state* — a mix of **receipts** (specific figures, multiples, levels, dates) **and** additional **angles** (moat, catalyst, risk, valuation, optionality). Never restates a summary sentence (see §2A) |
 | **Commentary** (dated, source-tagged: STREAM / DISCORD) | `conviction_comments` (many rows) | all 3 routines, 1 row per material **view** | many | *What he thinks about the company/chart/thesis right now* — the opinion log |
 | **Transaction History** (`notes` column) | `leg_transactions.notes` | morning/afternoon (the event-sourcing path) | many | *What he did, and the mechanics of doing it* — the action log |
 
@@ -26,6 +26,9 @@ overlap. After this spec, each holds one non-overlapping thing.
 - The Highlight box currently **echoes the newest Commentary row** → it must instead render
   `holdings.summary` (the durable why), which is presently written but rendered nowhere.
 - Key Points currently **restate the latest comment** → must instead hold durable pillars only.
+- Key Points also **duplicate the Highlight box** (ADEA: every bullet is a summary clause
+  re-chopped) → bullets must hold only durable detail the summary paragraph does **not** already
+  state (see §2A and the §3 CASE D worked example).
 
 ---
 
@@ -53,6 +56,34 @@ from now?"*
 - **Yes (durable)** → it also belongs in `summary` / `bullets`, and the thesis-refresh path
   rewrites those. Refresh the durable fields **only when the durable why actually changes**
   (new position, real bull-case shift) — never on a routine episodic remark.
+
+---
+## 2A. THE SUMMARY ↔ BULLETS BOUNDARY (no surface duplicates another)
+
+The non-duplication principle is **not limited to Transaction vs. Commentary** — *no two of the
+four surfaces may share content.* The pair that collides most often is the Highlight box
+(`summary`) and Key Points (`bullets`), because both are durable thesis and a routine tends to
+write the thesis once and then re-chop the same sentences into bullets. Give them distinct jobs:
+
+> **`summary` is the narrative; `bullets` are everything durable the narrative didn't already say.**
+> The summary is **one prose paragraph** that argues the "why he's in it." The bullets carry the
+> supporting detail — a mix of **receipts** (specific figures, multiples, dates, the key technical
+> level) **and** additional **angles** (moat, catalyst, risk, valuation, optionality). Both kinds
+> are welcome; the only rule is that a bullet must add something the summary paragraph does **not**
+> already state.
+
+### The de-dupe test (apply to every bullet)
+1. Is this point already made in the summary paragraph (same claim, even if reworded)?
+   - **Yes** → it is a duplicate. **Cut it**, or replace it with the underlying receipt (the
+     number behind the claim) or a new angle the paragraph didn't cover.
+   - **No** → it earns a bullet (a receipt the paragraph asserted but didn't quantify, or a
+     dimension the paragraph didn't touch).
+
+A topic may be *touched* by both as long as the bullet adds new substance:
+- **OK** — summary: "high-margin software growth"; bullet: "software rev +26.9% FY25 at ~72.1% GM"
+  (the bullet adds the figure).
+- **NOT OK** — summary: "one of his longest-ever DD notes"; bullet: "one of his longest-ever thesis
+  notes" (same statement, no new substance → drop the bullet).
 
 ---
 ## 3. WORKED EXAMPLES — real CXDO data
@@ -93,6 +124,23 @@ from now?"*
 - No overlap: the TXN row never repeats "gorgeous/frustrated"; the comment never repeats
   "$2.24 / 3.9%".
 
+### CASE D — Summary vs. Key Points duplication (the surface-pair failure)
+
+**ADEA, as currently stored on PROD** — every bullet just re-chops a summary clause:
+- `summary`: *"…mispriced relative to the company's hybrid-bonding IP position; … as 2027 nears and
+  HBM4/HBM5 become mainstream topics. **One of the host's longest-ever DD notes.** Near-term
+  **insider selling** created pressure but monthly structure intact; willing to sit through a
+  pullback to the 21 EMA."*
+- `bullets` (all four duplicate the paragraph): "Thesis: semiconductor IP book mispriced vs.
+  hybrid-bonding position" · "Mispricing seen becoming obvious as HBM4/HBM5 ramp toward 2027" ·
+  "One of his longest-ever thesis notes" · "Insider selling = near-term pressure, not a thesis risk."
+
+**Fix:** keep the narrative in `summary`; rebuild `bullets` as **non-duplicative receipts + angles**
+— e.g. the specific licensing-revenue mix, royalty-contract duration, the actual 21 EMA price
+level, the insider-sale size/date, valuation vs. peers, the hybrid-bonding patent position. Each
+must add a fact or angle the paragraph did **not** already state. (Contrast CXDO §4, which is the
+model of done-right: a comprehensive summary paragraph with bullets that quantify it.)
+
 ### NEITHER surface — pure multi-ticker noise (portfolio digest only)
 5/4 earnings-calendar list, 5/11 "ripped last week," 5/14 "+20% reaction" recap, 5/15 "relative
 strength off the open." None is a CXDO-specific view or a CXDO trade. These are logged in the day's
@@ -118,7 +166,7 @@ portfolio digest only — **no** Commentary row and **no** Transaction row at th
 - Durable profitability: 10 consecutive GAAP-profitable quarters, 29 non-GAAP
 - Near-zero capex (~$18K FY2025) → OCF converts almost directly to FCF
 - ESI acquisition ($35M, ~1.3x sales) — immediately accretive; synergies + full-quarter contribution still ramping
-- Direct $BAND peer growing far faster (rev +16% / EPS +43% TTM vs. +4.9% / +1.4%)
+- Grows far faster than its parabolic peer $BAND (CXDO rev +16% / EPS +43% TTM vs. $BAND +4.9% / +1.4%)
 - ~20-year base breakout with earnings momentum; $8.30 = the "explosive" level
 - AI-voice thematic via CAIRO (receptionist, routing, intent detection, transcription, analytics)
 - Low single-customer risk (no customer >10% of rev/receivables FY24–25)
@@ -144,7 +192,7 @@ portfolio digest only — **no** Commentary row and **no** Transaction row at th
 | 2026-05-01 | discord | 4 | Playbook stated: if earnings go well, will drop the full DD thread and potentially upsize, sized to the reaction. Primer posted (chart snapshots + $CXDO–$BAND comp sheet). |
 | 2026-05-03 | discord | 4 | 17 years of base-building; clean ladder of higher highs/lows toward overhead resistance. Over $8.30 can be explosive. |
 | 2026-05-05 | discord | 4 | "Monster bottom line beat." Q1 rev +29% YoY to $20.7M; GAAP NI $0.6M, non-GAAP $3.3M; 10th straight GAAP-profitable quarter despite ESI amortization drag. Very satisfied. |
-| 2026-05-06 | discord | 5 | Full DD thread (the "if earnings go well" trigger fired). Profitable platform business above its size: NetSapiens + UCaaS; ESI at ~1.3x sales, accretive, one month in-quarter; software +26.9% at ~72.1% GM; fwd P/E ~20; faster-growing $BAND peer; 20-year base breakout; AI-voice via CAIRO. *(refreshes summary + bullets)* |
+| 2026-05-06 | discord | 5 | Full DD thread (the "if earnings go well" trigger fired). Profitable platform business above its size: NetSapiens + UCaaS; ESI at ~1.3x sales, accretive, one month in-quarter; software +26.9% at ~72.1% GM; fwd P/E ~20; growing far faster than peer $BAND; 20-year base breakout; AI-voice via CAIRO. *(refreshes summary + bullets)* |
 | 2026-05-08 | discord | 5 | Characterized CXDO (then 1.9%) as an "options-only" position above 1.5% with the most "upside juice" — sizing that can expand weighting fast if it moves. |
 | 2026-05-28 | discord | 5 | Just outside the top 15 — rounds out the top 18 with $CRNC, $BB, within a stone's throw of #15 in weighting. |
 | 2026-06-01 | discord | 5 | Options already up ~350% and he openly said he doesn't have enough size. Gorgeous on all timeframes. Frustrated it won't give him the pullback to add. |
@@ -164,3 +212,9 @@ portfolio digest only — **no** Commentary row and **no** Transaction row at th
 4. **Conviction is inferred, not stated.** The 6/16 episode shows the host explicitly refuses a
    numeric scale. Consider a one-line UI disclaimer ("conviction inferred from sizing & commentary,
    not stated by STW").
+5. **Historical backfill (separate from the writer fix).** Existing `summary`/`bullets` predate
+   this boundary and are already polluted on PROD — CXDO's `summary` holds an episodic comment (the
+   §3 B1 "+350%" lament) instead of the durable thesis, and ADEA's bullets duplicate its summary
+   (CASE D). Fixing the routines only prevents *new* pollution; a one-time pass must rewrite the
+   bad rows (CXDO's target durable text is already written out in §4). This is a data `UPDATE`, not
+   a schema/migration change.

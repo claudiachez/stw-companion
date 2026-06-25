@@ -16,6 +16,7 @@ export interface Holding {
   equity_pct: number | null;   // per-position equity:options split (0–1); null → Config default (040)
   summary: string | null;
   bullets: string[] | null;
+  dd_source_url: string | null;   // Discord message URL of the DD source (042); drives the Highlight-box source icon
   dd_updated_at: string | null;   // when DD/thesis/conviction was last refreshed (runs + stream)
   updated_at: string | null;
   // Structured per-leg position rows (migrations 029/030), embedded via a PostgREST nested

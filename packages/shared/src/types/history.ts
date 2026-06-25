@@ -28,4 +28,6 @@ export interface ConvictionComment {
   source: ConvictionSource;
   user_id: string | null;
   created_at: string;
+  /** Discord/stream message URL this comment came from (042); drives the per-row source icon. */
+  source_url?: string | null;
 }
