@@ -1,7 +1,7 @@
-import { bColor, holdingPnlPct, legIsOpen, legMarkReason, fmtLegInstrument, fmtDateTime } from '@stw/shared';
+import { bColor, holdingPnlPct, legIsOpen, legMarkReason, fmtLegInstrument, fmtDateTime, TIERS } from '@stw/shared';
 import { usePriceCacheStore } from '../../../store/priceCache';
 import { useRecentChanges } from '../useRecentChanges';
-import { useLatestWebinar } from '../useLatestWebinar';
+import { useConvictionChanges, type ConvictionChange } from '../useConvictionChanges';
 import { TickerLink } from '../../../primitives/TickerLink';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 import { useCapabilities } from '../../../context/AppCapabilities';
@@ -54,6 +54,44 @@ function renderDigest(
   });
 }
 
+function trimSnippet(s: string, n = 120): string {
+  return s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s;
+}
+
+// One conviction-change row: ▲/▼/★ + ticker + the level move (FROM → TO, tier-colored) + a
+// one-line "why" from the batch comment. New notes show "New · <tier>" (no prior level).
+function ConvictionChangeRow({ c, onSelectTicker }: {
+  c: ConvictionChange;
+  onSelectTicker?: (t: string) => void;
+}) {
+  const arrow = c.dir === 'up' ? '▲' : c.dir === 'down' ? '▼' : '★';
+  const arrowColor = c.dir === 'up' ? 'var(--c5)' : c.dir === 'down' ? 'var(--c1)' : 'var(--acc)';
+  const toTier = TIERS[c.level] ?? TIERS[0];
+  const fromTier = c.prevLevel != null ? (TIERS[c.prevLevel] ?? TIERS[0]) : null;
+  return (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
+      <span style={{ color: arrowColor, fontSize: 11, flexShrink: 0, width: 12, textAlign: 'center' }}>{arrow}</span>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 8px', alignItems: 'baseline' }}>
+          <TickerLink ticker={c.ticker} onSelect={onSelectTicker} />
+          <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.04em' }}>
+            {fromTier ? (
+              <>
+                <span style={{ color: fromTier.color }}>{fromTier.short}</span>
+                <span style={{ color: 'var(--t3)' }}> → </span>
+                <span style={{ color: toTier.color }}>{toTier.short}</span>
+              </>
+            ) : (
+              <span style={{ color: toTier.color }}>NEW · {toTier.short}</span>
+            )}
+          </span>
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--t2)', lineHeight: 1.45, marginTop: 1 }}>{trimSnippet(c.comment)}</div>
+      </div>
+    </div>
+  );
+}
+
 // ── Portfolio dashboard (shown when no ticker selected) ───────
 export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps) {
   const isMobile = useIsMobile();
@@ -63,7 +101,7 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
   const cache = usePriceCacheStore((s) => s.cache);
   const { data: changes } = useRecentChanges(1);
   const latestChange = changes?.[0] ?? null;
-  const { data: webinar } = useLatestWebinar();
+  const { data: convBatch } = useConvictionChanges();
 
   const active = holdings.filter((h) => h.ticker !== 'CASH' && h.last_action !== 'Closed');
 
@@ -223,26 +261,47 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
       {/* Right column — activity + data status */}
       <div>
 
-      {/* Conviction Notes Updates — which positions had conviction notes refreshed by the latest stream */}
-      {webinar && webinar.tickers.length > 0 && (
+      {/* Conviction Changes — the latest batch, classified ▲ upgraded / ▼ downgraded / ★ new, each
+          with the level move and a one-line why. Reaffirmed (unchanged) collapse to a chip list. */}
+      {convBatch && convBatch.changes.length > 0 && (
         <div style={{ marginTop: isMobile ? 28 : 0 }}>
           <SectionHeader
-            title="Conviction Notes Updates"
-            updatedAt={webinar.updatedAt ? new Date(webinar.updatedAt) : null}
+            title="Conviction Changes"
+            updatedAt={convBatch.updatedAt ? new Date(convBatch.updatedAt) : null}
           />
           <div style={{
             padding: '12px 14px', borderRadius: 8,
             background: 'var(--s2)', border: '1px solid var(--acc)',
-            fontSize: 13, color: 'var(--t2)', lineHeight: 1.6,
           }}>
-            <div style={{ color: 'var(--text)', marginBottom: 8 }}>
-              📺 Conviction notes updated for {webinar.tickers.length} {webinar.tickers.length === 1 ? 'position' : 'positions'}
+            {/* tally line */}
+            <div style={{ fontSize: 12, marginBottom: 10, display: 'flex', flexWrap: 'wrap', gap: '2px 12px' }}>
+              {convBatch.counts.up > 0   && <span style={{ color: 'var(--c5)' }}>▲ {convBatch.counts.up} upgraded</span>}
+              {convBatch.counts.down > 0 && <span style={{ color: 'var(--c1)' }}>▼ {convBatch.counts.down} downgraded</span>}
+              {convBatch.counts.new > 0  && <span style={{ color: 'var(--acc)' }}>★ {convBatch.counts.new} new</span>}
+              {convBatch.counts.same > 0 && <span style={{ color: 'var(--t3)' }}>• {convBatch.counts.same} reaffirmed</span>}
             </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px 12px' }}>
-              {webinar.tickers.map((t) => (
-                <TickerLink key={t} ticker={t} onSelect={onSelectTicker} />
-              ))}
-            </div>
+            {/* meaningful changes (up / down / new) as detail rows */}
+            {convBatch.changes.some((c) => c.dir !== 'same') && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+                {convBatch.changes.filter((c) => c.dir !== 'same').map((c) => (
+                  <ConvictionChangeRow key={c.ticker} c={c} onSelectTicker={onSelectTicker} />
+                ))}
+              </div>
+            )}
+            {/* reaffirmed → collapsed chip list */}
+            {convBatch.changes.some((c) => c.dir === 'same') && (
+              <div style={{
+                marginTop: convBatch.changes.some((c) => c.dir !== 'same') ? 10 : 0,
+                paddingTop: convBatch.changes.some((c) => c.dir !== 'same') ? 10 : 0,
+                borderTop: convBatch.changes.some((c) => c.dir !== 'same') ? '1px solid var(--bsub)' : 'none',
+                fontSize: 12, color: 'var(--t3)', display: 'flex', flexWrap: 'wrap', gap: '4px 10px', alignItems: 'baseline',
+              }}>
+                <span>Reaffirmed:</span>
+                {convBatch.changes.filter((c) => c.dir === 'same').map((c) => (
+                  <TickerLink key={c.ticker} ticker={c.ticker} onSelect={onSelectTicker} />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
