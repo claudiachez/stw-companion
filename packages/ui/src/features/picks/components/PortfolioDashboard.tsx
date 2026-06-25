@@ -1,4 +1,4 @@
-import { bColor, holdingPnlPct, holdingType, legMarkReason, fmtLegInstrument, fmtDateTime } from '@stw/shared';
+import { bColor, holdingPnlPct, legIsOpen, legMarkReason, fmtLegInstrument, fmtDateTime } from '@stw/shared';
 import { usePriceCacheStore } from '../../../store/priceCache';
 import { useRecentChanges } from '../useRecentChanges';
 import { useLatestWebinar } from '../useLatestWebinar';
@@ -76,19 +76,30 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
     ? pnlValues.reduce((s, v) => s + v, 0) / pnlValues.length
     : null;
 
-  // Equity : Options ratio by portfolio weight (matches the host's Friday update)
-  // Mixed positions (shares + options overlay) count as equity weight
-  let equityWeight = 0;
-  let optionsWeight = 0;
+  // Equity : Options ratio by current MARKET VALUE, per leg. The host quotes the split by what
+  // each sleeve is worth now (not premium paid) — so winning option legs weigh more. Shares ride
+  // the live quote; option legs use their stored IBKR mark; each leg's cost weight is grossed up
+  // by mark÷entry. Per-leg (not whole-holding), so a shares+call overlay counts on BOTH sides —
+  // the old whole-holding classification dumped every mixed position into equity (read ~97:3).
+  // Falls back to the leg's cost weight when a price is missing.
+  let equityVal = 0;
+  let optionsVal = 0;
   active.forEach((h) => {
-    const w = h.current_weight ?? h.initial_weight ?? 0;
-    const t = holdingType(h.legs);
-    if (t === 'options') optionsWeight += w;
-    else if (w > 0) equityWeight += w; // shares, mixed, or unclassified
+    const live = cache[h.ticker]?.c ?? null;
+    for (const leg of h.legs) {
+      if (!legIsOpen(leg)) continue;
+      const w = leg.weight ?? 0;
+      if (w <= 0) continue;
+      const isOpt = leg.instrument_type === 'OPTION';
+      const ref = isOpt ? leg.mark_price : live;
+      const mult = (ref != null && leg.entry_price && leg.entry_price > 0) ? ref / leg.entry_price : 1;
+      const val = w * mult;
+      if (isOpt) optionsVal += val; else equityVal += val;
+    }
   });
-  const typeTotal = equityWeight + optionsWeight;
-  const equityPct  = typeTotal > 0 ? Math.round(equityWeight  / typeTotal * 100) : null;
-  const optionsPct = typeTotal > 0 ? Math.round(optionsWeight / typeTotal * 100) : null;
+  const typeTotal = equityVal + optionsVal;
+  const equityPct  = typeTotal > 0 ? Math.round(equityVal  / typeTotal * 100) : null;
+  const optionsPct = typeTotal > 0 ? Math.round(optionsVal / typeTotal * 100) : null;
 
   // Sector distribution by weight
   const sectorMap: Record<string, number> = {};
@@ -172,7 +183,7 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
               {optionsPct ?? '—'}
             </span>
           </div>
-          <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>Equity : Options (by weight)</div>
+          <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>Equity : Options (by market value)</div>
         </div>
       </div>
 
