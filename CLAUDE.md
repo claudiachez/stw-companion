@@ -20,7 +20,7 @@
 
 ---
 
-## Current Status — event-sourcing migration CLOSED + promoted to main; Phase 4 is next (handoff 2026-06-23)
+## Current Status — My Portfolio tab rebuilt; next = Ticker Detail surface dedup (handoff 2026-06-25)
 
 **✅ PLAN CLOSED (2026-06-23) — legs/transaction-history event-sourcing migration is DONE and on `main`.**
 Phases 1–5 shipped; the deprecated-column cleanup (migrations **034 + 035 + 041**) was applied and
@@ -30,26 +30,25 @@ PROD logical backup was taken (local, gitignored `backups/` — `*_pre-coldrop.j
 promoted to `main`. The next work is **Phase 4** + other forward features (see Next Steps) — the
 event-sourcing schema work itself is complete; do not reopen it.
 
-**Latest (2026-06-23, PRs #40–#42 MERGED to `staging`) — Portfolio Overview + Trades polish:**
-- **Portfolio Overview** ([`PortfolioDashboard.tsx`](packages/ui/src/features/picks/components/PortfolioDashboard.tsx)):
-  "New Webinar Analysis" → **"Conviction Notes Updates"** with a full `fmtDateTime` "Updated:" stamp in
-  the header ([`useLatestWebinar.ts`](packages/ui/src/features/picks/useLatestWebinar.ts) now selects
-  `created_at`); "Latest Portfolio Changes" date moved into the header + green (`--acc`) border; Unpriced
-  Legs / Stale Prices titles moved OUTSIDE their cards (shared `SectionHeader`); the "Run the IBKR sync"
-  hint is now **admin-only**.
-- **Trades tab** ([`TradesTable.tsx`](packages/ui/src/features/picks/components/TradesTable.tsx) +
-  [`TradesFilterBar.tsx`](packages/ui/src/features/picks/components/TradesFilterBar.tsx) +
-  [`useTradesFilters.ts`](packages/ui/src/features/picks/useTradesFilters.ts)): independent filter state,
-  bar chrome matching the Ticker Details `FilterBar` ("All Baskets", full-bleed); **Open/Closed/All toggle**,
-  Type (Shares/Options), Sector, trade-specific Sort (default **Opened newest**, + Closed newest/oldest);
-  added **Contribution %** (closed) + **Opened/Closed date** columns; **column set follows the toggle**
-  (Open hides closed-only cols + vice-versa).
-- **Readability:** green-accent filled buttons/toggle standardized to **white** text (was black, low-contrast).
-- **SANDBOX data cleanup (DB, not code):** deleted **30 orphan `legs`** (status=OPEN, no `leg_transactions`,
-  `entry_price` null) that a seed/import had inserted directly — they showed as phantom "open" trades on
-  Closed holdings. Sandbox now **42 legs, 0 orphans**. PROD was already clean (45 legs, 0 orphans).
-  ⚠️ Re-running the old `plans/*import*`/seed scripts can re-introduce them (they write `legs` directly
-  instead of via the diary) — fix the seed if you re-seed.
+**Latest (2026-06-25, PRs #44–#49 MERGED to `staging`, branches deleted) — My Portfolio (subscriber) tab rebuilt + Stock Picks ratio fix. No schema/migration changes this session.**
+- **My Portfolio** ([`PortfolioPage.tsx`](packages/ui/src/features/portfolio/PortfolioPage.tsx) +
+  [`PortfolioFilterBar.tsx`](packages/ui/src/features/portfolio/PortfolioFilterBar.tsx)) — the subscriber's
+  own IBKR book (`user_positions`). Summary stat cards: **Legs · Market Value · Return · Equity:Options (by
+  market value) · Options at risk**. Trader-aware **"tailed picks"** model (`FOLLOWED_TRADERS`; only STW wired
+  today, generalized for more): a `pickMap` matches the user's tickers to a followed trader's holdings → trader
+  badge + conviction badge on matched rows + a **"Tailed only"** filter + a rollup callout. Default view is a
+  **flat per-leg table that reuses the Trades blotter chrome** (Ticker · Type · Avg Cost · Mark · Value · Return ·
+  P&L); **"Group by ticker"** checkbox switches to the accordion-by-underlying view (with per-position
+  Shares:Options + options-risk detail on expand). Ticker links deep-link to the detail via `/picks?ticker=`,
+  consumed once on mount in [`PicksView.tsx`](packages/ui/src/features/picks/PicksView.tsx).
+- **Stock Picks → Overview Equity:Options fix** ([`PortfolioDashboard.tsx`](packages/ui/src/features/picks/components/PortfolioDashboard.tsx)):
+  was reading ~97:3 (it classified each *whole holding* as equity-or-options and summed cost weight, dumping
+  every mixed shares+overlay position into equity). Now computed **per-leg by current market value** (shares ride
+  the live Finnhub quote, option legs their IBKR mark, each cost weight grossed up by `mark÷entry`) — the basis
+  the host actually quotes. Also added an **"Init Wt"** column to the Trades tab ([`TradesTable.tsx`](packages/ui/src/features/picks/components/TradesTable.tsx)).
+- **Known limitation (surfaced this session):** My Portfolio shows **only OPEN positions** — the subscriber IBKR
+  **Flex Query returns current open positions only**, so there is no closed/realized history. Showing closed
+  transactions is a **future task** (would need a different IBKR query / trade-history feed). See Next Steps.
 
 **All event-sourcing work is MERGED to `staging`** (PRs #37/#38/#39). Phases 1–5 are done (details below).
 Authoritative spec: [`plans/legs_event_sourcing_redesign.md`](plans/legs_event_sourcing_redesign.md).
@@ -178,12 +177,24 @@ run DDL locally — apply migrations via the Supabase SQL editor). Prod service 
 
 ## Next Steps
 
-1. **Phase 4 — admin Config + Manage area** — spec'd in
+1. **Ticker Detail page — four-surface dedup (IMMEDIATE next task).** Authoritative spec:
+   [`plans/commentary_vs_transaction_boundary_spec.md`](plans/commentary_vs_transaction_boundary_spec.md)
+   (read first). Goal: give each of the four Ticker Detail surfaces **one job + one owner** so they stop
+   overlapping — **Highlight box** → `holdings.summary` (durable "why"), **Key Points** → `holdings.bullets`
+   (durable pillars), **Commentary** → `conviction_comments` (dated opinion log), **Transaction History** →
+   `leg_transactions.notes` (action log). **Repo-side bug to fix:** the Highlight box currently *echoes the
+   newest Commentary row* and Key Points *restate the latest comment* — they must instead render
+   `holdings.summary` / `holdings.bullets` (both already written, rendered nowhere) in
+   [`HoldingDetail.tsx`](packages/ui/src/features/picks/components/HoldingDetail.tsx). The *writing-side*
+   boundary rules (what each routine stores — the strip-out test, no duplicate content) are mostly **out-of-repo
+   routine work**; the spec is the contract. **No schema change** (spec §Scope says so explicitly).
+
+2. **Phase 4 — admin Config + Manage area** — spec'd in
    [`plans/phase4_admin_manage.md`](plans/phase4_admin_manage.md). Config page edits `app_config`
    (`equity_options_default` / `options_short_long_default`); `useAppConfig` read hook in `@stw/ui`
    (note: `deriveLegWeights` has **no call sites** today, so app-side split-wiring is forward-looking).
    Manage area: **categories CRUD** (delete-guarded), **traders read-only**. One "Manage" nav entry,
-   admin-local. No migrations expected.
+   admin-local. No migrations expected. (Host was "gathering info" as of 2026-06-25 — confirm before building.)
 
 2. ✅ **DONE — deprecated-column cleanup (034 / 035 / 041).** Applied + verified on PROD + SANDBOX
    (2026-06-23). Dropped 9 cols from `holdings` (`position_detail`/`last_*`/`ibkr_legs`/`exit_*`/`basket`)
@@ -191,9 +202,12 @@ run DDL locally — apply migrations via the Supabase SQL editor). Prod service 
    event-sourcing migration plan is **closed** — nothing pending. (`holding_transactions` survives as the
    trigger-written audit log; full table retirement was never in scope.)
 
-3. **Future features (not migration work):** inline 2-line leg editing in the modal (deferred until
-   day-to-day use proves it's needed); `$100k` notional + SPY benchmark (the `spy_daily` table from
-   migration 032 already exists; the population cron + benchmark UI are unbuilt).
+3. **Future features (not migration work):** **My Portfolio closed/realized transactions** — the subscriber
+   IBKR Flex query returns *open positions only*, so the tab can't show closed trades; needs a different IBKR
+   query (trade-history/flex statement) + storage before a closed view is possible (host asked for this
+   2026-06-25). Also: inline 2-line leg editing in the modal (deferred until day-to-day use proves it's needed);
+   `$100k` notional + SPY benchmark (the `spy_daily` table from migration 032 already exists; the population cron
+   + benchmark UI are unbuilt).
 
 **Known gap (not blocking):** the **"Latest Portfolio Changes"** Overview block can't render against
 SANDBOX because the `recent_changes` view (migration 008) was never applied there — `useRecentChanges`
@@ -451,6 +465,21 @@ active filter (closed hidden by default). The FilterBar count shows `N of {total
 - **Sibling tabs read as one app.** The Trades filter bar mirrors the Ticker Details `FilterBar` chrome
   (full-bleed surface bar, same control styling, same wording — e.g. "All Baskets", not "All Sectors").
   When you add a filter/list/blotter surface, reuse the established chrome rather than inventing a new look.
+  This bit hard in the 2026-06-25 My Portfolio work — a from-scratch layout had to be reworked twice to match.
+- **Filter/sort control ORDER is canonical — don't reinvent it per page.** Every filter bar follows
+  **Search → Baskets → (Tiers/Status) → Types → Sort → toggles (checkboxes) → Clear → count**. Sort sits *after*
+  the filters, never second. Match the order in `FilterBar.tsx` / `TradesFilterBar.tsx`; new tabs differ only by
+  which filters exist, not by arrangement.
+- **Timestamps align right; the left of a filter bar is for filters.** A "Last synced / Updated" stamp goes on
+  the **right** of its bar (right-aligned), not the left — the left edge is filter real estate (host, 2026-06-25).
+- **A list/blotter is a flat table by default; grouping is an opt-in checkbox** (like "Tailed only"), not forced
+  sections. My Portfolio reuses the Trades `th`/`td` table styles; its "Group by ticker" toggle is the accordion.
+- **Equity/Shares : Options ratio is computed by current MARKET VALUE, per leg** — shares on the live quote,
+  option legs on their mark (cost weight grossed up by `mark÷entry`). **Never** by cost/premium weight and
+  **never** by classifying a whole holding as equity-or-options (that dumps shares+overlay positions into equity
+  and badly understates options). The host quotes the split by market value (confirmed 2026-06-25 against prod
+  leg data: cost-weight ≈ 87:13 vs market-value ≈ host's 76:24). Same basis on the Stock Picks Overview card and
+  the My Portfolio summary card.
 - **Overview blocks share one header pattern.** Title lives OUTSIDE the card via `SectionHeader`, with an
   optional right-aligned `Updated: {fmtDateTime}` stamp — used by the webinar, changes, unpriced, and
   stale blocks. Don't put a block's title or its date inside the card.
