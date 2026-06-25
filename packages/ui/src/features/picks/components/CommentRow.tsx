@@ -1,5 +1,6 @@
 import { TIERS } from '@stw/shared';
 import type { ConvictionComment, ConvictionSource } from '@stw/shared';
+import { SourceLink } from './SourceLink';
 
 export const SOURCE_LABELS: Record<ConvictionSource, string> = {
   discord:   'Discord',
@@ -51,6 +52,7 @@ export function CommentRow({
             {SOURCE_LABELS[cc.source]}
           </span>
         )}
+        <SourceLink url={cc.source_url} title="Open original message" />
         {isOwn && (
           <span style={{
             fontSize: 9, fontWeight: 600, letterSpacing: '0.08em',

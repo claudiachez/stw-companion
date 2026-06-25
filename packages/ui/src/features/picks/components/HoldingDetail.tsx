@@ -11,6 +11,7 @@ import { useCapabilities } from '../../../context/AppCapabilities';
 import { PositionEditor } from './PositionEditor';
 import { LegTimeline } from './LegTimeline';
 import { ConvictionTimeline } from './ConvictionTimeline';
+import { SourceLink } from './SourceLink';
 
 function PriceEmptyState({ fetchStatus }: { fetchStatus: string }) {
   if (fetchStatus === 'fetching') return <div style={{ fontSize: 12, color: 'var(--t3)', fontStyle: 'italic' }}>Loading…</div>;
@@ -544,10 +545,12 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
           </div>
         </div>
 
-        {/* Thesis summary — the durable "why he's in it" (green card) */}
+        {/* Thesis summary — the durable "why he's in it" (green card). The ↗ opens the
+            original DD message (everyone sees it; Discord gates access). */}
         {h.summary && (
-          <div style={{ padding: '10px 12px', borderRadius: 6, background: tier.bg, border: `1px solid ${tier.border}`, marginBottom: 12, fontSize: 13, color: 'var(--text)', lineHeight: 1.6 }}>
+          <div style={{ position: 'relative', padding: '10px 12px', paddingRight: h.dd_source_url ? 30 : 12, borderRadius: 6, background: tier.bg, border: `1px solid ${tier.border}`, marginBottom: 12, fontSize: 13, color: 'var(--text)', lineHeight: 1.6 }}>
             {h.summary}
+            <SourceLink url={h.dd_source_url} title="Open DD source message" style={{ position: 'absolute', top: 6, right: 6 }} />
           </div>
         )}
 
