@@ -36,6 +36,7 @@ interface TradeRow {
   instrumentType: 'SHARES' | 'OPTION';
   openPrice: number | null; // leg entry_price
   closePrice: number | null;
+  initialWeight: number | null; // leg's entry lot (portfolio weight %)
   currentPnl: number | null;
   realizedPnl: number | null;
   contribution: number | null; // closed-only: realized% × weight sold (portfolio contribution, in pts)
@@ -67,6 +68,7 @@ function buildTrades(holdings: Holding[], cache: Record<string, Quote>): TradeRo
         instrumentType: leg.instrument_type,
         openPrice: leg.entry_price,
         closePrice: leg.exit_price ?? null,
+        initialWeight: leg.initial_weight ?? null,
         currentPnl: isOpen ? legUnrealizedPnlPct(leg, live) : null,
         realizedPnl: isOpen ? null : leg.realized_pnl_pct,
         contribution,
@@ -139,6 +141,7 @@ function pnlCell(v: number | null) {
 }
 const money = (v: number | null) => (v != null ? `$${v.toFixed(2)}` : '—');
 const days = (v: number | null) => (v != null ? `${v}d` : '—');
+const wt = (v: number | null) => (v != null ? `${v.toFixed(1)}%` : '—');
 
 interface Props {
   holdings: Holding[];
@@ -203,6 +206,7 @@ export function TradesTable({ holdings, onSelectTicker }: Props) {
                   <th style={th}>Ticker</th>
                   {!isMobile && <th style={th}>Opened</th>}
                   <th style={thR}>Open</th>
+                  {!isMobile && <th style={thR}>Init Wt</th>}
                   {!isMobile && showClosedCols && <th style={th}>Closed</th>}
                   {!isMobile && showClosedCols && <th style={thR}>Close</th>}
                   <th style={th}>Type</th>
@@ -229,6 +233,7 @@ export function TradesTable({ holdings, onSelectTicker }: Props) {
                       </td>
                       {!isMobile && <td style={{ ...td, color: 'var(--t2)' }}>{fmtTradeDate(t.openDate)}</td>}
                       <td style={{ ...tdR, color: 'var(--t2)' }}>{money(t.openPrice)}</td>
+                      {!isMobile && <td style={{ ...tdR, color: 'var(--t2)' }}>{wt(t.initialWeight)}</td>}
                       {!isMobile && showClosedCols && <td style={{ ...td, color: t.isOpen ? 'var(--t3)' : 'var(--t2)' }}>{t.isOpen ? '—' : fmtTradeDate(t.closeDate)}</td>}
                       {!isMobile && showClosedCols && <td style={{ ...tdR, color: 'var(--t2)' }}>{money(t.closePrice)}</td>}
                       <td style={{ ...td, color: 'var(--t2)', textTransform: 'capitalize' }}>{t.direction}</td>
