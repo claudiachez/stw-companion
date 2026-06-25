@@ -1,6 +1,7 @@
-// Filter + sort controls for the My Portfolio tab. Renders the inner controls only (no
-// surface wrapper) so the page can host them in one bar alongside the sync cluster — mirroring
-// the Ticker Details / Trades filter chrome. State is owned by PortfolioPage.
+// Filter + sort controls for the My Portfolio tab. Control ORDER mirrors the Ticker Details /
+// Trades filter bars (Search → Baskets → Types → Sort → toggles → Clear → count) so the tabs
+// read as one app. Renders inner controls only (no surface wrapper); the page hosts them in one
+// bar with the synced stamp + sync cluster. State is owned by PortfolioPage.
 
 export type PortfolioSort =
   | 'pnl_desc' | 'pnl_asc'
@@ -12,18 +13,20 @@ export type PortfolioType = '' | 'stocks' | 'options';
 
 export interface PortfolioFilters {
   search: string;
-  sort: PortfolioSort;
-  type: PortfolioType;
   basket: string;
+  type: PortfolioType;
+  sort: PortfolioSort;
   tailedOnly: boolean;
+  groupByTicker: boolean;
 }
 
 export const DEFAULT_PORTFOLIO_FILTERS: PortfolioFilters = {
   search: '',
-  sort: 'pnl_desc',
-  type: '',
   basket: '',
+  type: '',
+  sort: 'pnl_desc',
   tailedOnly: false,
+  groupByTicker: false,
 };
 
 const SORT_OPTIONS: { value: PortfolioSort; label: string }[] = [
@@ -43,6 +46,10 @@ const ctrlStyle: React.CSSProperties = {
   cursor: 'pointer', outline: 'none', flexShrink: 0,
 };
 
+const toggleStyle = (on: boolean): React.CSSProperties => ({
+  ...ctrlStyle, display: 'flex', alignItems: 'center', gap: 6, color: on ? 'var(--text)' : 'var(--t2)',
+});
+
 interface Props {
   filters: PortfolioFilters;
   onChange: (next: PortfolioFilters) => void;
@@ -52,8 +59,8 @@ interface Props {
 }
 
 export function PortfolioFilterBar({ filters, onChange, baskets, filtered, total }: Props) {
-  const { search, sort, type, basket, tailedOnly } = filters;
-  const hasFilter = !!search || type !== '' || !!basket || tailedOnly;
+  const { search, basket, type, sort, tailedOnly, groupByTicker } = filters;
+  const hasFilter = !!search || !!basket || type !== '' || tailedOnly;
 
   return (
     <>
@@ -65,16 +72,6 @@ export function PortfolioFilterBar({ filters, onChange, baskets, filtered, total
         style={{ ...ctrlStyle, width: 120, cursor: 'text' }}
       />
 
-      <select value={sort} onChange={(e) => onChange({ ...filters, sort: e.target.value as PortfolioSort })} style={ctrlStyle}>
-        {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-
-      <select value={type} onChange={(e) => onChange({ ...filters, type: e.target.value as PortfolioType })} style={ctrlStyle}>
-        <option value="">All Types</option>
-        <option value="stocks">Stocks</option>
-        <option value="options">Options</option>
-      </select>
-
       {baskets.length > 0 && (
         <select value={basket} onChange={(e) => onChange({ ...filters, basket: e.target.value })} style={ctrlStyle}>
           <option value="">All Baskets</option>
@@ -82,22 +79,29 @@ export function PortfolioFilterBar({ filters, onChange, baskets, filtered, total
         </select>
       )}
 
-      <label
-        style={{ ...ctrlStyle, display: 'flex', alignItems: 'center', gap: 6, color: tailedOnly ? 'var(--text)' : 'var(--t2)' }}
-        title="Show only positions that match a followed trader's pick"
-      >
-        <input
-          type="checkbox"
-          checked={tailedOnly}
-          onChange={(e) => onChange({ ...filters, tailedOnly: e.target.checked })}
-          style={{ accentColor: 'var(--acc)', cursor: 'pointer' }}
-        />
+      <select value={type} onChange={(e) => onChange({ ...filters, type: e.target.value as PortfolioType })} style={ctrlStyle}>
+        <option value="">All Types</option>
+        <option value="stocks">Stocks</option>
+        <option value="options">Options</option>
+      </select>
+
+      <select value={sort} onChange={(e) => onChange({ ...filters, sort: e.target.value as PortfolioSort })} style={ctrlStyle}>
+        {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+
+      <label style={toggleStyle(tailedOnly)} title="Show only positions that match a followed trader's pick">
+        <input type="checkbox" checked={tailedOnly} onChange={(e) => onChange({ ...filters, tailedOnly: e.target.checked })} style={{ accentColor: 'var(--acc)', cursor: 'pointer' }} />
         Tailed only
+      </label>
+
+      <label style={toggleStyle(groupByTicker)} title="Group legs by underlying ticker (off = flat per-leg table)">
+        <input type="checkbox" checked={groupByTicker} onChange={(e) => onChange({ ...filters, groupByTicker: e.target.checked })} style={{ accentColor: 'var(--acc)', cursor: 'pointer' }} />
+        Group by ticker
       </label>
 
       {hasFilter && (
         <button
-          onClick={() => onChange({ ...filters, search: '', type: '', basket: '', tailedOnly: false })}
+          onClick={() => onChange({ ...filters, search: '', basket: '', type: '', tailedOnly: false })}
           style={{ ...ctrlStyle, border: 'none', background: 'none', color: 'var(--t3)', padding: '0 4px' }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--t2)'; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--t3)'; }}
