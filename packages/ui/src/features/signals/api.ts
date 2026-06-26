@@ -35,6 +35,7 @@ export async function fetchGraddox(): Promise<GraddoxData | null> {
     last_updated: row.last_updated ?? '',
     bias: row.bias ?? '',
     bias_note: row.bias_note ?? '',
+    status_note: row.status_note ?? null,
     spx: row.spx ?? emptyLevels,
     qqq: row.qqq ?? emptyLevels,
     spx_price: row.spx_price ?? null,
