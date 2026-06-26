@@ -31,6 +31,7 @@ interface Row {
   ticker: string;
   event_date: string;
   conviction_level: number;
+  prev_conviction_level: number | null;
   comment: string;
   created_at: string | null;
   source: string;
@@ -69,15 +70,17 @@ function classify(rows: Row[], holdings: HoldingRef[]): ConvictionBatch | null {
   const hMap = new Map(holdings.map((h) => [h.ticker, h]));
 
   const changes: ConvictionChange[] = batch.map((b) => {
-    // prior = newest comment for this ticker dated before the batch (any public source).
-    const prior = rows.find((r) => r.ticker === b.ticker && r.event_date < eventDate);
-    const prevLevel = prior ? prior.conviction_level : null;
     const level = b.conviction_level;
+    // Source of truth for the delta is the routine-stamped prior level (043). Fall back to the
+    // most recent prior comment row only when it is unrecorded (legacy rows / pre-043).
+    const prior = rows.find((r) => r.ticker === b.ticker && r.event_date < eventDate);
+    const prevLevel = b.prev_conviction_level ?? (prior ? prior.conviction_level : null);
+
     let dir: ChangeDir;
     if (prevLevel != null) {
       dir = level > prevLevel ? 'up' : level < prevLevel ? 'down' : 'same';
     } else {
-      // No prior conviction note → "new" only if the position itself was recently opened;
+      // No recorded prior → "new" only if the position itself was recently opened;
       // otherwise it is a first-time note on an existing holding → reaffirmed.
       const h = hMap.get(b.ticker);
       const openedRecently =
@@ -86,7 +89,8 @@ function classify(rows: Row[], holdings: HoldingRef[]): ConvictionBatch | null {
         batchMs - new Date(h.action_date + 'T00:00:00').getTime() >= -7 * 86_400_000;
       dir = openedRecently ? 'new' : 'same';
     }
-    return { ticker: b.ticker, level, prevLevel, dir, comment: b.comment, sourceUrl: b.source_url };
+    // A reaffirmation must read as reaffirmed, never as a phantom move, even if prev==current.
+    return { ticker: b.ticker, level, prevLevel: dir === 'same' ? null : prevLevel, dir, comment: b.comment, sourceUrl: b.source_url };
   });
 
   const order: Record<ChangeDir, number> = { up: 0, down: 1, new: 2, same: 3 };
@@ -116,7 +120,7 @@ export function useConvictionChanges(holdings: HoldingRef[]): ConvictionBatch | 
     queryFn: async () => {
       const { data, error } = await getSupabase()
         .from('conviction_comments')
-        .select('ticker, event_date, conviction_level, comment, created_at, source, source_url')
+        .select('ticker, event_date, conviction_level, prev_conviction_level, comment, created_at, source, source_url')
         .is('user_id', null)
         .order('event_date', { ascending: false })
         .order('created_at', { ascending: false })

@@ -59,12 +59,12 @@ function trimSnippet(s: string, n = 180): string {
   return s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s;
 }
 
-// Per-direction badge presentation so the change type is readable by color + label at a glance.
-const CHANGE_META: Record<ChangeDir, { label: string; color: string; bg: string }> = {
-  up:   { label: 'Upgraded',   color: 'var(--c5)', bg: 'var(--c5bg)' },
-  down: { label: 'Downgraded', color: 'var(--c1)', bg: 'var(--c1bg)' },
-  new:  { label: 'New',        color: 'var(--c4)', bg: 'var(--c4bg)' },
-  same: { label: 'Reaffirmed', color: 'var(--t3)', bg: 'var(--s2)'  },
+// Per-direction presentation: a directional glyph (the change indicator) + a color-coded badge.
+const CHANGE_META: Record<ChangeDir, { label: string; color: string; bg: string; arrow: string }> = {
+  up:   { label: 'Upgraded',   color: 'var(--c5)', bg: 'var(--c5bg)', arrow: '▲' },
+  down: { label: 'Downgraded', color: 'var(--c1)', bg: 'var(--c1bg)', arrow: '▼' },
+  new:  { label: 'New',        color: 'var(--c4)', bg: 'var(--c4bg)', arrow: '★' },
+  same: { label: 'Reaffirmed', color: 'var(--t3)', bg: 'var(--s2)',  arrow: '•' },
 };
 
 // One conviction-change line, styled to match the "Latest Portfolio Changes" digest (13px body,
@@ -80,7 +80,8 @@ function ConvictionChangeRow({ c, onSelectTicker }: {
   return (
     <div style={{ marginBottom: 5 }}>
       <TickerLink ticker={c.ticker} onSelect={onSelectTicker} />
-      <SourceLink url={c.sourceUrl} style={{ verticalAlign: 'middle', margin: '0 1px' }} />
+      {' '}
+      <span style={{ color: m.color, fontWeight: 700 }}>{m.arrow}</span>
       {' '}
       <span style={{
         display: 'inline-block', verticalAlign: 'middle',
@@ -100,6 +101,9 @@ function ConvictionChangeRow({ c, onSelectTicker }: {
       </span>
       <span style={{ color: 'var(--t3)' }}>: </span>
       {trimSnippet(c.comment)}
+      {c.sourceUrl && (
+        <SourceLink url={c.sourceUrl} title="Open original message" style={{ verticalAlign: 'middle', marginLeft: 4 }} />
+      )}
     </div>
   );
 }
