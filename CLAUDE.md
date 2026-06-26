@@ -2,7 +2,7 @@
 
 > **⚠️ START HERE — branch.** **`staging` is the active trunk** — all feature work happens here.
 > As of **2026-06-23** `main` was brought **level with `staging`** (the event-sourcing migration plan
-> was completed and promoted), so a fresh clone is current — migrations run to **041**; if migrations
+> was completed and promoted), so a fresh clone is current — migrations run to **043**; if migrations
 > stop at 021 you are on a stale checkout, re-sync. **First command every session:**
 > `git fetch origin && git checkout staging && git pull --ff-only`.
 > Feature branches cut from `staging`, PR to `staging`. `main` is promoted only by an approved
@@ -20,40 +20,43 @@
 
 ---
 
-## Current Status — My Portfolio tab rebuilt; next = Ticker Detail surface dedup (handoff 2026-06-25)
+## Current Status — Ticker Detail four-surface dedup SHIPPED + Conviction Changes block (handoff 2026-06-25 PM)
 
-**✅ PLAN CLOSED (2026-06-23) — legs/transaction-history event-sourcing migration is DONE and on `main`.**
-Phases 1–5 shipped; the deprecated-column cleanup (migrations **034 + 035 + 041**) was applied and
-**verified on BOTH PROD and SANDBOX** — all 14 columns dropped, rows intact, the app's category-derived
-`basket` and leg-embed query return clean. Routines were reviewed (all 4 write only the new path) and a
-PROD logical backup was taken (local, gitignored `backups/` — `*_pre-coldrop.json`) before the drops. `staging` was
-promoted to `main`. The next work is **Phase 4** + other forward features (see Next Steps) — the
-event-sourcing schema work itself is complete; do not reopen it.
+**This session (PRs #50–#53 MERGED to `staging`) — Ticker Detail surface boundary, DD thesis backfill,
+source-message links, and a rebuilt Conviction Changes Overview block. Migrations 042 + 043.**
+- **Four-surface boundary (was Next Steps #1 — DONE).** The renderer already read `holdings.summary`/`bullets`
+  correctly; the real bug was **polluted data** (episodic commentary stored as the durable thesis) + no
+  summary↔bullets rule. Fixed: spec §2A boundary + de-dupe test
+  ([`plans/commentary_vs_transaction_boundary_spec.md`](plans/commentary_vs_transaction_boundary_spec.md)) +
+  a one-time **thesis backfill** ([`plans/thesis_backfill.sql`](plans/thesis_backfill.sql)) sourced from the
+  per-ticker DD files (see Conventions → DD files / Ticker Detail surfaces).
+- **Source-message links — migration `042_dd_source_urls.sql`** (`holdings.dd_source_url` +
+  `conviction_comments.source_url`). "Open original message" icon
+  ([`SourceLink.tsx`](packages/ui/src/features/picks/components/SourceLink.tsx)) on the Highlight box +
+  Commentary rows; shown to everyone (Discord gates access — membership-companion model).
+- **Conviction Changes Overview block** ([`PortfolioDashboard.tsx`](packages/ui/src/features/picks/components/PortfolioDashboard.tsx)
+  + [`useConvictionChanges.ts`](packages/ui/src/features/picks/useConvictionChanges.ts)) — replaces the flat
+  "notes updated for N positions" dump with ▲ upgraded / ▼ downgraded / ★ new lines (directional icon + badge +
+  `prev → current` + why), styled to match Latest Portfolio Changes; reaffirmed collapse to a chip line.
+- **Conviction delta = routine-recorded, NOT app-guessed — migration `043_conviction_prev_level.sql`**
+  (`conviction_comments.prev_conviction_level`). The app was diffing sparse comment-level history and
+  contradicting the routine (false upgrades on stale priors; missed upgrades when a bumped ticker had no prior
+  comment). Now the routines stamp the prior conviction on each comment and the block renders it directly.
+  Backfilled the current batch on PROD ([`plans/conviction_prev_level_backfill.sql`](plans/conviction_prev_level_backfill.sql)).
 
-**Latest (2026-06-25, PRs #44–#49 MERGED to `staging`, branches deleted) — My Portfolio (subscriber) tab rebuilt + Stock Picks ratio fix. No schema/migration changes this session.**
-- **My Portfolio** ([`PortfolioPage.tsx`](packages/ui/src/features/portfolio/PortfolioPage.tsx) +
-  [`PortfolioFilterBar.tsx`](packages/ui/src/features/portfolio/PortfolioFilterBar.tsx)) — the subscriber's
-  own IBKR book (`user_positions`). Summary stat cards: **Legs · Market Value · Return · Equity:Options (by
-  market value) · Options at risk**. Trader-aware **"tailed picks"** model (`FOLLOWED_TRADERS`; only STW wired
-  today, generalized for more): a `pickMap` matches the user's tickers to a followed trader's holdings → trader
-  badge + conviction badge on matched rows + a **"Tailed only"** filter + a rollup callout. Default view is a
-  **flat per-leg table that reuses the Trades blotter chrome** (Ticker · Type · Avg Cost · Mark · Value · Return ·
-  P&L); **"Group by ticker"** checkbox switches to the accordion-by-underlying view (with per-position
-  Shares:Options + options-risk detail on expand). Ticker links deep-link to the detail via `/picks?ticker=`,
-  consumed once on mount in [`PicksView.tsx`](packages/ui/src/features/picks/PicksView.tsx).
-- **Stock Picks → Overview Equity:Options fix** ([`PortfolioDashboard.tsx`](packages/ui/src/features/picks/components/PortfolioDashboard.tsx)):
-  was reading ~97:3 (it classified each *whole holding* as equity-or-options and summed cost weight, dumping
-  every mixed shares+overlay position into equity). Now computed **per-leg by current market value** (shares ride
-  the live Finnhub quote, option legs their IBKR mark, each cost weight grossed up by `mark÷entry`) — the basis
-  the host actually quotes. Also added an **"Init Wt"** column to the Trades tab ([`TradesTable.tsx`](packages/ui/src/features/picks/components/TradesTable.tsx)).
-- **Known limitation (surfaced this session):** My Portfolio shows **only OPEN positions** — the subscriber IBKR
-  **Flex Query returns current open positions only**, so there is no closed/realized history. Showing closed
-  transactions is a **future task** (would need a different IBKR query / trade-history feed). See Next Steps.
+**DB state:**
+- **PROD (`usmqbohcjcyszjxxvnqu`):** 042 + 043 applied; thesis backfill (36 tickers) + prev-level backfill
+  applied + **verified** (CTS/MITK/FPS upgrades, AMKR/NBIS/LEU reaffirmed — matches the routine's report).
+- **SANDBOX (`uolabcgbnrkhzpwuvzlk`):** 042 + 043 columns + thesis backfill applied. **PENDING: the
+  `prev_conviction_level` backfill was NOT run on sandbox** (dev-only; sandbox conviction data is stale so the
+  block hides there anyway — low priority).
 
-**All event-sourcing work is MERGED to `staging`** (PRs #37/#38/#39). Phases 1–5 are done (details below).
-Authoritative spec: [`plans/legs_event_sourcing_redesign.md`](plans/legs_event_sourcing_redesign.md).
-**Phases 1–3 verified on SANDBOX; clean import + post-import holdings fix applied to BOTH PROD + SANDBOX**
-(see DB state). The next code task is **Phase 4** (see Next Steps) — not started.
+**⏳ PENDING — production deploy:** all of the above is on **`staging`, NOT `main`**. Promoting `staging → main`
+is the production deploy and needs **explicit approval** (the PROD *database* already has the additive columns;
+old production code ignores them, so nothing is broken meanwhile).
+
+**Event-sourcing migration plan is CLOSED (on `main` since 2026-06-23) — do not reopen.** The weight model,
+locked decisions, and Phase-5 routine semantics below remain authoritative reference.
 
 **Why:** the old editor was split-brain — it wrote BOTH `legs` (directly) and `leg_transactions`, which
 fought on save, diverged, and stamped synthetic dates. Now committed to **true event-sourcing**:
@@ -177,17 +180,18 @@ run DDL locally — apply migrations via the Supabase SQL editor). Prod service 
 
 ## Next Steps
 
-1. **Ticker Detail page — four-surface dedup (IMMEDIATE next task).** Authoritative spec:
-   [`plans/commentary_vs_transaction_boundary_spec.md`](plans/commentary_vs_transaction_boundary_spec.md)
-   (read first). Goal: give each of the four Ticker Detail surfaces **one job + one owner** so they stop
-   overlapping — **Highlight box** → `holdings.summary` (durable "why"), **Key Points** → `holdings.bullets`
-   (durable pillars), **Commentary** → `conviction_comments` (dated opinion log), **Transaction History** →
-   `leg_transactions.notes` (action log). **Repo-side bug to fix:** the Highlight box currently *echoes the
-   newest Commentary row* and Key Points *restate the latest comment* — they must instead render
-   `holdings.summary` / `holdings.bullets` (both already written, rendered nowhere) in
-   [`HoldingDetail.tsx`](packages/ui/src/features/picks/components/HoldingDetail.tsx). The *writing-side*
-   boundary rules (what each routine stores — the strip-out test, no duplicate content) are mostly **out-of-repo
-   routine work**; the spec is the contract. **No schema change** (spec §Scope says so explicitly).
+0. **Promote `staging → main` when approved (production deploy).** This session's PRs #50–#53 are on
+   `staging` only. Open a `staging → main` PR **only on explicit host approval**.
+
+1. **Overview/experience enrichment — queued this session (host-requested, not started).** Host wants the
+   Overview to *say more* and stop the click-each-ticker experience. Two scoped ideas:
+   - **Transcripts library tab** — a NEW subscriber-facing **episode recap** (a mix of the host's *trading
+     psychology* + that episode's *per-ticker commentary*). **NOT** the local methodology `.md` files (those
+     stay private, apps never read them). Needs a new `webinars` table written by `stw-transcripts` + a new
+     tab. Schema + routine + UI.
+   - **Global Activity Feed** — one cross-ticker, reverse-chron feed merging Commentary + Transactions across
+     all holdings, filterable, each row linking to its ticker. No schema (reads `conviction_comments` +
+     `leg_transactions`). Highest-impact, lowest-cost.
 
 2. **Phase 4 — admin Config + Manage area** — spec'd in
    [`plans/phase4_admin_manage.md`](plans/phase4_admin_manage.md). Config page edits `app_config`
@@ -196,24 +200,16 @@ run DDL locally — apply migrations via the Supabase SQL editor). Prod service 
    Manage area: **categories CRUD** (delete-guarded), **traders read-only**. One "Manage" nav entry,
    admin-local. No migrations expected. (Host was "gathering info" as of 2026-06-25 — confirm before building.)
 
-2. ✅ **DONE — deprecated-column cleanup (034 / 035 / 041).** Applied + verified on PROD + SANDBOX
-   (2026-06-23). Dropped 9 cols from `holdings` (`position_detail`/`last_*`/`ibkr_legs`/`exit_*`/`basket`)
-   and 5 from `holding_transactions` (`position_detail`/`price`/`pnl_pct`/`leg`/`direction`). The
-   event-sourcing migration plan is **closed** — nothing pending. (`holding_transactions` survives as the
-   trigger-written audit log; full table retirement was never in scope.)
-
 3. **Future features (not migration work):** **My Portfolio closed/realized transactions** — the subscriber
    IBKR Flex query returns *open positions only*, so the tab can't show closed trades; needs a different IBKR
-   query (trade-history/flex statement) + storage before a closed view is possible (host asked for this
-   2026-06-25). Also: inline 2-line leg editing in the modal (deferred until day-to-day use proves it's needed);
-   `$100k` notional + SPY benchmark (the `spy_daily` table from migration 032 already exists; the population cron
-   + benchmark UI are unbuilt).
+   query (trade-history/flex statement) + storage before a closed view is possible (host asked 2026-06-25).
+   Also: inline 2-line leg editing in the modal (deferred); `$100k` notional + SPY benchmark (the `spy_daily`
+   table from migration 032 already exists; the population cron + benchmark UI are unbuilt).
 
-**Known gap (not blocking):** the **"Latest Portfolio Changes"** Overview block can't render against
-SANDBOX because the `recent_changes` view (migration 008) was never applied there — `useRecentChanges`
-errors and the block hides. PROD has the view (block renders fine). Apply 008 to sandbox if you want to
-verify that block locally. (The webinar "Conviction Notes Updates" block uses the same `SectionHeader`
-mechanism and does render, so the pattern is verified.)
+**Sandbox gaps (not blocking, dev-only):** (a) the **`prev_conviction_level` backfill** was never run on
+sandbox, so the Conviction Changes block won't render there until it is (or until a real batch lands); (b) the
+`recent_changes` view (migration 008) was never applied to sandbox, so **"Latest Portfolio Changes"** hides
+there. Both render fine on PROD. Apply them to sandbox only if you want those blocks locally.
 
 ---
 
@@ -249,7 +245,7 @@ apps/
   admin/                     admin shell: no paywall, Edit + Users + IBKR
     ibkr_proxy.py            local IBKR writer (run on your machine, not deployed)
     netlify.toml             (Netlify base dir = apps/admin)
-supabase/migrations/         001..041 — single source of truth for DB schema/RLS
+supabase/migrations/         001..043 — single source of truth for DB schema/RLS
 CLAUDE.md                    this file
 ```
 
@@ -324,7 +320,7 @@ OAuth on web does a full-page redirect).
 ## Database (Supabase)
 
 - Project: `usmqbohcjcyszjxxvnqu.supabase.co`; client created per-app and injected into `@stw/ui`.
-- `supabase/migrations/` is the single source of truth (through **041**).
+- `supabase/migrations/` is the single source of truth (through **043**).
   **Claude authors migrations; you apply them** via the Supabase SQL editor / `supabase db push`.
 - **Local DB backups → gitignored `backups/`** (never committed — may carry PII), named
   `<date>_<purpose>.json` (e.g. `*_pre-coldrop.json`). Take a fresh logical snapshot of the
@@ -485,6 +481,26 @@ active filter (closed hidden by default). The FilterBar count shows `N of {total
   stale blocks. Don't put a block's title or its date inside the card.
 - **Admin-only action hints.** Instructions a subscriber can't act on (e.g. "Run the IBKR sync") render
   only when `canEdit`; the explanation still shows to everyone.
+- **Ticker Detail = four non-overlapping surfaces, one job each** (contract:
+  [`plans/commentary_vs_transaction_boundary_spec.md`](plans/commentary_vs_transaction_boundary_spec.md)):
+  **Highlight box** = `holdings.summary` (durable narrative paragraph) · **Key Points** = `holdings.bullets`
+  (durable supporting detail — receipts + angles, **de-duped vs the summary**, never restating it; §2A) ·
+  **Commentary** = `conviction_comments` (dated episodic views) · **Transaction History** =
+  `leg_transactions.notes` (mechanics). Never re-derive one surface from another in the renderer.
+- **Durable thesis source = local DD files** at `~/Documents/Claude/Projects/Stock Talk Weekly/Tickers DD/<TICKER>.md`
+  (one per opened position; line 1 is a `**Source:** [Discord](url)` link; template `_TEMPLATE.md`). The apps
+  NEVER read these — `holdings.summary`/`bullets` are the condensed projection, written from them by the
+  routines (create on new position, non-destructive update on a durable DD expansion). Same private-library
+  pattern as the methodology `.md` files.
+- **Conviction delta is routine-recorded, never app-derived.** The Conviction Changes Overview block reads
+  `conviction_comments.prev_conviction_level` (043) → renders `prev → current` directly. Do NOT reconstruct
+  changes by diffing comment-level history across rows — it's sparse and contradicts the routine. The routine
+  stamps the prior conviction on every comment it writes (= current when reaffirming).
+- **Source-message icon is shown to everyone.** The "open original message" link (`dd_source_url` /
+  `source_url`, via `SourceLink`) renders for all users — the platform is a companion to the Discord
+  membership, so Discord itself gates access (member sees the message, non-member hits Discord's no-access
+  screen). Don't admin-gate it. Use a directional glyph (▲▼★) for change *direction* and the external-link
+  glyph only for *opening the source* — don't conflate the two.
 
 ---
 
