@@ -35,6 +35,9 @@ export interface GraddoxData {
   last_updated: string;
   bias: BiasLabel;
   bias_note: string;
+  /** Optional status note (045) — e.g. "Morning prep resumes 7/7" during a host break.
+   *  Shown by the Signals view when the latest read is stale (no report for today). */
+  status_note: string | null;
   spx: LevelSet;
   qqq: LevelSet;
   spx_price: number | null;

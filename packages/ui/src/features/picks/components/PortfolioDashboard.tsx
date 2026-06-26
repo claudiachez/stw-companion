@@ -1,7 +1,6 @@
 import { bColor, holdingPnlPct, legIsOpen, legMarkReason, fmtLegInstrument, fmtDateTime, TIERS } from '@stw/shared';
 import { usePriceCacheStore } from '../../../store/priceCache';
 import { useRecentChanges } from '../useRecentChanges';
-import { useLatestRun } from '../useLatestRun';
 import { useConvictionChanges, type ConvictionChange, type ChangeDir } from '../useConvictionChanges';
 import { TickerLink } from '../../../primitives/TickerLink';
 import { SourceLink } from './SourceLink';
@@ -119,7 +118,6 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
   const { data: changes } = useRecentChanges(1);
   const latestChange = changes?.[0] ?? null;
   const convBatch = useConvictionChanges(holdings);
-  const { data: lastRun } = useLatestRun();
 
   const active = holdings.filter((h) => h.ticker !== 'CASH' && h.last_action !== 'Closed');
 
@@ -278,16 +276,6 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
 
       {/* Right column — activity + data status */}
       <div>
-
-      {/* Freshness disclosure — the routine checks on a schedule but only posts when the host acts,
-          so older dates below are "no newer signal", not stale data. `lastRun` includes no-change
-          runs (recent_changes hides them), so this reflects the true last check. */}
-      {lastRun?.ran_at && (
-        <div style={{ fontSize: 11, color: 'var(--t3)', lineHeight: 1.5, marginBottom: 16 }}>
-          Last checked <span style={{ color: 'var(--t2)' }}>{fmtDateTime(new Date(lastRun.ran_at))}</span>.
-          The host posts changes intermittently — older dates below reflect his latest action, not stale data.
-        </div>
-      )}
 
       {/* Conviction Changes — the latest batch, classified ▲ upgraded / ▼ downgraded / ★ new, each
           with the level move and a one-line why. Reaffirmed (unchanged) collapse to a chip list. */}
