@@ -223,6 +223,41 @@ export function ratesDollarLabel(score: number | null): string {
   return 'Headwind';
 }
 
+// ── Module 8: GEX / Positioning (tactical overlay) ──────────────────
+// The host-authored bias text is free-form; normalize it case-insensitively.
+
+/** GEX bias text → 0–100 score. Bullish 90 · Flat 55 · Conflicted 35 · Bearish 10. */
+export function gexScore(bias: string | null | undefined): number | null {
+  if (!bias) return null;
+  const b = bias.toLowerCase();
+  if (b.includes('bull')) return 90;
+  if (b.includes('bear')) return 10;
+  if (b.includes('conflict') || b.includes('mixed')) return 35;
+  return 55; // flat / neutral / unknown
+}
+
+/** Canonical one-word label for a GEX bias. */
+export function gexBiasLabel(bias: string | null | undefined): string {
+  if (!bias) return '—';
+  const b = bias.toLowerCase();
+  if (b.includes('bull')) return 'Bullish';
+  if (b.includes('bear')) return 'Bearish';
+  if (b.includes('conflict') || b.includes('mixed')) return 'Conflicted';
+  return 'Flat';
+}
+
+/** Short trade implication from the bias. */
+export function gexImplication(bias: string | null | undefined): string {
+  const label = gexBiasLabel(bias);
+  switch (label) {
+    case 'Bullish':    return 'Breakouts acceptable; dips into support can be bought.';
+    case 'Bearish':    return 'Avoid chasing longs until a reclaim above the GEX pivot.';
+    case 'Conflicted': return 'Two-sided tape — wait for a level to break before committing.';
+    case 'Flat':       return 'Range-bound; fade extremes into the marked levels.';
+    default:           return 'No current positioning read.';
+  }
+}
+
 // ── Realized volatility (promoted from useSentimentGauge) ────────────
 /**
  * Annualized 30-day realized volatility (%) from a daily close series:

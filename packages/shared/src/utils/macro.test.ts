@@ -6,6 +6,7 @@ import {
   volatilityStressScore, stressLabel, percentileRank,
   creditHygScore, creditLabel,
   us10yScore, uupScore, ratesDollarScore, ratesDollarLabel,
+  gexScore, gexBiasLabel, gexImplication,
 } from './macro';
 
 describe('trendBucket', () => {
@@ -189,6 +190,26 @@ describe('rates + dollar scorers', () => {
     expect(ratesDollarLabel(70)).toBe('Tailwind');
     expect(ratesDollarLabel(50)).toBe('Neutral');
     expect(ratesDollarLabel(20)).toBe('Headwind');
+  });
+});
+
+describe('gex / positioning scorers', () => {
+  it('gexScore maps bias text to a score', () => {
+    expect(gexScore('Bullish')).toBe(90);
+    expect(gexScore('strongly bearish')).toBe(10);
+    expect(gexScore('conflicted')).toBe(35);
+    expect(gexScore('flat / neutral')).toBe(55);
+    expect(gexScore('')).toBeNull();
+    expect(gexScore(null)).toBeNull();
+  });
+  it('gexBiasLabel canonicalizes', () => {
+    expect(gexBiasLabel('BULLISH bias')).toBe('Bullish');
+    expect(gexBiasLabel('mixed')).toBe('Conflicted');
+    expect(gexBiasLabel(undefined)).toBe('—');
+  });
+  it('gexImplication gives an action line per bias', () => {
+    expect(gexImplication('bearish')).toMatch(/avoid chasing/i);
+    expect(gexImplication('bullish')).toMatch(/breakouts/i);
   });
 });
 

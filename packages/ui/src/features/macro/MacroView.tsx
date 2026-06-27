@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { environmentScore, regimeBand, trendSleeveScore } from '@stw/shared';
+import { environmentScore, regimeBand, trendSleeveScore, gexScore } from '@stw/shared';
 import { useCapabilities } from '../../context/AppCapabilities';
 import {
   useMacroIndicators, ALL_INDICATORS,
@@ -17,6 +17,7 @@ import { TrendStructureTable } from './components/TrendStructureTable';
 import { VolatilityStressCard } from './components/VolatilityStressCard';
 import { CreditLiquidityCard } from './components/CreditLiquidityCard';
 import { RatesDollarCard } from './components/RatesDollarCard';
+import { GexPositioningCard } from './components/GexPositioningCard';
 import { SentimentGauge } from './components/SentimentGauge';
 import { MacroRecapCard } from './components/MacroRecapCard';
 
@@ -54,8 +55,9 @@ export function MacroView() {
 
   const visibleIndicators = indicators.filter((i) => visibleSymbols.includes(i.symbol));
 
-  // Market Regime — weighted module scores. Trend + Volatility sleeves are live;
-  // the rest fill in as Modules 6–8 are built (missing weight redistributes).
+  // Market Regime — weighted module scores across all five sleeves
+  // (a missing sleeve redistributes its weight across the present ones).
+  const gexSleeve = gexScore(graddox?.bias);
   const regime = useMemo(() => {
     const trend = trendSleeveScore(visibleIndicators.map((i) => i.bucket));
     const env = environmentScore([
@@ -63,10 +65,10 @@ export function MacroView() {
       { key: 'volatility', score: volatility?.sleeveScore ?? null },
       { key: 'credit', score: credit?.sleeveScore ?? null },
       { key: 'rates_dollar', score: rates?.sleeveScore ?? null },
-      { key: 'gex', score: null },
+      { key: 'gex', score: gexSleeve },
     ]);
     return env === null ? null : regimeBand(env);
-  }, [visibleIndicators, volatility?.sleeveScore, credit?.sleeveScore, rates?.sleeveScore]);
+  }, [visibleIndicators, volatility?.sleeveScore, credit?.sleeveScore, rates?.sleeveScore, gexSleeve]);
 
   const updatedAt = useMemo(() => (indLoading ? null : new Date()), [indLoading]);
 
@@ -119,6 +121,14 @@ export function MacroView() {
         <SectionHeader title="Rates + Dollar Headwinds" />
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
           <RatesDollarCard data={rates} loading={ratesLoading} stressRising={stressRising} />
+        </div>
+      </section>
+
+      {/* ── Module 8: GEX / Positioning ────────────────────────────── */}
+      <section>
+        <SectionHeader title="GEX / Positioning" />
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
+          <GexPositioningCard graddox={graddox} loading={!graddox} />
         </div>
       </section>
 
