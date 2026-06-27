@@ -37,7 +37,11 @@ export function useWeeklyRecap() {
         },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`;
+        try { const b = await res.json() as { error?: string }; if (b?.error) detail = b.error; } catch { /* non-JSON body */ }
+        throw new Error(detail);
+      }
       const data = await res.json() as MacroRecap;
       setRecap(data);
       try { localStorage.setItem(isoWeekKey(), JSON.stringify(data)); } catch { /* ignore */ }

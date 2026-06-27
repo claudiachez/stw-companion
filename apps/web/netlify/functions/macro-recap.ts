@@ -17,7 +17,7 @@ import type { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
 
 function err(statusCode: number, message: string) {
-  return { statusCode, body: JSON.stringify({ error: message }) };
+  return { statusCode, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: message }) };
 }
 
 interface RecapModule { score: number | null; label: string; fiveDayDelta?: number | null }
@@ -51,9 +51,14 @@ export const handler: Handler = async (event) => {
   if (!anthropicKey) return err(500, 'AI service not configured');
 
   if (token) {
-    const supabase = createClient(supabaseUrl, serviceKey);
-    const { error: authError } = await supabase.auth.getUser(token);
-    if (authError) return err(401, 'Unauthorized');
+    try {
+      const supabase = createClient(supabaseUrl, serviceKey);
+      const { error: authError } = await supabase.auth.getUser(token);
+      if (authError) return err(401, 'Unauthorized');
+    } catch (e) {
+      console.error('macro-recap auth error:', e);
+      return err(401, 'Auth check failed');
+    }
   }
 
   // ── Parse body ─────────────────────────────────────────
@@ -115,8 +120,9 @@ Return only the JSON object, no other text.`;
     });
 
     if (!res.ok) {
-      console.error('Anthropic API error:', res.status, await res.text());
-      return err(502, 'AI generation failed');
+      const detail = (await res.text()).slice(0, 300);
+      console.error('Anthropic API error:', res.status, detail);
+      return err(502, `Anthropic ${res.status}: ${detail}`);
     }
 
     const data = await res.json() as { content?: { type: string; text?: string }[] };
@@ -132,6 +138,6 @@ Return only the JSON object, no other text.`;
     };
   } catch (e) {
     console.error('macro-recap error:', e);
-    return err(500, 'AI generation failed');
+    return err(500, `AI generation failed: ${e instanceof Error ? e.message : 'unknown'}`);
   }
 };
