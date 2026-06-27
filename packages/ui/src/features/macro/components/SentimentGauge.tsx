@@ -38,40 +38,44 @@ export function SentimentGauge({ score, loading }: Props) {
 
   return (
     // Two columns on desktop (gauge ┃ breakdown), stacks on mobile — fills the width.
-    <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center' }}>
+    <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
 
-      {/* Gauge */}
-      <div style={{ flex: '1 1 260px', minWidth: 240, maxWidth: 380, margin: '0 auto' }}>
+      {/* Gauge — pinned in a fixed-height, clipped box so the library's re-render
+          on scroll/resize can't reflow the page or leave an empty block. */}
+      <div style={{ flex: '1 1 260px', minWidth: 240, maxWidth: 340, margin: '0 auto' }}>
         {total !== null && z ? (
           <>
-            <GaugeComponent
-              type="semicircle"
-              value={total}
-              minValue={0}
-              maxValue={100}
-              arc={{
-                width: 0.22,
-                padding: 0.008,
-                cornerRadius: 2,
-                subArcs: [
-                  { limit: 25, color: '#ef4444' },
-                  { limit: 45, color: '#f97316' },
-                  { limit: 55, color: '#9ca3af' },
-                  { limit: 75, color: '#14b8a6' },
-                  { limit: 100, color: '#22c55e' },
-                ],
-              }}
-              pointer={{ type: 'needle', color: '#6b7280', width: 12, length: 0.72, elastic: true }}
-              labels={{
-                valueLabel: { formatTextValue: (v) => `${Math.round(v)}`, style: { fill: z.color, fontSize: '34px', textShadow: 'none' } },
-                tickLabels: {
-                  type: 'outer',
-                  defaultTickValueConfig: { style: { fill: '#9ca3af', fontSize: '8px' } },
-                  ticks: [{ value: 25 }, { value: 50 }, { value: 75 }],
-                },
-              }}
-            />
-            <div style={{ textAlign: 'center', marginTop: 2 }}>
+            <div style={{ height: 168, overflow: 'hidden' }}>
+              <GaugeComponent
+                type="semicircle"
+                value={total}
+                minValue={0}
+                maxValue={100}
+                marginInPercent={{ top: 0.04, bottom: 0.0, left: 0.05, right: 0.05 }}
+                arc={{
+                  width: 0.22,
+                  padding: 0.008,
+                  cornerRadius: 2,
+                  subArcs: [
+                    { limit: 25, color: '#ef4444' },
+                    { limit: 45, color: '#f97316' },
+                    { limit: 55, color: '#9ca3af' },
+                    { limit: 75, color: '#14b8a6' },
+                    { limit: 100, color: '#22c55e' },
+                  ],
+                }}
+                pointer={{ type: 'needle', color: '#6b7280', width: 12, length: 0.72, elastic: true }}
+                labels={{
+                  valueLabel: { formatTextValue: (v) => `${Math.round(v)}`, style: { fill: z.color, fontSize: '34px', textShadow: 'none' } },
+                  tickLabels: {
+                    type: 'outer',
+                    defaultTickValueConfig: { style: { fill: '#9ca3af', fontSize: '8px' } },
+                    ticks: [{ value: 25 }, { value: 50 }, { value: 75 }],
+                  },
+                }}
+              />
+            </div>
+            <div style={{ textAlign: 'center', marginTop: 6 }}>
               <div style={{ fontSize: 16, fontWeight: 700, color: z.color }}>{z.label}</div>
               <div style={{ fontSize: 11, color: 'var(--t3)' }}>Risk appetite · 0 = fear, 100 = greed</div>
             </div>

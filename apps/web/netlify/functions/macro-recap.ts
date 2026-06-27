@@ -52,7 +52,11 @@ export const handler: Handler = async (event) => {
 
   if (token) {
     try {
-      const supabase = createClient(supabaseUrl, serviceKey);
+      // Match ibkr-flex: disable session persistence/refresh — there is no browser
+      // storage in the Node runtime, and the default client throws without this.
+      const supabase = createClient(supabaseUrl, serviceKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
       const { error: authError } = await supabase.auth.getUser(token);
       if (authError) return err(401, 'Unauthorized');
     } catch (e) {
