@@ -18,13 +18,13 @@ export function useMacroPrefs() {
   const user = useAuthStore((s) => s.user);
   const [prefs, setPrefs] = useState<MacroPrefs>(loadFromStorage);
 
-  // Load from profiles if logged in
+  // Load from profiles if logged in (profiles PK is user_id, not id)
   useEffect(() => {
     if (!user) return;
     getSupabase()
       .from('profiles')
       .select('macro_prefs')
-      .eq('id', user.id)
+      .eq('user_id', user.id)
       .maybeSingle()
       .then(({ data }) => {
         if (!data) return;
@@ -34,17 +34,6 @@ export function useMacroPrefs() {
           localStorage.setItem(LS_KEY, JSON.stringify(mp));
         }
       });
-  }, [user?.id]);
-
-  const save = useCallback(async (next: MacroPrefs) => {
-    setPrefs(next);
-    localStorage.setItem(LS_KEY, JSON.stringify(next));
-    if (user) {
-      await getSupabase()
-        .from('profiles')
-        .update({ macro_prefs: next })
-        .eq('id', user.id);
-    }
   }, [user?.id]);
 
   const toggle = useCallback((symbol: string) => {
@@ -57,15 +46,12 @@ export function useMacroPrefs() {
       };
       localStorage.setItem(LS_KEY, JSON.stringify(next));
       if (user) {
-        getSupabase()
-          .from('profiles')
-          .update({ macro_prefs: next })
-          .eq('id', user.id)
-          .then(() => {});
+        // Use security-definer function (same pattern as set_my_preferences)
+        getSupabase().rpc('set_my_macro_prefs', { prefs: next }).then(() => {});
       }
       return next;
     });
   }, [user?.id]);
 
-  return { prefs, save, toggle, defaultVisible: DEFAULT_VISIBLE };
+  return { prefs, toggle, defaultVisible: DEFAULT_VISIBLE };
 }
