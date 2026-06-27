@@ -1,0 +1,115 @@
+import type {
+  TrendBucket, RegimeSleeveKey, RegimeLabel, RegimeRead,
+} from '../types/macro';
+
+// ── Regime sleeve weights (Environment Score) ───────────────────────
+// GEX is a tactical overlay weighted alongside macro structure — bearish GEX
+// downgrades confidence but cannot alone flip Risk-Off when trend + credit hold.
+export const SLEEVE_WEIGHTS: Record<RegimeSleeveKey, number> = {
+  trend: 0.30,
+  volatility: 0.20,
+  credit: 0.15,
+  rates_dollar: 0.15,
+  gex: 0.20,
+};
+
+// ── Trend / Market Structure (Module 4) ─────────────────────────────
+export interface TrendBucketMeta {
+  /** Short label for a row / chip, e.g. "Momentum". */
+  label: string;
+  /** Group-header label, e.g. "ABOVE 9 · 21 · 200 — MOMENTUM". */
+  groupLabel: string;
+  /** 0–100 sub-score this bucket contributes to the trend sleeve. */
+  score: number;
+}
+
+export const TREND_BUCKET_META: Record<TrendBucket, TrendBucketMeta> = {
+  momentum:         { label: 'Momentum',           groupLabel: 'ABOVE 9 · 21 · 200 — MOMENTUM',              score: 90 },
+  healthy_pullback: { label: 'Healthy Pullback',   groupLabel: 'ABOVE 21 · 200, BELOW 9 — HEALTHY PULLBACK', score: 70 },
+  mid_caution:      { label: 'Mid-Term Caution',   groupLabel: 'ABOVE 200, BELOW 9 · 21 — MID-TERM CAUTION', score: 50 },
+  bear_rally:       { label: 'Recovery Attempt',   groupLabel: 'BELOW 200, ABOVE 9/21 — BEAR-MARKET RALLY',  score: 35 },
+  risk_off:         { label: 'Risk-Off Trend',     groupLabel: 'BELOW 9 · 21 · 200 — RISK-OFF',              score: 10 },
+};
+
+export const TREND_BUCKET_ORDER: TrendBucket[] = [
+  'momentum', 'healthy_pullback', 'mid_caution', 'bear_rally', 'risk_off',
+];
+
+/**
+ * Classify a close vs its 9/21/200 MAs into one of the five structure buckets.
+ * Returns null when any MA is missing (insufficient history). The key v2 fix is
+ * the `bear_rally` bucket: below the 200D but bouncing above 9/21D is NOT bullish.
+ */
+export function trendBucket(
+  close: number | null,
+  ma9: number | null,
+  ma21: number | null,
+  ma200: number | null,
+): TrendBucket | null {
+  if (close === null || ma9 === null || ma21 === null || ma200 === null) return null;
+  const a9 = close > ma9;
+  const a21 = close > ma21;
+  const a200 = close > ma200;
+  if (a200) {
+    if (a9 && a21) return 'momentum';
+    if (a21 && !a9) return 'healthy_pullback';
+    return 'mid_caution'; // above 200 but below 21 (and maybe 9)
+  }
+  return (a9 || a21) ? 'bear_rally' : 'risk_off';
+}
+
+export function trendSubScore(bucket: TrendBucket | null): number | null {
+  return bucket === null ? null : TREND_BUCKET_META[bucket].score;
+}
+
+/** Trend sleeve score = average of the active (non-null) per-symbol sub-scores. */
+export function trendSleeveScore(buckets: (TrendBucket | null)[]): number | null {
+  const scores = buckets.map(trendSubScore).filter((s): s is number => s !== null);
+  if (scores.length === 0) return null;
+  return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+}
+
+// ── Environment Score + regime band ─────────────────────────────────
+/**
+ * Weighted sum of available sleeve scores. A missing sleeve (null) has its
+ * weight redistributed proportionally across the present sleeves, so the score
+ * stays meaningful while modules are still being built / data is unavailable.
+ */
+export function environmentScore(
+  sleeves: { key: RegimeSleeveKey; score: number | null }[],
+): number | null {
+  const present = sleeves.filter((s) => s.score !== null);
+  if (present.length === 0) return null;
+  const totalWeight = present.reduce((a, s) => a + SLEEVE_WEIGHTS[s.key], 0);
+  if (totalWeight === 0) return null;
+  const sum = present.reduce((a, s) => a + (s.score as number) * SLEEVE_WEIGHTS[s.key], 0);
+  return Math.round(sum / totalWeight);
+}
+
+const REGIME_BANDS: { min: number; label: RegimeLabel; tradingMode: string }[] = [
+  { min: 75, label: 'Risk-On',                  tradingMode: 'Normal sizing, breakouts acceptable, less need for hedges' },
+  { min: 60, label: 'Constructive / Selective', tradingMode: 'Favor strongest setups only' },
+  { min: 45, label: 'Cautious / Neutral',       tradingMode: 'Reduce chase, wait for reclaim levels, tighter stops' },
+  { min: 30, label: 'Defensive',                tradingMode: 'Smaller size, hedges allowed, avoid weak charts' },
+  { min: 0,  label: 'Risk-Off',                 tradingMode: 'Capital preservation, mostly cash/hedges, only tactical trades' },
+];
+
+export function regimeBand(score: number): RegimeRead {
+  const band = REGIME_BANDS.find((b) => score >= b.min) ?? REGIME_BANDS[REGIME_BANDS.length - 1];
+  return { score, label: band.label, tradingMode: band.tradingMode };
+}
+
+// ── Realized volatility (promoted from useSentimentGauge) ────────────
+/**
+ * Annualized 30-day realized volatility (%) from a daily close series:
+ *   realizedVol30 = stdev(last 30 ln(close[t]/close[t-1])) · sqrt(252) · 100
+ * Needs ≥31 closes (30 log-returns). Used for the IV-premium ratio (VIX ÷ HV).
+ */
+export function hv30(closes: number[]): number | null {
+  if (closes.length < 31) return null;
+  const slice = closes.slice(-31);
+  const logRets = slice.slice(1).map((c, i) => Math.log(c / slice[i]));
+  const mean = logRets.reduce((a, b) => a + b, 0) / logRets.length;
+  const variance = logRets.reduce((a, b) => a + (b - mean) ** 2, 0) / logRets.length;
+  return Math.sqrt(variance * 252) * 100;
+}
