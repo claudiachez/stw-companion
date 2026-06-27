@@ -7,6 +7,7 @@ import {
   creditHygScore, creditLabel,
   us10yScore, uupScore, ratesDollarScore, ratesDollarLabel,
   gexScore, gexBiasLabel, gexImplication,
+  breadthScore,
 } from './macro';
 
 describe('trendBucket', () => {
@@ -218,6 +219,15 @@ describe('gex / positioning scorers', () => {
   it('gexImplication gives an action line per bias', () => {
     expect(gexImplication('bearish')).toMatch(/avoid chasing/i);
     expect(gexImplication('bullish')).toMatch(/breakouts/i);
+  });
+});
+
+describe('breadthScore', () => {
+  it('equal-weight leading = confirming (high)', () => {
+    expect(breadthScore(true, true)).toBe(80);
+    expect(breadthScore(true, false)).toBe(60);
+    expect(breadthScore(false, true)).toBe(45);
+    expect(breadthScore(false, false)).toBe(25);
   });
 });
 

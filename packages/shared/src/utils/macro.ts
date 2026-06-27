@@ -268,6 +268,14 @@ export function gexImplication(bias: string | null | undefined): string {
   }
 }
 
+// ── Module 9: Risk Appetite — Breadth ───────────────────────────────
+/** RSP/SPY relative strength → breadth score. Equal-weight leading = the average
+ *  stock is confirming the cap-weighted tape (greed); lagging = narrow (fear). */
+export function breadthScore(aboveMa: boolean, rising: boolean): number {
+  if (aboveMa) return rising ? 80 : 60;
+  return rising ? 45 : 25;
+}
+
 // ── Realized volatility (promoted from useSentimentGauge) ────────────
 /**
  * Annualized 30-day realized volatility (%) from a daily close series:

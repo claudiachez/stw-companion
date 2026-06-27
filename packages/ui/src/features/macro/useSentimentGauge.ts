@@ -1,168 +1,108 @@
 import { useState, useEffect } from 'react';
+import {
+  hv30, vixScore, ivPremiumScore, vvixScore, gexScore, creditHygScore,
+  breadthScore, percentileRank,
+} from '@stw/shared';
 import { fetchGraddox } from '../signals/api';
+import { loadCloses, tdDailyCloses, finnhubQuote, sma } from './maCache';
 import type { SentimentInput, SentimentScore } from '@stw/shared';
 
-const TD_SYMBOL: Record<string, string> = { HYG: 'HYG', UUP: 'UUP', SPY: 'SPY' };
-const FH_SYMBOL: Record<string, string> = { VIX: '^VIX', VVIX: '^VVIX' };
-const MA_PREFIX = 'macro-ma-';
-
-function loadCloses(symbol: string): number[] {
-  try {
-    const raw = localStorage.getItem(MA_PREFIX + symbol);
-    if (!raw) return [];
-    return (JSON.parse(raw) as { closes: number[] }).closes ?? [];
-  } catch { return []; }
-}
-
-function sma(closes: number[], n: number): number | null {
-  if (closes.length < n) return null;
-  return closes.slice(-n).reduce((a, b) => a + b, 0) / n;
-}
-
-function hv30(closes: number[]): number | null {
-  if (closes.length < 31) return null;
-  const slice = closes.slice(-31);
-  const logRets = slice.slice(1).map((c, i) => Math.log(c / slice[i]));
-  const mean = logRets.reduce((a, b) => a + b, 0) / logRets.length;
-  const variance = logRets.reduce((a, b) => a + (b - mean) ** 2, 0) / logRets.length;
-  return Math.sqrt(variance * 252) * 100;
-}
-
-async function fetchQuote(sym: string, finnhubKey: string): Promise<number | null> {
-  const fhSym = FH_SYMBOL[sym] ?? sym;
-  try {
-    const d = await (await fetch(`https://finnhub.io/api/v1/quote?symbol=${fhSym}&token=${finnhubKey}`)).json();
-    return d.c ?? null;
-  } catch { return null; }
-}
-
-async function fetchDailyCloses(sym: string, twelveDataKey: string): Promise<number[]> {
-  const cached = loadCloses(sym);
-  if (cached.length > 0) return cached;
-  const tdSym = TD_SYMBOL[sym] ?? sym;
-  try {
-    const url = `https://api.twelvedata.com/time_series?symbol=${tdSym}&interval=1day&outputsize=60&timezone=UTC&apikey=${twelveDataKey}`;
-    const d = await (await fetch(url)).json();
-    if (d.status === 'ok' && d.values?.length) {
-      const closes = [...d.values].reverse().map((v: Record<string, string>) => parseFloat(v.close));
-      try { localStorage.setItem(MA_PREFIX + sym, JSON.stringify({ closes, date: new Date().toISOString().slice(0, 10), ts: Date.now() })); } catch { /* ignore */ }
-      return closes;
-    }
-  } catch { /* ignore */ }
-  return [];
-}
+// ── Module 9: Risk Appetite ─────────────────────────────────────────
+// A separate score from the Market Regime — "how much fear/greed is priced
+// right now?". Dollar moved to the Rates+Dollar sleeve; Breadth (RSP/SPY) added.
+// Weights sum to 100%.
 
 export function useSentimentGauge(finnhubKey?: string, twelveDataKey?: string) {
   const [score, setScore] = useState<SentimentScore | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!finnhubKey) { setLoading(false); return; }
     let cancelled = false;
+    setLoading(true);
 
     async function compute() {
       const inputs: SentimentInput[] = [];
 
-      // 1. Market Momentum (18%) — SPY % above/below 125d MA normalized ±10% → 0–100
-      const spyCloses = loadCloses('SPY');
+      // 1. Market Momentum (18%) — SPY % above/below its 125d MA, ±10% → 0–100.
+      let spyCloses = loadCloses('SPY');
+      if (spyCloses.length < 126 && twelveDataKey) spyCloses = await tdDailyCloses('SPY', twelveDataKey);
       const spy125 = sma(spyCloses, 125);
       const spyClose = spyCloses[spyCloses.length - 1] ?? null;
       let momentumScore: number | null = null;
       if (spy125 && spyClose) {
-        const pct = (spyClose - spy125) / spy125 * 100;
+        const pct = ((spyClose - spy125) / spy125) * 100;
         momentumScore = Math.max(0, Math.min(100, 50 + pct * 5));
       }
       inputs.push({ label: 'Market Momentum', weight: 0.18, score: momentumScore, description: 'SPY vs 125d MA' });
 
-      // 2. Volatility Level (16%) — VIX levels
-      const vix = await fetchQuote('VIX', finnhubKey!);
-      let volScore: number | null = null;
-      if (vix !== null) {
-        if (vix < 12) volScore = 100;
-        else if (vix < 16) volScore = 75;
-        else if (vix < 20) volScore = 50;
-        else if (vix < 25) volScore = 25;
-        else volScore = 0;
-      }
-      inputs.push({ label: 'Volatility (VIX)', weight: 0.16, score: volScore, description: `VIX ${vix?.toFixed(1) ?? '—'}` });
+      // 2. Volatility (16%) — VIX level (Finnhub, TwelveData fallback).
+      let vix: number | null = finnhubKey ? await finnhubQuote('^VIX', finnhubKey) : null;
+      const vixCloses = twelveDataKey ? await tdDailyCloses('VIX', twelveDataKey) : loadCloses('VIX');
+      if (vix === null && vixCloses.length) vix = vixCloses[vixCloses.length - 1];
+      inputs.push({ label: 'Volatility (VIX)', weight: 0.16, score: vixScore(vix), description: `VIX ${vix?.toFixed(1) ?? '—'}` });
 
-      // 3. IV Premium / vol ratio (16%)
+      // 3. IV Premium (16%) — VIX ÷ 30d realized vol on SPY.
       const spyHv = hv30(spyCloses);
-      let ivPremiumScore: number | null = null;
-      if (vix !== null && spyHv !== null && spyHv > 0) {
-        const ratio = vix / spyHv;
-        if (ratio > 1.3) ivPremiumScore = 20;
-        else if (ratio > 1.0) ivPremiumScore = 50;
-        else ivPremiumScore = 80;
-      }
-      inputs.push({ label: 'IV Premium', weight: 0.16, score: ivPremiumScore, description: 'VIX ÷ 30d realized HV' });
+      const ivRatio = vix !== null && spyHv !== null && spyHv > 0 ? vix / spyHv : null;
+      inputs.push({ label: 'IV Premium', weight: 0.16, score: ivPremiumScore(ivRatio), description: 'VIX ÷ 30d realized HV' });
 
-      // 4. Tail Risk — VVIX (12%)
+      // 4. Tail Risk (12%) — VVIX, percentile-based when history exists.
+      let vvix: number | null = finnhubKey ? await finnhubQuote('^VVIX', finnhubKey) : null;
+      const vvixCloses = twelveDataKey ? await tdDailyCloses('VVIX', twelveDataKey) : loadCloses('VVIX');
+      if (vvix === null && vvixCloses.length) vvix = vvixCloses[vvixCloses.length - 1];
       let tailScore: number | null = null;
-      try {
-        const vvix = await fetchQuote('VVIX', finnhubKey!);
-        if (vvix !== null) {
-          if (vvix < 85) tailScore = 80;
-          else if (vvix < 100) tailScore = 50;
-          else tailScore = 20;
+      if (vvix !== null) {
+        if (vvixCloses.length >= 60) {
+          const pct = percentileRank(vvix, vvixCloses.slice(-252));
+          tailScore = pct === null ? vvixScore(vvix) : 100 - pct; // high percentile = elevated vol-of-vol = fear
+        } else {
+          tailScore = vvixScore(vvix);
         }
-      } catch { /* VVIX may not be available on free tier */ }
-      inputs.push({ label: 'Tail Risk (VVIX)', weight: tailScore !== null ? 0.12 : 0, score: tailScore, description: 'Vol-of-vol level' });
+      }
+      inputs.push({ label: 'Tail Risk (VVIX)', weight: 0.12, score: tailScore, description: 'Vol-of-vol percentile' });
 
-      // 5. GEX Bias (18%)
-      let gexScore: number | null = null;
+      // 5. GEX Bias (18%) — tactical positioning.
+      let gexInput: number | null = null;
       try {
         const gex = await fetchGraddox();
-        if (gex?.bias) {
-          const b = gex.bias.toLowerCase();
-          if (b.includes('bull')) gexScore = 90;
-          else if (b.includes('bear')) gexScore = 10;
-          else if (b.includes('conflict')) gexScore = 35;
-          else gexScore = 50;
-        }
+        gexInput = gexScore(gex?.bias);
       } catch { /* ignore */ }
-      inputs.push({ label: 'GEX Bias', weight: 0.18, score: gexScore, description: 'Graddox daily signal' });
+      inputs.push({ label: 'GEX Bias', weight: 0.18, score: gexInput, description: 'Graddox daily signal' });
 
-      // 6. Credit (10%) — HYG vs 50d MA
+      // 6. Credit (10%) — HYG vs 50d MA.
       let creditScore: number | null = null;
       if (twelveDataKey) {
-        const hygCloses = await fetchDailyCloses('HYG', twelveDataKey);
-        const hyg50 = sma(hygCloses, 50);
-        const hygNow = hygCloses[hygCloses.length - 1] ?? null;
-        const hygPrev = hygCloses[hygCloses.length - 2] ?? null;
-        if (hyg50 && hygNow && hygPrev) {
-          const above = hygNow > hyg50;
-          const rising = hygNow > hygPrev;
-          if (above && rising) creditScore = 80;
-          else if (above || rising) creditScore = 50;
-          else creditScore = 20;
-        }
+        const hyg = await tdDailyCloses('HYG', twelveDataKey);
+        const hyg50 = sma(hyg, 50);
+        const now = hyg[hyg.length - 1] ?? null;
+        const prev = hyg[hyg.length - 2] ?? null;
+        if (hyg50 && now && prev) creditScore = creditHygScore(now > hyg50, now > prev);
       }
-      inputs.push({ label: 'Credit (HYG)', weight: 0.10, score: creditScore, description: 'HYG vs 50d MA' });
+      inputs.push({ label: 'Credit', weight: 0.10, score: creditScore, description: 'HYG vs 50d MA' });
 
-      // 7. Dollar (UUP) (10%) — UUP vs 9+21d MA
-      let dollarScore: number | null = null;
+      // 7. Breadth (10%) — RSP/SPY relative strength (is the average stock confirming?).
+      let breadth: number | null = null;
       if (twelveDataKey) {
-        const uupCloses = await fetchDailyCloses('UUP', twelveDataKey);
-        const uup9 = sma(uupCloses, 9);
-        const uup21 = sma(uupCloses, 21);
-        const uupNow = uupCloses[uupCloses.length - 1] ?? null;
-        if (uup9 && uup21 && uupNow) {
-          if (uupNow < uup9 && uupNow < uup21) dollarScore = 80;
-          else if (uupNow > uup9 && uupNow > uup21) dollarScore = 20;
-          else dollarScore = 50;
+        const rsp = await tdDailyCloses('RSP', twelveDataKey);
+        const L = Math.min(rsp.length, spyCloses.length);
+        if (L >= 51) {
+          const rspA = rsp.slice(-L);
+          const spyA = spyCloses.slice(-L);
+          const ratios = rspA.map((r, i) => r / spyA[i]);
+          const ratioNow = ratios[ratios.length - 1];
+          const ratioMa50 = ratios.slice(-50).reduce((a, b) => a + b, 0) / 50;
+          const rising = ratioNow > ratios[ratios.length - 2];
+          breadth = breadthScore(ratioNow > ratioMa50, rising);
         }
       }
-      inputs.push({ label: 'Dollar (UUP)', weight: 0.10, score: dollarScore, description: 'UUP vs 9+21d MA' });
+      inputs.push({ label: 'Breadth', weight: 0.10, score: breadth, description: 'RSP/SPY relative strength' });
 
-      // Redistribute weight if VVIX is null
-      const activeInputs = inputs.filter((x) => x.score !== null && x.weight > 0);
-      const totalWeight = activeInputs.reduce((a, x) => a + x.weight, 0);
-
+      // Final score = weighted average over the available inputs (missing redistributes).
+      const active = inputs.filter((x) => x.score !== null && x.weight > 0);
+      const totalWeight = active.reduce((a, x) => a + x.weight, 0);
       let total: number | null = null;
-      if (activeInputs.length > 0 && totalWeight > 0) {
-        total = activeInputs.reduce((a, x) => a + (x.score! * x.weight), 0) / totalWeight;
-        total = Math.round(total);
+      if (active.length > 0 && totalWeight > 0) {
+        total = Math.round(active.reduce((a, x) => a + (x.score as number) * x.weight, 0) / totalWeight);
       }
 
       if (!cancelled) {
