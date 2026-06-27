@@ -20,33 +20,44 @@
 
 ---
 
-## Current Status — Macro Dashboard Module 1 in PR (handoff 2026-06-27)
+## Current Status — Macro Dashboard v2 reorganized + built (handoff 2026-06-27)
 
-**NEXT SESSION = merge PR #56 then continue Macro Dashboard** — Module 1 (Environment block + Sentiment Gauge) is built on branch `claude/macro-dashboard-module-1-jzna26`, **PR #56 open, NOT yet merged to staging**. After merge, continue with Module 2 (Portfolio Heatmap on `PortfolioDashboard`) per [`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md).
+**NEXT SESSION = continue Macro Dashboard with P2 (5D trend engine), then P3 (Event Risk).**
+The Macro tab was **reorganized into a 10-module architecture and rebuilt** this session
+(spec rewritten in [`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md)). All work is on
+**`staging`** (built on branch `claude/macro-dashboard-reorganize-v3fvzj`, fast-forwarded into
+staging — **branch fully merged, safe to delete**). Read the spec first.
 
-**This session — Macro Dashboard Module 1 built on `claude/macro-dashboard-module-1-jzna26` (PR #56):**
-- **New `/macro` nav tab** (between Signals and Portfolio) in both web + admin shells.
-- **Environment block**: indicator table (`packages/ui/src/features/macro/components/IndicatorTable.tsx`) grouped by tier (Momentum / Mid-Caution / Risk-Off), MA columns (9d/21d/200d via TwelveData), signal dots. Expert indicators (IWM/RSP/TLT/HYG/VEA) hidden by default, revealed via "Expert Off/On" toggle in section header.
-- **Environment banner** (`EnvironmentBanner.tsx`): auto-computed `RISK-ON` / `CAUTIOUS / NEUTRAL` / `RISK-OFF` regime + descriptor phrase in the subheader bar.
-- **Sentiment Gauge** (`SentimentGauge.tsx`): SVG arc gauge 0–100 with needle + 7-component breakdown (Momentum, VIX, IV Premium, Tail Risk/VVIX, GEX Bias, Credit/HYG, Dollar/UUP). VVIX skipped gracefully if unavailable.
-- **AI Recap card** (`MacroRecapCard.tsx`): auto-generates on first load; uses `macro-recap` Netlify function (direct `fetch()` to Anthropic API — **no SDK**, avoids ESM/CJS bundling issues); caches by ISO week in localStorage; Refresh button.
-- **Data**: Finnhub for stock quotes (15-min localStorage cache); TwelveData for daily OHLC + MAs (1-day cache). VIX/US10Y fall back to TwelveData last daily close when Finnhub free tier doesn't serve indices.
-- **User prefs**: `profiles.macro_prefs JSONB` (migration 047) + `set_my_macro_prefs()` security-definer fn; localStorage fallback for unauthenticated users.
-- **Layout**: `height:100%; overflow-y:auto` outer shell (matches SignalsView); two-column on desktop (table+recap left, gauge right), single-column mobile.
-- **Migration 047** (`supabase/migrations/047_macro_prefs.sql`): `ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS macro_prefs JSONB DEFAULT '{}'` + `set_my_macro_prefs()` fn.
+**Architecture (the v2 fix):** the old single MA table mixed trend, stress, rates and positioning into
+one bucket. Now each module answers one question, and the **Market Regime is a weighted score**, not a
+row count: `Trend 30% · Volatility 20% · Credit 15% · Rates+Dollar 15% · GEX 20%` → 5 regime bands
+(75+ Risk-On … 0–29 Risk-Off). **VIX and US10Y are NOT trend rows** — VIX lives in Volatility/Stress,
+US10Y in Rates+Dollar. Pure scorers + 94 unit tests in `packages/shared/src/utils/macro.ts`.
 
-**DB state — migration 047:**
-- **PROD (`usmqbohcjcyszjxxvnqu`):** ✅ applied.
-- **SANDBOX (`uolabcgbnrkhzpwuvzlk`):** ⚠️ NOT applied and CANNOT be applied — sandbox is missing `public.profiles` (migrations 002/011/013 were never run there). Sandbox falls back to localStorage for macro prefs; macro tab works but prefs aren't DB-persisted. This is a pre-existing sandbox gap, not a blocker.
+**Built + on staging (`packages/ui/src/features/macro/`):**
+- **Module 1 Regime Banner** (`RegimeBanner.tsx`) — score-derived band + trading-mode line; 5D direction descriptor slot wired (filled by P2).
+- **Module 2 Module Score Strip** (`ModuleScoreStrip.tsx`) — per-sleeve score at a glance; 5D-delta slot (P2).
+- **Module 4 Trend / Market Structure** (`TrendStructureTable.tsx`) — SPY/QQQ default, IWM/RSP/VEA optional (click ticker to toggle, no expert gate); **5-bucket** logic incl. *bear-market rally* (below 200D but bouncing ≠ bullish).
+- **Module 5 Volatility / Stress** (`VolatilityStressCard.tsx`) — VIX, VVIX, IV Premium; percentile + 5D direction.
+- **Module 6 Credit / Liquidity** (`CreditLiquidityCard.tsx`) — HYG proxy (labeled; HY OAS later).
+- **Module 7 Rates + Dollar** (`RatesDollarCard.tsx`) — US10Y yield + UUP; flight-to-safety cross-check (falling yields during stress ≠ bullish).
+- **Module 8 GEX / Positioning** (`GexPositioningCard.tsx`) — Graddox bias score + **SPY (SPX÷10) and QQQ** levels + trigger/implication.
+- **Module 9 Risk Appetite** (`SentimentGauge.tsx`) — renamed from Sentiment; **`react-gauge-component`** library gauge; two-column (gauge ┃ breakdown); 7 inputs (Dollar dropped, Breadth added, percentile VVIX); each row shows its fear/greed word.
+- **Module 10 Recap** (`MacroRecapCard.tsx` + `macro-recap.ts`) — **full weekly week-close note** (headline · verdict · big story · bull/base/bear · next-week playbook · watching levels · final word), grounded ONLY in passed data (no fabricated figures), Sonnet→Haiku fallback, auto-generates, cached weekly. **Web-only** (admin has no Netlify functions).
+- **Help**: every module header has a collapsible ⓘ (`ModuleHeader`) — tap to expand a "what/why/how" blurb; collapsed by default.
 
-**Sandbox schema gap (pre-existing, not caused by this session):** sandbox is missing `profiles`, `tiers`, `categories`, `user_positions`, and `recent_changes`. Only `holdings`, `signals`, `legs`, `leg_transactions`, `run_log`, `traders`, `channels`, `conviction_comments`, `holding_transactions`, `app_config`, `spy_daily` exist there. The macro tab works on sandbox via localStorage fallback.
+**Not built yet:** **P2 5D trend engine** (`useMacroTrendHistory` — localStorage daily snapshots → banner direction + strip/gauge 5D deltas) and **P3 Macro Event Risk** (CPI/FOMC/jobs overlay; needs an economic-calendar **data-source decision** — paid API vs MVP manual list). Both spec'd.
 
-**⏳ PENDING — production deploy:** everything since the last promotion is on **`staging`, NOT `main`**
-(PRs #50–#55 merged to staging; PR #56 open). Promoting `staging → main` is the production deploy and needs **explicit approval**.
+**DB — no migrations this session.** Macro reuses existing `047_macro_prefs` (PROD ✅ applied;
+sandbox N/A — sandbox lacks `public.profiles`, falls back to localStorage; pre-existing gap). Nothing
+to apply.
 
-**Netlify env var added this session:** `ANTHROPIC_API_KEY` added to the **web** Netlify site (server-side only, no `VITE_` prefix) — needed for the `macro-recap` function.
+**Netlify env vars (web site):** `ANTHROPIC_API_KEY` (already added, required for the recap).
+Optional `MACRO_RECAP_MODEL` to override the recap model (defaults Sonnet→Haiku).
 
-**Previous session work (on staging, NOT yet on main):** GEX "no new report" banner (migrations 045/046), routine-miss fixes (out-of-repo), manual SYNA/GDYN/TENB corrections on PROD.
+**⏳ PENDING — production deploy:** `staging` is **57 commits ahead of `main`** — everything
+(PRs #50–#56 + all macro v2 work) is staging-only, **NOT on production**. Promoting `staging → main`
+is the production deploy and needs **explicit approval**.
 
 **Event-sourcing migration plan is CLOSED (on `main` since 2026-06-23) — do not reopen.** The weight model,
 locked decisions, and Phase-5 routine semantics below remain authoritative reference.
@@ -173,12 +184,22 @@ run DDL locally — apply migrations via the Supabase SQL editor). Prod service 
 
 ## Next Steps
 
-0. **Promote `staging → main` when approved (production deploy).** PRs #50–#55 are on `staging` only.
-   Open a `staging → main` PR **only on explicit host approval**.
+0. **Promote `staging → main` when approved (production deploy).** `staging` is 57 commits ahead of
+   `main` (PRs #50–#56 + all macro v2 work). Open a `staging → main` PR **only on explicit host approval**.
 
-1. **Macro Dashboard — continue.** Module 1 is on PR #56 (merge first). Then:
-   - **Module 2 = Portfolio Heatmap** block on `PortfolioDashboard` (`packages/ui/src/features/picks/components/PortfolioDashboard.tsx`) — treemap-style grid, box size ∝ `current_weight`, color by day% or total return, Today/Total + By Basket/All toggles. Full spec in [`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md) § Module 3.
-   - **Module 3 = Sector Rotation** (later session) — 11 SPDR sectors, 9+21+200 MA grouping, RS vs SPY radar. Spec bottom of same file.
+1. **Macro Dashboard — continue (spec: [`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md)).**
+   Modules 1–2 + 4–10 are built and on staging. Next, in order:
+   - **P2 — 5D trend engine** (`useMacroTrendHistory`): one localStorage daily snapshot of module +
+     indicator scores; compute 5D/20D deltas + a `TrendDirection`; wire into the **banner direction
+     descriptor**, the **score-strip 5D deltas**, the **gauge 5D delta**, and per-row trend badges. Pure
+     direction classifier → shared + tests. (Slots already wired; deltas are null until ~5 days accrue.)
+   - **P3 — Macro Event Risk** (`useMacroEvents` + `macro-events` Netlify fn + `MacroEventRiskCard`):
+     CPI/PCE/FOMC/NFP overlay (temporary, never a permanent regime-score change). **Blocked on a
+     data-source decision** — paid economic-calendar API (actual/consensus/previous) vs an MVP manual
+     list. Confirm with host before building.
+   - **Portfolio Heatmap** (later) — treemap block on `PortfolioDashboard`, box ∝ `current_weight`,
+     Today/Total + By Basket/All toggles. Spec § "Phase 4: Portfolio Heatmap".
+   - **Sector Rotation** (last) — 11 SPDR sectors, 9+21+200 grouping, RS vs SPY. Spec bottom of file.
 
 2. **Overview/experience enrichment (host-requested, queued).** Stop the click-each-ticker experience:
    - **Transcripts library tab** — a NEW subscriber-facing **episode recap** (host's *trading psychology* +
@@ -239,7 +260,7 @@ apps/
   admin/                     admin shell: no paywall, Edit + Users + IBKR
     ibkr_proxy.py            local IBKR writer (run on your machine, not deployed)
     netlify.toml             (Netlify base dir = apps/admin)
-supabase/migrations/         001..046 — single source of truth for DB schema/RLS
+supabase/migrations/         001..047 — single source of truth for DB schema/RLS
 CLAUDE.md                    this file
 ```
 
@@ -314,7 +335,7 @@ OAuth on web does a full-page redirect).
 ## Database (Supabase)
 
 - Project: `usmqbohcjcyszjxxvnqu.supabase.co`; client created per-app and injected into `@stw/ui`.
-- `supabase/migrations/` is the single source of truth (through **046**).
+- `supabase/migrations/` is the single source of truth (through **047**).
   **Claude authors migrations; you apply them** via the Supabase SQL editor / `supabase db push`.
 - **Local DB backups → gitignored `backups/`** (never committed — may carry PII), named
   `<date>_<purpose>.json` (e.g. `*_pre-coldrop.json`). Take a fresh logical snapshot of the
@@ -431,13 +452,17 @@ subscriber function reads the subscriber's own account. Do not conflate them.
 
 ## Conventions
 
-### Netlify Functions — Anthropic API
-Use **direct `fetch()` to `https://api.anthropic.com/v1/messages`** in Netlify functions — do NOT import `@anthropic-ai/sdk`. The SDK has ESM/CJS bundling issues in the Netlify Functions Node.js runtime that produce 502s. Pass `x-api-key`, `anthropic-version: 2023-06-01`, and JSON body directly. See `apps/web/netlify/functions/macro-recap.ts` for the pattern.
+### Netlify Functions
+- **Anthropic:** use **direct `fetch()` to `https://api.anthropic.com/v1/messages`** — do NOT import `@anthropic-ai/sdk` (ESM/CJS bundling issues in the Netlify Node runtime → 502s). Pass `x-api-key`, `anthropic-version: 2023-06-01`, JSON body. See `apps/web/netlify/functions/macro-recap.ts`.
+- **Supabase JWT verify:** create the client with `createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })`. Without those options supabase-js tries to use browser session storage in the Node runtime and **throws** (this was the macro-recap "Auth check failed" bug). Match `ibkr-flex.ts`.
+- **Functions are web-only.** Only the **web** app deploys `netlify/functions`; the **admin** app has none. Any feature needing a serverless function (e.g. the macro recap, IBKR flex) works on web only — don't rely on it from admin.
 
-### Macro data sources
+### Macro data sources & module structure
 - **Finnhub** (`VITE_FINNHUB_KEY`): live quotes for stock symbols only. Free tier does NOT serve index symbols (`^VIX`, `^TNX`, etc.) — they return empty. For index indicators, fall back to TwelveData last daily close.
-- **TwelveData** (`VITE_TWELVEDATA_KEY`): daily OHLC for MA computation (`interval=1day&outputsize=210`). Cache in localStorage keyed `macro-ma-{symbol}` with `date` field (refresh once per day). Also the authoritative close source for VIX/US10Y.
-- Without `VITE_TWELVEDATA_KEY`, MA columns show `—` and sentiment components that need HV/HYG/UUP are skipped — this is intentional graceful degradation.
+- **TwelveData** (`VITE_TWELVEDATA_KEY`): daily OHLC for MA computation. Cache via `packages/ui/src/features/macro/maCache.ts` (`tdDailyCloses`, `loadCloses`, `loadLastDate`, `sma`), keyed `macro-ma-{symbol}` with `date` + `lastDate` (refresh once per day). Also the authoritative close source for VIX/US10Y/CBOE-TNX.
+- Without `VITE_TWELVEDATA_KEY`, MA/score cells degrade to `—` gracefully.
+- **Module structure (v2):** the Macro tab is **weighted module scores**, NOT a single MA table. The 9/21/200 MA table is **Trend only**; **VIX → Volatility/Stress**, **US10Y → Rates+Dollar** — never put stress/rates indicators in the trend table. Pure scorers live in `packages/shared/src/utils/macro.ts` (unit-tested); fetching lives in the per-module hooks. Every macro card shows a **source + data-age** footer (`SourceNote`); daily series show their latest close date (`loadLastDate`).
+- **Macro recap** (`macro-recap` fn): a weekly note grounded ONLY in the data passed to it — **never let it fabricate figures** (dollar flows, streak counts, sector/fund names) it wasn't given. Prefers Sonnet, falls back to Haiku; override with `MACRO_RECAP_MODEL`.
 
 ### Timestamps
 All UI timestamps use `fmtDateTime(val: Date | string | null)` from `@stw/shared`.
@@ -552,7 +577,8 @@ active filter (closed hidden by default). The FilterBar count shows `N of {total
 | Data | TanStack Query 5 (60s staleTime) |
 | State | Zustand 5 |
 | Backend | Supabase (auth + Postgres + RLS) |
-| Prices | Finnhub (live), IBKR proxy (options legs) |
+| Prices | Finnhub (live), TwelveData (daily/MAs), IBKR proxy (options legs) |
+| Charts | lightweight-charts (GEX); react-gauge-component (Macro Risk-Appetite gauge) |
 | Styling | Tailwind 3 + CSS variables |
 
 ---
