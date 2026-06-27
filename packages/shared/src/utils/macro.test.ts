@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  trendBucket, trendSubScore, trendSleeveScore,
+  trendBucket, trendSubScore, trendSleeveScore, trendSleeveLabel,
   environmentScore, regimeBand, hv30, SLEEVE_WEIGHTS,
   vixScore, vvixScore, ivPremiumScore, vixDirectionScore,
   volatilityStressScore, stressLabel, percentileRank,
@@ -50,6 +50,14 @@ describe('trendSleeveScore', () => {
   });
   it('all null → null', () => {
     expect(trendSleeveScore([null, null])).toBeNull();
+  });
+  it('trendSleeveLabel maps the score to a word', () => {
+    expect(trendSleeveLabel(90)).toBe('Strong');
+    expect(trendSleeveLabel(65)).toBe('Constructive');
+    expect(trendSleeveLabel(50)).toBe('Caution');
+    expect(trendSleeveLabel(35)).toBe('Weak');
+    expect(trendSleeveLabel(10)).toBe('Risk-Off');
+    expect(trendSleeveLabel(null)).toBe('—');
   });
 });
 

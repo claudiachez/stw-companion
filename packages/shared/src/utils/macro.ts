@@ -58,6 +58,16 @@ export function trendBucket(
   return (a9 || a21) ? 'bear_rally' : 'risk_off';
 }
 
+/** Short status word for a 0–100 trend sleeve score (for the score strip / chips). */
+export function trendSleeveLabel(score: number | null): string {
+  if (score === null) return '—';
+  if (score >= 80) return 'Strong';
+  if (score >= 60) return 'Constructive';
+  if (score >= 45) return 'Caution';
+  if (score >= 30) return 'Weak';
+  return 'Risk-Off';
+}
+
 export function trendSubScore(bucket: TrendBucket | null): number | null {
   return bucket === null ? null : TREND_BUCKET_META[bucket].score;
 }

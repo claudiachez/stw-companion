@@ -1,5 +1,8 @@
 import { useState, useMemo } from 'react';
-import { environmentScore, regimeBand, trendSleeveScore, gexScore } from '@stw/shared';
+import {
+  environmentScore, regimeBand, trendSleeveScore, trendSleeveLabel, gexScore,
+  gexBiasLabel, stressLabel, creditLabel, ratesDollarLabel,
+} from '@stw/shared';
 import { useCapabilities } from '../../context/AppCapabilities';
 import {
   useMacroIndicators, ALL_INDICATORS,
@@ -13,6 +16,7 @@ import { useWeeklyRecap } from './useWeeklyRecap';
 import { useMacroPrefs } from './useMacroPrefs';
 import { useGraddox } from '../signals/useGraddox';
 import { RegimeBanner } from './components/RegimeBanner';
+import { ModuleScoreStrip } from './components/ModuleScoreStrip';
 import { TrendStructureTable } from './components/TrendStructureTable';
 import { VolatilityStressCard } from './components/VolatilityStressCard';
 import { CreditLiquidityCard } from './components/CreditLiquidityCard';
@@ -57,18 +61,31 @@ export function MacroView() {
 
   // Market Regime — weighted module scores across all five sleeves
   // (a missing sleeve redistributes its weight across the present ones).
+  const trendSleeve = useMemo(
+    () => trendSleeveScore(visibleIndicators.map((i) => i.bucket)),
+    [visibleIndicators],
+  );
   const gexSleeve = gexScore(graddox?.bias);
+
   const regime = useMemo(() => {
-    const trend = trendSleeveScore(visibleIndicators.map((i) => i.bucket));
     const env = environmentScore([
-      { key: 'trend', score: trend },
+      { key: 'trend', score: trendSleeve },
       { key: 'volatility', score: volatility?.sleeveScore ?? null },
       { key: 'credit', score: credit?.sleeveScore ?? null },
       { key: 'rates_dollar', score: rates?.sleeveScore ?? null },
       { key: 'gex', score: gexSleeve },
     ]);
     return env === null ? null : regimeBand(env);
-  }, [visibleIndicators, volatility?.sleeveScore, credit?.sleeveScore, rates?.sleeveScore, gexSleeve]);
+  }, [trendSleeve, volatility?.sleeveScore, credit?.sleeveScore, rates?.sleeveScore, gexSleeve]);
+
+  // Module 2: per-sleeve score strip (5D deltas arrive with the P2 trend engine).
+  const stripItems = [
+    { key: 'trend',       title: 'Trend',     score: trendSleeve,                 detail: trendSleeveLabel(trendSleeve) },
+    { key: 'volatility',  title: 'Volatility', score: volatility?.sleeveScore ?? null, detail: stressLabel(volatility?.sleeveScore ?? null) },
+    { key: 'credit',      title: 'Credit',    score: credit?.sleeveScore ?? null,  detail: creditLabel(credit?.sleeveScore ?? null) },
+    { key: 'rates',       title: 'Rates/USD', score: rates?.sleeveScore ?? null,   detail: ratesDollarLabel(rates?.sleeveScore ?? null) },
+    { key: 'gex',         title: 'GEX',       score: gexSleeve,                    detail: gexBiasLabel(graddox?.bias) },
+  ];
 
   const updatedAt = useMemo(() => (indLoading ? null : new Date()), [indLoading]);
 
@@ -81,6 +98,9 @@ export function MacroView() {
 
       {/* ── Module 1: Market Regime Banner ─────────────────────────── */}
       <RegimeBanner regime={regime} updatedAt={updatedAt} />
+
+      {/* ── Module 2: Module Score Strip ───────────────────────────── */}
+      <ModuleScoreStrip items={stripItems} />
 
       {/* ── Module 4: Trend / Market Structure ─────────────────────── */}
       <section>
