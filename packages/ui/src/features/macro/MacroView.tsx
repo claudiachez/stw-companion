@@ -8,6 +8,7 @@ import {
 import { useSentimentGauge } from './useSentimentGauge';
 import { useVolatilityStress } from './useVolatilityStress';
 import { useCreditLiquidity } from './useCreditLiquidity';
+import { useRatesDollar } from './useRatesDollar';
 import { useWeeklyRecap } from './useWeeklyRecap';
 import { useMacroPrefs } from './useMacroPrefs';
 import { useGraddox } from '../signals/useGraddox';
@@ -15,6 +16,7 @@ import { RegimeBanner } from './components/RegimeBanner';
 import { TrendStructureTable } from './components/TrendStructureTable';
 import { VolatilityStressCard } from './components/VolatilityStressCard';
 import { CreditLiquidityCard } from './components/CreditLiquidityCard';
+import { RatesDollarCard } from './components/RatesDollarCard';
 import { SentimentGauge } from './components/SentimentGauge';
 import { MacroRecapCard } from './components/MacroRecapCard';
 
@@ -43,6 +45,10 @@ export function MacroView() {
   const { indicators, loading: indLoading } = useMacroIndicators(visibleSymbols, finnhubKey, twelveDataKey);
   const { data: volatility, loading: volLoading } = useVolatilityStress(finnhubKey, twelveDataKey);
   const { data: credit, loading: creditLoading } = useCreditLiquidity(twelveDataKey);
+  // Stress rising = VIX climbing or credit below its 50D — feeds the US10Y
+  // flight-to-safety cross-check so a fast yield drop in stress isn't read bullish.
+  const stressRising = (volatility?.vixDelta5 ?? 0) > 0.5 || credit?.aboveMa50 === false;
+  const { data: rates, loading: ratesLoading } = useRatesDollar(twelveDataKey, stressRising);
   const { score, loading: sentLoading } = useSentimentGauge(finnhubKey, twelveDataKey);
   const { recap, loading: recapLoading, error: recapError, generate } = useWeeklyRecap();
 
@@ -56,11 +62,11 @@ export function MacroView() {
       { key: 'trend', score: trend },
       { key: 'volatility', score: volatility?.sleeveScore ?? null },
       { key: 'credit', score: credit?.sleeveScore ?? null },
-      { key: 'rates_dollar', score: null },
+      { key: 'rates_dollar', score: rates?.sleeveScore ?? null },
       { key: 'gex', score: null },
     ]);
     return env === null ? null : regimeBand(env);
-  }, [visibleIndicators, volatility?.sleeveScore, credit?.sleeveScore]);
+  }, [visibleIndicators, volatility?.sleeveScore, credit?.sleeveScore, rates?.sleeveScore]);
 
   const updatedAt = useMemo(() => (indLoading ? null : new Date()), [indLoading]);
 
@@ -105,6 +111,14 @@ export function MacroView() {
         <SectionHeader title="Credit / Liquidity" />
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
           <CreditLiquidityCard data={credit} loading={creditLoading} />
+        </div>
+      </section>
+
+      {/* ── Module 7: Rates + Dollar Headwinds ─────────────────────── */}
+      <section>
+        <SectionHeader title="Rates + Dollar Headwinds" />
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
+          <RatesDollarCard data={rates} loading={ratesLoading} stressRising={stressRising} />
         </div>
       </section>
 

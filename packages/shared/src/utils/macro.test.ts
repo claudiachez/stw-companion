@@ -5,6 +5,7 @@ import {
   vixScore, vvixScore, ivPremiumScore, vixDirectionScore,
   volatilityStressScore, stressLabel, percentileRank,
   creditHygScore, creditLabel,
+  us10yScore, uupScore, ratesDollarScore, ratesDollarLabel,
 } from './macro';
 
 describe('trendBucket', () => {
@@ -156,6 +157,38 @@ describe('credit / liquidity scorers', () => {
     expect(creditLabel(45)).toBe('Mixed');
     expect(creditLabel(20)).toBe('Warning');
     expect(creditLabel(null)).toBe('—');
+  });
+});
+
+describe('rates + dollar scorers', () => {
+  it('us10yScore: low + falling = tailwind', () => {
+    expect(us10yScore(4.1, -0.05, false)).toBe(80);
+    expect(us10yScore(4.1, 0.02, false)).toBe(65);
+  });
+  it('us10yScore: mid band neutral, high + rising = headwind', () => {
+    expect(us10yScore(4.4, 0, false)).toBe(55);
+    expect(us10yScore(4.6, 0.05, false)).toBe(20);
+    expect(us10yScore(4.6, -0.02, false)).toBe(35);
+  });
+  it('us10yScore: fast drop during stress = flight to safety, not bullish', () => {
+    expect(us10yScore(4.1, -0.15, true)).toBe(30);
+    // same drop but no stress → normal tailwind read
+    expect(us10yScore(4.1, -0.15, false)).toBe(80);
+  });
+  it('us10yScore: null yield → null', () => {
+    expect(us10yScore(null, -0.1, true)).toBeNull();
+  });
+  it('uupScore: below both = tailwind, above both = headwind', () => {
+    expect(uupScore(false, false)).toBe(80);
+    expect(uupScore(true, true)).toBe(20);
+    expect(uupScore(true, false)).toBe(50);
+  });
+  it('ratesDollarScore averages present sub-scores; label maps it', () => {
+    expect(ratesDollarScore([80, 20])).toBe(50);
+    expect(ratesDollarScore([null, null])).toBeNull();
+    expect(ratesDollarLabel(70)).toBe('Tailwind');
+    expect(ratesDollarLabel(50)).toBe('Neutral');
+    expect(ratesDollarLabel(20)).toBe('Headwind');
   });
 });
 

@@ -183,6 +183,46 @@ export function creditLabel(score: number | null): string {
   return 'Warning';
 }
 
+// ── Module 7: Rates + Dollar Headwinds ──────────────────────────────
+// US10Y is a YIELD, not a price-trend asset. Higher score = less headwind.
+
+/**
+ * 10-yr yield score. `delta5` is the 5-day change in yield POINTS (e.g. -0.12 = 12bp drop).
+ * Falling yields are NOT always bullish: a fast drop while vol/credit stress is
+ * rising is flight-to-safety, scored neutral-low rather than as a growth tailwind.
+ */
+export function us10yScore(yieldPct: number | null, delta5: number | null, stressRising: boolean): number | null {
+  if (yieldPct === null) return null;
+  const fallingFast = delta5 !== null && delta5 <= -0.10;
+  const falling = delta5 !== null && delta5 < 0;
+  const rising = delta5 !== null && delta5 > 0;
+  if (fallingFast && stressRising) return 30;        // flight to safety
+  if (yieldPct < 4.30) return falling ? 80 : 65;     // tailwind for growth
+  if (yieldPct <= 4.50) return 55;                   // neutral / watch
+  return rising ? 20 : 35;                           // headwind
+}
+
+/** Dollar (UUP) score. Below both 9 & 21D = tailwind; above both = headwind. */
+export function uupScore(aboveMa9: boolean, aboveMa21: boolean): number {
+  if (!aboveMa9 && !aboveMa21) return 80;
+  if (aboveMa9 && aboveMa21) return 20;
+  return 50;
+}
+
+/** Rates + Dollar sleeve score = average of the available sub-scores. */
+export function ratesDollarScore(parts: (number | null)[]): number | null {
+  const present = parts.filter((p): p is number => p !== null);
+  if (present.length === 0) return null;
+  return Math.round(present.reduce((a, b) => a + b, 0) / present.length);
+}
+
+export function ratesDollarLabel(score: number | null): string {
+  if (score === null) return '—';
+  if (score >= 60) return 'Tailwind';
+  if (score >= 40) return 'Neutral';
+  return 'Headwind';
+}
+
 // ── Realized volatility (promoted from useSentimentGauge) ────────────
 /**
  * Annualized 30-day realized volatility (%) from a daily close series:
