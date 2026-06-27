@@ -4,6 +4,8 @@ import type { SentimentScore } from '@stw/shared';
 interface Props {
   score: SentimentScore | null;
   loading: boolean;
+  /** 5D delta on the total risk-appetite score (P2 trend engine); null until ~5 days of history accrue. */
+  fiveDayDelta?: number | null;
 }
 
 interface Zone { label: string; short: string; color: string }
@@ -27,7 +29,7 @@ function MiniBar({ score }: { score: number | null }) {
   );
 }
 
-export function SentimentGauge({ score, loading }: Props) {
+export function SentimentGauge({ score, loading, fiveDayDelta }: Props) {
   if (loading && !score) {
     return <div style={{ color: 'var(--t3)', fontSize: 12, padding: '16px 0' }}>Computing risk appetite…</div>;
   }
@@ -35,6 +37,9 @@ export function SentimentGauge({ score, loading }: Props) {
 
   const total = score.total;
   const z = total !== null ? zoneFor(total) : null;
+  const deltaText = fiveDayDelta === null || fiveDayDelta === undefined
+    ? null
+    : `5D ${fiveDayDelta >= 0 ? '+' : ''}${Math.round(fiveDayDelta)}`;
 
   return (
     // Two columns on desktop (gauge ┃ breakdown), stacks on mobile — fills the width.
@@ -76,7 +81,9 @@ export function SentimentGauge({ score, loading }: Props) {
               />
             </div>
             <div style={{ textAlign: 'center', marginTop: 6 }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: z.color }}>{z.label}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: z.color }}>
+                {z.label}{deltaText ? ` · ${deltaText}` : ''}
+              </div>
               <div style={{ fontSize: 11, color: 'var(--t3)' }}>Risk appetite · 0 = fear, 100 = greed</div>
             </div>
           </>

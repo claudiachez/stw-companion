@@ -1,5 +1,5 @@
 import type {
-  TrendBucket, RegimeSleeveKey, RegimeLabel, RegimeRead,
+  TrendBucket, RegimeSleeveKey, RegimeLabel, RegimeRead, TrendDirection,
 } from '../types/macro';
 
 // ── Regime sleeve weights (Environment Score) ───────────────────────
@@ -289,4 +289,67 @@ export function hv30(closes: number[]): number | null {
   const mean = logRets.reduce((a, b) => a + b, 0) / logRets.length;
   const variance = logRets.reduce((a, b) => a + (b - mean) ** 2, 0) / logRets.length;
   return Math.sqrt(variance * 252) * 100;
+}
+
+// ── 5D Trend Engine (P2) ─────────────────────────────────────────────
+// Pure direction classifier consumed by useMacroTrendHistory (packages/ui).
+// `delta` = score change over the current lookback window (e.g. 5 trading
+// days); `priorDelta` = the same-length window immediately before it, used to
+// detect a reversal (sign flip) rather than just a continuing trend.
+
+const TREND_FLAT_BAND = 3;   // |delta| below this reads as flat / no clean signal
+const TREND_STRONG_BAND = 10; // |delta| at or above this reads as "strong"
+
+/**
+ * Classify a score's directional move. A flat-vs-flat or thin signal returns
+ * `'flat'` (rendered as "Mixed" in the regime banner) — this is the expected
+ * state until enough trading-day history has accrued, not a bug.
+ */
+export function classifyTrendDirection(
+  delta: number | null,
+  priorDelta: number | null,
+): TrendDirection {
+  if (delta === null) return 'flat';
+  if (priorDelta !== null) {
+    if (priorDelta <= -TREND_FLAT_BAND && delta >= TREND_FLAT_BAND) return 'reversing_up';
+    if (priorDelta >= TREND_FLAT_BAND && delta <= -TREND_FLAT_BAND) return 'reversing_down';
+  }
+  if (delta >= TREND_STRONG_BAND) return 'strong_improvement';
+  if (delta >= TREND_FLAT_BAND) return 'improving';
+  if (delta <= -TREND_STRONG_BAND) return 'strong_deterioration';
+  if (delta <= -TREND_FLAT_BAND) return 'deteriorating';
+  return 'flat';
+}
+
+/** Banner-level descriptor — collapses the 7 directions to the 5 the spec calls for. */
+export function regimeDirectionLabel(direction: TrendDirection): string {
+  switch (direction) {
+    case 'strong_improvement':
+    case 'improving': return 'Improving';
+    case 'strong_deterioration':
+    case 'deteriorating': return 'Deteriorating';
+    case 'reversing_up': return 'Reversing Up';
+    case 'reversing_down': return 'Reversing Down';
+    default: return 'Mixed';
+  }
+}
+
+/** Per-row phrase for trend-table badges, e.g. "SPY  Caution  5D ↓ weakening". */
+export function trendDirectionPhrase(direction: TrendDirection): string {
+  switch (direction) {
+    case 'strong_improvement': return 'strong improvement';
+    case 'improving': return 'improving';
+    case 'strong_deterioration': return 'strong deterioration';
+    case 'deteriorating': return 'weakening';
+    case 'reversing_up': return 'reversing up';
+    case 'reversing_down': return 'reversing down';
+    default: return 'flat';
+  }
+}
+
+/** Arrow glyph for a direction — pairs with `trendDirectionPhrase` in badges. */
+export function trendDirectionArrow(direction: TrendDirection): '↑' | '↓' | '→' {
+  if (direction === 'strong_improvement' || direction === 'improving' || direction === 'reversing_up') return '↑';
+  if (direction === 'strong_deterioration' || direction === 'deteriorating' || direction === 'reversing_down') return '↓';
+  return '→';
 }

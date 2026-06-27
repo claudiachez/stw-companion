@@ -70,12 +70,17 @@ export function StatTile({ label, value, sub, score }: {
 }
 
 /** A 0–100 sleeve-score summary line (big number + status word). */
-export function SleeveSummary({ score, label, hint }: { score: number | null; label: string; hint?: string }) {
+export function SleeveSummary({ score, label, hint, delta }: {
+  score: number | null; label: string; hint?: string;
+  /** Pre-formatted lookback delta, e.g. "3D +5" — omitted/null until enough history accrues. */
+  delta?: string | null;
+}) {
   return (
     <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
       <span style={{ fontSize: 26, fontWeight: 700, color: scoreColor(score) }}>{score ?? '—'}</span>
       <span style={{ fontSize: 13, fontWeight: 600, color: scoreColor(score) }}>{label}</span>
       {hint && <span style={{ fontSize: 11, color: 'var(--t3)' }}>{hint}</span>}
+      {delta && <span style={{ fontSize: 11, color: 'var(--t3)' }}>{delta}</span>}
     </div>
   );
 }
