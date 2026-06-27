@@ -99,6 +99,72 @@ export function regimeBand(score: number): RegimeRead {
   return { score, label: band.label, tradingMode: band.tradingMode };
 }
 
+// ── Module 5: Volatility / Stress ───────────────────────────────────
+// All sub-scores are 0–100 where HIGHER = LESS stress (more risk-on), so they
+// compose with the other risk-on sleeves in the Environment Score.
+
+/** VIX level → calm score. <15 calm, 15–20 normal, 20–25 elevated, >25 severe. */
+export function vixScore(vix: number | null): number | null {
+  if (vix === null) return null;
+  if (vix < 15) return 90;
+  if (vix < 20) return 55;
+  if (vix < 25) return 30;
+  return 10;
+}
+
+/** VVIX (vol-of-vol / tail risk) → calm score. <85 calm, 85–100 elevated, >100 fear. */
+export function vvixScore(vvix: number | null): number | null {
+  if (vvix === null) return null;
+  if (vvix < 85) return 85;
+  if (vvix < 100) return 50;
+  return 20;
+}
+
+/** IV-premium ratio (VIX ÷ 30D realized vol) → score. <0.90 calm, 0.90–1.25 normal, >1.25 fear. */
+export function ivPremiumScore(ratio: number | null): number | null {
+  if (ratio === null) return null;
+  if (ratio < 0.90) return 85;
+  if (ratio <= 1.25) return 55;
+  return 20;
+}
+
+/**
+ * VIX 5-day direction → score. Falling fast = calming (high), rising fast = fear (low).
+ * `delta` is the absolute change in VIX points over ~5 trading days.
+ */
+export function vixDirectionScore(delta: number | null): number | null {
+  if (delta === null) return null;
+  if (delta <= -1) return 80;   // falling
+  if (delta < 2) return 50;     // roughly flat
+  return 20;                    // rising fast
+}
+
+/** Volatility / Stress sleeve score = average of the available sub-scores. */
+export function volatilityStressScore(parts: (number | null)[]): number | null {
+  const present = parts.filter((p): p is number => p !== null);
+  if (present.length === 0) return null;
+  return Math.round(present.reduce((a, b) => a + b, 0) / present.length);
+}
+
+/** Short status word for a 0–100 stress sleeve score (higher = calmer). */
+export function stressLabel(score: number | null): string {
+  if (score === null) return '—';
+  if (score >= 70) return 'Calm';
+  if (score >= 45) return 'Normal';
+  if (score >= 25) return 'Elevated';
+  return 'Stress';
+}
+
+/**
+ * Percentile rank (0–100) of `value` within `series` — the share of observations
+ * at or below it. Lets "VIX 19" read as calm-in-context vs elevated-in-context.
+ */
+export function percentileRank(value: number, series: number[]): number | null {
+  if (series.length === 0) return null;
+  const below = series.filter((v) => v <= value).length;
+  return Math.round((below / series.length) * 100);
+}
+
 // ── Realized volatility (promoted from useSentimentGauge) ────────────
 /**
  * Annualized 30-day realized volatility (%) from a daily close series:

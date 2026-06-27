@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   trendBucket, trendSubScore, trendSleeveScore,
   environmentScore, regimeBand, hv30, SLEEVE_WEIGHTS,
+  vixScore, vvixScore, ivPremiumScore, vixDirectionScore,
+  volatilityStressScore, stressLabel, percentileRank,
 } from './macro';
 
 describe('trendBucket', () => {
@@ -97,6 +99,46 @@ describe('regimeBand', () => {
   });
   it('carries a trading-mode guidance string', () => {
     expect(regimeBand(80).tradingMode).toMatch(/breakouts/i);
+  });
+});
+
+describe('volatility / stress scorers', () => {
+  it('vixScore: lower VIX = calmer (higher score)', () => {
+    expect(vixScore(12)).toBe(90);
+    expect(vixScore(17)).toBe(55);
+    expect(vixScore(22)).toBe(30);
+    expect(vixScore(30)).toBe(10);
+    expect(vixScore(null)).toBeNull();
+  });
+  it('vvixScore: bands by tail risk', () => {
+    expect(vvixScore(80)).toBe(85);
+    expect(vvixScore(92)).toBe(50);
+    expect(vvixScore(110)).toBe(20);
+  });
+  it('ivPremiumScore: implied below realized = calm', () => {
+    expect(ivPremiumScore(0.8)).toBe(85);
+    expect(ivPremiumScore(1.1)).toBe(55);
+    expect(ivPremiumScore(1.4)).toBe(20);
+  });
+  it('vixDirectionScore: falling calms, rising frightens', () => {
+    expect(vixDirectionScore(-2)).toBe(80);
+    expect(vixDirectionScore(0.5)).toBe(50);
+    expect(vixDirectionScore(3)).toBe(20);
+  });
+  it('volatilityStressScore averages present sub-scores', () => {
+    expect(volatilityStressScore([90, 50, null])).toBe(70);
+    expect(volatilityStressScore([null, null])).toBeNull();
+  });
+  it('stressLabel maps the sleeve score to a word', () => {
+    expect(stressLabel(80)).toBe('Calm');
+    expect(stressLabel(50)).toBe('Normal');
+    expect(stressLabel(30)).toBe('Elevated');
+    expect(stressLabel(10)).toBe('Stress');
+    expect(stressLabel(null)).toBe('—');
+  });
+  it('percentileRank: share of values at or below', () => {
+    expect(percentileRank(19, [10, 15, 19, 25, 30])).toBe(60);
+    expect(percentileRank(5, [])).toBeNull();
   });
 });
 

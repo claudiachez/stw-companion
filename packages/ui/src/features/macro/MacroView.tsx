@@ -6,11 +6,13 @@ import {
   DEFAULT_TREND_SYMBOLS, EXPERT_TREND_SYMBOLS,
 } from './useMacroIndicators';
 import { useSentimentGauge } from './useSentimentGauge';
+import { useVolatilityStress } from './useVolatilityStress';
 import { useWeeklyRecap } from './useWeeklyRecap';
 import { useMacroPrefs } from './useMacroPrefs';
 import { useGraddox } from '../signals/useGraddox';
 import { RegimeBanner } from './components/RegimeBanner';
 import { TrendStructureTable } from './components/TrendStructureTable';
+import { VolatilityStressCard } from './components/VolatilityStressCard';
 import { SentimentGauge } from './components/SentimentGauge';
 import { MacroRecapCard } from './components/MacroRecapCard';
 
@@ -37,24 +39,25 @@ export function MacroView() {
   }, [prefs.visibleIndicators]);
 
   const { indicators, loading: indLoading } = useMacroIndicators(visibleSymbols, finnhubKey, twelveDataKey);
+  const { data: volatility, loading: volLoading } = useVolatilityStress(finnhubKey, twelveDataKey);
   const { score, loading: sentLoading } = useSentimentGauge(finnhubKey, twelveDataKey);
   const { recap, loading: recapLoading, error: recapError, generate } = useWeeklyRecap();
 
   const visibleIndicators = indicators.filter((i) => visibleSymbols.includes(i.symbol));
 
-  // Market Regime — weighted module scores. Only the Trend sleeve is live so far;
-  // the other sleeves fill in as Modules 5–8 are built (missing weight redistributes).
+  // Market Regime — weighted module scores. Trend + Volatility sleeves are live;
+  // the rest fill in as Modules 6–8 are built (missing weight redistributes).
   const regime = useMemo(() => {
     const trend = trendSleeveScore(visibleIndicators.map((i) => i.bucket));
     const env = environmentScore([
       { key: 'trend', score: trend },
-      { key: 'volatility', score: null },
+      { key: 'volatility', score: volatility?.sleeveScore ?? null },
       { key: 'credit', score: null },
       { key: 'rates_dollar', score: null },
       { key: 'gex', score: null },
     ]);
     return env === null ? null : regimeBand(env);
-  }, [visibleIndicators]);
+  }, [visibleIndicators, volatility?.sleeveScore]);
 
   const updatedAt = useMemo(() => (indLoading ? null : new Date()), [indLoading]);
 
@@ -83,6 +86,14 @@ export function MacroView() {
               onToggleExpert={() => setShowExpert((v) => !v)}
             />
           )}
+        </div>
+      </section>
+
+      {/* ── Module 5: Volatility / Stress ──────────────────────────── */}
+      <section>
+        <SectionHeader title="Volatility / Stress" />
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
+          <VolatilityStressCard data={volatility} loading={volLoading} />
         </div>
       </section>
 
