@@ -24,15 +24,21 @@ import { RatesDollarCard } from './components/RatesDollarCard';
 import { GexPositioningCard } from './components/GexPositioningCard';
 import { SentimentGauge } from './components/SentimentGauge';
 import { MacroRecapCard } from './components/MacroRecapCard';
+import { ModuleHeader } from './components/macroVisuals';
 
-// Section header (title outside the card; matches PortfolioDashboard pattern).
-function SectionHeader({ title, color = 'var(--t3)' }: { title: string; color?: string }) {
-  return (
-    <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color, marginBottom: 10 }}>
-      {title}
-    </div>
-  );
-}
+// Concise "what is this / why it matters / how to read it" blurbs, shown via the
+// collapsible ⓘ on each module header (collapsed by default — no clutter).
+const HELP = {
+  regime: 'The overall market read, computed from weighted sleeve scores — Trend 30%, Volatility 20%, Credit 15%, Rates+Dollar 15%, GEX 20%. 75–100 = Risk-On, 60–74 = Constructive, 45–59 = Cautious, 30–44 = Defensive, 0–29 = Risk-Off. It answers: how aggressive should I be right now?',
+  strip: "Each sleeve's 0–100 score at a glance (higher = more risk-on). Shows what's actually driving the regime — whether it's trend, stress, credit, rates, or positioning.",
+  trend: 'Are risk assets technically intact? Each index vs its 9-, 21- and 200-day moving averages. Above all three = momentum; below the 200-day = risk-off; below the 200-day but bouncing above the short ones = a bear-market rally (not bullish). The heaviest sleeve (30%).',
+  volatility: 'Is fear rising? VIX = expected S&P volatility; VVIX = volatility-of-volatility (tail risk); IV Premium = VIX ÷ realized vol (how expensive hedges are vs how much the market is actually moving). Higher score = calmer.',
+  credit: 'Is credit confirming the equity move? HYG (high-yield bond ETF) vs its 50-day average — credit usually weakens before stocks do, so it acts as an early warning. A proxy for now; true high-yield spreads come later.',
+  rates: 'Are macro headwinds building? Rising 10-year yields and a strengthening dollar pressure growth and speculative stocks. Key nuance: yields falling while stress rises is a flight to safety, not a growth tailwind.',
+  gex: "STW's options-positioning read (dealer gamma exposure) — Bullish / Flat / Conflicted / Bearish, with key SPY and QQQ levels. A tactical overlay: it helps time entries and spot pivots, but doesn't set the whole macro picture on its own.",
+  riskAppetite: 'How much fear vs greed is priced right now (0 = extreme fear, 100 = extreme greed). A different question from the regime: the regime is what the environment IS; this is how emotional the tape is. Built from momentum, VIX, IV premium, tail risk, GEX, credit and breadth.',
+  recap: 'An AI summary that turns all the module scores into a plain-English read plus a suggested trading mode. Generates automatically and refreshes weekly.',
+};
 
 export function MacroView() {
   const { finnhubKey, twelveDataKey } = useCapabilities();
@@ -120,14 +126,20 @@ export function MacroView() {
     <div style={{ padding: '16px', maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 24 }}>
 
       {/* ── Module 1: Market Regime Banner ─────────────────────────── */}
-      <RegimeBanner regime={regime} updatedAt={updatedAt} />
+      <section>
+        <ModuleHeader title="Market Regime" help={HELP.regime} />
+        <RegimeBanner regime={regime} updatedAt={updatedAt} />
+      </section>
 
       {/* ── Module 2: Module Score Strip ───────────────────────────── */}
-      <ModuleScoreStrip items={stripItems} />
+      <section>
+        <ModuleHeader title="Module Scores" help={HELP.strip} />
+        <ModuleScoreStrip items={stripItems} />
+      </section>
 
       {/* ── Module 4: Trend / Market Structure ─────────────────────── */}
       <section>
-        <SectionHeader title="Trend / Market Structure" />
+        <ModuleHeader title="Trend / Market Structure" help={HELP.trend} />
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
           {indLoading && indicators.length === 0 ? (
             <div style={{ color: 'var(--t3)', fontSize: 12 }}>Loading market structure…</div>
@@ -144,7 +156,7 @@ export function MacroView() {
 
       {/* ── Module 5: Volatility / Stress ──────────────────────────── */}
       <section>
-        <SectionHeader title="Volatility / Stress" />
+        <ModuleHeader title="Volatility / Stress" help={HELP.volatility} />
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
           <VolatilityStressCard data={volatility} loading={volLoading} />
         </div>
@@ -152,7 +164,7 @@ export function MacroView() {
 
       {/* ── Module 6: Credit / Liquidity ───────────────────────────── */}
       <section>
-        <SectionHeader title="Credit / Liquidity" />
+        <ModuleHeader title="Credit / Liquidity" help={HELP.credit} />
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
           <CreditLiquidityCard data={credit} loading={creditLoading} />
         </div>
@@ -160,7 +172,7 @@ export function MacroView() {
 
       {/* ── Module 7: Rates + Dollar Headwinds ─────────────────────── */}
       <section>
-        <SectionHeader title="Rates + Dollar Headwinds" />
+        <ModuleHeader title="Rates + Dollar Headwinds" help={HELP.rates} />
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
           <RatesDollarCard data={rates} loading={ratesLoading} stressRising={stressRising} />
         </div>
@@ -168,7 +180,7 @@ export function MacroView() {
 
       {/* ── Module 8: GEX / Positioning ────────────────────────────── */}
       <section>
-        <SectionHeader title="GEX / Positioning" />
+        <ModuleHeader title="GEX / Positioning" help={HELP.gex} />
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
           <GexPositioningCard graddox={graddox} loading={!graddox} />
         </div>
@@ -176,7 +188,7 @@ export function MacroView() {
 
       {/* ── Module 9: Risk Appetite (gauge) ────────────────────────── */}
       <section>
-        <SectionHeader title="Risk Appetite" />
+        <ModuleHeader title="Risk Appetite" help={HELP.riskAppetite} />
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
           <SentimentGauge score={score} loading={sentLoading} />
         </div>
@@ -184,7 +196,7 @@ export function MacroView() {
 
       {/* ── Module 10: AI Recap ────────────────────────────────────── */}
       <section>
-        <SectionHeader title="Market Recap" />
+        <ModuleHeader title="Market Recap" help={HELP.recap} />
         <MacroRecapCard
           recap={recap}
           loading={recapLoading}

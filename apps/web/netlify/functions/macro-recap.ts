@@ -50,18 +50,17 @@ export const handler: Handler = async (event) => {
   if (!supabaseUrl || !serviceKey) return err(500, 'Server config error');
   if (!anthropicKey) return err(500, 'AI service not configured');
 
+  // Best-effort auth: verify the JWT when present, but DON'T hard-fail the recap on
+  // a verification hiccup — it reads no user data, so this is only a light gate.
   if (token) {
     try {
-      // Match ibkr-flex: disable session persistence/refresh — there is no browser
-      // storage in the Node runtime, and the default client throws without this.
       const supabase = createClient(supabaseUrl, serviceKey, {
         auth: { autoRefreshToken: false, persistSession: false },
       });
       const { error: authError } = await supabase.auth.getUser(token);
-      if (authError) return err(401, 'Unauthorized');
+      if (authError) console.warn('macro-recap: token rejected —', authError.message);
     } catch (e) {
-      console.error('macro-recap auth error:', e);
-      return err(401, 'Auth check failed');
+      console.warn('macro-recap: auth verify threw —', e instanceof Error ? e.message : e);
     }
   }
 

@@ -1,6 +1,43 @@
+import { useState, type ReactNode } from 'react';
 import { formatDate } from '@stw/shared';
 
 // Shared visual primitives for the macro module cards.
+
+/**
+ * Section title with an optional collapsible help blurb (a small ⓘ toggle).
+ * Collapsed by default so it never clutters the page; tap-to-expand works on
+ * mobile and desktop alike.
+ */
+export function ModuleHeader({ title, color = 'var(--t3)', help }: { title: string; color?: string; help?: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color }}>{title}</span>
+        {help && (
+          <button
+            onClick={() => setOpen((o) => !o)}
+            aria-label={open ? 'Hide explanation' : 'What is this?'}
+            aria-expanded={open}
+            style={{
+              width: 15, height: 15, borderRadius: '50%', border: '1px solid var(--border)',
+              background: open ? 'var(--s2)' : 'transparent', color: 'var(--t3)',
+              fontSize: 9, fontStyle: 'italic', fontWeight: 700, lineHeight: '13px',
+              cursor: 'pointer', padding: 0, flexShrink: 0,
+            }}
+          >
+            i
+          </button>
+        )}
+      </div>
+      {open && help && (
+        <div style={{ marginTop: 6, fontSize: 12, color: 'var(--t2)', lineHeight: 1.5, background: 'var(--s2)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 10px' }}>
+          {help}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** A muted source + freshness footer. `asOf` is a daily-close date (ISO). */
 export function SourceNote({ source, asOf }: { source: string; asOf?: string | null }) {
