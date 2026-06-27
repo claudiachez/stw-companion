@@ -22,6 +22,18 @@ export function MacroRecapCard({ recap, loading, error, onRefresh }: Props) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <p style={{ margin: 0, fontSize: 14, color: 'var(--text)', lineHeight: 1.6 }}>{recap.summary}</p>
 
+          {recap.whatChanged && (
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--t2)' }}>
+              <span style={{ fontWeight: 600, color: 'var(--t3)' }}>What changed: </span>{recap.whatChanged}
+            </p>
+          )}
+
+          {recap.eventRisk && (
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--c3)' }}>
+              <span style={{ fontWeight: 600 }}>Event risk: </span>{recap.eventRisk}
+            </p>
+          )}
+
           {recap.keyLevel !== null && (
             <div style={{ background: 'var(--s2)', borderRadius: 6, padding: '8px 12px', fontSize: 12 }}>
               <span style={{ fontWeight: 600, color: 'var(--t2)' }}>Key Level: </span>
@@ -30,9 +42,14 @@ export function MacroRecapCard({ recap, loading, error, onRefresh }: Props) {
             </div>
           )}
 
-          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--t2)', borderTop: '1px solid var(--bsub)', paddingTop: 8 }}>
-            {recap.bottomLine}
-          </p>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, borderTop: '1px solid var(--bsub)', paddingTop: 8, flexWrap: 'wrap' }}>
+            {recap.tradingMode && (
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: 'var(--acc)', borderRadius: 4, padding: '2px 8px' }}>
+                {recap.tradingMode}
+              </span>
+            )}
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--t2)' }}>{recap.bottomLine}</span>
+          </div>
         </div>
       )}
 

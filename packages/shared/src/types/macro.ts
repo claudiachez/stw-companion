@@ -98,12 +98,45 @@ export interface SentimentScore {
   inputs: SentimentInput[];
 }
 
-// ── Module 10: AI Recap ─────────────────────────────────────────────
+// ── Module 10: AI Recap / Trading Mode ──────────────────────────────
 export interface MacroRecap {
   summary: string;
+  /** One sentence on the 5D acceleration/reversal. */
+  whatChanged: string;
+  /** One sentence on active event risk (empty when none). */
+  eventRisk: string;
   keyLevel: number | null;
   keyLevelNote: string;
+  /** Selective / Defensive / Risk-On … keyed off the regime band. */
+  tradingMode: string;
   bottomLine: string;
+}
+
+/** A module's read passed to the recap generator. */
+export interface RecapModule {
+  score: number | null;
+  label: string;
+  fiveDayDelta?: number | null;
+}
+
+/** Request body for the macro-recap Netlify function. */
+export interface MacroRecapRequest {
+  regime: { score: number | null; label: string; tradingMode: string; fiveDayDelta?: number | null };
+  modules: {
+    trend: RecapModule;
+    volatility: RecapModule;
+    credit: RecapModule;
+    ratesDollar: RecapModule;
+    gex: RecapModule;
+  };
+  eventRisk?: {
+    level: string;
+    event: string;
+    time: string;
+    consensus?: string;
+    previous?: string;
+    overlay?: string;
+  } | null;
 }
 
 // ── User prefs ──────────────────────────────────────────────────────

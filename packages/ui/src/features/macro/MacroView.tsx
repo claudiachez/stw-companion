@@ -90,7 +90,18 @@ export function MacroView() {
   const updatedAt = useMemo(() => (indLoading ? null : new Date()), [indLoading]);
 
   function handleRefreshRecap() {
-    generate(visibleIndicators, graddox?.bias ?? '', graddox?.bias_note ?? '');
+    if (!regime) return;
+    generate({
+      regime: { score: regime.score, label: regime.label, tradingMode: regime.tradingMode },
+      modules: {
+        trend:       { score: trendSleeve, label: trendSleeveLabel(trendSleeve) },
+        volatility:  { score: volatility?.sleeveScore ?? null, label: stressLabel(volatility?.sleeveScore ?? null) },
+        credit:      { score: credit?.sleeveScore ?? null, label: creditLabel(credit?.sleeveScore ?? null) },
+        ratesDollar: { score: rates?.sleeveScore ?? null, label: ratesDollarLabel(rates?.sleeveScore ?? null) },
+        gex:         { score: gexSleeve, label: gexBiasLabel(graddox?.bias) },
+      },
+      eventRisk: null,
+    });
   }
 
   return (

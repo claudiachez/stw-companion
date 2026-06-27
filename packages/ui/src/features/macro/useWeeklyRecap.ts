@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import type { MacroRecap, MacroIndicator } from '@stw/shared';
+import type { MacroRecap, MacroRecapRequest } from '@stw/shared';
 import { useAuthStore } from '../../store/auth';
 import { getSupabase } from '../../lib/supabase';
 
@@ -23,11 +23,7 @@ export function useWeeklyRecap() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const generate = useCallback(async (
-    indicators: MacroIndicator[],
-    graddoxBias: string,
-    graddoxBiasNote: string,
-  ) => {
+  const generate = useCallback(async (payload: MacroRecapRequest) => {
     setLoading(true);
     setError(null);
     try {
@@ -39,17 +35,7 @@ export function useWeeklyRecap() {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({
-          indicators: indicators.map((i) => ({
-            symbol: i.symbol,
-            name: i.name,
-            close: i.close,
-            signal: i.bucket,
-            tier: i.bucket,
-          })),
-          graddoxBias,
-          graddoxBiasNote,
-        }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json() as MacroRecap;
