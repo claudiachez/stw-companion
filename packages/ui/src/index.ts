@@ -51,6 +51,9 @@ export { useSyncPortfolio } from './features/portfolio/useSyncPortfolio';
 export { saveIbkrSettings } from './features/portfolio/api';
 export type { UserPosition, IbkrSettings } from './features/portfolio/api';
 
+// ── Macro ─────────────────────────────────────────────────────
+export { MacroView } from './features/macro/MacroView';
+
 // ── Signals ───────────────────────────────────────────────────
 export { SignalsView } from './features/signals/SignalsView';
 export { useGraddox } from './features/signals/useGraddox';
