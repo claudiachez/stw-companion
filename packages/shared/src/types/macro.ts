@@ -99,17 +99,25 @@ export interface SentimentScore {
 }
 
 // ── Module 10: AI Recap / Trading Mode ──────────────────────────────
+// A full week-close note + next-week expectations, grounded ONLY in the data
+// passed to the generator (no fabricated figures).
 export interface MacroRecap {
-  summary: string;
-  /** One sentence on the 5D acceleration/reversal. */
-  whatChanged: string;
-  /** One sentence on active event risk (empty when none). */
-  eventRisk: string;
-  keyLevel: number | null;
-  keyLevelNote: string;
+  /** Punchy hook line — the week's defining contradiction/theme. */
+  headline: string;
+  /** Main weekly narrative — 2–4 paragraphs, separated by blank lines. */
+  verdict: string;
+  /** The dominant theme of the week (1–2 paragraphs). */
+  bigStory: string;
+  /** Bull / base / bear reads for the week ahead. */
+  scenarios: { bull: string; base: string; bear: string };
+  /** Next-week game plan / expectations (1–2 paragraphs). */
+  playbook: string;
+  /** Key levels one-liner, e.g. "Watch 7,435 above and 7,339 below." */
+  watching: string;
   /** Selective / Defensive / Risk-On … keyed off the regime band. */
   tradingMode: string;
-  bottomLine: string;
+  /** Closing punch line. */
+  finalWord: string;
 }
 
 /** A module's read passed to the recap generator. */
@@ -117,6 +125,28 @@ export interface RecapModule {
   score: number | null;
   label: string;
   fiveDayDelta?: number | null;
+}
+
+export interface RecapLevelSet {
+  resistance: number | null;
+  gex1: number | null;
+  put_support: number | null;
+  key_target?: number | null;
+  downside_risk?: number | null;
+}
+
+/** Grounding context for a richer, non-fabricated narrative. */
+export interface MacroRecapContext {
+  indicators?: { symbol: string; name: string; bucket: string | null; close: number | null; chgPct: number | null }[];
+  volatility?: { vix: number | null; vvix: number | null; ivPremium: number | null } | null;
+  riskAppetite?: { total: number | null; inputs: { label: string; score: number | null }[] } | null;
+  gex?: {
+    bias: string;
+    biasNote: string;
+    lastUpdated: string;
+    spx?: RecapLevelSet | null;
+    qqq?: RecapLevelSet | null;
+  } | null;
 }
 
 /** Request body for the macro-recap Netlify function. */
@@ -129,6 +159,7 @@ export interface MacroRecapRequest {
     ratesDollar: RecapModule;
     gex: RecapModule;
   };
+  context?: MacroRecapContext;
   eventRisk?: {
     level: string;
     event: string;

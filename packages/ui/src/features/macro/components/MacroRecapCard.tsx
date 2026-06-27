@@ -7,72 +7,110 @@ interface Props {
   onRefresh: () => void;
 }
 
+function Paragraphs({ text, size = 14, color = 'var(--text)' }: { text?: string; size?: number; color?: string }) {
+  if (!text) return null;
+  return (
+    <>
+      {text.split(/\n\n+/).map((p, i) => (
+        <p key={i} style={{ margin: 0, fontSize: size, color, lineHeight: 1.6 }}>{p.trim()}</p>
+      ))}
+    </>
+  );
+}
+
+function SubHeader({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--t3)', marginTop: 4 }}>
+      {children}
+    </div>
+  );
+}
+
+function ScenarioRow({ label, text, color }: { label: string; text?: string; color: string }) {
+  if (!text) return null;
+  return (
+    <div style={{ display: 'flex', gap: 8, fontSize: 13, lineHeight: 1.5 }}>
+      <span style={{ flexShrink: 0, minWidth: 42, fontWeight: 700, color }}>{label}</span>
+      <span style={{ color: 'var(--t2)' }}>{text}</span>
+    </div>
+  );
+}
+
 export function MacroRecapCard({ recap, loading, error, onRefresh }: Props) {
   return (
     <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
-      {loading && (
-        <div style={{ color: 'var(--t3)', fontSize: 12 }}>Generating AI recap…</div>
-      )}
+      {loading && <div style={{ color: 'var(--t3)', fontSize: 12 }}>Writing this week's recap…</div>}
 
-      {error && !loading && (
-        <div style={{ color: 'var(--c1)', fontSize: 12 }}>{error}</div>
-      )}
+      {error && !loading && <div style={{ color: 'var(--c1)', fontSize: 12 }}>{error}</div>}
 
       {recap && !loading && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <p style={{ margin: 0, fontSize: 14, color: 'var(--text)', lineHeight: 1.6 }}>{recap.summary}</p>
-
-          {recap.whatChanged && (
-            <p style={{ margin: 0, fontSize: 12, color: 'var(--t2)' }}>
-              <span style={{ fontWeight: 600, color: 'var(--t3)' }}>What changed: </span>{recap.whatChanged}
-            </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {recap.headline && (
+            <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--text)', lineHeight: 1.4 }}>{recap.headline}</p>
           )}
 
-          {recap.eventRisk && (
-            <p style={{ margin: 0, fontSize: 12, color: 'var(--c3)' }}>
-              <span style={{ fontWeight: 600 }}>Event risk: </span>{recap.eventRisk}
-            </p>
-          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <Paragraphs text={recap.verdict} />
+          </div>
 
-          {recap.keyLevel !== null && (
-            <div style={{ background: 'var(--s2)', borderRadius: 6, padding: '8px 12px', fontSize: 12 }}>
-              <span style={{ fontWeight: 600, color: 'var(--t2)' }}>Key Level: </span>
-              <span style={{ color: 'var(--text)' }}>{recap.keyLevel}</span>
-              {recap.keyLevelNote && <span style={{ color: 'var(--t2)' }}> — {recap.keyLevelNote}</span>}
+          {recap.bigStory && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: '1px solid var(--bsub)', paddingTop: 12 }}>
+              <SubHeader>The Big Story</SubHeader>
+              <Paragraphs text={recap.bigStory} size={13} color="var(--t2)" />
             </div>
           )}
 
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, borderTop: '1px solid var(--bsub)', paddingTop: 8, flexWrap: 'wrap' }}>
+          {recap.scenarios && (recap.scenarios.bull || recap.scenarios.base || recap.scenarios.bear) && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: '1px solid var(--bsub)', paddingTop: 12 }}>
+              <SubHeader>Week Ahead</SubHeader>
+              <ScenarioRow label="Bull" text={recap.scenarios.bull} color="var(--c5)" />
+              <ScenarioRow label="Base" text={recap.scenarios.base} color="var(--c3)" />
+              <ScenarioRow label="Bear" text={recap.scenarios.bear} color="var(--c1)" />
+            </div>
+          )}
+
+          {recap.playbook && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: '1px solid var(--bsub)', paddingTop: 12 }}>
+              <SubHeader>Next Week</SubHeader>
+              <Paragraphs text={recap.playbook} size={13} color="var(--t2)" />
+            </div>
+          )}
+
+          {recap.watching && (
+            <div style={{ background: 'var(--s2)', borderRadius: 6, padding: '8px 12px', fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
+              📍 {recap.watching}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, borderTop: '1px solid var(--bsub)', paddingTop: 12, flexWrap: 'wrap' }}>
             {recap.tradingMode && (
               <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: 'var(--acc)', borderRadius: 4, padding: '2px 8px' }}>
                 {recap.tradingMode}
               </span>
             )}
-            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--t2)' }}>{recap.bottomLine}</span>
+            {recap.finalWord && (
+              <span style={{ fontSize: 13, fontStyle: 'italic', color: 'var(--t2)' }}>{recap.finalWord}</span>
+            )}
           </div>
         </div>
       )}
 
       {!recap && !loading && !error && (
-        <div style={{ color: 'var(--t3)', fontSize: 12 }}>No recap yet — click Refresh to generate.</div>
+        <div style={{ color: 'var(--t3)', fontSize: 12 }}>No recap yet — generating…</div>
       )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 10, color: 'var(--t3)' }}>AI-generated from the module scores · cached weekly</span>
+        <span style={{ fontSize: 10, color: 'var(--t3)' }}>AI-generated weekly from the module scores + GEX read · refreshes weekly</span>
         <button
           onClick={onRefresh}
           disabled={loading}
           style={{
-            fontSize: 11,
-            padding: '3px 10px',
-            borderRadius: 4,
-            border: '1px solid var(--border)',
-            background: 'transparent',
-            color: loading ? 'var(--t3)' : 'var(--t2)',
+            fontSize: 11, padding: '3px 10px', borderRadius: 4, border: '1px solid var(--border)',
+            background: 'transparent', color: loading ? 'var(--t3)' : 'var(--t2)',
             cursor: loading ? 'not-allowed' : 'pointer',
           }}
         >
-          {loading ? 'Generating…' : 'AI-generated · Refresh'}
+          {loading ? 'Generating…' : 'Regenerate'}
         </button>
       </div>
     </div>

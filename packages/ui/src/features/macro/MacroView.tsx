@@ -105,6 +105,13 @@ export function MacroView() {
         ratesDollar: { score: rates?.sleeveScore ?? null, label: ratesDollarLabel(rates?.sleeveScore ?? null) },
         gex:         { score: gexSleeve, label: gexBiasLabel(graddox?.bias) },
       },
+      // Grounding context for a richer, non-fabricated weekly narrative.
+      context: {
+        indicators: visibleIndicators.map((i) => ({ symbol: i.symbol, name: i.name, bucket: i.bucket, close: i.close, chgPct: i.chgPct })),
+        volatility: volatility ? { vix: volatility.vix, vvix: volatility.vvix, ivPremium: volatility.ivPremium } : null,
+        riskAppetite: score ? { total: score.total, inputs: score.inputs.map((x) => ({ label: x.label, score: x.score })) } : null,
+        gex: graddox ? { bias: graddox.bias, biasNote: graddox.bias_note, lastUpdated: graddox.last_updated, spx: graddox.spx, qqq: graddox.qqq } : null,
+      },
       eventRisk: null,
     });
   }

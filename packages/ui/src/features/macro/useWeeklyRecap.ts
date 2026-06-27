@@ -7,7 +7,8 @@ function isoWeekKey(): string {
   const d = new Date();
   const jan1 = new Date(d.getFullYear(), 0, 1);
   const week = Math.ceil(((d.getTime() - jan1.getTime()) / 86400000 + jan1.getDay() + 1) / 7);
-  return `macro-recap-${d.getFullYear()}-W${String(week).padStart(2, '0')}`;
+  // v2 = richer week-close note schema (headline/verdict/scenarios/playbook/…).
+  return `macro-recap-v2-${d.getFullYear()}-W${String(week).padStart(2, '0')}`;
 }
 
 function loadCached(): MacroRecap | null {
