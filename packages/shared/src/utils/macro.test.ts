@@ -4,6 +4,7 @@ import {
   environmentScore, regimeBand, hv30, SLEEVE_WEIGHTS,
   vixScore, vvixScore, ivPremiumScore, vixDirectionScore,
   volatilityStressScore, stressLabel, percentileRank,
+  creditHygScore, creditLabel,
 } from './macro';
 
 describe('trendBucket', () => {
@@ -139,6 +140,22 @@ describe('volatility / stress scorers', () => {
   it('percentileRank: share of values at or below', () => {
     expect(percentileRank(19, [10, 15, 19, 25, 30])).toBe(60);
     expect(percentileRank(5, [])).toBeNull();
+  });
+});
+
+describe('credit / liquidity scorers', () => {
+  it('creditHygScore: above 50D + rising = confirming', () => {
+    expect(creditHygScore(true, true)).toBe(80);
+    expect(creditHygScore(true, false)).toBe(60);
+    expect(creditHygScore(false, true)).toBe(45);
+    expect(creditHygScore(false, false)).toBe(20);
+  });
+  it('creditLabel maps scores', () => {
+    expect(creditLabel(80)).toBe('Confirming');
+    expect(creditLabel(60)).toBe('Mild Caution');
+    expect(creditLabel(45)).toBe('Mixed');
+    expect(creditLabel(20)).toBe('Warning');
+    expect(creditLabel(null)).toBe('—');
   });
 });
 

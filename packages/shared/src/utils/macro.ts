@@ -165,6 +165,24 @@ export function percentileRank(value: number, series: number[]): number | null {
   return Math.round((below / series.length) * 100);
 }
 
+// ── Module 6: Credit / Liquidity ────────────────────────────────────
+// v1 uses HYG as a credit PROXY (it mixes credit risk with ETF flows + duration;
+// ICE BofA HY OAS is the cleaner input, deferred). Higher = credit confirming.
+
+/** HYG vs 50D MA + today's direction → credit score. */
+export function creditHygScore(aboveMa50: boolean, rising: boolean): number {
+  if (aboveMa50) return rising ? 80 : 60; // confirming / mild caution
+  return rising ? 45 : 20;                // stabilizing-mixed / warning
+}
+
+export function creditLabel(score: number | null): string {
+  if (score === null) return '—';
+  if (score >= 70) return 'Confirming';
+  if (score >= 50) return 'Mild Caution';
+  if (score >= 35) return 'Mixed';
+  return 'Warning';
+}
+
 // ── Realized volatility (promoted from useSentimentGauge) ────────────
 /**
  * Annualized 30-day realized volatility (%) from a daily close series:

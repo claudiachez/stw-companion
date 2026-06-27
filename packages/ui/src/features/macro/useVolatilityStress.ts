@@ -3,14 +3,12 @@ import {
   hv30, vixScore, vvixScore, ivPremiumScore, vixDirectionScore,
   volatilityStressScore, percentileRank,
 } from '@stw/shared';
+import { loadCloses, finnhubQuote, tdDailyCloses } from './maCache';
 
 // ── Module 5: Volatility / Stress ───────────────────────────────────
 // VIX/VVIX are index symbols Finnhub's free tier often won't serve, so we take
 // the live quote when available and fall back to the last TwelveData daily close.
 // Daily history (TwelveData) also drives the 1-yr percentile + 5D direction.
-
-const MA_PREFIX = 'macro-ma-';
-const MA_TTL = 24 * 60 * 60 * 1000;
 
 export interface VolatilityStress {
   vix: number | null;
@@ -21,52 +19,6 @@ export interface VolatilityStress {
   ivPremium: number | null;       // VIX ÷ 30D realized vol
   subScores: { vix: number | null; vvix: number | null; ivPremium: number | null; direction: number | null };
   sleeveScore: number | null;
-}
-
-function todayStr() { return new Date().toISOString().slice(0, 10); }
-
-function loadCloses(symbol: string): number[] {
-  try {
-    const raw = localStorage.getItem(MA_PREFIX + symbol);
-    if (!raw) return [];
-    return (JSON.parse(raw) as { closes: number[] }).closes ?? [];
-  } catch { return []; }
-}
-
-function saveCloses(symbol: string, closes: number[]) {
-  try { localStorage.setItem(MA_PREFIX + symbol, JSON.stringify({ closes, date: todayStr(), ts: Date.now() })); }
-  catch { /* ignore */ }
-}
-
-function cacheFresh(symbol: string): boolean {
-  try {
-    const raw = localStorage.getItem(MA_PREFIX + symbol);
-    if (!raw) return false;
-    const d = JSON.parse(raw) as { date?: string; ts?: number };
-    return d.date === todayStr() || (d.ts ?? 0) + MA_TTL > Date.now();
-  } catch { return false; }
-}
-
-async function finnhubQuote(fhSym: string, key: string): Promise<number | null> {
-  try {
-    const d = await (await fetch(`https://finnhub.io/api/v1/quote?symbol=${fhSym}&token=${key}`)).json();
-    return d.c || null;
-  } catch { return null; }
-}
-
-async function tdDailyCloses(tdSym: string, key: string, outputsize = 252): Promise<number[]> {
-  const cached = loadCloses(tdSym);
-  if (cached.length > 0 && cacheFresh(tdSym)) return cached;
-  try {
-    const url = `https://api.twelvedata.com/time_series?symbol=${tdSym}&interval=1day&outputsize=${outputsize}&timezone=UTC&apikey=${key}`;
-    const d = await (await fetch(url)).json();
-    if (d.status === 'ok' && d.values?.length) {
-      const closes = [...d.values].reverse().map((v: Record<string, string>) => parseFloat(v.close));
-      saveCloses(tdSym, closes);
-      return closes;
-    }
-  } catch { /* ignore */ }
-  return cached;
 }
 
 export function useVolatilityStress(finnhubKey?: string, twelveDataKey?: string) {

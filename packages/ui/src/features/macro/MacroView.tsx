@@ -7,12 +7,14 @@ import {
 } from './useMacroIndicators';
 import { useSentimentGauge } from './useSentimentGauge';
 import { useVolatilityStress } from './useVolatilityStress';
+import { useCreditLiquidity } from './useCreditLiquidity';
 import { useWeeklyRecap } from './useWeeklyRecap';
 import { useMacroPrefs } from './useMacroPrefs';
 import { useGraddox } from '../signals/useGraddox';
 import { RegimeBanner } from './components/RegimeBanner';
 import { TrendStructureTable } from './components/TrendStructureTable';
 import { VolatilityStressCard } from './components/VolatilityStressCard';
+import { CreditLiquidityCard } from './components/CreditLiquidityCard';
 import { SentimentGauge } from './components/SentimentGauge';
 import { MacroRecapCard } from './components/MacroRecapCard';
 
@@ -40,6 +42,7 @@ export function MacroView() {
 
   const { indicators, loading: indLoading } = useMacroIndicators(visibleSymbols, finnhubKey, twelveDataKey);
   const { data: volatility, loading: volLoading } = useVolatilityStress(finnhubKey, twelveDataKey);
+  const { data: credit, loading: creditLoading } = useCreditLiquidity(twelveDataKey);
   const { score, loading: sentLoading } = useSentimentGauge(finnhubKey, twelveDataKey);
   const { recap, loading: recapLoading, error: recapError, generate } = useWeeklyRecap();
 
@@ -52,12 +55,12 @@ export function MacroView() {
     const env = environmentScore([
       { key: 'trend', score: trend },
       { key: 'volatility', score: volatility?.sleeveScore ?? null },
-      { key: 'credit', score: null },
+      { key: 'credit', score: credit?.sleeveScore ?? null },
       { key: 'rates_dollar', score: null },
       { key: 'gex', score: null },
     ]);
     return env === null ? null : regimeBand(env);
-  }, [visibleIndicators, volatility?.sleeveScore]);
+  }, [visibleIndicators, volatility?.sleeveScore, credit?.sleeveScore]);
 
   const updatedAt = useMemo(() => (indLoading ? null : new Date()), [indLoading]);
 
@@ -94,6 +97,14 @@ export function MacroView() {
         <SectionHeader title="Volatility / Stress" />
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
           <VolatilityStressCard data={volatility} loading={volLoading} />
+        </div>
+      </section>
+
+      {/* ── Module 6: Credit / Liquidity ───────────────────────────── */}
+      <section>
+        <SectionHeader title="Credit / Liquidity" />
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
+          <CreditLiquidityCard data={credit} loading={creditLoading} />
         </div>
       </section>
 
