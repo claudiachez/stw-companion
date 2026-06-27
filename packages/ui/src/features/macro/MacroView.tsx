@@ -45,14 +45,17 @@ export function MacroView() {
   const { prefs, toggle } = useMacroPrefs();
   const { data: graddox } = useGraddox();
 
-  // Trend symbols: defaults + any expert symbols toggled on, in canonical order.
+  // Fetch the FULL trend set always (so the recap can speak to small-caps/
+  // equal-weight rotation even when those rows are toggled off); the table and the
+  // regime sleeve use only the visible subset.
+  const allSymbols = useMemo(() => ALL_INDICATORS.map((i) => i.symbol), []);
   const visibleSymbols = useMemo(() => {
     const base = [...DEFAULT_TREND_SYMBOLS];
     EXPERT_TREND_SYMBOLS.forEach((s) => { if (prefs.visibleIndicators.includes(s)) base.push(s); });
-    return ALL_INDICATORS.map((i) => i.symbol).filter((s) => base.includes(s));
-  }, [prefs.visibleIndicators]);
+    return allSymbols.filter((s) => base.includes(s));
+  }, [prefs.visibleIndicators, allSymbols]);
 
-  const { indicators, loading: indLoading, asOf: trendAsOf } = useMacroIndicators(visibleSymbols, finnhubKey, twelveDataKey);
+  const { indicators, loading: indLoading, asOf: trendAsOf } = useMacroIndicators(allSymbols, finnhubKey, twelveDataKey);
   const { data: volatility, loading: volLoading } = useVolatilityStress(finnhubKey, twelveDataKey);
   const { data: credit, loading: creditLoading } = useCreditLiquidity(twelveDataKey);
   // Stress rising = VIX climbing or credit below its 50D — feeds the US10Y
@@ -106,8 +109,10 @@ export function MacroView() {
         gex:         { score: gexSleeve, label: gexBiasLabel(graddox?.bias) },
       },
       // Grounding context for a richer, non-fabricated weekly narrative.
+      // Always pass the full trend set (incl. IWM/RSP/VEA) so the rotation/breadth
+      // story is grounded even when those rows are hidden in the table.
       context: {
-        indicators: visibleIndicators.map((i) => ({ symbol: i.symbol, name: i.name, bucket: i.bucket, close: i.close, chgPct: i.chgPct })),
+        indicators: indicators.map((i) => ({ symbol: i.symbol, name: i.name, bucket: i.bucket, close: i.close, chgPct: i.chgPct })),
         volatility: volatility ? { vix: volatility.vix, vvix: volatility.vvix, ivPremium: volatility.ivPremium } : null,
         riskAppetite: score ? { total: score.total, inputs: score.inputs.map((x) => ({ label: x.label, score: x.score })) } : null,
         gex: graddox ? { bias: graddox.bias, biasNote: graddox.bias_note, lastUpdated: graddox.last_updated, spx: graddox.spx, qqq: graddox.qqq } : null,

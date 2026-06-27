@@ -88,6 +88,7 @@ function buildPrompt(body: RecapRequest): string {
 CRITICAL GROUNDING RULES:
 - Use ONLY the data provided below. Do NOT invent specific figures (dollar flows, exact streak counts, sector names, fund names) you were not given.
 - You MAY interpret and tell a story (rotation, risk-on/off, where leadership sits) but every concrete number you cite must come from the data below.
+- Always read across the index structure: if small caps (IWM) or equal-weight (RSP) diverge from SPY/QQQ, name the rotation explicitly (e.g. broad market vs mega-cap leadership). Work it into the prose.
 - If the data is thin, write a shorter note rather than padding with invented detail.
 - Quote price levels exactly as given (SPX/QQQ levels are in index points).
 
