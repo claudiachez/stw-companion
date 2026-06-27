@@ -23,31 +23,43 @@ function LevelTile({ label, value }: { label: string; value: number | null }) {
   );
 }
 
+function LevelGroup({ name, resistance, gex1, putSupport }: { name: string; resistance: number | null; gex1: number | null; putSupport: number | null }) {
+  return (
+    <div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--t2)', margin: '0 0 6px 2px' }}>{name}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 8 }}>
+        <LevelTile label="Resistance" value={resistance} />
+        <LevelTile label="GEX1 (pivot)" value={gex1} />
+        <LevelTile label="Put Support" value={putSupport} />
+      </div>
+    </div>
+  );
+}
+
 export function GexPositioningCard({ graddox, loading }: Props) {
   if (loading && !graddox) return <div style={{ color: 'var(--t3)', fontSize: 12 }}>Loading positioning…</div>;
   if (!graddox) return <div style={{ color: 'var(--t3)', fontSize: 12 }}>No GEX signal available.</div>;
 
   const score = gexScore(graddox.bias);
   const label = gexBiasLabel(graddox.bias);
-  const gex1 = spy(graddox.spx?.gex1);
-  const resistance = spy(graddox.spx?.resistance);
-  const putSupport = spy(graddox.spx?.put_support);
+  // SPY = SPX ÷ 10; QQQ levels are already in QQQ price terms (no scaling).
+  const spyGex1 = spy(graddox.spx?.gex1);
+  const spyPut = spy(graddox.spx?.put_support);
 
-  const trigger = label === 'Bearish' && gex1 !== null
-    ? `Reclaim above GEX1 (SPY ${gex1.toFixed(0)}) flips the read neutral.`
-    : label === 'Bullish' && putSupport !== null
-      ? `Hold above put support (SPY ${putSupport.toFixed(0)}) keeps the bid intact.`
+  const trigger = label === 'Bearish' && spyGex1 !== null
+    ? `Reclaim above GEX1 (SPY ${spyGex1.toFixed(0)}) flips the read neutral.`
+    : label === 'Bullish' && spyPut !== null
+      ? `Hold above put support (SPY ${spyPut.toFixed(0)}) keeps the bid intact.`
       : 'Watch the GEX pivot for a regime flip.';
 
   return (
     <div>
       <SleeveSummary score={score} label={label} hint="tactical overlay" />
 
-      {/* SPY-scale key levels */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10 }}>
-        <LevelTile label="SPY Resistance" value={resistance} />
-        <LevelTile label="SPY GEX1 (pivot)" value={gex1} />
-        <LevelTile label="SPY Put Support" value={putSupport} />
+      {/* Key levels — SPY (SPX ÷10) and QQQ */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
+        <LevelGroup name="SPY" resistance={spy(graddox.spx?.resistance)} gex1={spyGex1} putSupport={spyPut} />
+        <LevelGroup name="QQQ" resistance={graddox.qqq?.resistance ?? null} gex1={graddox.qqq?.gex1 ?? null} putSupport={graddox.qqq?.put_support ?? null} />
       </div>
 
       {/* Trigger + implication */}

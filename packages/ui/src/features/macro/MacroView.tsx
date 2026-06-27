@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect, useRef } from 'react';
 import {
   environmentScore, regimeBand, trendSleeveScore, trendSleeveLabel, gexScore,
   gexBiasLabel, stressLabel, creditLabel, ratesDollarLabel,
@@ -102,6 +102,17 @@ export function MacroView() {
       eventRisk: null,
     });
   }
+
+  // Auto-generate the recap on first load once the sleeves have settled — no
+  // manual Refresh needed (cached per ISO week, so this fires at most once/week).
+  const autoTriedRef = useRef(false);
+  const dataReady = !indLoading && !volLoading && !creditLoading && !ratesLoading;
+  useEffect(() => {
+    if (autoTriedRef.current || recap || recapLoading || !regime || !dataReady) return;
+    autoTriedRef.current = true;
+    handleRefreshRecap();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataReady, regime, recap, recapLoading]);
 
   return (
     // Layout's <main> is overflow:hidden inside a 100dvh shell — this view owns its scroll.

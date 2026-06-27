@@ -1,3 +1,4 @@
+import { GaugeComponent } from 'react-gauge-component';
 import type { SentimentScore } from '@stw/shared';
 
 interface Props {
@@ -5,141 +6,107 @@ interface Props {
   loading: boolean;
 }
 
-function scoreZone(s: number): { label: string; color: string } {
-  if (s < 25)  return { label: 'Extreme Fear',  color: '#ef4444' };
-  if (s < 45)  return { label: 'Fear',          color: '#f97316' };
-  if (s < 55)  return { label: 'Neutral',       color: '#9ca3af' };
-  if (s < 75)  return { label: 'Greed',         color: '#14b8a6' };
-  return             { label: 'Extreme Greed',  color: '#22c55e' };
-}
+interface Zone { label: string; short: string; color: string }
 
-// Arc gauge: draws a semicircle (180°) from 0 to 100
-function ArcGauge({ value }: { value: number | null }) {
-  const cx = 120, cy = 110, r = 90;
-  const startAngle = Math.PI; // left
-  const endAngle = 0;         // right
-
-  function polarToXY(angle: number): [number, number] {
-    return [cx + r * Math.cos(angle), cy + r * Math.sin(angle)];
-  }
-
-  // Background arc
-  const bgStart = polarToXY(startAngle);
-  const bgEnd = polarToXY(endAngle);
-  const bgPath = `M ${bgStart[0]} ${bgStart[1]} A ${r} ${r} 0 0 1 ${bgEnd[0]} ${bgEnd[1]}`;
-
-  // Value arc (if value)
-  let valuePath = '';
-  let needleX = cx, needleY = cy - r;
-  if (value !== null) {
-    const clipped = Math.max(0, Math.min(100, value));
-    // angle goes from π (0) to 0 (100) linearly
-    const angle = startAngle - (clipped / 100) * Math.PI;
-    const [vx, vy] = polarToXY(angle);
-    const large = clipped > 50 ? 1 : 0;
-    valuePath = `M ${bgStart[0]} ${bgStart[1]} A ${r} ${r} 0 ${large} 1 ${vx} ${vy}`;
-    needleX = vx;
-    needleY = vy;
-  }
-
-  const zone = value !== null ? scoreZone(value) : null;
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      <svg viewBox="0 0 240 130" style={{ width: '100%', maxWidth: 280 }}>
-        {/* Zone segments (color bands) */}
-        {[
-          { from: 0, to: 25,  color: '#ef4444' },
-          { from: 25, to: 45, color: '#f97316' },
-          { from: 45, to: 55, color: '#9ca3af' },
-          { from: 55, to: 75, color: '#14b8a6' },
-          { from: 75, to: 100,color: '#22c55e' },
-        ].map(({ from, to, color }) => {
-          const a1 = startAngle - (from / 100) * Math.PI;
-          const a2 = startAngle - (to / 100) * Math.PI;
-          const [x1, y1] = polarToXY(a1);
-          const [x2, y2] = polarToXY(a2);
-          return (
-            <path key={from} d={`M ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2}`}
-              fill="none" stroke={color} strokeWidth={12} strokeLinecap="butt" opacity={0.3} />
-          );
-        })}
-
-        {/* Background arc */}
-        <path d={bgPath} fill="none" stroke="var(--border)" strokeWidth={8} />
-
-        {/* Value arc */}
-        {valuePath && value !== null && (
-          <path d={valuePath} fill="none" stroke={zone!.color} strokeWidth={8} strokeLinecap="round" />
-        )}
-
-        {/* Needle */}
-        {value !== null && (
-          <>
-            <line x1={cx} y1={cy} x2={needleX} y2={needleY} stroke="var(--text)" strokeWidth={2.5} strokeLinecap="round" />
-            <circle cx={cx} cy={cy} r={5} fill="var(--text)" />
-          </>
-        )}
-
-        {/* Zone labels */}
-        <text x={30} y={125} fontSize={8} fill="#ef4444" textAnchor="middle">Extreme Fear</text>
-        <text x={84} y={80} fontSize={8} fill="#f97316" textAnchor="middle">Fear</text>
-        <text x={120} y={65} fontSize={8} fill="#9ca3af" textAnchor="middle">Neutral</text>
-        <text x={156} y={80} fontSize={8} fill="#14b8a6" textAnchor="middle">Greed</text>
-        <text x={210} y={125} fontSize={8} fill="#22c55e" textAnchor="middle">Extreme Greed</text>
-
-        {/* Score in center */}
-        {value !== null && (
-          <>
-            <text x={cx} y={cy + 20} fontSize={22} fontWeight={700} fill={zone!.color} textAnchor="middle">{Math.round(value)}</text>
-            <text x={cx} y={cy + 35} fontSize={9} fill={zone!.color} textAnchor="middle">{zone!.label}</text>
-          </>
-        )}
-      </svg>
-    </div>
-  );
+// 0 = extreme fear … 100 = extreme greed.
+function zoneFor(s: number): Zone {
+  if (s < 25) return { label: 'Extreme Fear', short: 'Ext. Fear', color: '#ef4444' };
+  if (s < 45) return { label: 'Fear',         short: 'Fear',      color: '#f97316' };
+  if (s < 55) return { label: 'Neutral',      short: 'Neutral',   color: '#9ca3af' };
+  if (s < 75) return { label: 'Greed',        short: 'Greed',     color: '#14b8a6' };
+  return       { label: 'Extreme Greed', short: 'Ext. Greed', color: '#22c55e' };
 }
 
 function MiniBar({ score }: { score: number | null }) {
   if (score === null) return <div style={{ flex: 1, height: 6, background: 'var(--border)', borderRadius: 3 }} />;
-  const zone = scoreZone(score);
+  const z = zoneFor(score);
   return (
     <div style={{ flex: 1, height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
-      <div style={{ width: `${score}%`, height: '100%', background: zone.color, borderRadius: 3, transition: 'width 0.4s' }} />
+      <div style={{ width: `${score}%`, height: '100%', background: z.color, borderRadius: 3, transition: 'width 0.4s' }} />
     </div>
   );
 }
 
 export function SentimentGauge({ score, loading }: Props) {
+  if (loading && !score) {
+    return <div style={{ color: 'var(--t3)', fontSize: 12, padding: '16px 0' }}>Computing risk appetite…</div>;
+  }
+  if (!score) return <div style={{ color: 'var(--t3)', fontSize: 12 }}>Risk-appetite data unavailable.</div>;
+
+  const total = score.total;
+  const z = total !== null ? zoneFor(total) : null;
+
   return (
-    <div>
-      {loading && !score && (
-        <div style={{ color: 'var(--t3)', fontSize: 12, padding: '16px 0' }}>Computing sentiment…</div>
-      )}
+    // Two columns on desktop (gauge ┃ breakdown), stacks on mobile — fills the width.
+    <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center' }}>
 
-      {score && (
-        <>
-          <ArcGauge value={score.total} />
+      {/* Gauge */}
+      <div style={{ flex: '1 1 260px', minWidth: 240, maxWidth: 380, margin: '0 auto' }}>
+        {total !== null && z ? (
+          <>
+            <GaugeComponent
+              type="semicircle"
+              value={total}
+              minValue={0}
+              maxValue={100}
+              arc={{
+                width: 0.22,
+                padding: 0.008,
+                cornerRadius: 2,
+                subArcs: [
+                  { limit: 25, color: '#ef4444' },
+                  { limit: 45, color: '#f97316' },
+                  { limit: 55, color: '#9ca3af' },
+                  { limit: 75, color: '#14b8a6' },
+                  { limit: 100, color: '#22c55e' },
+                ],
+              }}
+              pointer={{ type: 'needle', color: '#6b7280', width: 12, length: 0.72, elastic: true }}
+              labels={{
+                valueLabel: { formatTextValue: (v) => `${Math.round(v)}`, style: { fill: z.color, fontSize: '34px', textShadow: 'none' } },
+                tickLabels: {
+                  type: 'outer',
+                  defaultTickValueConfig: { style: { fill: '#9ca3af', fontSize: '8px' } },
+                  ticks: [{ value: 25 }, { value: 50 }, { value: 75 }],
+                },
+              }}
+            />
+            <div style={{ textAlign: 'center', marginTop: 2 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: z.color }}>{z.label}</div>
+              <div style={{ fontSize: 11, color: 'var(--t3)' }}>Risk appetite · 0 = fear, 100 = greed</div>
+            </div>
+          </>
+        ) : (
+          <div style={{ color: 'var(--t3)', fontSize: 12, textAlign: 'center' }}>Not enough data to score.</div>
+        )}
+      </div>
 
-          <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {score.inputs.map((inp) => (
+      {/* Component breakdown */}
+      <div style={{ flex: '2 1 300px', minWidth: 260 }}>
+        <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 8 }}>
+          What's driving it (0 = fear · 100 = greed)
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {score.inputs.map((inp) => {
+            const iz = inp.score !== null ? zoneFor(inp.score) : null;
+            return (
               <div key={inp.label} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ minWidth: 140, fontSize: 12, color: 'var(--t2)' }}>{inp.label}</div>
+                <div style={{ minWidth: 120, fontSize: 12, color: 'var(--t2)' }}>{inp.label}</div>
                 <MiniBar score={inp.score} />
-                <div style={{ minWidth: 28, fontSize: 12, color: inp.score !== null ? scoreZone(inp.score).color : 'var(--t3)', textAlign: 'right' }}>
-                  {inp.score !== null ? Math.round(inp.score) : '—'}
+                <div style={{ minWidth: 86, fontSize: 12, textAlign: 'right', color: iz ? iz.color : 'var(--t3)' }}>
+                  {inp.score !== null ? `${Math.round(inp.score)} · ${iz!.short}` : '—'}
                 </div>
-                <div style={{ minWidth: 32, fontSize: 10, color: 'var(--t3)', textAlign: 'right' }}>
+                <div style={{ minWidth: 30, fontSize: 10, color: 'var(--t3)', textAlign: 'right' }}>
                   {Math.round(inp.weight * 100)}%
                 </div>
               </div>
-            ))}
-          </div>
-          <div style={{ marginTop: 12, fontSize: 10, color: 'var(--t3)', lineHeight: 1.4 }}>
-            Source: Finnhub (VIX/VVIX) + TwelveData (SPY/RSP/HYG daily) + STW Graddox (GEX). Live quotes ≤15m; daily metrics refresh once per session.
-          </div>
-        </>
-      )}
+            );
+          })}
+        </div>
+        <div style={{ marginTop: 12, fontSize: 10, color: 'var(--t3)', lineHeight: 1.4 }}>
+          Source: Finnhub (VIX/VVIX) + TwelveData (SPY/RSP/HYG daily) + STW Graddox (GEX). Live quotes ≤15m; daily metrics refresh once per session.
+        </div>
+      </div>
     </div>
   );
 }
