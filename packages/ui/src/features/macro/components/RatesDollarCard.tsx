@@ -1,6 +1,6 @@
 import { ratesDollarLabel } from '@stw/shared';
 import type { RatesDollar } from '../useRatesDollar';
-import { StatTile, SleeveSummary, TileGrid } from './macroVisuals';
+import { StatTile, SleeveSummary, TileGrid, SourceNote } from './macroVisuals';
 
 interface Props {
   data: RatesDollar | null;
@@ -45,6 +45,7 @@ export function RatesDollarCard({ data, loading, stressRising }: Props) {
           ⚠ Yields falling fast while stress rises — flight to safety, not a growth tailwind.
         </div>
       )}
+      <SourceNote source="TwelveData daily (CBOE TNX, UUP)" asOf={data.asOf} />
     </div>
   );
 }

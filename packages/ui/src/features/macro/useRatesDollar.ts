@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { us10yScore, uupScore, ratesDollarScore } from '@stw/shared';
-import { tdDailyCloses, sma } from './maCache';
+import { tdDailyCloses, sma, loadLastDate } from './maCache';
 
 // ── Module 7: Rates + Dollar Headwinds ──────────────────────────────
 // US10Y shown as a yield %. TwelveData/CBOE 'TNX' quotes 10× the yield
@@ -19,6 +19,7 @@ export interface RatesDollar {
   uupAbove21: boolean | null;
   subScores: { us10y: number | null; uup: number | null };
   sleeveScore: number | null;
+  asOf: string | null;
 }
 
 export function useRatesDollar(twelveDataKey: string | undefined, stressRising: boolean) {
@@ -51,7 +52,7 @@ export function useRatesDollar(twelveDataKey: string | undefined, stressRising: 
       const sleeveScore = ratesDollarScore([subScores.us10y, subScores.uup]);
 
       if (!cancelled) {
-        setData({ us10y, us10yDelta5, uup, uupAbove9, uupAbove21, subScores, sleeveScore });
+        setData({ us10y, us10yDelta5, uup, uupAbove9, uupAbove21, subScores, sleeveScore, asOf: loadLastDate('TNX') });
         setLoading(false);
       }
     }

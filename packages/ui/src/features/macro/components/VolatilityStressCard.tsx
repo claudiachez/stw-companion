@@ -1,6 +1,6 @@
 import { stressLabel } from '@stw/shared';
 import type { VolatilityStress } from '../useVolatilityStress';
-import { StatTile, SleeveSummary, TileGrid } from './macroVisuals';
+import { StatTile, SleeveSummary, TileGrid, SourceNote } from './macroVisuals';
 
 interface Props {
   data: VolatilityStress | null;
@@ -41,6 +41,7 @@ export function VolatilityStressCard({ data, loading }: Props) {
           score={subScores.ivPremium}
         />
       </TileGrid>
+      <SourceNote source="VIX/VVIX: Finnhub live · history: TwelveData daily" asOf={data.asOf} />
     </div>
   );
 }

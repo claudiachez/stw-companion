@@ -1,6 +1,6 @@
 import { creditLabel } from '@stw/shared';
 import type { CreditLiquidity } from '../useCreditLiquidity';
-import { StatTile, SleeveSummary, TileGrid } from './macroVisuals';
+import { StatTile, SleeveSummary, TileGrid, SourceNote } from './macroVisuals';
 
 interface Props {
   data: CreditLiquidity | null;
@@ -40,6 +40,7 @@ export function CreditLiquidityCard({ data, loading }: Props) {
       <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 10 }}>
         Credit proxy via HYG — true HY OAS spread coming later.
       </div>
+      <SourceNote source="TwelveData daily (HYG)" asOf={data.asOf} />
     </div>
   );
 }

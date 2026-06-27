@@ -3,7 +3,7 @@ import {
   hv30, vixScore, vvixScore, ivPremiumScore, vixDirectionScore,
   volatilityStressScore, percentileRank,
 } from '@stw/shared';
-import { loadCloses, finnhubQuote, tdDailyCloses } from './maCache';
+import { loadCloses, finnhubQuote, tdDailyCloses, loadLastDate } from './maCache';
 
 // ── Module 5: Volatility / Stress ───────────────────────────────────
 // VIX/VVIX are index symbols Finnhub's free tier often won't serve, so we take
@@ -19,6 +19,7 @@ export interface VolatilityStress {
   ivPremium: number | null;       // VIX ÷ 30D realized vol
   subScores: { vix: number | null; vvix: number | null; ivPremium: number | null; direction: number | null };
   sleeveScore: number | null;
+  asOf: string | null;            // latest daily-history bar date
 }
 
 export function useVolatilityStress(finnhubKey?: string, twelveDataKey?: string) {
@@ -62,7 +63,7 @@ export function useVolatilityStress(finnhubKey?: string, twelveDataKey?: string)
       const sleeveScore = volatilityStressScore([subScores.vix, subScores.vvix, subScores.ivPremium, subScores.direction]);
 
       if (!cancelled) {
-        setData({ vix, vixPercentile, vixDelta5, vvix, spyHv30, ivPremium, subScores, sleeveScore });
+        setData({ vix, vixPercentile, vixDelta5, vvix, spyHv30, ivPremium, subScores, sleeveScore, asOf: loadLastDate('VIX') });
         setLoading(false);
       }
     }

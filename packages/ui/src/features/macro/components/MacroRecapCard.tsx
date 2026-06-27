@@ -57,7 +57,8 @@ export function MacroRecapCard({ recap, loading, error, onRefresh }: Props) {
         <div style={{ color: 'var(--t3)', fontSize: 12 }}>No recap yet — click Refresh to generate.</div>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 10, color: 'var(--t3)' }}>AI-generated from the module scores · cached weekly</span>
         <button
           onClick={onRefresh}
           disabled={loading}

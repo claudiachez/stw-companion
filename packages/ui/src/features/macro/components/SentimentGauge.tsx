@@ -135,6 +135,9 @@ export function SentimentGauge({ score, loading }: Props) {
               </div>
             ))}
           </div>
+          <div style={{ marginTop: 12, fontSize: 10, color: 'var(--t3)', lineHeight: 1.4 }}>
+            Source: Finnhub (VIX/VVIX) + TwelveData (SPY/RSP/HYG daily) + STW Graddox (GEX). Live quotes ≤15m; daily metrics refresh once per session.
+          </div>
         </>
       )}
     </div>

@@ -59,11 +59,9 @@ export function GexPositioningCard({ graddox, loading }: Props) {
         )}
       </div>
 
-      {graddox.last_updated && (
-        <div style={{ marginTop: 8, fontSize: 10, color: 'var(--t3)' }}>
-          GEX as of {fmtDateTime(graddox.last_updated)}
-        </div>
-      )}
+      <div style={{ marginTop: 10, fontSize: 10, color: 'var(--t3)', lineHeight: 1.4 }}>
+        STW Graddox GEX signal{graddox.last_updated ? ` · updated ${fmtDateTime(graddox.last_updated)}` : ''}
+      </div>
     </div>
   );
 }

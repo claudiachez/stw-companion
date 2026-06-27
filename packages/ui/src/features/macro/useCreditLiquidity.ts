@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { creditHygScore } from '@stw/shared';
-import { tdDailyCloses, sma } from './maCache';
+import { tdDailyCloses, sma, loadLastDate } from './maCache';
 
 // ── Module 6: Credit / Liquidity ────────────────────────────────────
 // v1 credit proxy = HYG vs its 50D MA + direction. Labeled a proxy in the UI;
@@ -13,6 +13,7 @@ export interface CreditLiquidity {
   rising: boolean | null;
   delta5Pct: number | null;   // 5-day % change
   sleeveScore: number | null;
+  asOf: string | null;
 }
 
 export function useCreditLiquidity(twelveDataKey?: string) {
@@ -37,7 +38,7 @@ export function useCreditLiquidity(twelveDataKey?: string) {
       const sleeveScore = aboveMa50 !== null && rising !== null ? creditHygScore(aboveMa50, rising) : null;
 
       if (!cancelled) {
-        setData({ hyg, hyg50, aboveMa50, rising, delta5Pct, sleeveScore });
+        setData({ hyg, hyg50, aboveMa50, rising, delta5Pct, sleeveScore, asOf: loadLastDate('HYG') });
         setLoading(false);
       }
     }

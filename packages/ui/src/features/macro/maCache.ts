@@ -15,9 +15,18 @@ export function loadCloses(symbol: string): number[] {
   } catch { return []; }
 }
 
-function saveCloses(symbol: string, closes: number[]) {
-  try { localStorage.setItem(MA_PREFIX + symbol, JSON.stringify({ closes, date: todayStr(), ts: Date.now() })); }
+function saveCloses(symbol: string, closes: number[], lastDate?: string | null) {
+  try { localStorage.setItem(MA_PREFIX + symbol, JSON.stringify({ closes, date: todayStr(), ts: Date.now(), lastDate: lastDate ?? null })); }
   catch { /* ignore */ }
+}
+
+/** The datetime of the most recent daily bar for a symbol (how fresh the close is). */
+export function loadLastDate(symbol: string): string | null {
+  try {
+    const raw = localStorage.getItem(MA_PREFIX + symbol);
+    if (!raw) return null;
+    return (JSON.parse(raw) as { lastDate?: string | null }).lastDate ?? null;
+  } catch { return null; }
 }
 
 export function cacheFresh(symbol: string): boolean {
@@ -44,8 +53,9 @@ export async function tdDailyCloses(tdSym: string, key: string, outputsize = 252
     const url = `https://api.twelvedata.com/time_series?symbol=${tdSym}&interval=1day&outputsize=${outputsize}&timezone=UTC&apikey=${key}`;
     const d = await (await fetch(url)).json();
     if (d.status === 'ok' && d.values?.length) {
+      const lastDate = (d.values[0] as Record<string, string>)?.datetime ?? null; // values are newest-first
       const closes = [...d.values].reverse().map((v: Record<string, string>) => parseFloat(v.close));
-      saveCloses(tdSym, closes);
+      saveCloses(tdSym, closes, lastDate);
       return closes;
     }
   } catch { /* ignore */ }

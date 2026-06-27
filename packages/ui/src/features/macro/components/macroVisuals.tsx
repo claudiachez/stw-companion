@@ -1,4 +1,15 @@
+import { formatDate } from '@stw/shared';
+
 // Shared visual primitives for the macro module cards.
+
+/** A muted source + freshness footer. `asOf` is a daily-close date (ISO). */
+export function SourceNote({ source, asOf }: { source: string; asOf?: string | null }) {
+  return (
+    <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 10, lineHeight: 1.4 }}>
+      {source}{asOf ? ` · daily close ${formatDate(asOf)}` : ''}
+    </div>
+  );
+}
 
 /** 0–100 sub-score (higher = more risk-on / calmer) → CSS color token. */
 export function scoreColor(score: number | null): string {

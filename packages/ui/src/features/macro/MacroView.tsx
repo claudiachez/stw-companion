@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import {
   environmentScore, regimeBand, trendSleeveScore, trendSleeveLabel, gexScore,
   gexBiasLabel, stressLabel, creditLabel, ratesDollarLabel,
@@ -37,7 +37,6 @@ function SectionHeader({ title, color = 'var(--t3)' }: { title: string; color?: 
 export function MacroView() {
   const { finnhubKey, twelveDataKey } = useCapabilities();
   const { prefs, toggle } = useMacroPrefs();
-  const [showExpert, setShowExpert] = useState(false);
   const { data: graddox } = useGraddox();
 
   // Trend symbols: defaults + any expert symbols toggled on, in canonical order.
@@ -47,7 +46,7 @@ export function MacroView() {
     return ALL_INDICATORS.map((i) => i.symbol).filter((s) => base.includes(s));
   }, [prefs.visibleIndicators]);
 
-  const { indicators, loading: indLoading } = useMacroIndicators(visibleSymbols, finnhubKey, twelveDataKey);
+  const { indicators, loading: indLoading, asOf: trendAsOf } = useMacroIndicators(visibleSymbols, finnhubKey, twelveDataKey);
   const { data: volatility, loading: volLoading } = useVolatilityStress(finnhubKey, twelveDataKey);
   const { data: credit, loading: creditLoading } = useCreditLiquidity(twelveDataKey);
   // Stress rising = VIX climbing or credit below its 50D — feeds the US10Y
@@ -105,6 +104,8 @@ export function MacroView() {
   }
 
   return (
+    // Layout's <main> is overflow:hidden inside a 100dvh shell — this view owns its scroll.
+    <div style={{ height: '100%', overflowY: 'auto' }}>
     <div style={{ padding: '16px', maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 24 }}>
 
       {/* ── Module 1: Market Regime Banner ─────────────────────────── */}
@@ -124,8 +125,7 @@ export function MacroView() {
               indicators={indicators}
               visibleSymbols={visibleSymbols}
               onToggle={toggle}
-              showExpert={showExpert}
-              onToggleExpert={() => setShowExpert((v) => !v)}
+              asOf={trendAsOf}
             />
           )}
         </div>
@@ -182,6 +182,7 @@ export function MacroView() {
         />
       </section>
 
+    </div>
     </div>
   );
 }

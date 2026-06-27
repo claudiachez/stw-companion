@@ -1,13 +1,13 @@
 import type { MacroIndicator, TrendBucket } from '@stw/shared';
 import { TREND_BUCKET_META, TREND_BUCKET_ORDER } from '@stw/shared';
 import { ALL_INDICATORS, EXPERT_TREND_SYMBOLS } from '../useMacroIndicators';
+import { SourceNote } from './macroVisuals';
 
 interface Props {
   indicators: MacroIndicator[];
   visibleSymbols: string[];
   onToggle: (symbol: string) => void;
-  showExpert: boolean;
-  onToggleExpert: () => void;
+  asOf: string | null;
 }
 
 const EXPERT_SET = new Set(EXPERT_TREND_SYMBOLS);
@@ -68,7 +68,7 @@ function IndicatorRow({ ind }: { ind: MacroIndicator }) {
   );
 }
 
-export function TrendStructureTable({ indicators, visibleSymbols, onToggle, showExpert, onToggleExpert }: Props) {
+export function TrendStructureTable({ indicators, visibleSymbols, onToggle, asOf }: Props) {
   const visSet = new Set(visibleSymbols);
   const visible = indicators.filter((i) => visSet.has(i.symbol));
 
@@ -81,27 +81,17 @@ export function TrendStructureTable({ indicators, visibleSymbols, onToggle, show
 
   return (
     <div>
-      {/* Expert toggle + per-symbol visibility */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
-        <button
-          onClick={onToggleExpert}
-          style={{
-            fontSize: 11, padding: '3px 10px', borderRadius: 4, border: '1px solid var(--border)',
-            background: showExpert ? 'var(--acc)' : 'transparent',
-            color: showExpert ? '#fff' : 'var(--t2)', cursor: 'pointer',
-          }}
-        >
-          {showExpert ? 'Expert: On' : 'Expert: Off'}
-        </button>
-        <span style={{ fontSize: 11, color: 'var(--t3)' }}>Small-cap, breadth & intl confirmation</span>
-        {showExpert && ALL_INDICATORS.filter((i) => EXPERT_SET.has(i.symbol)).map((i) => (
+      {/* Optional indicators — click a ticker to add/remove it directly */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 11, color: 'var(--t3)' }}>Small-cap, breadth &amp; intl indicators:</span>
+        {ALL_INDICATORS.filter((i) => EXPERT_SET.has(i.symbol)).map((i) => (
           <button
             key={i.symbol}
             onClick={() => onToggle(i.symbol)}
             style={{
               fontSize: 11, padding: '2px 8px', borderRadius: 4, border: '1px solid var(--border)',
-              background: visSet.has(i.symbol) ? 'var(--s2)' : 'transparent',
-              color: visSet.has(i.symbol) ? 'var(--text)' : 'var(--t3)', cursor: 'pointer',
+              background: visSet.has(i.symbol) ? 'var(--acc)' : 'transparent',
+              color: visSet.has(i.symbol) ? '#fff' : 'var(--t2)', cursor: 'pointer',
             }}
           >
             {i.symbol}
@@ -136,6 +126,7 @@ export function TrendStructureTable({ indicators, visibleSymbols, onToggle, show
           </tbody>
         </table>
       </div>
+      <SourceNote source="Quotes: Finnhub (live, ≤15m) · MAs: TwelveData daily" asOf={asOf} />
     </div>
   );
 }

@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { trendBucket } from '@stw/shared';
 import type { MacroIndicator } from '@stw/shared';
+import { tdDailyCloses, loadCloses, loadLastDate, sma } from './maCache';
 
 // ── Module 4: Trend / Market Structure ──────────────────────────────
 // Only price-trend assets live here. VIX moved to Volatility/Stress and US10Y
-// to Rates+Dollar — neither is an equity-momentum row, so they are NOT fetched
-// by this hook anymore.
+// to Rates+Dollar — neither is an equity-momentum row.
 export const ALL_INDICATORS: { symbol: string; name: string }[] = [
   { symbol: 'SPY', name: 'S&P 500' },
   { symbol: 'QQQ', name: 'Nasdaq 100' },
@@ -17,40 +17,11 @@ export const ALL_INDICATORS: { symbol: string; name: string }[] = [
 export const DEFAULT_TREND_SYMBOLS = ['SPY', 'QQQ'];
 export const EXPERT_TREND_SYMBOLS = ['IWM', 'RSP', 'VEA'];
 
-const PRICE_TTL = 15 * 60 * 1000;          // 15 min
-const MA_TTL    = 24 * 60 * 60 * 1000;     // 1 day
-const MA_LS_PREFIX = 'macro-ma-';
-
-interface MaData { closes: number[]; date: string }
-
-function todayStr() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function loadMaCache(symbol: string): MaData | null {
-  try {
-    const raw = localStorage.getItem(MA_LS_PREFIX + symbol);
-    if (!raw) return null;
-    const d = JSON.parse(raw) as MaData & { ts?: number };
-    if (d.date !== todayStr() && (d.ts ?? 0) + MA_TTL < Date.now()) return null;
-    return d;
-  } catch { return null; }
-}
-
-function saveMaCache(symbol: string, closes: number[]) {
-  try {
-    localStorage.setItem(MA_LS_PREFIX + symbol, JSON.stringify({ closes, date: todayStr(), ts: Date.now() }));
-  } catch { /* ignore */ }
-}
-
-function sma(closes: number[], n: number): number | null {
-  if (closes.length < n) return null;
-  const slice = closes.slice(-n);
-  return slice.reduce((a, b) => a + b, 0) / n;
-}
+const PRICE_TTL = 15 * 60 * 1000; // 15 min
 
 export function useMacroIndicators(symbols: string[], finnhubKey?: string, twelveDataKey?: string) {
   const [indicators, setIndicators] = useState<MacroIndicator[]>([]);
+  const [asOf, setAsOf] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const mountedRef = useRef(true);
 
@@ -66,26 +37,16 @@ export function useMacroIndicators(symbols: string[], finnhubKey?: string, twelv
     setLoading(true);
 
     async function fetchAll() {
-      // 1. Daily closes from TwelveData for MA computation (1-day cache).
+      // 1. Daily closes (TwelveData) for MA computation — shared 1-day cache.
       const maMap: Record<string, number[]> = {};
       await Promise.all(symbols.map(async (sym) => {
-        const cached = loadMaCache(sym);
-        if (cached) { maMap[sym] = cached.closes; return; }
-        if (!twelveDataKey) return;
-        try {
-          const url = `https://api.twelvedata.com/time_series?symbol=${sym}&interval=1day&outputsize=210&timezone=UTC&apikey=${twelveDataKey}`;
-          const d = await (await fetch(url)).json();
-          if (d.status === 'ok' && d.values?.length) {
-            const closes = [...d.values].reverse().map((v: Record<string, string>) => parseFloat(v.close));
-            maMap[sym] = closes;
-            saveMaCache(sym, closes);
-          }
-        } catch { /* ignore */ }
+        if (twelveDataKey) maMap[sym] = await tdDailyCloses(sym, twelveDataKey, 252);
+        else maMap[sym] = loadCloses(sym);
       }));
 
       if (cancelled) return;
 
-      // 2. Live quotes from Finnhub (15-min localStorage cache, staggered).
+      // 2. Live quotes (Finnhub) — 15-min localStorage cache, staggered.
       const quoteMap: Record<string, { c: number; d: number; dp: number }> = {};
       const now = Date.now();
       const lsRaw = localStorage.getItem('stw-price-cache');
@@ -137,6 +98,7 @@ export function useMacroIndicators(symbols: string[], finnhubKey?: string, twelv
 
       if (!cancelled && mountedRef.current) {
         setIndicators(result);
+        setAsOf(loadLastDate(symbols[0]));
         setLoading(false);
       }
     }
@@ -145,5 +107,5 @@ export function useMacroIndicators(symbols: string[], finnhubKey?: string, twelv
     return () => { cancelled = true; };
   }, [symbols.join(','), finnhubKey, twelveDataKey]);
 
-  return { indicators, loading };
+  return { indicators, loading, asOf };
 }
