@@ -1,7 +1,7 @@
 import { useMemo, useEffect, useRef } from 'react';
 import {
-  environmentScore, regimeBand, trendSleeveScore, trendSleeveLabel, gexScore,
-  gexBiasLabel, stressLabel, creditLabel, ratesDollarLabel,
+  environmentScore, regimeBand, trendSleeveScore, trendSleeveLabel, trendSubScore, gexScore,
+  gexBiasLabel, stressLabel, creditLabel, ratesDollarLabel, regimeDirectionLabel,
 } from '@stw/shared';
 import { useCapabilities } from '../../context/AppCapabilities';
 import {
@@ -14,6 +14,7 @@ import { useCreditLiquidity } from './useCreditLiquidity';
 import { useRatesDollar } from './useRatesDollar';
 import { useWeeklyRecap } from './useWeeklyRecap';
 import { useMacroPrefs } from './useMacroPrefs';
+import { useMacroTrendHistory } from './useMacroTrendHistory';
 import { useGraddox } from '../signals/useGraddox';
 import { RegimeBanner } from './components/RegimeBanner';
 import { ModuleScoreStrip } from './components/ModuleScoreStrip';
@@ -86,13 +87,31 @@ export function MacroView() {
     return env === null ? null : regimeBand(env);
   }, [trendSleeve, volatility?.sleeveScore, credit?.sleeveScore, rates?.sleeveScore, gexSleeve]);
 
-  // Module 2: per-sleeve score strip (5D deltas arrive with the P2 trend engine).
+  // P2: 5D trend engine — one localStorage snapshot/day, read back as 5D/20D
+  // deltas + a direction classification. Deltas stay null until ~5 trading
+  // days of history accrue (expected, not a bug).
+  const dataReady = !indLoading && !volLoading && !creditLoading && !ratesLoading;
+  const trendHistory = useMacroTrendHistory({
+    ready: dataReady,
+    regime: regime?.score ?? null,
+    trend: trendSleeve,
+    volatility: volatility?.sleeveScore ?? null,
+    credit: credit?.sleeveScore ?? null,
+    ratesDollar: rates?.sleeveScore ?? null,
+    gex: gexSleeve,
+    riskAppetite: score?.total ?? null,
+    indicators: indicators.map((i) => ({ symbol: i.symbol, score: trendSubScore(i.bucket) })),
+  });
+  const regimeDirection = dataReady ? regimeDirectionLabel(trendHistory.deltas.regime.direction) : null;
+
+  // Module 2: per-sleeve score strip. GEX uses a 3D delta (it moves fast); the
+  // rest use the standard 5D delta.
   const stripItems = [
-    { key: 'trend',       title: 'Trend',     score: trendSleeve,                 detail: trendSleeveLabel(trendSleeve) },
-    { key: 'volatility',  title: 'Volatility', score: volatility?.sleeveScore ?? null, detail: stressLabel(volatility?.sleeveScore ?? null) },
-    { key: 'credit',      title: 'Credit',    score: credit?.sleeveScore ?? null,  detail: creditLabel(credit?.sleeveScore ?? null) },
-    { key: 'rates',       title: 'Rates/USD', score: rates?.sleeveScore ?? null,   detail: ratesDollarLabel(rates?.sleeveScore ?? null) },
-    { key: 'gex',         title: 'GEX',       score: gexSleeve,                    detail: gexBiasLabel(graddox?.bias) },
+    { key: 'trend',       title: 'Trend',     score: trendSleeve,                 detail: trendSleeveLabel(trendSleeve), fiveDayDelta: trendHistory.deltas.trend.fiveDayDelta },
+    { key: 'volatility',  title: 'Volatility', score: volatility?.sleeveScore ?? null, detail: stressLabel(volatility?.sleeveScore ?? null), fiveDayDelta: trendHistory.deltas.volatility.fiveDayDelta },
+    { key: 'credit',      title: 'Credit',    score: credit?.sleeveScore ?? null,  detail: creditLabel(credit?.sleeveScore ?? null), fiveDayDelta: trendHistory.deltas.credit.fiveDayDelta },
+    { key: 'rates',       title: 'Rates/USD', score: rates?.sleeveScore ?? null,   detail: ratesDollarLabel(rates?.sleeveScore ?? null), fiveDayDelta: trendHistory.deltas.rates_dollar.fiveDayDelta },
+    { key: 'gex',         title: 'GEX',       score: gexSleeve,                    detail: gexBiasLabel(graddox?.bias), fiveDayDelta: trendHistory.deltas.gex.threeDayDelta, deltaLabel: '3D' as const },
   ];
 
   const updatedAt = useMemo(() => (indLoading ? null : new Date()), [indLoading]);
@@ -100,13 +119,13 @@ export function MacroView() {
   function handleRefreshRecap() {
     if (!regime) return;
     generate({
-      regime: { score: regime.score, label: regime.label, tradingMode: regime.tradingMode },
+      regime: { score: regime.score, label: regime.label, tradingMode: regime.tradingMode, fiveDayDelta: trendHistory.deltas.regime.fiveDayDelta },
       modules: {
-        trend:       { score: trendSleeve, label: trendSleeveLabel(trendSleeve) },
-        volatility:  { score: volatility?.sleeveScore ?? null, label: stressLabel(volatility?.sleeveScore ?? null) },
-        credit:      { score: credit?.sleeveScore ?? null, label: creditLabel(credit?.sleeveScore ?? null) },
-        ratesDollar: { score: rates?.sleeveScore ?? null, label: ratesDollarLabel(rates?.sleeveScore ?? null) },
-        gex:         { score: gexSleeve, label: gexBiasLabel(graddox?.bias) },
+        trend:       { score: trendSleeve, label: trendSleeveLabel(trendSleeve), fiveDayDelta: trendHistory.deltas.trend.fiveDayDelta },
+        volatility:  { score: volatility?.sleeveScore ?? null, label: stressLabel(volatility?.sleeveScore ?? null), fiveDayDelta: trendHistory.deltas.volatility.fiveDayDelta },
+        credit:      { score: credit?.sleeveScore ?? null, label: creditLabel(credit?.sleeveScore ?? null), fiveDayDelta: trendHistory.deltas.credit.fiveDayDelta },
+        ratesDollar: { score: rates?.sleeveScore ?? null, label: ratesDollarLabel(rates?.sleeveScore ?? null), fiveDayDelta: trendHistory.deltas.rates_dollar.fiveDayDelta },
+        gex:         { score: gexSleeve, label: gexBiasLabel(graddox?.bias), fiveDayDelta: trendHistory.deltas.gex.threeDayDelta },
       },
       // Grounding context for a richer, non-fabricated weekly narrative.
       // Always pass the full trend set (incl. IWM/RSP/VEA) so the rotation/breadth
@@ -124,7 +143,6 @@ export function MacroView() {
   // Auto-generate the recap on first load once the sleeves have settled — no
   // manual Refresh needed (cached per ISO week, so this fires at most once/week).
   const autoTriedRef = useRef(false);
-  const dataReady = !indLoading && !volLoading && !creditLoading && !ratesLoading;
   useEffect(() => {
     if (autoTriedRef.current || recap || recapLoading || !regime || !dataReady) return;
     autoTriedRef.current = true;
@@ -140,7 +158,7 @@ export function MacroView() {
       {/* ── Module 1: Market Regime Banner ─────────────────────────── */}
       <section>
         <ModuleHeader title="Market Regime" help={HELP.regime} />
-        <RegimeBanner regime={regime} updatedAt={updatedAt} />
+        <RegimeBanner regime={regime} updatedAt={updatedAt} direction={regimeDirection} />
       </section>
 
       {/* ── Module 2: Module Score Strip ───────────────────────────── */}
@@ -161,6 +179,7 @@ export function MacroView() {
               visibleSymbols={visibleSymbols}
               onToggle={toggle}
               asOf={trendAsOf}
+              indicatorDeltas={trendHistory.indicatorDeltas}
             />
           )}
         </div>
@@ -194,7 +213,7 @@ export function MacroView() {
       <section>
         <ModuleHeader title="GEX / Positioning" help={HELP.gex} />
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
-          <GexPositioningCard graddox={graddox} loading={!graddox} />
+          <GexPositioningCard graddox={graddox} loading={!graddox} threeDayDelta={trendHistory.deltas.gex.threeDayDelta} />
         </div>
       </section>
 
@@ -202,7 +221,7 @@ export function MacroView() {
       <section>
         <ModuleHeader title="Risk Appetite" help={HELP.riskAppetite} />
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
-          <SentimentGauge score={score} loading={sentLoading} />
+          <SentimentGauge score={score} loading={sentLoading} fiveDayDelta={trendHistory.deltas.risk_appetite.fiveDayDelta} />
         </div>
       </section>
 

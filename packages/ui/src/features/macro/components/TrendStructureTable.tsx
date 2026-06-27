@@ -1,6 +1,7 @@
 import type { MacroIndicator, TrendBucket } from '@stw/shared';
-import { TREND_BUCKET_META, TREND_BUCKET_ORDER } from '@stw/shared';
+import { TREND_BUCKET_META, TREND_BUCKET_ORDER, trendDirectionArrow, trendDirectionPhrase } from '@stw/shared';
 import { ALL_INDICATORS, EXPERT_TREND_SYMBOLS } from '../useMacroIndicators';
+import type { TrendHistoryEntry } from '../useMacroTrendHistory';
 import { SourceNote } from './macroVisuals';
 
 interface Props {
@@ -8,6 +9,8 @@ interface Props {
   visibleSymbols: string[];
   onToggle: (symbol: string) => void;
   asOf: string | null;
+  /** Per-symbol 5D/20D deltas from the P2 trend engine; null entries until ~5 days of history accrue. */
+  indicatorDeltas?: Record<string, TrendHistoryEntry>;
 }
 
 const EXPERT_SET = new Set(EXPERT_TREND_SYMBOLS);
@@ -50,7 +53,21 @@ function MaCell({ close, ma }: { close: number | null; ma: number | null }) {
   );
 }
 
-function IndicatorRow({ ind }: { ind: MacroIndicator }) {
+function TrendBadge({ entry }: { entry: TrendHistoryEntry | undefined }) {
+  if (!entry || entry.fiveDayDelta === null) {
+    return <td style={{ padding: '6px 8px', fontSize: 12, color: 'var(--t3)', whiteSpace: 'nowrap' }}>—</td>;
+  }
+  const arrow = trendDirectionArrow(entry.direction);
+  const color = arrow === '↑' ? 'var(--c5)' : arrow === '↓' ? 'var(--c1)' : 'var(--t2)';
+  const delta = entry.fiveDayDelta;
+  return (
+    <td style={{ padding: '6px 8px', fontSize: 12, color, whiteSpace: 'nowrap' }}>
+      {arrow} {trendDirectionPhrase(entry.direction)} ({delta >= 0 ? '+' : ''}{Math.round(delta)})
+    </td>
+  );
+}
+
+function IndicatorRow({ ind, trendEntry }: { ind: MacroIndicator; trendEntry?: TrendHistoryEntry }) {
   const bucketColor = ind.bucket ? BUCKET_COLOR[ind.bucket] : 'var(--t3)';
   const bucketLabel = ind.bucket ? TREND_BUCKET_META[ind.bucket].label : 'N/A';
   return (
@@ -64,11 +81,12 @@ function IndicatorRow({ ind }: { ind: MacroIndicator }) {
       <MaCell close={ind.close} ma={ind.ma21} />
       <MaCell close={ind.close} ma={ind.ma200} />
       <td style={{ padding: '6px 8px', fontSize: 12, fontWeight: 600, color: bucketColor, whiteSpace: 'nowrap' }}>{bucketLabel}</td>
+      <TrendBadge entry={trendEntry} />
     </tr>
   );
 }
 
-export function TrendStructureTable({ indicators, visibleSymbols, onToggle, asOf }: Props) {
+export function TrendStructureTable({ indicators, visibleSymbols, onToggle, asOf, indicatorDeltas }: Props) {
   const visSet = new Set(visibleSymbols);
   const visible = indicators.filter((i) => visSet.has(i.symbol));
 
@@ -104,7 +122,7 @@ export function TrendStructureTable({ indicators, visibleSymbols, onToggle, asOf
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border)' }}>
-              {['Symbol', 'Name', 'Close', 'Chg', 'Chg%', 'vs 9d MA', 'vs 21d MA', 'vs 200d MA', 'Structure'].map((h) => (
+              {['Symbol', 'Name', 'Close', 'Chg', 'Chg%', 'vs 9d MA', 'vs 21d MA', 'vs 200d MA', 'Structure', '5D Trend'].map((h) => (
                 <th key={h} style={{ padding: '6px 8px', textAlign: 'left', fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--t3)', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
@@ -115,14 +133,14 @@ export function TrendStructureTable({ indicators, visibleSymbols, onToggle, asOf
               if (!rows?.length) return null;
               return [
                 <tr key={`b-${bucket}`} style={{ background: 'var(--s2)' }}>
-                  <td colSpan={9} style={{ padding: '5px 8px', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: BUCKET_COLOR[bucket] }}>
+                  <td colSpan={10} style={{ padding: '5px 8px', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: BUCKET_COLOR[bucket] }}>
                     {TREND_BUCKET_META[bucket].groupLabel}
                   </td>
                 </tr>,
-                ...rows.map((ind) => <IndicatorRow key={ind.symbol} ind={ind} />),
+                ...rows.map((ind) => <IndicatorRow key={ind.symbol} ind={ind} trendEntry={indicatorDeltas?.[ind.symbol]} />),
               ];
             })}
-            {naList.map((ind) => <IndicatorRow key={ind.symbol} ind={ind} />)}
+            {naList.map((ind) => <IndicatorRow key={ind.symbol} ind={ind} trendEntry={indicatorDeltas?.[ind.symbol]} />)}
           </tbody>
         </table>
       </div>

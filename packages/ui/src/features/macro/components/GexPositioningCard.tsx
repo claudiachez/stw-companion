@@ -5,6 +5,8 @@ import { SleeveSummary } from './macroVisuals';
 interface Props {
   graddox: GraddoxData | null | undefined;
   loading: boolean;
+  /** 3D bias-score delta from the P2 trend engine (GEX moves fast, so it uses 3D not 5D); null until ~3 days of history accrue. */
+  threeDayDelta?: number | null;
 }
 
 // SPX levels render on the SPY scale (÷10), matching the Signals view convention.
@@ -36,12 +38,15 @@ function LevelGroup({ name, resistance, gex1, putSupport }: { name: string; resi
   );
 }
 
-export function GexPositioningCard({ graddox, loading }: Props) {
+export function GexPositioningCard({ graddox, loading, threeDayDelta }: Props) {
   if (loading && !graddox) return <div style={{ color: 'var(--t3)', fontSize: 12 }}>Loading positioning…</div>;
   if (!graddox) return <div style={{ color: 'var(--t3)', fontSize: 12 }}>No GEX signal available.</div>;
 
   const score = gexScore(graddox.bias);
   const label = gexBiasLabel(graddox.bias);
+  const delta = threeDayDelta === null || threeDayDelta === undefined
+    ? null
+    : `3D ${threeDayDelta >= 0 ? '+' : ''}${Math.round(threeDayDelta)}`;
   // SPY = SPX ÷ 10; QQQ levels are already in QQQ price terms (no scaling).
   const spyGex1 = spy(graddox.spx?.gex1);
   const spyPut = spy(graddox.spx?.put_support);
@@ -54,7 +59,7 @@ export function GexPositioningCard({ graddox, loading }: Props) {
 
   return (
     <div>
-      <SleeveSummary score={score} label={label} hint="tactical overlay" />
+      <SleeveSummary score={score} label={label} hint="tactical overlay" delta={delta} />
 
       {/* Key levels — SPY (SPX ÷10) and QQQ */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>

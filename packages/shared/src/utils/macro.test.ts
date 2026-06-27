@@ -8,6 +8,7 @@ import {
   us10yScore, uupScore, ratesDollarScore, ratesDollarLabel,
   gexScore, gexBiasLabel, gexImplication,
   breadthScore,
+  classifyTrendDirection, regimeDirectionLabel, trendDirectionPhrase, trendDirectionArrow,
 } from './macro';
 
 describe('trendBucket', () => {
@@ -243,5 +244,67 @@ describe('hv30', () => {
     const v = hv30(closes);
     expect(v).not.toBeNull();
     expect(v as number).toBeGreaterThan(0);
+  });
+});
+
+describe('classifyTrendDirection', () => {
+  it('null delta → flat (no history yet)', () => {
+    expect(classifyTrendDirection(null, null)).toBe('flat');
+  });
+  it('small delta with no prior → flat', () => {
+    expect(classifyTrendDirection(1, null)).toBe('flat');
+    expect(classifyTrendDirection(-2, null)).toBe('flat');
+  });
+  it('moderate positive delta → improving', () => {
+    expect(classifyTrendDirection(5, null)).toBe('improving');
+  });
+  it('moderate negative delta → deteriorating', () => {
+    expect(classifyTrendDirection(-5, null)).toBe('deteriorating');
+  });
+  it('large positive delta → strong_improvement', () => {
+    expect(classifyTrendDirection(12, null)).toBe('strong_improvement');
+  });
+  it('large negative delta → strong_deterioration', () => {
+    expect(classifyTrendDirection(-12, 1)).toBe('strong_deterioration');
+  });
+  it('was falling, now rising → reversing_up', () => {
+    expect(classifyTrendDirection(4, -6)).toBe('reversing_up');
+  });
+  it('was rising, now falling → reversing_down', () => {
+    expect(classifyTrendDirection(-4, 6)).toBe('reversing_down');
+  });
+  it('two small deltas in a row do not count as a reversal', () => {
+    expect(classifyTrendDirection(1, -1)).toBe('flat');
+  });
+});
+
+describe('regimeDirectionLabel', () => {
+  it('maps improvement variants to Improving', () => {
+    expect(regimeDirectionLabel('improving')).toBe('Improving');
+    expect(regimeDirectionLabel('strong_improvement')).toBe('Improving');
+  });
+  it('maps deterioration variants to Deteriorating', () => {
+    expect(regimeDirectionLabel('deteriorating')).toBe('Deteriorating');
+    expect(regimeDirectionLabel('strong_deterioration')).toBe('Deteriorating');
+  });
+  it('maps reversals to their own labels', () => {
+    expect(regimeDirectionLabel('reversing_up')).toBe('Reversing Up');
+    expect(regimeDirectionLabel('reversing_down')).toBe('Reversing Down');
+  });
+  it('flat → Mixed', () => {
+    expect(regimeDirectionLabel('flat')).toBe('Mixed');
+  });
+});
+
+describe('trendDirectionPhrase + trendDirectionArrow', () => {
+  it('pairs phrases with the correct arrow', () => {
+    expect(trendDirectionPhrase('improving')).toBe('improving');
+    expect(trendDirectionArrow('improving')).toBe('↑');
+    expect(trendDirectionPhrase('deteriorating')).toBe('weakening');
+    expect(trendDirectionArrow('deteriorating')).toBe('↓');
+    expect(trendDirectionPhrase('strong_deterioration')).toBe('strong deterioration');
+    expect(trendDirectionArrow('strong_deterioration')).toBe('↓');
+    expect(trendDirectionPhrase('flat')).toBe('flat');
+    expect(trendDirectionArrow('flat')).toBe('→');
   });
 });
