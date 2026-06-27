@@ -2,7 +2,7 @@
 
 > **⚠️ START HERE — branch.** **`staging` is the active trunk** — all feature work happens here.
 > As of **2026-06-23** `main` was brought **level with `staging`** (the event-sourcing migration plan
-> was completed and promoted), so a fresh clone is current — migrations run to **043**; if migrations
+> was completed and promoted), so a fresh clone is current — migrations run to **046**; if migrations
 > stop at 021 you are on a stale checkout, re-sync. **First command every session:**
 > `git fetch origin && git checkout staging && git pull --ff-only`.
 > Feature branches cut from `staging`, PR to `staging`. `main` is promoted only by an approved
@@ -20,40 +20,40 @@
 
 ---
 
-## Current Status — Ticker Detail four-surface dedup SHIPPED + Conviction Changes block (handoff 2026-06-25 PM)
+## Current Status — GEX staleness disclosure + missed-alerts routine fix + manual PROD corrections (handoff 2026-06-26 PM)
 
-**This session (PRs #50–#53 MERGED to `staging`) — Ticker Detail surface boundary, DD thesis backfill,
-source-message links, and a rebuilt Conviction Changes Overview block. Migrations 042 + 043.**
-- **Four-surface boundary (was Next Steps #1 — DONE).** The renderer already read `holdings.summary`/`bullets`
-  correctly; the real bug was **polluted data** (episodic commentary stored as the durable thesis) + no
-  summary↔bullets rule. Fixed: spec §2A boundary + de-dupe test
-  ([`plans/commentary_vs_transaction_boundary_spec.md`](plans/commentary_vs_transaction_boundary_spec.md)) +
-  a one-time **thesis backfill** ([`plans/thesis_backfill.sql`](plans/thesis_backfill.sql)) sourced from the
-  per-ticker DD files (see Conventions → DD files / Ticker Detail surfaces).
-- **Source-message links — migration `042_dd_source_urls.sql`** (`holdings.dd_source_url` +
-  `conviction_comments.source_url`). "Open original message" icon
-  ([`SourceLink.tsx`](packages/ui/src/features/picks/components/SourceLink.tsx)) on the Highlight box +
-  Commentary rows; shown to everyone (Discord gates access — membership-companion model).
-- **Conviction Changes Overview block** ([`PortfolioDashboard.tsx`](packages/ui/src/features/picks/components/PortfolioDashboard.tsx)
-  + [`useConvictionChanges.ts`](packages/ui/src/features/picks/useConvictionChanges.ts)) — replaces the flat
-  "notes updated for N positions" dump with ▲ upgraded / ▼ downgraded / ★ new lines (directional icon + badge +
-  `prev → current` + why), styled to match Latest Portfolio Changes; reaffirmed collapse to a chip line.
-- **Conviction delta = routine-recorded, NOT app-guessed — migration `043_conviction_prev_level.sql`**
-  (`conviction_comments.prev_conviction_level`). The app was diffing sparse comment-level history and
-  contradicting the routine (false upgrades on stale priors; missed upgrades when a bumped ticker had no prior
-  comment). Now the routines stamp the prior conviction on each comment and the block renders it directly.
-  Backfilled the current batch on PROD ([`plans/conviction_prev_level_backfill.sql`](plans/conviction_prev_level_backfill.sql)).
+**NEXT SESSION = build the Macro Dashboard** — full spec on staging at
+[`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md) (read first). New **Macro** nav tab
+(Environment block + Sentiment Gauge first), then a **Portfolio Heatmap** block on `PortfolioDashboard`.
+See Next Steps #1.
 
-**DB state:**
-- **PROD (`usmqbohcjcyszjxxvnqu`):** 042 + 043 applied; thesis backfill (36 tickers) + prev-level backfill
-  applied + **verified** (CTS/MITK/FPS upgrades, AMKR/NBIS/LEU reaffirmed — matches the routine's report).
-- **SANDBOX (`uolabcgbnrkhzpwuvzlk`):** 042 + 043 columns + thesis backfill applied. **PENDING: the
-  `prev_conviction_level` backfill was NOT run on sandbox** (dev-only; sandbox conviction data is stale so the
-  block hides there anyway — low priority).
+**This session — shipped on `staging` (PRs #54 reverted-in-place, #55): GEX "no new report" disclosure
+(migrations 045/046), a routine-miss diagnosis + fix, and manual SYNA/GDYN/TENB corrections on PROD.**
+- **GEX Signals "no new report" banner** ([`SignalsView.tsx`](packages/ui/src/features/signals/SignalsView.tsx)
+  + `signals.status_note`, migration `045`). When the latest read's `date` < today (ET), the subheader leads
+  with "No new report · Last GEX read: \<bias\> \<M/D\>" + a host-set note (e.g. "Morning prep resumes 7/7").
+  A first attempt put a "last checked" line on the Portfolio **Overview** — wrong place, reverted; the
+  `latest_run` view (044) it used was dropped (migration `046`).
+- **Routine miss diagnosed + fixed (out-of-repo SKILLs).** The 6/26 afternoon run advanced the live-notes
+  high-water mark PAST SYNA-close / TENB-DD / GDYN-close without processing them — **incomplete Discord
+  scrollback** (read the newest screenful, never scrolled back to the prior mark). Added to morning/afternoon:
+  a **completeness rule** (scroll back to the prior mark, process EVERY message in the gap, advance the mark
+  only after); **alert-obfuscation interpretation** (host disguises actions to fool copy-bots — read intent,
+  not the verb; GDYN worked example); **research name-only tickers** (CCXI = "Agility Robotics SPAC");
+  **business-only comments**; and the GEX break `status_note` set/clear.
+- **Manual PROD corrections** (the 3 missed, applied via the event-sourcing model + verified): **SYNA** Closed
+  (shares +49.4%, $85C +352.6% — ON Semi acquisition), **GDYN** Closed (shares −18.6%, stopped out;
+  revisit-before-earnings saved as commentary), **TENB** split fixed 90:10→80:20 + full DD added (new
+  `TENB.md`); **basket "AI Fraud / Verified Identity" → "AI Security & Fraud"**.
 
-**⏳ PENDING — production deploy:** all of the above is on **`staging`, NOT `main`**. Promoting `staging → main`
-is the production deploy and needs **explicit approval** (the PROD *database* already has the additive columns;
-old production code ignores them, so nothing is broken meanwhile).
+**DB state — migrations 045 + 046 applied to BOTH PROD (`usmqbohcjcyszjxxvnqu`) and SANDBOX
+(`uolabcgbnrkhzpwuvzlk`)** — `signals.status_note` exists, `latest_run` view dropped. The manual
+SYNA/GDYN/TENB/basket corrections are **PROD-only** (live position data; sandbox is stale dev data).
+(Carried-over sandbox gap from last session: the `prev_conviction_level` backfill was never run on sandbox.)
+
+**⏳ PENDING — production deploy:** everything since the last promotion is on **`staging`, NOT `main`**
+(PRs #50–#55). Promoting `staging → main` is the production deploy and needs **explicit approval** (the PROD
+*database* already has the additive columns; old production code ignores them, so nothing is broken meanwhile).
 
 **Event-sourcing migration plan is CLOSED (on `main` since 2026-06-23) — do not reopen.** The weight model,
 locked decisions, and Phase-5 routine semantics below remain authoritative reference.
@@ -180,27 +180,32 @@ run DDL locally — apply migrations via the Supabase SQL editor). Prod service 
 
 ## Next Steps
 
-0. **Promote `staging → main` when approved (production deploy).** This session's PRs #50–#53 are on
-   `staging` only. Open a `staging → main` PR **only on explicit host approval**.
+0. **Promote `staging → main` when approved (production deploy).** PRs #50–#55 are on `staging` only.
+   Open a `staging → main` PR **only on explicit host approval**.
 
-1. **Overview/experience enrichment — queued this session (host-requested, not started).** Host wants the
-   Overview to *say more* and stop the click-each-ticker experience. Two scoped ideas:
-   - **Transcripts library tab** — a NEW subscriber-facing **episode recap** (a mix of the host's *trading
-     psychology* + that episode's *per-ticker commentary*). **NOT** the local methodology `.md` files (those
-     stay private, apps never read them). Needs a new `webinars` table written by `stw-transcripts` + a new
-     tab. Schema + routine + UI.
+1. **Macro Dashboard — IMMEDIATE next task.** Full self-contained spec:
+   [`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md) (read first). New **Macro** nav tab
+   (between Signals and Portfolio): **Module 1 = Environment block + Sentiment Gauge** (start here), then
+   **Module 2 = Portfolio Heatmap** block on `PortfolioDashboard`, then **Module 3 = Sector Rotation**
+   (later). Design principles per the spec: Environment = market *structure* (indices/rates/credit/breadth,
+   no dollar), Sentiment = *risk appetite* (vol/IV/GEX/credit/breadth/dollar), no indicator duplication,
+   user-configurable indicator visibility, minimal default (SPY/QQQ/VIX/US10Y) with expert indicators opt-in.
+
+2. **Overview/experience enrichment (host-requested, queued).** Stop the click-each-ticker experience:
+   - **Transcripts library tab** — a NEW subscriber-facing **episode recap** (host's *trading psychology* +
+     that episode's *per-ticker commentary*). **NOT** the local methodology `.md` files (apps never read those).
+     Needs a new `webinars` table written by `stw-transcripts` + a new tab.
    - **Global Activity Feed** — one cross-ticker, reverse-chron feed merging Commentary + Transactions across
-     all holdings, filterable, each row linking to its ticker. No schema (reads `conviction_comments` +
-     `leg_transactions`). Highest-impact, lowest-cost.
+     all holdings, filterable. No schema (reads `conviction_comments` + `leg_transactions`). Low-cost.
 
-2. **Phase 4 — admin Config + Manage area** — spec'd in
+3. **Phase 4 — admin Config + Manage area** — spec'd in
    [`plans/phase4_admin_manage.md`](plans/phase4_admin_manage.md). Config page edits `app_config`
    (`equity_options_default` / `options_short_long_default`); `useAppConfig` read hook in `@stw/ui`
    (note: `deriveLegWeights` has **no call sites** today, so app-side split-wiring is forward-looking).
    Manage area: **categories CRUD** (delete-guarded), **traders read-only**. One "Manage" nav entry,
    admin-local. No migrations expected. (Host was "gathering info" as of 2026-06-25 — confirm before building.)
 
-3. **Future features (not migration work):** **My Portfolio closed/realized transactions** — the subscriber
+4. **Future features (not migration work):** **My Portfolio closed/realized transactions** — the subscriber
    IBKR Flex query returns *open positions only*, so the tab can't show closed trades; needs a different IBKR
    query (trade-history/flex statement) + storage before a closed view is possible (host asked 2026-06-25).
    Also: inline 2-line leg editing in the modal (deferred); `$100k` notional + SPY benchmark (the `spy_daily`
@@ -245,7 +250,7 @@ apps/
   admin/                     admin shell: no paywall, Edit + Users + IBKR
     ibkr_proxy.py            local IBKR writer (run on your machine, not deployed)
     netlify.toml             (Netlify base dir = apps/admin)
-supabase/migrations/         001..043 — single source of truth for DB schema/RLS
+supabase/migrations/         001..046 — single source of truth for DB schema/RLS
 CLAUDE.md                    this file
 ```
 
@@ -320,16 +325,16 @@ OAuth on web does a full-page redirect).
 ## Database (Supabase)
 
 - Project: `usmqbohcjcyszjxxvnqu.supabase.co`; client created per-app and injected into `@stw/ui`.
-- `supabase/migrations/` is the single source of truth (through **043**).
+- `supabase/migrations/` is the single source of truth (through **046**).
   **Claude authors migrations; you apply them** via the Supabase SQL editor / `supabase db push`.
 - **Local DB backups → gitignored `backups/`** (never committed — may carry PII), named
   `<date>_<purpose>.json` (e.g. `*_pre-coldrop.json`). Take a fresh logical snapshot of the
   affected tables before any destructive migration (column/table drop). The Supabase MCP has no
   `pg_dump`; pull tables via the REST API with the service key, or `select json_agg(...)`.
-- Tables: `holdings`, `graddox`, `graddox_levels`, `profiles`, `tiers`, `run_log`,
+- Tables: `holdings`, `signals`, `profiles`, `tiers`, `run_log`,
   `user_positions`, `holding_transactions`, `conviction_comments`, plus the event-sourced
   `legs` / `leg_transactions`, `categories`, `traders`, `app_config`.
-  RLS on `holdings`/`graddox` restricts writes to `cc@claudiachez.com`. `user_positions`
+  RLS on `holdings`/`signals` restricts writes to `cc@claudiachez.com`. `user_positions`
   uses user-owned RLS — each subscriber reads and writes only their own rows.
   The admin IBKR proxy now prices STW's option legs and writes **`legs.mark_price`** (the old
   `last_pnl_*` / `ibkr_legs` columns on `holdings` were dropped in 034).
@@ -349,7 +354,7 @@ repo**. Know who writes what before you reason about freshness or "why is this r
 | Table | Primary writer | Notes |
 |---|---|---|
 | `holdings` | **the routines** (see next section) | core position rows (`last_action`/`action_date`/`current_weight`/thesis/conviction/`category_id`); admin Edit form also writes. Per-leg sizing + prices live on `legs`/`leg_transactions`, not here |
-| `graddox` / `graddox_levels` | **morning routine** (Graddox step) | GEX signal bias + levels |
+| `signals` | **morning routine** (Graddox step) | GEX signal bias + levels |
 | `conviction_comments` | **the routines** + `stw-transcripts` | explicit appends; `source` = `discord` or `streaming`; admin/users can also add notes |
 | `holding_transactions` | **DB trigger** (no client) | auto-logged from any `holdings` write; never written directly by app or routine |
 | `run_log` | **the routines** | ingestion audit + high-water mark; newest `digest` → "Latest Portfolio Changes" |
@@ -357,10 +362,10 @@ repo**. Know who writes what before you reason about freshness or "why is this r
 | `profiles` / `tiers` | auth + Settings | per-user creds/preferences, tier paywall |
 
 "The routines" = three cowork cron tasks that ingest Discord into Supabase — **the primary writers of
-`holdings`, `graddox`, `conviction_comments`, `run_log`.** They are not in this repo (they live at
+`holdings`, `signals`, `conviction_comments`, `run_log`.** They are not in this repo (they live at
 `~/Documents/Claude/Scheduled/<id>/SKILL.md`); the next section documents the full flow. They write
 via the Supabase REST API with the **service-role key**, which is why their writes bypass the
-`cc@claudiachez.com`-only RLS on `holdings`/`graddox`.
+`cc@claudiachez.com`-only RLS on `holdings`/`signals`.
 
 ---
 
@@ -375,14 +380,14 @@ documented here because the Supabase schema is the contract between it (writer) 
 **Mechanism (shared by every routine):**
 - Reads Discord via **Claude in Chrome** (the user's own account — not a bot; the user isn't a server admin).
 - Writes to Supabase via `curl` to the REST API using the **service-role key** (from `~/Documents/Claude/Scheduled/.supabase-service-key`), bypassing RLS. Every write uses `Prefer: return=representation` and is verified — an empty `[]` body is treated as failure.
-- **High-water mark:** each routine first reads the newest `run_log.last_message_ts` for its channel, processes only messages newer than that, then writes a fresh `run_log` row. This makes every run idempotent — a message/recording/snapshot is processed exactly once, no matter which path fires.
-- **Only extracts what is explicitly stated** — never infers actions, weights, or conviction.
+- **High-water mark:** each routine first reads the newest `run_log.last_message_ts` for its channel, processes only messages newer than that, then writes a fresh `run_log` row. This makes every run idempotent — a message/recording/snapshot is processed exactly once, no matter which path fires. **Completeness is critical:** scroll Discord back to the *prior* mark and process EVERY message in the gap before advancing — the newest screenful loads first, so stopping early silently skips mid-gap messages while the mark moves past them (this dropped SYNA/TENB/GDYN on 6/26).
+- **Extract intent, not the surface verb.** The host **deliberately obfuscates alerts to fool copy-bots** (confirmed 2026-06-26): a disguised "buy / hang on / revisit" can be a real **Close** (tells: "tossed/stopped out", "rules are rules", "I often sell bottoms"), and he may **omit the ticker** (name only, e.g. "Agility Robotics SPAC" = $CCXI → research and resolve the symbol). Still never infer weights/conviction from sizing; flag genuinely ambiguous actions rather than guessing.
 
 **The four routines:**
 
 | Routine | Cadence | Reads (Discord channel) | Writes |
 |---|---|---|---|
-| `stw-morning-run` | 9am wkdays | Graddox → `live-notes-portfolio` → (fallback) `stream-library-stw` | `graddox`, `graddox_levels`, `legs`, `leg_transactions`, `holdings`, `conviction_comments`, `run_log` |
+| `stw-morning-run` | 9am wkdays | Graddox → `live-notes-portfolio` → (fallback) `stream-library-stw` | `signals`, `legs`, `leg_transactions`, `holdings`, `conviction_comments`, `run_log` |
 | `stw-afternoon-run` | 3pm wkdays | `live-notes-portfolio` → (fallback) `stream-library-stw` | `legs`, `leg_transactions`, `holdings`, `conviction_comments`, `run_log` |
 | `stw-friday-weighting` | 5pm Fri | `updates-portfolio` (weekly full snapshot) | `holdings` (weights only), `run_log` |
 | `stw-transcripts` | manual (+ daily fallback) | `stream-library-stw` (webinar recording) | methodology `.md` (local), `holdings`, `conviction_comments`, `run_log` |
@@ -393,7 +398,7 @@ documented here because the Supabase schema is the contract between it (writer) 
 3. That `holdings` PATCH **auto-fires the 033 trigger** → a harmless `holding_transactions` audit row (no client code; the routines never write that table directly).
 4. For notable commentary, **append a `conviction_comments` row** (`source='discord'`) → becomes "Latest Comments"; refresh `holdings.summary`/`bullets` + `dd_updated_at` only when the durable thesis actually changed.
 5. Write the `run_log` mark, including a multi-line **`digest`** → rendered as "Latest Portfolio Changes" in the Overview.
-6. **Recording fallback:** if `stream-library-stw` has an unprocessed recording, delegate to `stw-transcripts`. (Morning also runs the Graddox GEX step first → `graddox`/`graddox_levels`.)
+6. **Recording fallback:** if `stream-library-stw` has an unprocessed recording, delegate to `stw-transcripts`. (Morning also runs the Graddox GEX step first → `signals`.)
 
 **Weekly flow (Friday):** read the full-portfolio snapshot from `updates-portfolio` and **truth-up every holding's `current_weight`** to match it (this is the weighting source of record; daily calls only nudge weights). A ticker in `holdings` but absent from the snapshot is flagged, not auto-closed.
 
@@ -481,6 +486,10 @@ active filter (closed hidden by default). The FilterBar count shows `N of {total
   stale blocks. Don't put a block's title or its date inside the card.
 - **Admin-only action hints.** Instructions a subscriber can't act on (e.g. "Run the IBKR sync") render
   only when `canEdit`; the explanation still shows to everyone.
+- **Routine review-flags are admin-only** (host 2026-06-26). Operational uncertainty the routine surfaces —
+  "flagged for review", "left open rather than auto-closed", missing-DD / snapshot-mismatch notes — must NOT
+  appear in the subscriber-facing digest (`run_log.digest` → "Latest Portfolio Changes"). The public digest
+  carries only **confirmed** changes; review-flags go to `run_log.summary` / the chat output (admin-gated).
 - **Ticker Detail = four non-overlapping surfaces, one job each** (contract:
   [`plans/commentary_vs_transaction_boundary_spec.md`](plans/commentary_vs_transaction_boundary_spec.md)):
   **Highlight box** = `holdings.summary` (durable narrative paragraph) · **Key Points** = `holdings.bullets`
