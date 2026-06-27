@@ -2,7 +2,7 @@
 
 > **⚠️ START HERE — branch.** **`staging` is the active trunk** — all feature work happens here.
 > As of **2026-06-23** `main` was brought **level with `staging`** (the event-sourcing migration plan
-> was completed and promoted), so a fresh clone is current — migrations run to **046**; if migrations
+> was completed and promoted), so a fresh clone is current — migrations run to **047** on PROD; if migrations
 > stop at 021 you are on a stale checkout, re-sync. **First command every session:**
 > `git fetch origin && git checkout staging && git pull --ff-only`.
 > Feature branches cut from `staging`, PR to `staging`. `main` is promoted only by an approved
@@ -20,40 +20,33 @@
 
 ---
 
-## Current Status — GEX staleness disclosure + missed-alerts routine fix + manual PROD corrections (handoff 2026-06-26 PM)
+## Current Status — Macro Dashboard Module 1 in PR (handoff 2026-06-27)
 
-**NEXT SESSION = build the Macro Dashboard** — full spec on staging at
-[`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md) (read first). New **Macro** nav tab
-(Environment block + Sentiment Gauge first), then a **Portfolio Heatmap** block on `PortfolioDashboard`.
-See Next Steps #1.
+**NEXT SESSION = merge PR #56 then continue Macro Dashboard** — Module 1 (Environment block + Sentiment Gauge) is built on branch `claude/macro-dashboard-module-1-jzna26`, **PR #56 open, NOT yet merged to staging**. After merge, continue with Module 2 (Portfolio Heatmap on `PortfolioDashboard`) per [`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md).
 
-**This session — shipped on `staging` (PRs #54 reverted-in-place, #55): GEX "no new report" disclosure
-(migrations 045/046), a routine-miss diagnosis + fix, and manual SYNA/GDYN/TENB corrections on PROD.**
-- **GEX Signals "no new report" banner** ([`SignalsView.tsx`](packages/ui/src/features/signals/SignalsView.tsx)
-  + `signals.status_note`, migration `045`). When the latest read's `date` < today (ET), the subheader leads
-  with "No new report · Last GEX read: \<bias\> \<M/D\>" + a host-set note (e.g. "Morning prep resumes 7/7").
-  A first attempt put a "last checked" line on the Portfolio **Overview** — wrong place, reverted; the
-  `latest_run` view (044) it used was dropped (migration `046`).
-- **Routine miss diagnosed + fixed (out-of-repo SKILLs).** The 6/26 afternoon run advanced the live-notes
-  high-water mark PAST SYNA-close / TENB-DD / GDYN-close without processing them — **incomplete Discord
-  scrollback** (read the newest screenful, never scrolled back to the prior mark). Added to morning/afternoon:
-  a **completeness rule** (scroll back to the prior mark, process EVERY message in the gap, advance the mark
-  only after); **alert-obfuscation interpretation** (host disguises actions to fool copy-bots — read intent,
-  not the verb; GDYN worked example); **research name-only tickers** (CCXI = "Agility Robotics SPAC");
-  **business-only comments**; and the GEX break `status_note` set/clear.
-- **Manual PROD corrections** (the 3 missed, applied via the event-sourcing model + verified): **SYNA** Closed
-  (shares +49.4%, $85C +352.6% — ON Semi acquisition), **GDYN** Closed (shares −18.6%, stopped out;
-  revisit-before-earnings saved as commentary), **TENB** split fixed 90:10→80:20 + full DD added (new
-  `TENB.md`); **basket "AI Fraud / Verified Identity" → "AI Security & Fraud"**.
+**This session — Macro Dashboard Module 1 built on `claude/macro-dashboard-module-1-jzna26` (PR #56):**
+- **New `/macro` nav tab** (between Signals and Portfolio) in both web + admin shells.
+- **Environment block**: indicator table (`packages/ui/src/features/macro/components/IndicatorTable.tsx`) grouped by tier (Momentum / Mid-Caution / Risk-Off), MA columns (9d/21d/200d via TwelveData), signal dots. Expert indicators (IWM/RSP/TLT/HYG/VEA) hidden by default, revealed via "Expert Off/On" toggle in section header.
+- **Environment banner** (`EnvironmentBanner.tsx`): auto-computed `RISK-ON` / `CAUTIOUS / NEUTRAL` / `RISK-OFF` regime + descriptor phrase in the subheader bar.
+- **Sentiment Gauge** (`SentimentGauge.tsx`): SVG arc gauge 0–100 with needle + 7-component breakdown (Momentum, VIX, IV Premium, Tail Risk/VVIX, GEX Bias, Credit/HYG, Dollar/UUP). VVIX skipped gracefully if unavailable.
+- **AI Recap card** (`MacroRecapCard.tsx`): auto-generates on first load; uses `macro-recap` Netlify function (direct `fetch()` to Anthropic API — **no SDK**, avoids ESM/CJS bundling issues); caches by ISO week in localStorage; Refresh button.
+- **Data**: Finnhub for stock quotes (15-min localStorage cache); TwelveData for daily OHLC + MAs (1-day cache). VIX/US10Y fall back to TwelveData last daily close when Finnhub free tier doesn't serve indices.
+- **User prefs**: `profiles.macro_prefs JSONB` (migration 047) + `set_my_macro_prefs()` security-definer fn; localStorage fallback for unauthenticated users.
+- **Layout**: `height:100%; overflow-y:auto` outer shell (matches SignalsView); two-column on desktop (table+recap left, gauge right), single-column mobile.
+- **Migration 047** (`supabase/migrations/047_macro_prefs.sql`): `ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS macro_prefs JSONB DEFAULT '{}'` + `set_my_macro_prefs()` fn.
 
-**DB state — migrations 045 + 046 applied to BOTH PROD (`usmqbohcjcyszjxxvnqu`) and SANDBOX
-(`uolabcgbnrkhzpwuvzlk`)** — `signals.status_note` exists, `latest_run` view dropped. The manual
-SYNA/GDYN/TENB/basket corrections are **PROD-only** (live position data; sandbox is stale dev data).
-(Carried-over sandbox gap from last session: the `prev_conviction_level` backfill was never run on sandbox.)
+**DB state — migration 047:**
+- **PROD (`usmqbohcjcyszjxxvnqu`):** ✅ applied.
+- **SANDBOX (`uolabcgbnrkhzpwuvzlk`):** ⚠️ NOT applied and CANNOT be applied — sandbox is missing `public.profiles` (migrations 002/011/013 were never run there). Sandbox falls back to localStorage for macro prefs; macro tab works but prefs aren't DB-persisted. This is a pre-existing sandbox gap, not a blocker.
+
+**Sandbox schema gap (pre-existing, not caused by this session):** sandbox is missing `profiles`, `tiers`, `categories`, `user_positions`, and `recent_changes`. Only `holdings`, `signals`, `legs`, `leg_transactions`, `run_log`, `traders`, `channels`, `conviction_comments`, `holding_transactions`, `app_config`, `spy_daily` exist there. The macro tab works on sandbox via localStorage fallback.
 
 **⏳ PENDING — production deploy:** everything since the last promotion is on **`staging`, NOT `main`**
-(PRs #50–#55). Promoting `staging → main` is the production deploy and needs **explicit approval** (the PROD
-*database* already has the additive columns; old production code ignores them, so nothing is broken meanwhile).
+(PRs #50–#55 merged to staging; PR #56 open). Promoting `staging → main` is the production deploy and needs **explicit approval**.
+
+**Netlify env var added this session:** `ANTHROPIC_API_KEY` added to the **web** Netlify site (server-side only, no `VITE_` prefix) — needed for the `macro-recap` function.
+
+**Previous session work (on staging, NOT yet on main):** GEX "no new report" banner (migrations 045/046), routine-miss fixes (out-of-repo), manual SYNA/GDYN/TENB corrections on PROD.
 
 **Event-sourcing migration plan is CLOSED (on `main` since 2026-06-23) — do not reopen.** The weight model,
 locked decisions, and Phase-5 routine semantics below remain authoritative reference.
@@ -183,13 +176,9 @@ run DDL locally — apply migrations via the Supabase SQL editor). Prod service 
 0. **Promote `staging → main` when approved (production deploy).** PRs #50–#55 are on `staging` only.
    Open a `staging → main` PR **only on explicit host approval**.
 
-1. **Macro Dashboard — IMMEDIATE next task.** Full self-contained spec:
-   [`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md) (read first). New **Macro** nav tab
-   (between Signals and Portfolio): **Module 1 = Environment block + Sentiment Gauge** (start here), then
-   **Module 2 = Portfolio Heatmap** block on `PortfolioDashboard`, then **Module 3 = Sector Rotation**
-   (later). Design principles per the spec: Environment = market *structure* (indices/rates/credit/breadth,
-   no dollar), Sentiment = *risk appetite* (vol/IV/GEX/credit/breadth/dollar), no indicator duplication,
-   user-configurable indicator visibility, minimal default (SPY/QQQ/VIX/US10Y) with expert indicators opt-in.
+1. **Macro Dashboard — continue.** Module 1 is on PR #56 (merge first). Then:
+   - **Module 2 = Portfolio Heatmap** block on `PortfolioDashboard` (`packages/ui/src/features/picks/components/PortfolioDashboard.tsx`) — treemap-style grid, box size ∝ `current_weight`, color by day% or total return, Today/Total + By Basket/All toggles. Full spec in [`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md) § Module 3.
+   - **Module 3 = Sector Rotation** (later session) — 11 SPDR sectors, 9+21+200 MA grouping, RS vs SPY radar. Spec bottom of same file.
 
 2. **Overview/experience enrichment (host-requested, queued).** Stop the click-each-ticker experience:
    - **Transcripts library tab** — a NEW subscriber-facing **episode recap** (host's *trading psychology* +
@@ -441,6 +430,14 @@ subscriber function reads the subscriber's own account. Do not conflate them.
 ---
 
 ## Conventions
+
+### Netlify Functions — Anthropic API
+Use **direct `fetch()` to `https://api.anthropic.com/v1/messages`** in Netlify functions — do NOT import `@anthropic-ai/sdk`. The SDK has ESM/CJS bundling issues in the Netlify Functions Node.js runtime that produce 502s. Pass `x-api-key`, `anthropic-version: 2023-06-01`, and JSON body directly. See `apps/web/netlify/functions/macro-recap.ts` for the pattern.
+
+### Macro data sources
+- **Finnhub** (`VITE_FINNHUB_KEY`): live quotes for stock symbols only. Free tier does NOT serve index symbols (`^VIX`, `^TNX`, etc.) — they return empty. For index indicators, fall back to TwelveData last daily close.
+- **TwelveData** (`VITE_TWELVEDATA_KEY`): daily OHLC for MA computation (`interval=1day&outputsize=210`). Cache in localStorage keyed `macro-ma-{symbol}` with `date` field (refresh once per day). Also the authoritative close source for VIX/US10Y.
+- Without `VITE_TWELVEDATA_KEY`, MA columns show `—` and sentiment components that need HV/HYG/UUP are skipped — this is intentional graceful degradation.
 
 ### Timestamps
 All UI timestamps use `fmtDateTime(val: Date | string | null)` from `@stw/shared`.
