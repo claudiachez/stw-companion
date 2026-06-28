@@ -15,9 +15,11 @@ import { useRatesDollar } from './useRatesDollar';
 import { useWeeklyRecap } from './useWeeklyRecap';
 import { useMacroPrefs } from './useMacroPrefs';
 import { useMacroTrendHistory } from './useMacroTrendHistory';
+import { useMacroEvents } from './useMacroEvents';
 import { useGraddox } from '../signals/useGraddox';
 import { RegimeBanner } from './components/RegimeBanner';
 import { ModuleScoreStrip } from './components/ModuleScoreStrip';
+import { MacroEventRiskCard } from './components/MacroEventRiskCard';
 import { TrendStructureTable } from './components/TrendStructureTable';
 import { VolatilityStressCard } from './components/VolatilityStressCard';
 import { CreditLiquidityCard } from './components/CreditLiquidityCard';
@@ -39,6 +41,7 @@ const HELP = {
   gex: "STW's options-positioning read (dealer gamma exposure) — Bullish / Flat / Conflicted / Bearish, with key SPY and QQQ levels. A tactical overlay: it helps time entries and spot pivots, but doesn't set the whole macro picture on its own.",
   riskAppetite: 'How much fear vs greed is priced right now (0 = extreme fear, 100 = extreme greed). A different question from the regime: the regime is what the environment IS; this is how emotional the tape is. Built from momentum, VIX, IV premium, tail risk, GEX, credit and breadth.',
   recap: 'An AI summary that turns all the module scores into a plain-English read plus a suggested trading mode. Generates automatically and refreshes weekly.',
+  eventRisk: "What scheduled macro events (CPI, FOMC, jobs, etc.) could change the setup in the next 1-2 days. This is a temporary OVERLAY, not a permanent change to the regime score — it fades a few trading days after the print unless the structure actually shifted. MVP data source: MarketWatch's economic calendar; cross-check FXStreet for confirmation.",
 };
 
 export function MacroView() {
@@ -65,8 +68,10 @@ export function MacroView() {
   const { data: rates, loading: ratesLoading } = useRatesDollar(twelveDataKey, stressRising);
   const { score, loading: sentLoading } = useSentimentGauge(finnhubKey, twelveDataKey);
   const { recap, loading: recapLoading, error: recapError, generate } = useWeeklyRecap();
+  const { read: eventsRead, loading: eventsLoading, error: eventsError, warning: eventsWarning } = useMacroEvents();
 
   const visibleIndicators = indicators.filter((i) => visibleSymbols.includes(i.symbol));
+  const qqqBucket = indicators.find((i) => i.symbol === 'QQQ')?.bucket ?? null;
 
   // Market Regime — weighted module scores across all five sleeves
   // (a missing sleeve redistributes its weight across the present ones).
@@ -165,6 +170,23 @@ export function MacroView() {
       <section>
         <ModuleHeader title="Module Scores" help={HELP.strip} />
         <ModuleScoreStrip items={stripItems} />
+      </section>
+
+      {/* ── Module 3: Macro Event Risk ─────────────────────────────── */}
+      <section>
+        <ModuleHeader title="Event Risk" help={HELP.eventRisk} />
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
+          <MacroEventRiskCard
+            read={eventsRead}
+            loading={eventsLoading}
+            error={eventsError}
+            warning={eventsWarning}
+            qqqBucket={qqqBucket}
+            vix={volatility?.vix ?? null}
+            vixDelta5={volatility?.vixDelta5 ?? null}
+            us10yDelta5={rates?.us10yDelta5 ?? null}
+          />
+        </div>
       </section>
 
       {/* ── Module 4: Trend / Market Structure ─────────────────────── */}

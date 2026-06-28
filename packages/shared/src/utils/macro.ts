@@ -1,5 +1,6 @@
 import type {
   TrendBucket, RegimeSleeveKey, RegimeLabel, RegimeRead, TrendDirection,
+  MacroEvent, EventImportance, EventRiskLevel, EventOverlayState, EventRiskRead,
 } from '../types/macro';
 
 // ── Regime sleeve weights (Environment Score) ───────────────────────
@@ -352,4 +353,121 @@ export function trendDirectionArrow(direction: TrendDirection): '↑' | '↓' | 
   if (direction === 'strong_improvement' || direction === 'improving' || direction === 'reversing_up') return '↑';
   if (direction === 'strong_deterioration' || direction === 'deteriorating' || direction === 'reversing_down') return '↓';
   return '→';
+}
+
+// ── Module 3: Macro Event Risk (P3) ──────────────────────────────────
+// Pure classification over a list of scheduled/released calendar events
+// (sourced by useMacroEvents/macro-events.ts — MarketWatch primary, FXStreet
+// secondary). Never reads an event in isolation for its risk LEVEL — but the
+// surrounding setup/market-reaction narrative is composed by the card, not
+// here, since this layer has no access to VIX/US10Y/SPY context.
+const VERY_HIGH_EVENT_PATTERNS = [
+  /\bcpi\b/i, /\bconsumer price index\b/i, /\bpce\b/i, /\bpersonal consumption expenditures\b/i,
+  /\bfomc\b/i, /\bfed(?:eral)? (?:interest rate|funds rate) decision\b/i, /\bpowell\b/i,
+  /\bnonfarm payrolls\b/i, /\bnfp\b/i, /\bunemployment rate\b/i,
+];
+const HIGH_EVENT_PATTERNS = [/\bppi\b/i, /\bproducer price index\b/i, /\baverage hourly earnings\b/i];
+const MEDIUM_EVENT_PATTERNS = [
+  /\bjobless claims\b/i, /\bretail sales\b/i, /\bism manufacturing\b/i, /\bism services\b/i,
+  /\btreasury auction\b/i, /\bbond auction\b/i, /\b\d+-(?:year|month|week) (?:note|bond|bill) auction\b/i,
+];
+
+/** Classify an event's importance tier from its name, per the spec's events-to-track table. */
+export function eventImportance(eventName: string): EventImportance {
+  if (VERY_HIGH_EVENT_PATTERNS.some((re) => re.test(eventName))) return 'very_high';
+  if (HIGH_EVENT_PATTERNS.some((re) => re.test(eventName))) return 'high';
+  if (MEDIUM_EVENT_PATTERNS.some((re) => re.test(eventName))) return 'medium';
+  return 'low';
+}
+
+/** First numeric token in a calendar print, e.g. "0.4%" → 0.4, "175K" → 175. */
+function parseEventValue(s: string | null | undefined): number | null {
+  if (!s) return null;
+  const m = s.match(/-?\d+(\.\d+)?/);
+  return m ? parseFloat(m[0]) : null;
+}
+
+/** actual − consensus, when both parse as numeric; null otherwise (text prints or pre-release). */
+export function eventSurprise(actual: string | null, consensus: string | null): number | null {
+  const a = parseEventValue(actual);
+  const c = parseEventValue(consensus);
+  return a === null || c === null ? null : a - c;
+}
+
+const EVENT_WATCH_HOURS = 48;
+const HIGH_RISK_HOURS = 24;
+const REACTION_OVERLAY_HOURS = 72; // ~1-3 trading days; fades after unless structure changed
+const SHOCK_RELATIVE_SURPRISE = 0.2; // |surprise| ≥ 20% of |consensus| reads as a meaningful beat/miss
+
+function hoursBetween(aIso: string, bMs: number): number {
+  return (new Date(aIso).getTime() - bMs) / 3_600_000;
+}
+
+/**
+ * Classify the current event-risk overlay from a list of calendar rows.
+ * A released event (has `actual`) drives a Reaction Overlay for up to ~3
+ * trading days; otherwise the nearest upcoming Very-High/High event sets
+ * Event Watch (24-48h out) or High Event Risk (within 24h). No major event
+ * within 48h → 'none'/'low'.
+ */
+export function classifyEventRisk(events: MacroEvent[], now: Date = new Date()): EventRiskRead {
+  const nowMs = now.getTime();
+
+  const releasedRecent = events
+    .filter((e) => e.actual !== null && e.actual !== '')
+    .map((e) => ({ e, ageHours: -hoursBetween(e.releaseTimeEt, nowMs) }))
+    .filter((x) => x.ageHours >= 0 && x.ageHours <= REACTION_OVERLAY_HOURS)
+    .sort((a, b) => a.ageHours - b.ageHours);
+
+  if (releasedRecent.length > 0) {
+    const { e } = releasedRecent[0];
+    const surprise = eventSurprise(e.actual, e.consensus);
+    const consensusVal = parseEventValue(e.consensus);
+    const relSurprise = surprise !== null && consensusVal !== null
+      ? Math.abs(surprise) / Math.max(Math.abs(consensusVal), 0.01)
+      : null;
+    const isShock = relSurprise !== null && relSurprise >= SHOCK_RELATIVE_SURPRISE;
+    const riskLevel: EventRiskLevel = isShock ? 'shock' : e.importance === 'very_high' || e.importance === 'high' ? 'high' : 'medium';
+    return { overlay: 'reaction_overlay', riskLevel, event: e, surprise };
+  }
+
+  const upcoming = events
+    .filter((e) => e.actual === null || e.actual === '')
+    .map((e) => ({ e, hoursOut: hoursBetween(e.releaseTimeEt, nowMs) }))
+    .filter((x) => x.hoursOut >= 0)
+    .sort((a, b) => a.hoursOut - b.hoursOut);
+
+  const nextMajor = upcoming.find((x) => x.e.importance === 'very_high' || x.e.importance === 'high');
+  if (nextMajor && nextMajor.hoursOut <= HIGH_RISK_HOURS) {
+    return { overlay: 'high_event_risk', riskLevel: 'high', event: nextMajor.e, surprise: null };
+  }
+  if (nextMajor && nextMajor.hoursOut <= EVENT_WATCH_HOURS) {
+    return { overlay: 'event_watch', riskLevel: 'medium', event: nextMajor.e, surprise: null };
+  }
+  const nextAny = upcoming[0] ?? null;
+  if (nextAny && nextAny.hoursOut <= EVENT_WATCH_HOURS) {
+    return { overlay: 'event_watch', riskLevel: 'medium', event: nextAny.e, surprise: null };
+  }
+  return { overlay: 'none', riskLevel: 'low', event: nextAny?.e ?? null, surprise: null };
+}
+
+/** Status-strip / banner label for an overlay state. */
+export function eventOverlayLabel(overlay: EventOverlayState): string {
+  switch (overlay) {
+    case 'none': return 'No major event risk';
+    case 'event_watch': return 'Event Watch';
+    case 'high_event_risk': return 'High Event Risk';
+    case 'reaction_overlay': return 'Reaction Overlay';
+    case 'fading': return 'Fading';
+  }
+}
+
+/** Display label for an importance tier, e.g. "Very High". */
+export function eventImportanceLabel(importance: EventImportance): string {
+  switch (importance) {
+    case 'very_high': return 'Very High';
+    case 'high': return 'High';
+    case 'medium': return 'Medium';
+    case 'low': return 'Low';
+  }
 }

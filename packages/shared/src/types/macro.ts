@@ -71,18 +71,36 @@ export interface RegimeRead {
 }
 
 // ── Module 3: Macro Event Risk (overlay) ────────────────────────────
-export interface MacroEventRisk {
-  eventId: string;
+// Temporary overlay on the regime read — never a permanent score change.
+export type EventImportance = 'low' | 'medium' | 'high' | 'very_high';
+export type EventRiskLevel = 'low' | 'medium' | 'high' | 'shock';
+export type EventOverlayState = 'none' | 'event_watch' | 'high_event_risk' | 'reaction_overlay' | 'fading';
+
+/** One scheduled/released economic-calendar row (MVP source: MarketWatch, FXStreet as secondary). */
+export interface MacroEvent {
   eventName: string;
-  importance: 'low' | 'medium' | 'high' | 'very_high';
-  releaseTime: string;
-  actual?: number | string;
-  consensus?: number | string;
-  previous?: number | string;
-  surprise?: number | string;
-  status: 'upcoming' | 'released' | 'reaction_overlay' | 'expired';
-  riskLevel: 'low' | 'medium' | 'high' | 'shock';
-  marketComment?: string;
+  /** ISO datetime of the scheduled/actual release, Eastern Time. */
+  releaseTimeEt: string;
+  /** The period the print covers, e.g. "May 2026". Null if not given. */
+  period: string | null;
+  actual: string | null;
+  consensus: string | null;
+  previous: string | null;
+  importance: EventImportance;
+  /** Where this row was scraped from, e.g. "MarketWatch", "FXStreet". */
+  source: string;
+  /** When the source page was fetched (ISO) — distinct from the release time itself. */
+  sourceTimestamp: string;
+}
+
+/** The classified overlay read — which event (if any) is driving it, and how hot. */
+export interface EventRiskRead {
+  overlay: EventOverlayState;
+  riskLevel: EventRiskLevel;
+  /** The single most relevant event driving the current overlay; null only when overlay is 'none'. */
+  event: MacroEvent | null;
+  /** actual − consensus, when both parse as numeric; null otherwise (non-numeric prints, or pre-release). */
+  surprise: number | null;
 }
 
 // ── Module 9: Risk Appetite gauge ───────────────────────────────────
