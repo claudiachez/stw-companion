@@ -19,10 +19,12 @@
  * Function. So the raw TwelveData/Finnhub fetches are re-implemented here —
  * but every scoring formula is imported from @stw/shared (no duplicated logic).
  *
- * Required Netlify env vars (server-side, no VITE_ prefix — the VITE_* vars
- * are inlined into the client bundle at build time and are NOT available here):
- *   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY  (already present for ibkr-flex.ts)
- *   FINNHUB_KEY, TWELVEDATA_KEY              (new — must be added in Netlify)
+ * Env vars: reuses the site's existing VITE_FINNHUB_KEY / VITE_TWELVEDATA_KEY /
+ * VITE_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY — no new Netlify env vars needed.
+ * The VITE_ prefix only controls what Vite inlines into the CLIENT bundle at
+ * build time; it has no effect on a Function's runtime process.env, which gets
+ * every site env var regardless of name (same fallback pattern already used in
+ * ibkr-flex.ts / macro-recap.ts: `process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL`).
  *
  * Event risk is fetched from the already-deployed macro-events function
  * (internal HTTP call via process.env.URL) rather than duplicating its
@@ -85,9 +87,9 @@ async function fetchEventRisk(): Promise<{ events: MacroEvent[]; source: string;
 }
 
 const handlerImpl: Handler = async () => {
-  const finnhubKey = process.env.FINNHUB_KEY;
-  const twelveDataKey = process.env.TWELVEDATA_KEY;
-  const supabaseUrl = process.env.SUPABASE_URL;
+  const finnhubKey = process.env.VITE_FINNHUB_KEY ?? process.env.FINNHUB_KEY;
+  const twelveDataKey = process.env.VITE_TWELVEDATA_KEY ?? process.env.TWELVEDATA_KEY;
+  const supabaseUrl = process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !serviceKey) {
