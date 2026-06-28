@@ -13,6 +13,7 @@ import { useVolatilityStress } from './useVolatilityStress';
 import { useCreditLiquidity } from './useCreditLiquidity';
 import { useRatesDollar } from './useRatesDollar';
 import { useWeeklyRecap } from './useWeeklyRecap';
+import { useSectorRotation } from './useSectorRotation';
 import { useMacroPrefs } from './useMacroPrefs';
 import { useMacroTrendHistory } from './useMacroTrendHistory';
 import { useMacroEvents } from './useMacroEvents';
@@ -27,6 +28,7 @@ import { RatesDollarCard } from './components/RatesDollarCard';
 import { GexPositioningCard } from './components/GexPositioningCard';
 import { SentimentGauge } from './components/SentimentGauge';
 import { MacroRecapCard } from './components/MacroRecapCard';
+import { SectorRotationCard } from './components/SectorRotationCard';
 import { ModuleHeader } from './components/macroVisuals';
 
 // Concise "what is this / why it matters / how to read it" blurbs, shown via the
@@ -42,10 +44,11 @@ const HELP = {
   riskAppetite: 'How much fear vs greed is priced right now (0 = extreme fear, 100 = extreme greed). A different question from the regime: the regime is what the environment IS; this is how emotional the tape is. Built from momentum, VIX, IV premium, tail risk, GEX, credit and breadth.',
   recap: 'An AI summary that turns all the module scores into a plain-English read plus a suggested trading mode. Generates automatically and refreshes weekly.',
   eventRisk: "What scheduled macro events (CPI, FOMC, jobs, etc.) could change the setup in the next 1-2 days. This is a temporary OVERLAY, not a permanent change to the regime score — it fades a few trading days after the print unless the structure actually shifted. MVP data source: MarketWatch's economic calendar; cross-check FXStreet for confirmation.",
+  sectorRotation: "Where money is rotating across the 11 SPDR sectors. Structure = the same 9/21/200-day trend bucketing used in the Trend module; RS columns show each sector's return minus SPY's over that lookback (positive = leading the market, negative = lagging). Leaders/Laggards rank by current structure + 1-month RS.",
 };
 
 export function MacroView() {
-  const { finnhubKey, twelveDataKey } = useCapabilities();
+  const { finnhubKey, twelveDataKey, canEdit } = useCapabilities();
   const { prefs, toggle } = useMacroPrefs();
   const { data: graddox } = useGraddox();
 
@@ -67,8 +70,9 @@ export function MacroView() {
   const stressRising = (volatility?.vixDelta5 ?? 0) > 0.5 || credit?.aboveMa50 === false;
   const { data: rates, loading: ratesLoading } = useRatesDollar(twelveDataKey, stressRising);
   const { score, loading: sentLoading } = useSentimentGauge(finnhubKey, twelveDataKey);
-  const { recap, loading: recapLoading, error: recapError, generate } = useWeeklyRecap();
+  const { recap, loading: recapLoading, error: recapError, loaded: recapLoaded, generate } = useWeeklyRecap();
   const { read: eventsRead, loading: eventsLoading, error: eventsError, warning: eventsWarning } = useMacroEvents();
+  const { rows: sectorRows, loading: sectorLoading, asOf: sectorAsOf } = useSectorRotation(twelveDataKey);
 
   const visibleIndicators = indicators.filter((i) => visibleSymbols.includes(i.symbol));
   const qqqBucket = indicators.find((i) => i.symbol === 'QQQ')?.bucket ?? null;
@@ -121,7 +125,7 @@ export function MacroView() {
 
   const updatedAt = useMemo(() => (indLoading ? null : new Date()), [indLoading]);
 
-  function handleRefreshRecap() {
+  function handleRefreshRecap(note?: string) {
     if (!regime) return;
     generate({
       regime: { score: regime.score, label: regime.label, tradingMode: regime.tradingMode, fiveDayDelta: trendHistory.deltas.regime.fiveDayDelta },
@@ -142,18 +146,22 @@ export function MacroView() {
         gex: graddox ? { bias: graddox.bias, biasNote: graddox.bias_note, lastUpdated: graddox.last_updated, spx: graddox.spx, qqq: graddox.qqq } : null,
       },
       eventRisk: null,
-    });
+    }, note);
   }
 
   // Auto-generate the recap on first load once the sleeves have settled — no
   // manual Refresh needed (cached per ISO week, so this fires at most once/week).
+  // Regeneration is a real, costly Anthropic call and writes the shared cross-device
+  // recap, so only the editor triggers it — subscribers just wait for the cross-device
+  // row (recapLoaded) to come back. Also wait for recapLoaded so we don't regenerate
+  // before knowing this week's recap already exists.
   const autoTriedRef = useRef(false);
   useEffect(() => {
-    if (autoTriedRef.current || recap || recapLoading || !regime || !dataReady) return;
+    if (!canEdit || autoTriedRef.current || recap || recapLoading || !recapLoaded || !regime || !dataReady) return;
     autoTriedRef.current = true;
     handleRefreshRecap();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataReady, regime, recap, recapLoading]);
+  }, [canEdit, dataReady, regime, recap, recapLoading, recapLoaded]);
 
   return (
     // Layout's <main> is overflow:hidden inside a 100dvh shell — this view owns its scroll.
@@ -254,8 +262,17 @@ export function MacroView() {
           recap={recap}
           loading={recapLoading}
           error={recapError}
+          canEdit={canEdit}
           onRefresh={handleRefreshRecap}
         />
+      </section>
+
+      {/* ── Module 11: Sector Rotation ──────────────────────────────── */}
+      <section>
+        <ModuleHeader title="Sector Rotation" help={HELP.sectorRotation} />
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
+          <SectorRotationCard rows={sectorRows} loading={sectorLoading} asOf={sectorAsOf} />
+        </div>
       </section>
 
     </div>

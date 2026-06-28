@@ -1,10 +1,12 @@
+import { useState } from 'react';
 import type { MacroRecap } from '@stw/shared';
 
 interface Props {
   recap: MacroRecap | null;
   loading: boolean;
   error: string | null;
-  onRefresh: () => void;
+  canEdit: boolean;
+  onRefresh: (note?: string) => void;
 }
 
 function Paragraphs({ text, size = 14, color = 'var(--text)' }: { text?: string; size?: number; color?: string }) {
@@ -36,7 +38,9 @@ function ScenarioRow({ label, text, color }: { label: string; text?: string; col
   );
 }
 
-export function MacroRecapCard({ recap, loading, error, onRefresh }: Props) {
+export function MacroRecapCard({ recap, loading, error, canEdit, onRefresh }: Props) {
+  const [note, setNote] = useState('');
+
   return (
     <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
       {loading && <div style={{ color: 'var(--t3)', fontSize: 12 }}>Writing this week's recap…</div>}
@@ -101,18 +105,34 @@ export function MacroRecapCard({ recap, loading, error, onRefresh }: Props) {
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 10, color: 'var(--t3)' }}>AI-generated weekly from the module scores + GEX read · refreshes weekly</span>
-        <button
-          onClick={onRefresh}
-          disabled={loading}
-          style={{
-            fontSize: 11, padding: '3px 10px', borderRadius: 4, border: '1px solid var(--border)',
-            background: 'transparent', color: loading ? 'var(--t3)' : 'var(--t2)',
-            cursor: loading ? 'not-allowed' : 'pointer',
-          }}
-        >
-          {loading ? 'Generating…' : 'Regenerate'}
-        </button>
+        {canEdit && (
+          <button
+            onClick={() => onRefresh(note)}
+            disabled={loading}
+            style={{
+              fontSize: 11, padding: '3px 10px', borderRadius: 4, border: '1px solid var(--border)',
+              background: 'transparent', color: loading ? 'var(--t3)' : 'var(--t2)',
+              cursor: loading ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {loading ? 'Generating…' : 'Regenerate'}
+          </button>
+        )}
       </div>
+
+      {canEdit && (
+        <input
+          type="text"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          disabled={loading}
+          placeholder="Optional: steer the next rewrite, e.g. focus more on credit stress this week"
+          style={{
+            width: '100%', marginTop: 8, fontSize: 12, padding: '6px 10px', borderRadius: 4,
+            border: '1px solid var(--border)', background: 'var(--s2)', color: 'var(--text)',
+          }}
+        />
+      )}
     </div>
   );
 }

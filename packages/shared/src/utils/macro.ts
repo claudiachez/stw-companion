@@ -499,3 +499,51 @@ export function eventImportanceLabel(importance: EventImportance): string {
     case 'low': return 'Low';
   }
 }
+
+// ── Module 11: Sector Rotation ───────────────────────────────────────
+// The 11 SPDR sector ETFs, reusing the Module 4 trend-bucket logic (same
+// 9/21/200 MA grouping) plus relative strength vs SPY. XLSR (equal-weight
+// sector meta-ETF) is intentionally excluded — it derives from the same XL_
+// sector data, so including it would double-count rather than add a signal.
+export const SECTOR_ETFS: { symbol: string; name: string }[] = [
+  { symbol: 'XLK',  name: 'Technology' },
+  { symbol: 'XLV',  name: 'Health Care' },
+  { symbol: 'XLF',  name: 'Financials' },
+  { symbol: 'XLE',  name: 'Energy' },
+  { symbol: 'XLI',  name: 'Industrials' },
+  { symbol: 'XLY',  name: 'Consumer Discretionary' },
+  { symbol: 'XLP',  name: 'Consumer Staples' },
+  { symbol: 'XLU',  name: 'Utilities' },
+  { symbol: 'XLRE', name: 'Real Estate' },
+  { symbol: 'XLB',  name: 'Materials' },
+  { symbol: 'XLC',  name: 'Communication Services' },
+];
+
+/** Trading-day lookback windows for the RS-vs-SPY columns. */
+export const RS_LOOKBACKS = { week: 5, oneMonth: 21, threeMonth: 63, sixMonth: 126, oneYear: 252 } as const;
+
+/**
+ * Relative strength of a series vs a benchmark over `lookback` trading days:
+ * (seriesReturn − benchmarkReturn) in percentage points. Null if either series
+ * doesn't have enough history for that lookback yet.
+ */
+export function relativeStrength(closes: number[], benchmarkCloses: number[], lookback: number): number | null {
+  if (closes.length <= lookback || benchmarkCloses.length <= lookback) return null;
+  const now = closes[closes.length - 1];
+  const prior = closes[closes.length - 1 - lookback];
+  const bNow = benchmarkCloses[benchmarkCloses.length - 1];
+  const bPrior = benchmarkCloses[benchmarkCloses.length - 1 - lookback];
+  if (!prior || !bPrior) return null;
+  const seriesReturn = (now / prior - 1) * 100;
+  const benchmarkReturn = (bNow / bPrior - 1) * 100;
+  return Math.round((seriesReturn - benchmarkReturn) * 10) / 10;
+}
+
+// ── Module 10: AI Recap — weekly key ────────────────────────────────
+// Shared by useWeeklyRecap.ts (client read) and macro-recap.ts (server write) so
+// both sides agree on which row is "this week"'s without duplicating the format.
+export function isoWeekKey(date: Date = new Date()): string {
+  const jan1 = new Date(date.getFullYear(), 0, 1);
+  const week = Math.ceil(((date.getTime() - jan1.getTime()) / 86400000 + jan1.getDay() + 1) / 7);
+  return `${date.getFullYear()}-W${String(week).padStart(2, '0')}`;
+}

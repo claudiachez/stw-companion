@@ -10,6 +10,7 @@ import {
   breadthScore, RISK_APPETITE_WEIGHTS, riskAppetiteScore,
   classifyTrendDirection, regimeDirectionLabel, trendDirectionPhrase, trendDirectionArrow,
   eventImportance, eventSurprise, classifyEventRisk, eventOverlayLabel, eventImportanceLabel,
+  SECTOR_ETFS, RS_LOOKBACKS, relativeStrength,
 } from './macro';
 import type { MacroEvent } from '../types/macro';
 
@@ -465,5 +466,40 @@ describe('eventOverlayLabel + eventImportanceLabel', () => {
     expect(eventOverlayLabel('high_event_risk')).toBe('High Event Risk');
     expect(eventImportanceLabel('very_high')).toBe('Very High');
     expect(eventImportanceLabel('low')).toBe('Low');
+  });
+});
+
+describe('SECTOR_ETFS', () => {
+  it('lists exactly the 11 SPDR sectors, no XLSR', () => {
+    expect(SECTOR_ETFS).toHaveLength(11);
+    expect(SECTOR_ETFS.map((s) => s.symbol)).not.toContain('XLSR');
+    expect(SECTOR_ETFS.map((s) => s.symbol)).toEqual(
+      expect.arrayContaining(['XLK', 'XLV', 'XLF', 'XLE', 'XLI', 'XLY', 'XLP', 'XLU', 'XLRE', 'XLB', 'XLC']),
+    );
+  });
+});
+
+describe('relativeStrength', () => {
+  const flat = Array.from({ length: 260 }, () => 100);
+
+  it('outperformance vs a flat benchmark reads positive', () => {
+    const closes = [...flat];
+    closes[closes.length - 1] = 110; // +10% over the lookback
+    expect(relativeStrength(closes, flat, RS_LOOKBACKS.week)).toBe(10);
+  });
+
+  it('underperformance vs a rising benchmark reads negative', () => {
+    const sector = [...flat]; // flat sector
+    const benchmark = [...flat];
+    benchmark[benchmark.length - 1] = 105; // benchmark +5%
+    expect(relativeStrength(sector, benchmark, RS_LOOKBACKS.week)).toBe(-5);
+  });
+
+  it('not enough history for the lookback → null', () => {
+    expect(relativeStrength([100, 101, 102], flat, RS_LOOKBACKS.oneMonth)).toBeNull();
+  });
+
+  it('matching returns → 0', () => {
+    expect(relativeStrength(flat, flat, RS_LOOKBACKS.oneYear)).toBe(0);
   });
 });
