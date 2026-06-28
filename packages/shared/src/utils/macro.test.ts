@@ -9,7 +9,9 @@ import {
   gexScore, gexBiasLabel, gexImplication,
   breadthScore,
   classifyTrendDirection, regimeDirectionLabel, trendDirectionPhrase, trendDirectionArrow,
+  eventImportance, eventSurprise, classifyEventRisk, eventOverlayLabel, eventImportanceLabel,
 } from './macro';
+import type { MacroEvent } from '../types/macro';
 
 describe('trendBucket', () => {
   it('above all three MAs → momentum', () => {
@@ -306,5 +308,132 @@ describe('trendDirectionPhrase + trendDirectionArrow', () => {
     expect(trendDirectionArrow('strong_deterioration')).toBe('↓');
     expect(trendDirectionPhrase('flat')).toBe('flat');
     expect(trendDirectionArrow('flat')).toBe('→');
+  });
+});
+
+function mkEvent(overrides: Partial<MacroEvent>): MacroEvent {
+  return {
+    eventName: 'CPI',
+    releaseTimeEt: '2026-06-28T08:30:00-04:00',
+    period: 'May 2026',
+    actual: null,
+    consensus: '0.3%',
+    previous: '0.2%',
+    importance: 'very_high',
+    source: 'MarketWatch',
+    sourceTimestamp: '2026-06-27T00:00:00Z',
+    ...overrides,
+  };
+}
+
+describe('eventImportance', () => {
+  it('classifies very-high events', () => {
+    expect(eventImportance('CPI')).toBe('very_high');
+    expect(eventImportance('Core CPI')).toBe('very_high');
+    expect(eventImportance('PCE Inflation')).toBe('very_high');
+    expect(eventImportance('FOMC Interest Rate Decision')).toBe('very_high');
+    expect(eventImportance('Nonfarm Payrolls')).toBe('very_high');
+    expect(eventImportance('Unemployment Rate')).toBe('very_high');
+  });
+  it('classifies high events', () => {
+    expect(eventImportance('PPI')).toBe('high');
+    expect(eventImportance('Average Hourly Earnings')).toBe('high');
+  });
+  it('classifies medium events', () => {
+    expect(eventImportance('Initial Jobless Claims')).toBe('medium');
+    expect(eventImportance('Retail Sales')).toBe('medium');
+    expect(eventImportance('ISM Manufacturing PMI')).toBe('medium');
+    expect(eventImportance('10-Year Note Auction')).toBe('medium');
+  });
+  it('falls back to low for unrecognized events', () => {
+    expect(eventImportance('Some Obscure Indicator')).toBe('low');
+  });
+});
+
+describe('eventSurprise', () => {
+  it('computes actual minus consensus for numeric prints', () => {
+    expect(eventSurprise('0.4%', '0.3%')).toBeCloseTo(0.1);
+    expect(eventSurprise('175K', '200K')).toBeCloseTo(-25);
+  });
+  it('returns null when either side is missing or non-numeric', () => {
+    expect(eventSurprise(null, '0.3%')).toBeNull();
+    expect(eventSurprise('0.4%', null)).toBeNull();
+    expect(eventSurprise('n/a', '0.3%')).toBeNull();
+  });
+});
+
+describe('classifyEventRisk', () => {
+  const now = new Date('2026-06-28T00:00:00-04:00');
+
+  it('returns none/low when nothing is within 48h', () => {
+    const events = [mkEvent({ releaseTimeEt: '2026-07-05T08:30:00-04:00' })];
+    const read = classifyEventRisk(events, now);
+    expect(read.overlay).toBe('none');
+    expect(read.riskLevel).toBe('low');
+  });
+
+  it('flags Event Watch for a major event 24-48h out', () => {
+    const events = [mkEvent({ releaseTimeEt: '2026-06-29T12:00:00-04:00' })]; // ~36h out
+    const read = classifyEventRisk(events, now);
+    expect(read.overlay).toBe('event_watch');
+    expect(read.riskLevel).toBe('medium');
+    expect(read.event?.eventName).toBe('CPI');
+  });
+
+  it('flags High Event Risk for a major event within 24h', () => {
+    const events = [mkEvent({ releaseTimeEt: '2026-06-28T20:00:00-04:00' })]; // ~20h out
+    const read = classifyEventRisk(events, now);
+    expect(read.overlay).toBe('high_event_risk');
+    expect(read.riskLevel).toBe('high');
+  });
+
+  it('flags a Reaction Overlay for a just-released event, with surprise', () => {
+    const events = [mkEvent({
+      releaseTimeEt: '2026-06-27T08:30:00-04:00', // ~16h ago
+      actual: '0.4%',
+      consensus: '0.3%',
+    })];
+    const read = classifyEventRisk(events, now);
+    expect(read.overlay).toBe('reaction_overlay');
+    expect(read.surprise).toBeCloseTo(0.1);
+  });
+
+  it('escalates to Shock on a large relative surprise', () => {
+    const events = [mkEvent({
+      releaseTimeEt: '2026-06-27T08:30:00-04:00',
+      actual: '0.6%',
+      consensus: '0.2%', // 200% relative miss
+    })];
+    const read = classifyEventRisk(events, now);
+    expect(read.riskLevel).toBe('shock');
+  });
+
+  it('fades a reaction overlay after ~3 trading days', () => {
+    const events = [mkEvent({
+      releaseTimeEt: '2026-06-20T08:30:00-04:00', // well over 72h ago
+      actual: '0.4%',
+      consensus: '0.3%',
+    })];
+    const read = classifyEventRisk(events, now);
+    expect(read.overlay).toBe('none');
+  });
+
+  it('prefers a released event over a still-upcoming one', () => {
+    const events = [
+      mkEvent({ eventName: 'PPI', releaseTimeEt: '2026-06-27T08:30:00-04:00', actual: '0.3%', consensus: '0.2%', importance: 'high' }),
+      mkEvent({ eventName: 'CPI', releaseTimeEt: '2026-07-05T08:30:00-04:00' }),
+    ];
+    const read = classifyEventRisk(events, now);
+    expect(read.overlay).toBe('reaction_overlay');
+    expect(read.event?.eventName).toBe('PPI');
+  });
+});
+
+describe('eventOverlayLabel + eventImportanceLabel', () => {
+  it('renders display labels', () => {
+    expect(eventOverlayLabel('none')).toBe('No major event risk');
+    expect(eventOverlayLabel('high_event_risk')).toBe('High Event Risk');
+    expect(eventImportanceLabel('very_high')).toBe('Very High');
+    expect(eventImportanceLabel('low')).toBe('Low');
   });
 });
