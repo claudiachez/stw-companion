@@ -10,6 +10,8 @@ import {
   breadthScore, RISK_APPETITE_WEIGHTS, riskAppetiteScore,
   classifyTrendDirection, regimeDirectionLabel, trendDirectionPhrase, trendDirectionArrow,
   eventImportance, eventSurprise, classifyEventRisk, eventOverlayLabel, eventImportanceLabel,
+  SECTOR_ETFS, RS_LOOKBACKS, relativeStrength,
+  weekRange,
 } from './macro';
 import type { MacroEvent } from '../types/macro';
 
@@ -465,5 +467,60 @@ describe('eventOverlayLabel + eventImportanceLabel', () => {
     expect(eventOverlayLabel('high_event_risk')).toBe('High Event Risk');
     expect(eventImportanceLabel('very_high')).toBe('Very High');
     expect(eventImportanceLabel('low')).toBe('Low');
+  });
+});
+
+describe('SECTOR_ETFS', () => {
+  it('lists exactly the 11 SPDR sectors, no XLSR', () => {
+    expect(SECTOR_ETFS).toHaveLength(11);
+    expect(SECTOR_ETFS.map((s) => s.symbol)).not.toContain('XLSR');
+    expect(SECTOR_ETFS.map((s) => s.symbol)).toEqual(
+      expect.arrayContaining(['XLK', 'XLV', 'XLF', 'XLE', 'XLI', 'XLY', 'XLP', 'XLU', 'XLRE', 'XLB', 'XLC']),
+    );
+  });
+});
+
+describe('relativeStrength', () => {
+  const flat = Array.from({ length: 260 }, () => 100);
+
+  it('outperformance vs a flat benchmark reads positive', () => {
+    const closes = [...flat];
+    closes[closes.length - 1] = 110; // +10% over the lookback
+    expect(relativeStrength(closes, flat, RS_LOOKBACKS.week)).toBe(10);
+  });
+
+  it('underperformance vs a rising benchmark reads negative', () => {
+    const sector = [...flat]; // flat sector
+    const benchmark = [...flat];
+    benchmark[benchmark.length - 1] = 105; // benchmark +5%
+    expect(relativeStrength(sector, benchmark, RS_LOOKBACKS.week)).toBe(-5);
+  });
+
+  it('not enough history for the lookback → null', () => {
+    expect(relativeStrength([100, 101, 102], flat, RS_LOOKBACKS.oneMonth)).toBeNull();
+  });
+
+  it('matching returns → 0', () => {
+    expect(relativeStrength(flat, flat, RS_LOOKBACKS.oneYear)).toBe(0);
+  });
+});
+
+describe('weekRange', () => {
+  it('a mid-week date resolves to that week\'s Monday–Friday', () => {
+    // Wednesday 2026-06-24
+    expect(weekRange(new Date(2026, 5, 24))).toEqual({ start: '2026-06-22', end: '2026-06-26' });
+  });
+
+  it('a Sunday resolves to the prior Monday–Friday', () => {
+    expect(weekRange(new Date(2026, 5, 28))).toEqual({ start: '2026-06-22', end: '2026-06-26' });
+  });
+
+  it('a Monday resolves to its own week', () => {
+    expect(weekRange(new Date(2026, 5, 22))).toEqual({ start: '2026-06-22', end: '2026-06-26' });
+  });
+
+  it('handles a month boundary', () => {
+    // Monday 2026-06-29
+    expect(weekRange(new Date(2026, 5, 29))).toEqual({ start: '2026-06-29', end: '2026-07-03' });
   });
 });

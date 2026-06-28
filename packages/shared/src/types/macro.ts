@@ -136,6 +136,8 @@ export interface MacroRecap {
   tradingMode: string;
   /** Closing punch line. */
   finalWord: string;
+  /** ISO timestamp this recap was generated, attached client-side from the row/response. */
+  generatedAt?: string | null;
 }
 
 /** A module's read passed to the recap generator. */
@@ -186,6 +188,25 @@ export interface MacroRecapRequest {
     previous?: string;
     overlay?: string;
   } | null;
+  /** Optional editor steering text for this regeneration, e.g. "focus more on credit stress". Admin-only. */
+  note?: string;
+}
+
+// ── Module 11: Sector Rotation ──────────────────────────────────────
+export interface SectorRotationRow {
+  symbol: string;
+  name: string;
+  close: number | null;
+  ma9: number | null;
+  ma21: number | null;
+  ma200: number | null;
+  bucket: TrendBucket | null;
+  /** Relative strength vs SPY (percentage points) over each lookback; null if too little history. */
+  rsWeek: number | null;
+  rs1M: number | null;
+  rs3M: number | null;
+  rs6M: number | null;
+  rs1Y: number | null;
 }
 
 // ── User prefs ──────────────────────────────────────────────────────

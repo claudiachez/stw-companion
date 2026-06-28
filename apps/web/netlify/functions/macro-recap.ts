@@ -11,6 +11,15 @@
  * see CLAUDE.md → Conventions). Prefers Sonnet for narrative quality, falls back
  * to Haiku if the key lacks access; override with MACRO_RECAP_MODEL.
  *
+ * Result is upserted into `macro_weekly_recaps` (migration 049), keyed by ISO
+ * week (`isoWeekKey()` from @stw/shared) — a cross-device row every user reads,
+ * instead of each browser regenerating its own via localStorage. Only the editor
+ * (cc@claudiachez.com) may trigger a regeneration — this is a real, costly
+ * Anthropic call, so the check is a hard 403, not the best-effort warn this
+ * function used to do. An optional `note` in the request body lets the editor
+ * steer the angle of the rewrite (e.g. "focus more on credit stress this week");
+ * it's folded into the prompt and persisted alongside the result as `admin_note`.
+ *
  * Required Netlify env vars:
  *   VITE_SUPABASE_URL  (or SUPABASE_URL)
  *   SUPABASE_SERVICE_ROLE_KEY
@@ -20,6 +29,9 @@
  */
 import type { Handler } from '@netlify/functions';
 import { createClient } from '@supabase/supabase-js';
+import { isoWeekKey } from '@stw/shared';
+
+const EDITOR_EMAIL = 'cc@claudiachez.com';
 
 function err(statusCode: number, message: string) {
   return { statusCode, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: message }) };
@@ -37,6 +49,7 @@ interface RecapRequest {
     gex?: { bias: string; biasNote: string; lastUpdated: string; spx?: LevelSet | null; qqq?: LevelSet | null } | null;
   };
   eventRisk?: { level: string; event: string; time: string; consensus?: string; previous?: string; overlay?: string } | null;
+  note?: string;
 }
 
 function moduleLine(name: string, m: RecapModule | undefined): string {
@@ -83,8 +96,12 @@ function buildPrompt(body: RecapRequest): string {
     ? `Event risk: ${eventRisk.level} — ${eventRisk.event} (${eventRisk.time})${eventRisk.consensus ? `, consensus ${eventRisk.consensus}` : ''}.`
     : 'No major scheduled event risk noted.';
 
-  return `You are a sharp markets strategist writing a WEEK-CLOSE note plus NEXT-WEEK expectations for active traders. Write in the voice of a desk strategist: confident, specific, and narrative — short punchy paragraphs, not bullet dumps.
+  const noteBlock = body.note?.trim()
+    ? `\nEDITOR GUIDANCE FOR THIS REWRITE: "${body.note.trim()}"\nWeave this angle/focus into the note while still obeying the grounding rules below — never let it justify inventing a figure you weren't given.\n`
+    : '';
 
+  return `You are a sharp markets strategist writing a WEEK-CLOSE note plus NEXT-WEEK expectations for active traders. Write in the voice of a desk strategist: confident, specific, and narrative — short punchy paragraphs, not bullet dumps.
+${noteBlock}
 CRITICAL GROUNDING RULES:
 - Use ONLY the data provided below. Do NOT invent specific figures (dollar flows, exact streak counts, sector names, fund names) you were not given.
 - You MAY interpret and tell a story (rotation, risk-on/off, where leadership sits) but every concrete number you cite must come from the data below.
@@ -143,17 +160,21 @@ export const handler: Handler = async (event) => {
   if (!supabaseUrl || !serviceKey) return err(500, 'Server config error');
   if (!anthropicKey) return err(500, 'AI service not configured');
 
-  // Best-effort auth: verify the JWT when present, but never hard-fail the recap
-  // on a verification hiccup — it reads no user data, so this is only a light gate.
-  if (token) {
-    try {
-      const supabase = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
-      const { error: authError } = await supabase.auth.getUser(token);
-      if (authError) console.warn('macro-recap: token rejected —', authError.message);
-    } catch (e) {
-      console.warn('macro-recap: auth verify threw —', e instanceof Error ? e.message : e);
-    }
+  const supabase = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
+
+  // Hard gate: this triggers a real, costly Anthropic call and writes the shared
+  // cross-device recap every subscriber reads, so unlike the read side, regeneration
+  // is editor-only — never a best-effort warn.
+  if (!token) return err(401, 'Authentication required to regenerate the recap');
+  let callerEmail: string | undefined;
+  try {
+    const { data, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !data.user) return err(401, 'Invalid session');
+    callerEmail = data.user.email;
+  } catch (e) {
+    return err(401, e instanceof Error ? e.message : 'Could not verify session');
   }
+  if (callerEmail !== EDITOR_EMAIL) return err(403, 'Only the editor can regenerate the recap');
 
   let body: RecapRequest;
   try {
@@ -177,7 +198,19 @@ export const handler: Handler = async (event) => {
       if (r.ok) {
         const m = r.text.match(/\{[\s\S]*\}/);
         if (!m) return err(500, 'Could not parse AI response');
-        return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(JSON.parse(m[0])) };
+        const recap = JSON.parse(m[0]);
+        const generatedAt = new Date().toISOString();
+        const { error: upsertError } = await supabase
+          .from('macro_weekly_recaps')
+          .upsert({
+            week_key: isoWeekKey(),
+            recap,
+            admin_note: body.note?.trim() || null,
+            model,
+            generated_at: generatedAt,
+          }, { onConflict: 'week_key' });
+        if (upsertError) console.error('macro-recap: failed to persist recap:', upsertError.message);
+        return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...recap, generatedAt }) };
       }
       lastErr = { status: r.status, detail: r.detail };
       // Only fall through to the next model when this one isn't available.

@@ -1,19 +1,14 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import type { MacroRecap, MacroRecapRequest } from '@stw/shared';
+import { isoWeekKey } from '@stw/shared';
 import { useAuthStore } from '../../store/auth';
 import { getSupabase } from '../../lib/supabase';
 
-function isoWeekKey(): string {
-  const d = new Date();
-  const jan1 = new Date(d.getFullYear(), 0, 1);
-  const week = Math.ceil(((d.getTime() - jan1.getTime()) / 86400000 + jan1.getDay() + 1) / 7);
-  // v2 = richer week-close note schema (headline/verdict/scenarios/playbook/…).
-  return `macro-recap-v2-${d.getFullYear()}-W${String(week).padStart(2, '0')}`;
-}
+const LS_KEY = `macro-recap-v2-${isoWeekKey()}`;
 
 function loadCached(): MacroRecap | null {
   try {
-    const raw = localStorage.getItem(isoWeekKey());
+    const raw = localStorage.getItem(LS_KEY);
     return raw ? JSON.parse(raw) as MacroRecap : null;
   } catch { return null; }
 }
@@ -23,8 +18,27 @@ export function useWeeklyRecap() {
   const [recap, setRecap] = useState<MacroRecap | null>(loadCached);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
-  const generate = useCallback(async (payload: MacroRecapRequest) => {
+  // The recap is a cross-device row (everyone reads the same week's note) — check
+  // macro_weekly_recaps first; only fall back to the per-browser cache if the table
+  // read fails (e.g. sandbox pre-migration), same degrade-gracefully pattern as
+  // useMacroPrefs.
+  useEffect(() => {
+    getSupabase()
+      .from('macro_weekly_recaps')
+      .select('recap, generated_at')
+      .eq('week_key', isoWeekKey())
+      .maybeSingle()
+      .then(({ data, error: readError }) => {
+        if (!readError && data?.recap) {
+          setRecap({ ...(data.recap as MacroRecap), generatedAt: data.generated_at });
+        }
+        setLoaded(true);
+      });
+  }, []);
+
+  const generate = useCallback(async (payload: MacroRecapRequest, note?: string) => {
     setLoading(true);
     setError(null);
     try {
@@ -36,7 +50,7 @@ export function useWeeklyRecap() {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(note?.trim() ? { ...payload, note: note.trim() } : payload),
       });
       if (!res.ok) {
         let detail = `HTTP ${res.status}`;
@@ -45,7 +59,7 @@ export function useWeeklyRecap() {
       }
       const data = await res.json() as MacroRecap;
       setRecap(data);
-      try { localStorage.setItem(isoWeekKey(), JSON.stringify(data)); } catch { /* ignore */ }
+      try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch { /* ignore */ }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to generate recap');
     } finally {
@@ -53,5 +67,5 @@ export function useWeeklyRecap() {
     }
   }, [user?.id]);
 
-  return { recap, loading, error, generate };
+  return { recap, loading, error, loaded, generate };
 }
