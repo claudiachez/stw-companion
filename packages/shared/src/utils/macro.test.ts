@@ -11,6 +11,7 @@ import {
   classifyTrendDirection, regimeDirectionLabel, trendDirectionPhrase, trendDirectionArrow,
   eventImportance, eventSurprise, classifyEventRisk, eventOverlayLabel, eventImportanceLabel,
   SECTOR_ETFS, RS_LOOKBACKS, relativeStrength,
+  weekRange,
 } from './macro';
 import type { MacroEvent } from '../types/macro';
 
@@ -501,5 +502,25 @@ describe('relativeStrength', () => {
 
   it('matching returns → 0', () => {
     expect(relativeStrength(flat, flat, RS_LOOKBACKS.oneYear)).toBe(0);
+  });
+});
+
+describe('weekRange', () => {
+  it('a mid-week date resolves to that week\'s Monday–Friday', () => {
+    // Wednesday 2026-06-24
+    expect(weekRange(new Date(2026, 5, 24))).toEqual({ start: '2026-06-22', end: '2026-06-26' });
+  });
+
+  it('a Sunday resolves to the prior Monday–Friday', () => {
+    expect(weekRange(new Date(2026, 5, 28))).toEqual({ start: '2026-06-22', end: '2026-06-26' });
+  });
+
+  it('a Monday resolves to its own week', () => {
+    expect(weekRange(new Date(2026, 5, 22))).toEqual({ start: '2026-06-22', end: '2026-06-26' });
+  });
+
+  it('handles a month boundary', () => {
+    // Monday 2026-06-29
+    expect(weekRange(new Date(2026, 5, 29))).toEqual({ start: '2026-06-29', end: '2026-07-03' });
   });
 });

@@ -199,6 +199,7 @@ export const handler: Handler = async (event) => {
         const m = r.text.match(/\{[\s\S]*\}/);
         if (!m) return err(500, 'Could not parse AI response');
         const recap = JSON.parse(m[0]);
+        const generatedAt = new Date().toISOString();
         const { error: upsertError } = await supabase
           .from('macro_weekly_recaps')
           .upsert({
@@ -206,10 +207,10 @@ export const handler: Handler = async (event) => {
             recap,
             admin_note: body.note?.trim() || null,
             model,
-            generated_at: new Date().toISOString(),
+            generated_at: generatedAt,
           }, { onConflict: 'week_key' });
         if (upsertError) console.error('macro-recap: failed to persist recap:', upsertError.message);
-        return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(recap) };
+        return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...recap, generatedAt }) };
       }
       lastErr = { status: r.status, detail: r.detail };
       // Only fall through to the next model when this one isn't available.

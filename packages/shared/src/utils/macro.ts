@@ -547,3 +547,20 @@ export function isoWeekKey(date: Date = new Date()): string {
   const week = Math.ceil(((date.getTime() - jan1.getTime()) / 86400000 + jan1.getDay() + 1) / 7);
   return `${date.getFullYear()}-W${String(week).padStart(2, '0')}`;
 }
+
+/** Local-date YYYY-MM-DD string, avoiding the UTC day-shift of toISOString(). */
+function localIsoDate(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/** Monday–Friday calendar-week range (as local YYYY-MM-DD strings) containing `date`. */
+export function weekRange(date: Date = new Date()): { start: string; end: string } {
+  const day = date.getDay(); // 0 = Sun .. 6 = Sat
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  const monday = new Date(date.getFullYear(), date.getMonth(), date.getDate() + mondayOffset);
+  const friday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 4);
+  return { start: localIsoDate(monday), end: localIsoDate(friday) };
+}

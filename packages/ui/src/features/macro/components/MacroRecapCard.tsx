@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { MacroRecap } from '@stw/shared';
+import { fmtDateTime, formatDate, weekRange } from '@stw/shared';
 
 interface Props {
   recap: MacroRecap | null;
@@ -49,6 +50,14 @@ export function MacroRecapCard({ recap, loading, error, canEdit, onRefresh }: Pr
 
       {recap && !loading && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {recap.generatedAt && (() => {
+            const { start, end } = weekRange(new Date(recap.generatedAt!));
+            return (
+              <div style={{ fontSize: 10, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Week of {formatDate(start)}–{formatDate(end)} · Generated: {fmtDateTime(recap.generatedAt)}
+              </div>
+            );
+          })()}
           {recap.headline && (
             <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--text)', lineHeight: 1.4 }}>{recap.headline}</p>
           )}

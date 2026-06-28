@@ -27,12 +27,12 @@ export function useWeeklyRecap() {
   useEffect(() => {
     getSupabase()
       .from('macro_weekly_recaps')
-      .select('recap')
+      .select('recap, generated_at')
       .eq('week_key', isoWeekKey())
       .maybeSingle()
       .then(({ data, error: readError }) => {
         if (!readError && data?.recap) {
-          setRecap(data.recap as MacroRecap);
+          setRecap({ ...(data.recap as MacroRecap), generatedAt: data.generated_at });
         }
         setLoaded(true);
       });

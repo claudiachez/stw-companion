@@ -136,6 +136,8 @@ export interface MacroRecap {
   tradingMode: string;
   /** Closing punch line. */
   finalWord: string;
+  /** ISO timestamp this recap was generated, attached client-side from the row/response. */
+  generatedAt?: string | null;
 }
 
 /** A module's read passed to the recap generator. */
