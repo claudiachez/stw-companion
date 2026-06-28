@@ -277,6 +277,34 @@ export function breadthScore(aboveMa: boolean, rising: boolean): number {
   return rising ? 45 : 25;
 }
 
+/**
+ * Risk Appetite gauge weights (sum to 100%) — the single source of truth
+ * shared by the live gauge (useSentimentGauge) and the daily snapshot writer
+ * (macro-snapshot.ts), so the persisted 5D/20D trend tracks the same number
+ * the gauge displays instead of drifting out of sync.
+ */
+export const RISK_APPETITE_WEIGHTS = {
+  momentum: 0.18,
+  vix: 0.16,
+  ivPremium: 0.16,
+  vvix: 0.12,
+  gex: 0.18,
+  credit: 0.10,
+  breadth: 0.10,
+} as const;
+
+export type RiskAppetiteInputs = Partial<Record<keyof typeof RISK_APPETITE_WEIGHTS, number | null>>;
+
+/** Weighted average over whichever inputs are present (missing redistributes); null if none are. */
+export function riskAppetiteScore(scores: RiskAppetiteInputs): number | null {
+  const keys = Object.keys(RISK_APPETITE_WEIGHTS) as (keyof typeof RISK_APPETITE_WEIGHTS)[];
+  const active = keys.filter((k) => scores[k] !== null && scores[k] !== undefined);
+  const totalWeight = active.reduce((a, k) => a + RISK_APPETITE_WEIGHTS[k], 0);
+  if (active.length === 0 || totalWeight === 0) return null;
+  const sum = active.reduce((a, k) => a + (scores[k] as number) * RISK_APPETITE_WEIGHTS[k], 0);
+  return Math.round(sum / totalWeight);
+}
+
 // ── Realized volatility (promoted from useSentimentGauge) ────────────
 /**
  * Annualized 30-day realized volatility (%) from a daily close series:

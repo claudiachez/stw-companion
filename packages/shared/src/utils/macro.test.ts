@@ -7,7 +7,7 @@ import {
   creditHygScore, creditLabel,
   us10yScore, uupScore, ratesDollarScore, ratesDollarLabel,
   gexScore, gexBiasLabel, gexImplication,
-  breadthScore,
+  breadthScore, RISK_APPETITE_WEIGHTS, riskAppetiteScore,
   classifyTrendDirection, regimeDirectionLabel, trendDirectionPhrase, trendDirectionArrow,
   eventImportance, eventSurprise, classifyEventRisk, eventOverlayLabel, eventImportanceLabel,
 } from './macro';
@@ -231,6 +231,36 @@ describe('breadthScore', () => {
     expect(breadthScore(true, false)).toBe(60);
     expect(breadthScore(false, true)).toBe(45);
     expect(breadthScore(false, false)).toBe(25);
+  });
+});
+
+describe('riskAppetiteScore', () => {
+  it('weights are exactly the 7 gauge inputs and sum to 100%', () => {
+    const total = Object.values(RISK_APPETITE_WEIGHTS).reduce((a, b) => a + b, 0);
+    expect(total).toBeCloseTo(1, 10);
+  });
+
+  it('returns null when no inputs are present', () => {
+    expect(riskAppetiteScore({})).toBeNull();
+  });
+
+  it('weighted-averages whichever inputs are present, redistributing missing weight', () => {
+    // Only momentum (18%) and breadth (10%) present, both scored 100 → still 100.
+    expect(riskAppetiteScore({ momentum: 100, breadth: 100 })).toBe(100);
+    // momentum=100 (18%), vix=0 (16%) → weighted toward momentum's larger weight.
+    const score = riskAppetiteScore({ momentum: 100, vix: 0 });
+    expect(score).toBe(Math.round((100 * RISK_APPETITE_WEIGHTS.momentum) / (RISK_APPETITE_WEIGHTS.momentum + RISK_APPETITE_WEIGHTS.vix)));
+  });
+
+  it('treats null and undefined inputs as absent', () => {
+    expect(riskAppetiteScore({ momentum: 80, vix: null, ivPremium: undefined })).toBe(80);
+  });
+
+  it('full set of 7 inputs averages with their published weights', () => {
+    const score = riskAppetiteScore({
+      momentum: 90, vix: 90, ivPremium: 85, vvix: 85, gex: 90, credit: 80, breadth: 80,
+    });
+    expect(score).toBe(87); // weighted avg, rounded
   });
 });
 
