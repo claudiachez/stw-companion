@@ -35,7 +35,7 @@ import {
   trendBucket, trendSleeveScore, environmentScore,
   vixScore, vvixScore, ivPremiumScore, vixDirectionScore, volatilityStressScore, percentileRank, hv30,
   creditHygScore, us10yScore, uupScore, ratesDollarScore, gexScore, breadthScore,
-  classifyEventRisk,
+  classifyEventRisk, riskAppetiteScore,
 } from '@stw/shared';
 import type { MacroEvent } from '@stw/shared';
 
@@ -138,9 +138,9 @@ const handlerImpl: Handler = async () => {
     }
   }
 
-  const volatilityScore = volatilityStressScore([
-    vixScore(vix), ivPremiumScore(ivRatio), vvixPctScore, vixDirectionScore(vixDelta5),
-  ]);
+  const vixSc = vixScore(vix);
+  const ivSc = ivPremiumScore(ivRatio);
+  const volatilityScore = volatilityStressScore([vixSc, ivSc, vvixPctScore, vixDirectionScore(vixDelta5)]);
   const stressRising = vixDelta5 !== null && vixDelta5 > 0;
 
   // ── Module 6: Credit / Liquidity ─────────────────────────────────────
@@ -178,8 +178,17 @@ const handlerImpl: Handler = async () => {
   } catch { /* ignore — gexScore(null) below */ }
   const gexSc = gexScore(gexBias);
 
-  // ── Module 9: Risk Appetite — Breadth sub-score only feeds indicatorScores;
-  //    the full gauge needs Graddox/credit context already computed above. ──
+  // ── Module 9: Risk Appetite gauge — same 7 weighted inputs as
+  //    useSentimentGauge.ts, via the shared riskAppetiteScore() so the
+  //    persisted trend tracks the same number the gauge displays. ──
+  const spy125 = sma(spyCloses, 125);
+  const spyClose = spyCloses[spyCloses.length - 1] ?? null;
+  let momentumScore: number | null = null;
+  if (spy125 && spyClose) {
+    const pct = ((spyClose - spy125) / spy125) * 100;
+    momentumScore = Math.max(0, Math.min(100, 50 + pct * 5));
+  }
+
   let breadth: number | null = null;
   const rspCloses = await tdDailyCloses('RSP', twelveDataKey);
   const L = Math.min(rspCloses.length, spyCloses.length);
@@ -189,6 +198,11 @@ const handlerImpl: Handler = async () => {
     const ratioMa50 = ratios.slice(-50).reduce((a, b) => a + b, 0) / 50;
     breadth = breadthScore(ratioNow > ratioMa50, ratioNow > ratios[ratios.length - 2]);
   }
+
+  const riskAppetiteSc = riskAppetiteScore({
+    momentum: momentumScore, vix: vixSc, ivPremium: ivSc, vvix: vvixPctScore,
+    gex: gexSc, credit: creditScore, breadth,
+  });
 
   const regimeScore = environmentScore([
     { key: 'trend', score: trendScore },
@@ -209,7 +223,7 @@ const handlerImpl: Handler = async () => {
     credit: creditScore,
     rates_dollar: ratesDollarSc,
     gex: gexSc,
-    risk_appetite: breadth, // partial proxy; full 7-input gauge stays client-side
+    risk_appetite: riskAppetiteSc,
   };
 
   const snapshotDate = new Date().toISOString().slice(0, 10);
