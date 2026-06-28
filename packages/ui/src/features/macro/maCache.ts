@@ -66,3 +66,32 @@ export function sma(closes: number[], n: number): number | null {
   if (closes.length < n) return null;
   return closes.slice(-n).reduce((a, b) => a + b, 0) / n;
 }
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Daily closes for many symbols, fetched in small sequential chunks so a large
+ * symbol list (e.g. sector constituents) doesn't blow through TwelveData's
+ * free-tier rate limit the way one big Promise.all would. Already-cached
+ * symbols resolve instantly and don't count against the pacing delay.
+ */
+export async function fetchClosesChunked(
+  symbols: string[],
+  key: string,
+  outputsize = 252,
+  chunkSize = 8,
+  delayMs = 2000,
+): Promise<Record<string, number[]>> {
+  const result: Record<string, number[]> = {};
+  for (let i = 0; i < symbols.length; i += chunkSize) {
+    const chunk = symbols.slice(i, i + chunkSize);
+    const needsFetch = chunk.some((sym) => !cacheFresh(sym));
+    await Promise.all(chunk.map(async (sym) => {
+      result[sym] = await tdDailyCloses(sym, key, outputsize);
+    }));
+    if (needsFetch && i + chunkSize < symbols.length) await delay(delayMs);
+  }
+  return result;
+}

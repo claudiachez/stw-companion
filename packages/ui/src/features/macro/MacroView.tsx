@@ -44,7 +44,7 @@ const HELP = {
   riskAppetite: 'How much fear vs greed is priced right now (0 = extreme fear, 100 = extreme greed). A different question from the regime: the regime is what the environment IS; this is how emotional the tape is. Built from momentum, VIX, IV premium, tail risk, GEX, credit and breadth.',
   recap: 'An AI summary that turns all the module scores into a plain-English read plus a suggested trading mode. Generates automatically and refreshes weekly.',
   eventRisk: "What scheduled macro events (CPI, FOMC, jobs, etc.) could change the setup in the next 1-2 days. This is a temporary OVERLAY, not a permanent change to the regime score — it fades a few trading days after the print unless the structure actually shifted. MVP data source: MarketWatch's economic calendar; cross-check FXStreet for confirmation.",
-  sectorRotation: "Where money is rotating across the 11 SPDR sectors. Structure = the same 9/21/200-day trend bucketing used in the Trend module; RS columns show each sector's return minus SPY's over that lookback (positive = leading the market, negative = lagging). Leaders/Laggards rank by current structure + 1-month RS.",
+  sectorRotation: "Where money is rotating across the 11 SPDR sectors, ranked #1 (leading) to #11 (lagging) by structure + 1-month RS. Structure = the same 9/21/200-day trend bucketing used in the Trend module; the radar plots each sector's RS vs SPY (percentage points) across Week/1M/3M/6M/1Y. Leaders/Setting Up below each radar are stock ideas from that sector's OWN universe (not STW's existing holdings) — Leaders have confirmed bullish structure, Setting Up are still mid-caution/recovering but turning positive on 1M RS. They complement STW's picks, not replace them.",
 };
 
 export function MacroView() {
@@ -72,7 +72,7 @@ export function MacroView() {
   const { score, loading: sentLoading } = useSentimentGauge(finnhubKey, twelveDataKey);
   const { recap, loading: recapLoading, error: recapError, loaded: recapLoaded, generate } = useWeeklyRecap();
   const { read: eventsRead, loading: eventsLoading, error: eventsError, warning: eventsWarning } = useMacroEvents();
-  const { rows: sectorRows, loading: sectorLoading, asOf: sectorAsOf } = useSectorRotation(twelveDataKey);
+  const { rows: sectorRows, loading: sectorLoading, asOf: sectorAsOf, constituents: sectorConstituents, constituentsLoading: sectorConstituentsLoading } = useSectorRotation(twelveDataKey);
 
   const visibleIndicators = indicators.filter((i) => visibleSymbols.includes(i.symbol));
   const qqqBucket = indicators.find((i) => i.symbol === 'QQQ')?.bucket ?? null;
@@ -271,7 +271,13 @@ export function MacroView() {
       <section>
         <ModuleHeader title="Sector Rotation" help={HELP.sectorRotation} />
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
-          <SectorRotationCard rows={sectorRows} loading={sectorLoading} asOf={sectorAsOf} />
+          <SectorRotationCard
+            rows={sectorRows}
+            loading={sectorLoading}
+            asOf={sectorAsOf}
+            constituents={sectorConstituents}
+            constituentsLoading={sectorConstituentsLoading}
+          />
         </div>
       </section>
 
