@@ -1,6 +1,12 @@
 import type { SectorRotationRow, TrendBucket } from '@stw/shared';
-import { TREND_BUCKET_META } from '@stw/shared';
+import { TREND_BUCKET_META, TREND_BUCKET_ORDER } from '@stw/shared';
 import { SourceNote } from './macroVisuals';
+
+const STRUCTURE_TOOLTIP = TREND_BUCKET_ORDER
+  .map((b) => TREND_BUCKET_META[b].groupLabel)
+  .join('\n');
+
+const RS_TOOLTIP = "Relative strength vs SPY (percentage points): the sector's % return minus SPY's % return over that lookback. +2.0 means the sector beat SPY by 2pp; it is not the sector's own price change.";
 
 interface Props {
   rows: SectorRotationRow[];
@@ -76,7 +82,11 @@ export function SectorRotationCard({ rows, loading, asOf }: Props) {
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border)' }}>
               {['Sector', 'Name', 'Structure', '1W RS', '1M RS', '3M RS', '6M RS', '1Y RS'].map((h) => (
-                <th key={h} style={{ padding: '6px 8px', textAlign: 'left', fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--t3)', whiteSpace: 'nowrap' }}>{h}</th>
+                <th
+                  key={h}
+                  title={h === 'Structure' ? STRUCTURE_TOOLTIP : h.endsWith('RS') ? RS_TOOLTIP : undefined}
+                  style={{ padding: '6px 8px', textAlign: 'left', fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--t3)', whiteSpace: 'nowrap', cursor: h === 'Structure' || h.endsWith('RS') ? 'help' : 'default' }}
+                >{h}</th>
               ))}
             </tr>
           </thead>
