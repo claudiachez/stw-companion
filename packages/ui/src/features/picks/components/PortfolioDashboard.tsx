@@ -188,7 +188,7 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
   const stalePrices = holdings.flatMap((h) => {
     if (h.ticker === 'CASH' || h.last_action === 'Closed' || !optionsSynced) return [];
     const stale = h.legs.filter(
-      (l) => l.instrument_type === 'OPTION' && l.mark_price != null && l.mark_price_at != null &&
+      (l) => l.instrument_type === 'OPTION' && l.status === 'OPEN' && l.mark_price != null && l.mark_price_at != null &&
         new Date(l.mark_price_at).getTime() < optionsSynced.getTime(),
     );
     if (!stale.length) return [];
@@ -367,7 +367,7 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
             ))}
           </div>
           <div style={{ fontSize: 9, color: 'var(--t3)', marginTop: 4 }}>
-            Showing prices from an earlier sync — the latest IBKR sync didn't refresh these.{canEdit ? ' Re-run the sync.' : ''}
+            {canEdit ? 'Showing prices from an earlier sync — the latest IBKR sync didn\'t refresh these. Re-run the sync.' : 'These option prices are from an earlier session.'}
           </div>
           </div>
         </div>

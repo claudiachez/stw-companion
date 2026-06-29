@@ -87,7 +87,7 @@ export function SignalsView() {
         <div style={{ flex: 1, overflowY: isMobile ? 'visible' : 'auto', padding: isMobile ? 10 : 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <GexCharts spyLevels={spyLevels} qqqLevels={gx.qqq} />
           {gx.signals.length > 0 && <SignalsTable signals={gx.signals} />}
-          {gx.log.length > 0 && <DayLog log={gx.log} />}
+          {gx.log.length > 0 && <DayLog log={gx.log} date={gx.date} />}
         </div>
       </div>
     </div>
