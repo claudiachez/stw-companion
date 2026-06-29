@@ -8,7 +8,7 @@ import { useCapabilities } from '../../../context/AppCapabilities';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 import { errMsg } from '../../../lib/errMsg';
 import {
-  insertLegReturningId, insertLegTransaction, updateLegTransaction, deleteLegTransaction,
+  insertLegReturningId, insertLegTransaction, updateLegTransaction, updateLeg, deleteLegTransaction,
   type LegEvent, type LegEventInput,
 } from '../api';
 
@@ -222,10 +222,14 @@ function EventForm({ ticker, legs, event, onDone }: { ticker: string; legs: Leg[
   const qc = useQueryClient();
   const editing = !!event;
   const [legId, setLegId] = useState(event?.leg_id ?? (legs[0]?.id ?? NEW_LEG));
-  // new-leg structural fields
-  const [instrument, setInstrument] = useState<'SHARES' | 'CALL' | 'PUT'>('SHARES');
-  const [strike, setStrike] = useState('');
-  const [expiry, setExpiry] = useState('');
+  // new-leg structural fields (also used when editing an existing option leg's contract details)
+  const editingLeg = editing ? event.leg : null;
+  const editingIsOption = editingLeg?.instrument_type === 'OPTION';
+  const [instrument, setInstrument] = useState<'SHARES' | 'CALL' | 'PUT'>(
+    editingIsOption ? (editingLeg?.option_right === 'PUT' ? 'PUT' : 'CALL') : 'SHARES',
+  );
+  const [strike, setStrike] = useState(editingIsOption && editingLeg?.option_strike != null ? String(editingLeg.option_strike) : '');
+  const [expiry, setExpiry] = useState(editingIsOption && editingLeg?.option_expiry ? editingLeg.option_expiry : '');
   const [direction, setDirection] = useState<Direction>('long');
   // event fields
   const [action, setAction] = useState<ActionLabel>((event?.action_label as ActionLabel) || (event ? deriveLabel(event) : 'New'));
@@ -252,6 +256,16 @@ function EventForm({ ticker, legs, event, onDone }: { ticker: string; legs: Leg[
           option_right: (isOpt ? instrument : null) as OptionRight | null,
           option_expiry: isOpt ? (expiry || null) : null,
           direction,
+        });
+      } else if (editing && editingIsOption) {
+        // Update the leg's contract details if they changed (strike, expiry, right)
+        const fullLeg = legs.find((l) => l.id === event!.leg_id);
+        await updateLeg(event!.leg_id, {
+          instrument_type: 'OPTION' as LegInstrument,
+          option_strike: strike ? parseFloat(strike) : null,
+          option_right: (instrument !== 'SHARES' ? instrument : 'CALL') as OptionRight,
+          option_expiry: expiry || null,
+          direction: (fullLeg?.direction ?? 'long') as Direction,
         });
       }
       const input: LegEventInput = {
@@ -303,6 +317,19 @@ function EventForm({ ticker, legs, event, onDone }: { ticker: string; legs: Leg[
             <div><label style={lbl}>Strike</label><input style={fld} type="number" step="0.5" value={strike} onChange={(e) => setStrike(e.target.value)} /></div>
             <div><label style={lbl}>Expiry</label><input style={fld} type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} /></div>
           </>}
+        </div>
+      )}
+
+      {editing && editingIsOption && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+          <div><label style={lbl}>Right</label>
+            <select style={fld} value={instrument} onChange={(e) => setInstrument(e.target.value as 'CALL' | 'PUT')}>
+              <option value="CALL">Call</option><option value="PUT">Put</option>
+            </select></div>
+          <div><label style={lbl}>Strike</label>
+            <input style={fld} type="number" step="0.5" value={strike} onChange={(e) => setStrike(e.target.value)} /></div>
+          <div style={{ gridColumn: '1 / -1' }}><label style={lbl}>Expiry</label>
+            <input style={fld} type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} /></div>
         </div>
       )}
 

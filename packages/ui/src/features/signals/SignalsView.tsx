@@ -71,7 +71,7 @@ export function SignalsView() {
           </>
         )}
         <span style={{ marginLeft: isMobile ? 0 : 'auto', fontSize: 11, color: 'var(--t3)', whiteSpace: 'nowrap', width: isMobile ? '100%' : undefined }}>
-          Updated: {updStr}
+          {isStale ? `Last report: ${updStr}` : `Updated: ${updStr}`}
         </span>
       </div>
 
