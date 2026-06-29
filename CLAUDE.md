@@ -2,8 +2,12 @@
 
 > **⚠️ START HERE — branch.** **`staging` is the active trunk** — all feature work happens here.
 > As of **2026-06-23** `main` was brought **level with `staging`** (the event-sourcing migration plan
-> was completed and promoted), so a fresh clone is current — migrations run to **047** on PROD; if migrations
-> stop at 021 you are on a stale checkout, re-sync. **First command every session:**
+> was completed and promoted) — but `staging` has since moved well ahead again (currently **72 commits**
+> ahead of `main`, all Macro Dashboard v2 work, **not yet promoted**). `staging` migrations run to
+> **049** (`048_macro_daily_snapshots`, `049_macro_weekly_recaps`); PROD/sandbox application of 048/049
+> was **not verified** as of 2026-06-29 (Supabase MCP access was unavailable that session) — confirm
+> before assuming either env has them. If migrations stop at 021 you are on a stale checkout, re-sync.
+> **First command every session:**
 > `git fetch origin && git checkout staging && git pull --ff-only`.
 > Feature branches cut from `staging`, PR to `staging`. `main` is promoted only by an approved
 > staging→main PR (= a production deploy). (Note: `memory/` lives in local `~/.claude/`, NOT in the repo —
@@ -20,13 +24,13 @@
 
 ---
 
-## Current Status — Macro Dashboard v2 reorganized + built (handoff 2026-06-27)
+## Current Status — Macro Dashboard v2 complete: all 11 modules built (handoff 2026-06-29)
 
-**NEXT SESSION = continue Macro Dashboard with P2 (5D trend engine), then P3 (Event Risk).**
-The Macro tab was **reorganized into a 10-module architecture and rebuilt** this session
-(spec rewritten in [`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md)). All work is on
-**`staging`** (built on branch `claude/macro-dashboard-reorganize-v3fvzj`, fast-forwarded into
-staging — **branch fully merged, safe to delete**). Read the spec first.
+**NEXT SESSION = host is doing manual QA on the full Macro tab; expect to start with QA-driven bug
+fixes rather than the next roadmap item below.** The Macro tab's full v2 rebuild (spec:
+[`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md)) is now **feature-complete on
+`staging`** — all 11 modules, including the two that were previously deferred (P2 5D trend engine, P3
+Event Risk) and Sector Rotation, are built and merged. Read the spec first if extending any module.
 
 **Architecture (the v2 fix):** the old single MA table mixed trend, stress, rates and positioning into
 one bucket. Now each module answers one question, and the **Market Regime is a weighted score**, not a
@@ -43,21 +47,26 @@ US10Y in Rates+Dollar. Pure scorers + 94 unit tests in `packages/shared/src/util
 - **Module 7 Rates + Dollar** (`RatesDollarCard.tsx`) — US10Y yield + UUP; flight-to-safety cross-check (falling yields during stress ≠ bullish).
 - **Module 8 GEX / Positioning** (`GexPositioningCard.tsx`) — Graddox bias score + **SPY (SPX÷10) and QQQ** levels + trigger/implication.
 - **Module 9 Risk Appetite** (`SentimentGauge.tsx`) — renamed from Sentiment; **`react-gauge-component`** library gauge; two-column (gauge ┃ breakdown); 7 inputs (Dollar dropped, Breadth added, percentile VVIX); each row shows its fear/greed word.
-- **Module 10 Recap** (`MacroRecapCard.tsx` + `macro-recap.ts`) — **full weekly week-close note** (headline · verdict · big story · bull/base/bear · next-week playbook · watching levels · final word), grounded ONLY in passed data (no fabricated figures), Sonnet→Haiku fallback, auto-generates, cached weekly. **Web-only** (admin has no Netlify functions).
+- **Module 10 Recap** (`MacroRecapCard.tsx` + `macro-recap.ts`) — **full weekly week-close note** (headline · verdict · big story · bull/base/bear · next-week playbook · watching levels · final word), grounded ONLY in passed data (no fabricated figures), Sonnet→Haiku fallback, auto-generates. Now **persisted cross-device in Supabase** (`macro_weekly_recaps`, migration 049) — written only by the `macro-recap` function's service-role key, which hard-rejects regeneration from anyone but the editor; subscribers only ever read. **Web-only** (admin has no Netlify functions).
+- **Module 11 Sector Rotation** (`SectorRotationCard.tsx` + `useSectorRotation.ts`) — 11 SPDR sectors as per-sector cards, ranked leader-to-laggard by structure + 1M RS; each card has a `recharts` radar (RS vs SPY across Week/1M/3M/6M/1Y) plus "Leaders"/"Setting Up" chip rows (that sector's own constituents, not STW holdings). Built on `claude/sector-rotation-tooltips`, merged via **PR #61**.
+- **P2 — 5D trend engine** (`useMacroTrendHistory.ts`) — daily snapshots (now via `macro_daily_snapshots`, migration 048, written by the `macro-snapshot` scheduled function) drive the banner's 5D direction descriptor, the score-strip 5D deltas, and the gauge 5D delta.
+- **P3 — Macro Event Risk** (`useMacroEvents.ts` + `macro-events` fn + `MacroEventRiskCard.tsx`) — CPI/PCE/FOMC/NFP overlay, wired into `MacroView.tsx`.
 - **Help**: every module header has a collapsible ⓘ (`ModuleHeader`) — tap to expand a "what/why/how" blurb; collapsed by default.
 
-**Not built yet:** **P2 5D trend engine** (`useMacroTrendHistory` — localStorage daily snapshots → banner direction + strip/gauge 5D deltas) and **P3 Macro Event Risk** (CPI/FOMC/jobs overlay; needs an economic-calendar **data-source decision** — paid API vs MVP manual list). Both spec'd.
-
-**DB — no migrations this session.** Macro reuses existing `047_macro_prefs` (PROD ✅ applied;
-sandbox N/A — sandbox lacks `public.profiles`, falls back to localStorage; pre-existing gap). Nothing
-to apply.
+**DB — migrations 048 + 049 added this arc** (`macro_daily_snapshots`, `macro_weekly_recaps` — both
+RLS read-only for `authenticated`, written only by their respective Netlify functions' service-role
+keys). **Application status on PROD and sandbox was NOT verified as of 2026-06-29** — Supabase MCP
+access was denied that session. Confirm both environments have 048/049 applied (check the tables exist)
+before relying on the recap/trend-history features working cross-device there.
 
 **Netlify env vars (web site):** `ANTHROPIC_API_KEY` (already added, required for the recap).
 Optional `MACRO_RECAP_MODEL` to override the recap model (defaults Sonnet→Haiku).
 
-**⏳ PENDING — production deploy:** `staging` is **57 commits ahead of `main`** — everything
-(PRs #50–#56 + all macro v2 work) is staging-only, **NOT on production**. Promoting `staging → main`
-is the production deploy and needs **explicit approval**.
+**⏳ PENDING — production deploy:** `staging` is **72 commits ahead of `main`** (verified
+2026-06-29 via `git log --oneline origin/main..origin/staging`) — everything since the 2026-06-23
+event-sourcing promotion, including PRs #50–#61 and all Macro Dashboard v2 work, is staging-only,
+**NOT on production**. Promoting `staging → main` is the production deploy and needs **explicit
+approval**.
 
 **Event-sourcing migration plan is CLOSED (on `main` since 2026-06-23) — do not reopen.** The weight model,
 locked decisions, and Phase-5 routine semantics below remain authoritative reference.
@@ -184,38 +193,35 @@ run DDL locally — apply migrations via the Supabase SQL editor). Prod service 
 
 ## Next Steps
 
-0. **Promote `staging → main` when approved (production deploy).** `staging` is 57 commits ahead of
-   `main` (PRs #50–#56 + all macro v2 work). Open a `staging → main` PR **only on explicit host approval**.
+0. **Host is doing manual QA on the Macro tab now (2026-06-29) — likely first task next session is
+   fixing whatever QA turns up**, ahead of any item below. Check for new instructions before starting
+   on the roadmap.
 
-1. **Macro Dashboard — continue (spec: [`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md)).**
-   Modules 1–2 + 4–10 are built and on staging. Next, in order:
-   - **P2 — 5D trend engine** (`useMacroTrendHistory`): one localStorage daily snapshot of module +
-     indicator scores; compute 5D/20D deltas + a `TrendDirection`; wire into the **banner direction
-     descriptor**, the **score-strip 5D deltas**, the **gauge 5D delta**, and per-row trend badges. Pure
-     direction classifier → shared + tests. (Slots already wired; deltas are null until ~5 days accrue.)
-   - **P3 — Macro Event Risk** (`useMacroEvents` + `macro-events` Netlify fn + `MacroEventRiskCard`):
-     CPI/PCE/FOMC/NFP overlay (temporary, never a permanent regime-score change). **Blocked on a
-     data-source decision** — paid economic-calendar API (actual/consensus/previous) vs an MVP manual
-     list. Confirm with host before building.
-   - **Portfolio Heatmap** (later) — treemap block on `PortfolioDashboard`, box ∝ `current_weight`,
+1. **Promote `staging → main` when approved (production deploy).** `staging` is 72 commits ahead of
+   `main` (PRs #50–#61 + all Macro Dashboard v2 work, now feature-complete). Open a `staging → main`
+   PR **only on explicit host approval**.
+
+2. **Macro Dashboard — remaining roadmap item (spec: [`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md)).**
+   All 11 modules (Regime Banner through Sector Rotation, plus the 5D trend engine and Event Risk) are
+   built and on staging. The one item left from the spec:
+   - **Portfolio Heatmap** — treemap block on `PortfolioDashboard`, box ∝ `current_weight`,
      Today/Total + By Basket/All toggles. Spec § "Phase 4: Portfolio Heatmap".
-   - **Sector Rotation** (last) — 11 SPDR sectors, 9+21+200 grouping, RS vs SPY. Spec bottom of file.
 
-2. **Overview/experience enrichment (host-requested, queued).** Stop the click-each-ticker experience:
+3. **Overview/experience enrichment (host-requested, queued).** Stop the click-each-ticker experience:
    - **Transcripts library tab** — a NEW subscriber-facing **episode recap** (host's *trading psychology* +
      that episode's *per-ticker commentary*). **NOT** the local methodology `.md` files (apps never read those).
      Needs a new `webinars` table written by `stw-transcripts` + a new tab.
    - **Global Activity Feed** — one cross-ticker, reverse-chron feed merging Commentary + Transactions across
      all holdings, filterable. No schema (reads `conviction_comments` + `leg_transactions`). Low-cost.
 
-3. **Phase 4 — admin Config + Manage area** — spec'd in
+4. **Phase 4 — admin Config + Manage area** — spec'd in
    [`plans/phase4_admin_manage.md`](plans/phase4_admin_manage.md). Config page edits `app_config`
    (`equity_options_default` / `options_short_long_default`); `useAppConfig` read hook in `@stw/ui`
    (note: `deriveLegWeights` has **no call sites** today, so app-side split-wiring is forward-looking).
    Manage area: **categories CRUD** (delete-guarded), **traders read-only**. One "Manage" nav entry,
    admin-local. No migrations expected. (Host was "gathering info" as of 2026-06-25 — confirm before building.)
 
-4. **Future features (not migration work):** **My Portfolio closed/realized transactions** — the subscriber
+5. **Future features (not migration work):** **My Portfolio closed/realized transactions** — the subscriber
    IBKR Flex query returns *open positions only*, so the tab can't show closed trades; needs a different IBKR
    query (trade-history/flex statement) + storage before a closed view is possible (host asked 2026-06-25).
    Also: inline 2-line leg editing in the modal (deferred); `$100k` notional + SPY benchmark (the `spy_daily`
@@ -462,7 +468,9 @@ subscriber function reads the subscriber's own account. Do not conflate them.
 - **TwelveData** (`VITE_TWELVEDATA_KEY`): daily OHLC for MA computation. Cache via `packages/ui/src/features/macro/maCache.ts` (`tdDailyCloses`, `loadCloses`, `loadLastDate`, `sma`), keyed `macro-ma-{symbol}` with `date` + `lastDate` (refresh once per day). Also the authoritative close source for VIX/US10Y/CBOE-TNX.
 - Without `VITE_TWELVEDATA_KEY`, MA/score cells degrade to `—` gracefully.
 - **Module structure (v2):** the Macro tab is **weighted module scores**, NOT a single MA table. The 9/21/200 MA table is **Trend only**; **VIX → Volatility/Stress**, **US10Y → Rates+Dollar** — never put stress/rates indicators in the trend table. Pure scorers live in `packages/shared/src/utils/macro.ts` (unit-tested); fetching lives in the per-module hooks. Every macro card shows a **source + data-age** footer (`SourceNote`); daily series show their latest close date (`loadLastDate`).
-- **Macro recap** (`macro-recap` fn): a weekly note grounded ONLY in the data passed to it — **never let it fabricate figures** (dollar flows, streak counts, sector/fund names) it wasn't given. Prefers Sonnet, falls back to Haiku; override with `MACRO_RECAP_MODEL`.
+- **Macro recap** (`macro-recap` fn): a weekly note grounded ONLY in the data passed to it — **never let it fabricate figures** (dollar flows, streak counts, sector/fund names) it wasn't given. Prefers Sonnet, falls back to Haiku; override with `MACRO_RECAP_MODEL`. **Persisted cross-device** in `public.macro_weekly_recaps` (migration 049, one row per ISO week) — the function writes with its service-role key and hard-rejects regeneration from anyone but the editor; the table's RLS grants read-only `SELECT` to `authenticated`, no client ever writes it directly.
+- **5D trend engine** (`useMacroTrendHistory.ts`): daily module/indicator-score snapshots, now persisted server-side in `public.macro_daily_snapshots` (migration 048, one row per weekday, written by the `macro-snapshot` scheduled Netlify function at 4:30pm ET) rather than per-browser localStorage — so the banner direction descriptor, score-strip deltas, and gauge delta are consistent across devices.
+- **Sector Rotation** (Module 11, `useSectorRotation.ts` + `SectorRotationCard.tsx`): per-sector radar cards (RS vs SPY across Week/1M/3M/6M/1Y via `recharts`) plus "Leaders"/"Setting Up" constituent chips, fetched via `fetchClosesChunked` in `maCache.ts` (small sequential chunks to respect TwelveData's free-tier rate limit for the larger constituent symbol list).
 
 ### Timestamps
 All UI timestamps use `fmtDateTime(val: Date | string | null)` from `@stw/shared`.
@@ -477,6 +485,10 @@ Output format: **`Mon D · H:MM AM ET`** (Eastern Time, year omitted).
 plain text. Use `<TickerLink ticker onSelect={onSelectTicker} />` from `@stw/ui` (free
 text like a digest can be linkified token-by-token against the holdings set). This is a
 standing rule: when you render a ticker, link it without being asked.
+**Exception: the Macro tab.** Sector ETFs, index symbols (VIX, US10Y, etc.), and the Sector Rotation
+card's Leaders/Setting Up constituent tickers render as plain styled chips/text, not `TickerLink` —
+the Macro tab has no `onSelectTicker` navigation capability wired in (it isn't scoped to STW's
+holdings set), so there's no detail page for most of these symbols to link to.
 
 ### Counts
 "Positions" counts exclude the `CASH` balance row (it's not a position) and reflect the
