@@ -1,4 +1,4 @@
-import { useGraddox } from './useGraddox';
+import { useGraddox, useLastMorningRun } from './useGraddox';
 import { LevelCard } from './components/LevelCard';
 import { SignalsTable } from './components/SignalsTable';
 import { BiasChip } from './components/BiasChip';
@@ -18,6 +18,7 @@ const scale10 = (v: number | null | undefined) => (v != null ? +(v / 10).toFixed
 // Paywall/tier gating lives in each app shell, not here.
 export function SignalsView() {
   const { data: gx, isLoading, error } = useGraddox();
+  const { data: lastMorningRun } = useLastMorningRun();
   const isMobile = useIsMobile();
 
   if (isLoading) return <LoadingSpinner className="mt-16" />;
@@ -70,9 +71,17 @@ export function SignalsView() {
             {gx.bias_note && <span style={{ fontSize: 11, color: 'var(--t2)' }}>{gx.bias_note}</span>}
           </>
         )}
-        <span style={{ marginLeft: isMobile ? 0 : 'auto', fontSize: 11, color: 'var(--t3)', whiteSpace: 'nowrap', width: isMobile ? '100%' : undefined }}>
-          Updated: {updStr}
-        </span>
+        {isStale ? (
+          <span style={{ marginLeft: isMobile ? 0 : 'auto', fontSize: 11, color: 'var(--t3)', whiteSpace: 'nowrap', width: isMobile ? '100%' : undefined }}>
+            {lastMorningRun
+              ? <>Checked: <span style={{ color: 'var(--t2)' }}>{fmtDateTime(lastMorningRun)}</span> · Last report: {updStr}</>
+              : `Last report: ${updStr}`}
+          </span>
+        ) : (
+          <span style={{ marginLeft: isMobile ? 0 : 'auto', fontSize: 11, color: 'var(--t3)', whiteSpace: 'nowrap', width: isMobile ? '100%' : undefined }}>
+            Updated: {updStr}
+          </span>
+        )}
       </div>
 
       {/* Body */}
@@ -87,7 +96,7 @@ export function SignalsView() {
         <div style={{ flex: 1, overflowY: isMobile ? 'visible' : 'auto', padding: isMobile ? 10 : 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <GexCharts spyLevels={spyLevels} qqqLevels={gx.qqq} />
           {gx.signals.length > 0 && <SignalsTable signals={gx.signals} />}
-          {gx.log.length > 0 && <DayLog log={gx.log} />}
+          {gx.log.length > 0 && <DayLog log={gx.log} date={gx.date} />}
         </div>
       </div>
     </div>

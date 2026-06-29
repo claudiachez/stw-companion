@@ -1,10 +1,15 @@
 import type { LogEntry } from '../api';
 
-export function DayLog({ log }: { log: LogEntry[] }) {
+export function DayLog({ log, date }: { log: LogEntry[]; date?: string }) {
+  const dateLabel = date
+    ? new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+    : '';
+
   return (
     <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', boxShadow: 'var(--shadow)' }}>
-      <div style={{ padding: '8px 13px', background: 'var(--s2)', borderBottom: '1px solid var(--bsub)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.09em', color: 'var(--t2)' }}>
-        📝 Day Log
+      <div style={{ padding: '8px 13px', background: 'var(--s2)', borderBottom: '1px solid var(--bsub)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.09em', color: 'var(--t2)' }}>📝 Day Log</span>
+        {dateLabel && <span style={{ fontSize: 10, color: 'var(--t3)' }}>{dateLabel}</span>}
       </div>
       {log.map((m, i) => (
         <div key={i} style={{ display: 'flex', gap: 12, padding: '9px 13px', borderBottom: i === log.length - 1 ? '1px solid transparent' : '1px solid var(--bsub)' }}>
