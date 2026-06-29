@@ -5,6 +5,16 @@ import type { GraddoxData, Signal, LevelSet, LogEntry } from '@stw/shared';
 // Re-export the canonical shared shapes so signal components import from one place.
 export type { GraddoxData, Signal, LevelSet, LogEntry };
 
+export async function fetchLastMorningRun(): Promise<Date | null> {
+  const { data, error } = await getSupabase()
+    .from('run_log_latest')
+    .select('ran_at')
+    .eq('run_type', 'morning')
+    .maybeSingle();
+  if (error) return null;
+  return data?.ran_at ? new Date(data.ran_at) : null;
+}
+
 // The `signals` table (renamed from `graddox` in migration 028) holds one row per trader
 // per day: bias + bias_note, JSONB level sets for SPX/QQQ, the trade signals JSONB
 // (`signals_data`), and the stream log. The Signals view shows Graddox's latest day's read.
