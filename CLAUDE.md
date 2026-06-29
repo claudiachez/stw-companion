@@ -104,7 +104,11 @@ detail — held in `app_config`, with a per-position override on `holdings.equit
   columns **Date · Action · Details · Price · Weight · Notes** (Details holds "Shares"/`$30C Sep '26`;
   one **Notes** column), newest-first, table on desktop / cards on mobile, **open/closed/all toggle**,
   **closed-leg rows dimmed** + "Closed"/"Expired" muted gray.
-- **Resizable split** in `PicksView` — drag the divider between the list and the detail (15–80%).
+- **Resizable split** in `PicksView` — drag the divider between the list and the detail (15–80%) on
+  desktop. **On mobile, the opened detail takes over the full screen** instead — the sub-tabs and filter
+  bar hide entirely (`mobileDetail` in `PicksView.tsx`), and `onClose` returns to the list. This is the
+  canonical list+detail pattern for any list+detail surface, not just Ticker Details: desktop shows both
+  panes side-by-side; mobile never crams both into a narrow viewport — one pane takes over at a time.
 
 **Phase 3 DONE ✅ + verified on SANDBOX (CXDO/IRDM):** detail-card P&L split per asset class, never
 blended — **Open** shows Shares/Options return + lot; **Closed** shows per-asset return + portfolio
@@ -499,8 +503,16 @@ active filter (closed hidden by default). The FilterBar count shows `N of {total
   black/dark (black-on-green is low-contrast). Match the existing Save buttons (`color: '#fff'`).
 - **Sibling tabs read as one app.** The Trades filter bar mirrors the Ticker Details `FilterBar` chrome
   (full-bleed surface bar, same control styling, same wording — e.g. "All Baskets", not "All Sectors").
-  When you add a filter/list/blotter surface, reuse the established chrome rather than inventing a new look.
-  This bit hard in the 2026-06-25 My Portfolio work — a from-scratch layout had to be reworked twice to match.
+  Every tab uses a **full-bleed layout** — control bar → filter bar → padded scroll area — never a
+  centered/max-width column. When a new tab's data shape matches an existing one (e.g. My Portfolio vs.
+  Trades), **reuse the exact same table styles** (`th`/`td`, etc.) rather than inventing a new look.
+  This bit hard in the 2026-06-25 My Portfolio work — a from-scratch centered layout had to be reworked
+  twice to match the siblings' full-bleed chrome.
+- **Multi-column layouts stack on mobile.** Side-by-side sections (e.g. the Risk-Appetite gauge ┃
+  breakdown) use `flexWrap` so they fill the full width on desktop and stack to a single column on
+  mobile, rather than a fixed grid that gets cramped. Table columns that don't fit a narrow screen are
+  hidden outright via the shared `useIsMobile()` hook (e.g. Trades' "Init Wt" column is desktop-only)
+  rather than reflowed or truncated.
 - **Filter/sort control ORDER is canonical — don't reinvent it per page.** Every filter bar follows
   **Search → Baskets → (Tiers/Status) → Types → Sort → toggles (checkboxes) → Clear → count**. Sort sits *after*
   the filters, never second. Match the order in `FilterBar.tsx` / `TradesFilterBar.tsx`; new tabs differ only by
