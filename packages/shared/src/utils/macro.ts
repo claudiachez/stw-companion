@@ -1,6 +1,7 @@
 import type {
   TrendBucket, RegimeSleeveKey, RegimeLabel, RegimeRead, TrendDirection,
   MacroEvent, EventImportance, EventRiskLevel, EventOverlayState, EventRiskRead,
+  SectorRotationRow,
 } from '../types/macro';
 
 // ── Regime sleeve weights (Environment Score) ───────────────────────
@@ -521,6 +522,42 @@ export const SECTOR_ETFS: { symbol: string; name: string }[] = [
 
 /** Trading-day lookback windows for the RS-vs-SPY columns. */
 export const RS_LOOKBACKS = { week: 5, oneMonth: 21, threeMonth: 63, sixMonth: 126, oneYear: 252 } as const;
+
+// A curated handful of well-known holdings per SPDR sector ETF, used to surface
+// "Leaders" / "Setting Up" stock ideas alongside the sector-level radar — this is
+// deliberately the sector's own universe, not STW's holdings, so it complements
+// STW picks (surfaces names beyond what's already held) rather than narrowing to them.
+export const SECTOR_CONSTITUENTS: Record<string, { symbol: string; name: string }[]> = {
+  XLK:  [{ symbol: 'AAPL', name: 'Apple' }, { symbol: 'MSFT', name: 'Microsoft' }, { symbol: 'NVDA', name: 'Nvidia' }, { symbol: 'AVGO', name: 'Broadcom' }, { symbol: 'ORCL', name: 'Oracle' }, { symbol: 'CRM', name: 'Salesforce' }],
+  XLV:  [{ symbol: 'LLY', name: 'Eli Lilly' }, { symbol: 'UNH', name: 'UnitedHealth' }, { symbol: 'JNJ', name: 'Johnson & Johnson' }, { symbol: 'ABBV', name: 'AbbVie' }, { symbol: 'MRK', name: 'Merck' }, { symbol: 'TMO', name: 'Thermo Fisher' }],
+  XLF:  [{ symbol: 'JPM', name: 'JPMorgan Chase' }, { symbol: 'V', name: 'Visa' }, { symbol: 'MA', name: 'Mastercard' }, { symbol: 'BAC', name: 'Bank of America' }, { symbol: 'WFC', name: 'Wells Fargo' }, { symbol: 'GS', name: 'Goldman Sachs' }],
+  XLE:  [{ symbol: 'XOM', name: 'Exxon Mobil' }, { symbol: 'CVX', name: 'Chevron' }, { symbol: 'COP', name: 'ConocoPhillips' }, { symbol: 'EOG', name: 'EOG Resources' }, { symbol: 'SLB', name: 'Schlumberger' }, { symbol: 'WMB', name: 'Williams Companies' }],
+  XLI:  [{ symbol: 'GE', name: 'GE Aerospace' }, { symbol: 'CAT', name: 'Caterpillar' }, { symbol: 'RTX', name: 'RTX Corp' }, { symbol: 'HON', name: 'Honeywell' }, { symbol: 'UNP', name: 'Union Pacific' }, { symbol: 'ETN', name: 'Eaton' }],
+  XLY:  [{ symbol: 'AMZN', name: 'Amazon' }, { symbol: 'TSLA', name: 'Tesla' }, { symbol: 'HD', name: 'Home Depot' }, { symbol: 'MCD', name: "McDonald's" }, { symbol: 'BKNG', name: 'Booking Holdings' }, { symbol: 'LOW', name: "Lowe's" }],
+  XLP:  [{ symbol: 'PG', name: 'Procter & Gamble' }, { symbol: 'COST', name: 'Costco' }, { symbol: 'WMT', name: 'Walmart' }, { symbol: 'KO', name: 'Coca-Cola' }, { symbol: 'PEP', name: 'PepsiCo' }, { symbol: 'PM', name: 'Philip Morris' }],
+  XLU:  [{ symbol: 'NEE', name: 'NextEra Energy' }, { symbol: 'SO', name: 'Southern Co' }, { symbol: 'DUK', name: 'Duke Energy' }, { symbol: 'CEG', name: 'Constellation Energy' }, { symbol: 'AEP', name: 'American Electric Power' }, { symbol: 'D', name: 'Dominion Energy' }],
+  XLRE: [{ symbol: 'PLD', name: 'Prologis' }, { symbol: 'AMT', name: 'American Tower' }, { symbol: 'EQIX', name: 'Equinix' }, { symbol: 'WELL', name: 'Welltower' }, { symbol: 'SPG', name: 'Simon Property' }, { symbol: 'PSA', name: 'Public Storage' }],
+  XLB:  [{ symbol: 'LIN', name: 'Linde' }, { symbol: 'SHW', name: 'Sherwin-Williams' }, { symbol: 'FCX', name: 'Freeport-McMoRan' }, { symbol: 'ECL', name: 'Ecolab' }, { symbol: 'APD', name: 'Air Products' }, { symbol: 'NEM', name: 'Newmont' }],
+  XLC:  [{ symbol: 'META', name: 'Meta Platforms' }, { symbol: 'GOOGL', name: 'Alphabet' }, { symbol: 'NFLX', name: 'Netflix' }, { symbol: 'TMUS', name: 'T-Mobile US' }, { symbol: 'DIS', name: 'Disney' }, { symbol: 'CMCSA', name: 'Comcast' }],
+};
+
+/**
+ * Split a sector's constituent rows (already scored via trendBucket + relativeStrength)
+ * into Leaders (confirmed bullish structure, ranked by 1M RS) and Setting Up (structure
+ * not yet confirmed but 1M RS turning positive — i.e. early, not yet a leader). Risk-off
+ * names are excluded from both — that's neither leading nor setting up.
+ */
+export function rankSectorConstituents(rows: SectorRotationRow[]): { leaders: SectorRotationRow[]; settingUp: SectorRotationRow[] } {
+  const leaders = rows
+    .filter((r) => r.bucket === 'momentum' || r.bucket === 'healthy_pullback')
+    .sort((a, b) => (b.rs1M ?? -Infinity) - (a.rs1M ?? -Infinity))
+    .slice(0, 5);
+  const settingUp = rows
+    .filter((r) => (r.bucket === 'mid_caution' || r.bucket === 'bear_rally') && (r.rs1M ?? 0) > 0)
+    .sort((a, b) => (b.rs1M ?? -Infinity) - (a.rs1M ?? -Infinity))
+    .slice(0, 5);
+  return { leaders, settingUp };
+}
 
 /**
  * Relative strength of a series vs a benchmark over `lookback` trading days:

@@ -12,8 +12,9 @@ import {
   eventImportance, eventSurprise, classifyEventRisk, eventOverlayLabel, eventImportanceLabel,
   SECTOR_ETFS, RS_LOOKBACKS, relativeStrength,
   weekRange,
+  SECTOR_CONSTITUENTS, rankSectorConstituents,
 } from './macro';
-import type { MacroEvent } from '../types/macro';
+import type { MacroEvent, SectorRotationRow } from '../types/macro';
 
 describe('trendBucket', () => {
   it('above all three MAs → momentum', () => {
@@ -522,5 +523,49 @@ describe('weekRange', () => {
   it('handles a month boundary', () => {
     // Monday 2026-06-29
     expect(weekRange(new Date(2026, 5, 29))).toEqual({ start: '2026-06-29', end: '2026-07-03' });
+  });
+});
+
+describe('SECTOR_CONSTITUENTS', () => {
+  it('has an entry for every SPDR sector, each with at least one ticker', () => {
+    for (const { symbol } of SECTOR_ETFS) {
+      expect(SECTOR_CONSTITUENTS[symbol]?.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('rankSectorConstituents', () => {
+  function row(symbol: string, bucket: SectorRotationRow['bucket'], rs1M: number | null): SectorRotationRow {
+    return { symbol, name: symbol, close: 100, ma9: 100, ma21: 100, ma200: 100, bucket, rsWeek: null, rs1M, rs3M: null, rs6M: null, rs1Y: null };
+  }
+
+  it('leaders are confirmed-bullish names ranked by 1M RS descending', () => {
+    const rows = [
+      row('A', 'momentum', 2),
+      row('B', 'healthy_pullback', 8),
+      row('C', 'momentum', 5),
+    ];
+    expect(rankSectorConstituents(rows).leaders.map((r) => r.symbol)).toEqual(['B', 'C', 'A']);
+  });
+
+  it('setting up are unconfirmed names with improving 1M RS, ranked descending', () => {
+    const rows = [
+      row('A', 'mid_caution', 1),
+      row('B', 'bear_rally', 4),
+      row('C', 'mid_caution', -1), // not improving → excluded
+    ];
+    expect(rankSectorConstituents(rows).settingUp.map((r) => r.symbol)).toEqual(['B', 'A']);
+  });
+
+  it('risk-off names are excluded from both leaders and setting up', () => {
+    const rows = [row('A', 'risk_off', 10)];
+    const { leaders, settingUp } = rankSectorConstituents(rows);
+    expect(leaders).toHaveLength(0);
+    expect(settingUp).toHaveLength(0);
+  });
+
+  it('caps each list at 5 names', () => {
+    const rows = Array.from({ length: 8 }, (_, i) => row(`S${i}`, 'momentum', 8 - i));
+    expect(rankSectorConstituents(rows).leaders).toHaveLength(5);
   });
 });
