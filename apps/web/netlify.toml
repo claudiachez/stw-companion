@@ -19,7 +19,10 @@
 [functions."ibkr-flex"]
   timeout = 26
 
-[functions."macro-recap-scheduled"]
+[functions."macro-recap-am"]
+  timeout = 60
+
+[functions."macro-recap-pm"]
   timeout = 60
 
 [[redirects]]

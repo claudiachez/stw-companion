@@ -33,11 +33,15 @@ import { isoWeekKey } from '@stw/shared';
 // Use direct REST calls instead of @supabase/supabase-js to avoid the
 // Realtime client's Node 20 WebSocket error (supabase-js 2.100+ throws on
 // createClient when native WebSocket is absent, crashing the function).
-async function sbGetUser(url: string, serviceKey: string, token: string): Promise<{ email?: string } | null> {
-  const res = await fetch(`${url}/auth/v1/user`, {
+async function sbGetUser(url: string, serviceKey: string, token: string): Promise<{ email?: string } | { _authError: string }> {
+  const base = url.replace(/\/$/, '');
+  const res = await fetch(`${base}/auth/v1/user`, {
     headers: { apikey: serviceKey, Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) return null;
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    return { _authError: `Supabase auth ${res.status}: ${body.slice(0, 200)}` };
+  }
   return res.json() as Promise<{ email?: string }>;
 }
 
@@ -192,7 +196,7 @@ export const handler: Handler = async (event) => {
   let callerEmail: string | undefined;
   try {
     const user = await sbGetUser(supabaseUrl, serviceKey, token);
-    if (!user) return err(401, 'Invalid session');
+    if ('_authError' in user) return err(401, user._authError);
     callerEmail = user.email;
   } catch (e) {
     return err(401, e instanceof Error ? e.message : 'Could not verify session');

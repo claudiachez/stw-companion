@@ -109,7 +109,7 @@ export function MacroRecapCard({ recap, loading, error, canEdit, onRefresh }: Pr
       )}
 
       {!recap && !loading && !error && (
-        <div style={{ color: 'var(--t3)', fontSize: 12 }}>No recap yet — generating…</div>
+        <div style={{ color: 'var(--t3)', fontSize: 12 }}>No recap for this week yet — check back after 4:30pm ET on a weekday.</div>
       )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>

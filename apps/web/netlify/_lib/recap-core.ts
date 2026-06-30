@@ -1,27 +1,8 @@
 /**
- * Scheduled macro weekly recap generator.
- *
- * Fires at 4:05pm ET on weekdays (21:05 UTC — correct for EST; 5:05pm ET in EDT
- * summer months, which is still after market close).
- *
- * Checks whether this ISO week already has a recap in `macro_weekly_recaps`; if
- * so, exits immediately (idempotent — safe to re-trigger). Otherwise:
- *   1. Fetches TwelveData daily closes for SPY, QQQ (trend), VIX (volatility),
- *      HYG (credit), TNX (yields, ÷10 to normalize), UUP (dollar).
- *   2. Fetches the latest GEX signal from Supabase.
- *   3. Computes sleeve scores using @stw/shared utilities.
- *   4. Generates the recap via Anthropic (Sonnet → Haiku fallback).
- *   5. Upserts into `macro_weekly_recaps` keyed by ISO week.
- *
- * Required Netlify env vars (web site):
- *   VITE_SUPABASE_URL  (or SUPABASE_URL)
- *   SUPABASE_SERVICE_ROLE_KEY
- *   ANTHROPIC_API_KEY
- *   VITE_TWELVEDATA_KEY
- * Optional:
- *   MACRO_RECAP_MODEL  (defaults to claude-sonnet-4-6, then claude-haiku-4-5-20251001)
+ * Shared logic for the two scheduled macro recap functions (AM + PM).
+ * Lives outside netlify/functions/ so Netlify doesn't deploy it as a standalone
+ * function — it's bundled into each caller by esbuild at deploy time.
  */
-import { schedule } from '@netlify/functions';
 import {
   trendBucket, trendSleeveScore, trendSleeveLabel,
   vixScore, volatilityStressScore, stressLabel,
@@ -32,12 +13,10 @@ import {
   isoWeekKey,
 } from '@stw/shared';
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
-// Direct REST helpers — avoid @supabase/supabase-js which throws on Node 20
-// due to the Realtime client requiring native WebSocket (only in Node 22+).
+// ── Supabase REST helpers (no supabase-js — it throws on Node 20 due to Realtime WebSocket) ──
 
 async function sbSelect<T>(url: string, serviceKey: string, table: string, query: string): Promise<T | null> {
-  const res = await fetch(`${url}/rest/v1/${table}?${query}&limit=1`, {
+  const res = await fetch(`${url.replace(/\/$/, '')}/rest/v1/${table}?${query}&limit=1`, {
     headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, Accept: 'application/json' },
   });
   if (!res.ok) return null;
@@ -46,7 +25,7 @@ async function sbSelect<T>(url: string, serviceKey: string, table: string, query
 }
 
 async function sbUpsert(url: string, serviceKey: string, table: string, row: Record<string, unknown>): Promise<string | null> {
-  const res = await fetch(`${url}/rest/v1/${table}`, {
+  const res = await fetch(`${url.replace(/\/$/, '')}/rest/v1/${table}`, {
     method: 'POST',
     headers: {
       apikey: serviceKey,
@@ -60,22 +39,23 @@ async function sbUpsert(url: string, serviceKey: string, table: string, row: Rec
   return null;
 }
 
+// ── TwelveData ───────────────────────────────────────────────────────────────
+
 function sma(closes: number[], period: number): number | null {
   if (closes.length < period) return null;
   return closes.slice(-period).reduce((a, b) => a + b, 0) / period;
 }
 
-async function fetchTwelveDataCloses(symbol: string, apiKey: string, outputsize = 252): Promise<number[]> {
-  const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(symbol)}&interval=1day&outputsize=${outputsize}&apikey=${apiKey}`;
+async function fetchCloses(symbol: string, apiKey: string): Promise<number[]> {
+  const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(symbol)}&interval=1day&outputsize=252&apikey=${apiKey}`;
   const res = await fetch(url);
-  if (!res.ok) { console.warn(`macro-recap-scheduled: TwelveData ${symbol} fetch failed (${res.status})`); return []; }
+  if (!res.ok) { console.warn(`recap-core: TwelveData ${symbol} failed (${res.status})`); return []; }
   const data = await res.json() as { values?: { close: string }[]; status?: string };
-  if (data.status === 'error' || !data.values?.length) { console.warn(`macro-recap-scheduled: TwelveData ${symbol} returned no data`); return []; }
-  // values are newest-first → reverse for chronological order
+  if (data.status === 'error' || !data.values?.length) { console.warn(`recap-core: TwelveData ${symbol} no data`); return []; }
   return data.values.reverse().map((v) => parseFloat(v.close)).filter((v) => !isNaN(v));
 }
 
-// ── Prompt builder (mirrors apps/web/netlify/functions/macro-recap.ts) ──────
+// ── Prompt builder ────────────────────────────────────────────────────────────
 
 interface RecapModule { score: number | null; label: string }
 interface LevelSet { resistance: number | null; gex1: number | null; put_support: number | null }
@@ -108,8 +88,6 @@ function buildPrompt(body: RecapBody): string {
   const indicatorLines = context.indicators
     .map((i) => `- ${i.symbol} (${i.name}): ${i.bucket ?? 'n/a'}${i.chgPct != null ? `, ${i.chgPct >= 0 ? '+' : ''}${i.chgPct.toFixed(2)}% on the day` : ''}`)
     .join('\n');
-  const vol = context.volatility;
-  const volLine = `VIX ${vol.vix ?? 'n/a'}, VVIX n/a, IV premium n/a`;
   const gex = context.gex;
   const gexBlock = gex ? [
     `GEX bias: ${gex.bias || 'n/a'}`,
@@ -136,7 +114,7 @@ ${moduleLine('Rates + Dollar', modules.ratesDollar)}
 ${moduleLine('GEX / Positioning', modules.gex)}
 Index structure (vs 9/21/200-day MAs):
 ${indicatorLines || '- n/a'}
-Volatility: ${volLine}
+VIX ${context.volatility.vix ?? 'n/a'}
 ${gexBlock}
 No major scheduled event risk noted.
 
@@ -151,60 +129,55 @@ Respond with ONLY a JSON object (no markdown fences) with exactly these fields:
 - finalWord: a short, memorable closing line`;
 }
 
-// ── Scheduled handler ────────────────────────────────────────────────────────
+// ── Main export ───────────────────────────────────────────────────────────────
 
-const scheduledHandler = async () => {
+export async function generateWeeklyRecap(tag: string): Promise<void> {
   const supabaseUrl  = process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? '';
   const serviceKey   = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
   const anthropicKey = process.env.ANTHROPIC_API_KEY ?? '';
   const twelveKey    = process.env.VITE_TWELVEDATA_KEY ?? '';
 
   if (!supabaseUrl || !serviceKey || !anthropicKey || !twelveKey) {
-    console.error('macro-recap-scheduled: missing required env vars — aborting');
+    console.error(`${tag}: missing required env vars — aborting`);
     return;
   }
 
   const weekKey = isoWeekKey();
 
-  // Idempotency check — skip if this week's recap was already generated.
+  // Idempotency — skip if this week's recap already exists.
   const existing = await sbSelect<{ week_key: string }>(
     supabaseUrl, serviceKey, 'macro_weekly_recaps', `select=week_key&week_key=eq.${weekKey}`,
   );
-
   if (existing) {
-    console.log(`macro-recap-scheduled: recap for ${weekKey} already exists — skipping`);
+    console.log(`${tag}: recap for ${weekKey} already exists — skipping`);
     return;
   }
 
-  // Fetch TwelveData closes (sequential to respect free-tier rate limits).
-  console.log('macro-recap-scheduled: fetching market data from TwelveData...');
+  // Fetch TwelveData closes sequentially (free-tier rate limit).
+  console.log(`${tag}: fetching market data...`);
   const SYMBOLS = ['SPY', 'QQQ', 'VIX', 'HYG', 'TNX', 'UUP'];
   const closesMap: Record<string, number[]> = {};
   for (const sym of SYMBOLS) {
-    closesMap[sym] = await fetchTwelveDataCloses(sym, twelveKey);
+    closesMap[sym] = await fetchCloses(sym, twelveKey);
     await new Promise<void>((r) => setTimeout(r, 300));
   }
 
-  // ── Trend sleeve (SPY + QQQ) ──
   const spyCloses = closesMap.SPY ?? [];
   const qqqCloses = closesMap.QQQ ?? [];
   const spyBucket = trendBucket(spyCloses.at(-1) ?? null, sma(spyCloses, 9), sma(spyCloses, 21), sma(spyCloses, 200));
   const qqqBucket = trendBucket(qqqCloses.at(-1) ?? null, sma(qqqCloses, 9), sma(qqqCloses, 21), sma(qqqCloses, 200));
   const trendScore = trendSleeveScore([spyBucket, qqqBucket]);
 
-  // ── Volatility sleeve (VIX only — VVIX not available via TwelveData free tier) ──
   const vixCloses = closesMap.VIX ?? [];
   const vix = vixCloses.at(-1) ?? null;
   const volScore = volatilityStressScore([vixScore(vix)]);
 
-  // ── Credit sleeve (HYG vs 50D MA + day direction) ──
   const hygCloses = closesMap.HYG ?? [];
   const hygLast = hygCloses.at(-1) ?? null;
   const hygMa50 = sma(hygCloses, 50);
   const hygRising = hygCloses.length >= 2 && hygCloses.at(-1)! > hygCloses.at(-2)!;
   const credScore = creditHygScore(hygLast != null && hygMa50 != null && hygLast > hygMa50, hygRising);
 
-  // ── Rates + Dollar sleeve ──
   // TNX quotes 10× the yield (e.g. 42.5 = 4.25%) — divide to normalize.
   const tnxCloses = (closesMap.TNX ?? []).map((v) => v / 10);
   const us10y = tnxCloses.at(-1) ?? null;
@@ -216,15 +189,12 @@ const scheduledHandler = async () => {
   const uupAbove21 = uupLast != null && sma(uupCloses, 21) != null && uupLast > sma(uupCloses, 21)!;
   const ratesScore = ratesDollarScore([us10yScore(us10y, us10yDelta5, stressRising), uupScore(uupAbove9, uupAbove21)]);
 
-  // ── GEX from Supabase signals ──
   const signalRow = await sbSelect<{ bias: string; bias_note: string; spx: unknown; qqq: unknown; last_updated: string }>(
     supabaseUrl, serviceKey, 'signals', 'select=bias,bias_note,spx,qqq,last_updated&order=date.desc',
   );
-
   const gexBias = signalRow?.bias ?? null;
   const gexScoreVal = gexScore(gexBias);
 
-  // ── Environment score + regime ──
   const envScore = environmentScore([
     { key: 'trend',       score: trendScore  },
     { key: 'volatility',  score: volScore    },
@@ -234,29 +204,27 @@ const scheduledHandler = async () => {
   ]);
 
   if (envScore === null) {
-    console.error('macro-recap-scheduled: insufficient data to compute environment score — aborting');
+    console.error(`${tag}: insufficient data to compute environment score — aborting`);
     return;
   }
 
   const regime = regimeBand(envScore);
-
-  // ── Build prompt body ──
   const spyChg = spyCloses.length >= 2 ? ((spyCloses.at(-1)! / spyCloses.at(-2)!) - 1) * 100 : null;
   const qqqChg = qqqCloses.length >= 2 ? ((qqqCloses.at(-1)! / qqqCloses.at(-2)!) - 1) * 100 : null;
 
   const body: RecapBody = {
     regime: { score: regime.score, label: regime.label, tradingMode: regime.tradingMode },
     modules: {
-      trend:       { score: trendScore,  label: trendSleeveLabel(trendScore)   },
-      volatility:  { score: volScore,    label: stressLabel(volScore)           },
-      credit:      { score: credScore,   label: creditLabel(credScore)          },
-      ratesDollar: { score: ratesScore,  label: ratesDollarLabel(ratesScore)   },
-      gex:         { score: gexScoreVal, label: gexBiasLabel(gexBias)          },
+      trend:       { score: trendScore,  label: trendSleeveLabel(trendScore)  },
+      volatility:  { score: volScore,    label: stressLabel(volScore)          },
+      credit:      { score: credScore,   label: creditLabel(credScore)         },
+      ratesDollar: { score: ratesScore,  label: ratesDollarLabel(ratesScore)  },
+      gex:         { score: gexScoreVal, label: gexBiasLabel(gexBias)         },
     },
     context: {
       indicators: [
-        { symbol: 'SPY', name: 'S&P 500',     bucket: spyBucket, close: spyCloses.at(-1) ?? null, chgPct: spyChg },
-        { symbol: 'QQQ', name: 'Nasdaq 100',  bucket: qqqBucket, close: qqqCloses.at(-1) ?? null, chgPct: qqqChg },
+        { symbol: 'SPY', name: 'S&P 500',    bucket: spyBucket, close: spyCloses.at(-1) ?? null, chgPct: spyChg },
+        { symbol: 'QQQ', name: 'Nasdaq 100', bucket: qqqBucket, close: qqqCloses.at(-1) ?? null, chgPct: qqqChg },
       ],
       volatility: { vix, vvix: null, ivPremium: null },
       gex: signalRow ? {
@@ -269,9 +237,6 @@ const scheduledHandler = async () => {
     },
   };
 
-  const prompt = buildPrompt(body);
-
-  // ── Call Anthropic (Sonnet → Haiku fallback) ──
   const models = [...new Set([
     process.env.MACRO_RECAP_MODEL || 'claude-sonnet-4-6',
     'claude-haiku-4-5-20251001',
@@ -281,12 +246,12 @@ const scheduledHandler = async () => {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model, max_tokens: 2500, messages: [{ role: 'user', content: prompt }] }),
+      body: JSON.stringify({ model, max_tokens: 2500, messages: [{ role: 'user', content: buildPrompt(body) }] }),
     });
 
     if (!res.ok) {
       const detail = (await res.text()).slice(0, 200);
-      console.warn(`macro-recap-scheduled: model ${model} failed (${res.status}): ${detail}`);
+      console.warn(`${tag}: model ${model} failed (${res.status}): ${detail}`);
       if (res.status !== 404 && res.status !== 403 && res.status !== 400) break;
       continue;
     }
@@ -294,33 +259,20 @@ const scheduledHandler = async () => {
     const aiData = await res.json() as { content?: { type: string; text?: string }[] };
     const text = aiData.content?.find((c) => c.type === 'text')?.text?.trim() ?? '';
     const match = text.match(/\{[\s\S]*\}/);
-    if (!match) { console.error('macro-recap-scheduled: could not parse AI response JSON'); return; }
+    if (!match) { console.error(`${tag}: could not parse AI response JSON`); return; }
 
     let recap: unknown;
-    try {
-      recap = JSON.parse(match[0]);
-    } catch (e) {
-      console.error('macro-recap-scheduled: JSON parse error:', e);
-      return;
-    }
+    try { recap = JSON.parse(match[0]); } catch (e) { console.error(`${tag}: JSON parse error:`, e); return; }
 
     const generatedAt = new Date().toISOString();
     const upsertError = await sbUpsert(supabaseUrl, serviceKey, 'macro_weekly_recaps', {
       week_key: weekKey, recap, model, generated_at: generatedAt,
     });
 
-    if (upsertError) {
-      console.error('macro-recap-scheduled: upsert failed:', upsertError);
-    } else {
-      console.log(`macro-recap-scheduled: recap for ${weekKey} generated and persisted (${model})`);
-    }
+    if (upsertError) console.error(`${tag}: upsert failed:`, upsertError);
+    else console.log(`${tag}: recap for ${weekKey} generated (${model})`);
     return;
   }
 
-  console.error('macro-recap-scheduled: all models failed — no recap generated');
-};
-
-// Netlify scheduled function: 4:05pm ET weekdays.
-// Cron runs in UTC: 21:05 UTC = 4:05pm EST (correct in winter); in summer EDT
-// (UTC-4) this fires at 5:05pm ET — still after 4pm market close.
-export const handler = schedule('5 21 * * 1-5', scheduledHandler);
+  console.error(`${tag}: all models failed`);
+}
