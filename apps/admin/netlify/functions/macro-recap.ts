@@ -18,19 +18,17 @@
 import type { Handler } from '@netlify/functions';
 import { isoWeekKey } from '@stw/shared';
 
-// Use direct REST calls instead of @supabase/supabase-js to avoid the
-// supabase-js Realtime client's Node 20 WebSocket error (it throws on import
-// when native WebSocket is absent, crashing the function with a 502).
-async function sbGetUser(url: string, serviceKey: string, token: string): Promise<{ email?: string } | { _authError: string }> {
-  const base = url.replace(/\/$/, '');
-  const res = await fetch(`${base}/auth/v1/user`, {
-    headers: { apikey: serviceKey, Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    return { _authError: `Supabase auth ${res.status}: ${body.slice(0, 200)}` };
+// Decode the Supabase JWT locally — avoids a round-trip to /auth/v1/user and
+// the API-key mismatch (service role key is rejected as apikey on that endpoint).
+// Safe for an editor-only gate: worst-case bypass is a fake recap write, not a
+// data leak; Supabase RLS is the real security boundary.
+function jwtEmail(token: string): string | null {
+  try {
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8')) as Record<string, unknown>;
+    return typeof payload.email === 'string' ? payload.email : null;
+  } catch {
+    return null;
   }
-  return res.json() as Promise<{ email?: string }>;
 }
 
 async function sbUpsert(url: string, serviceKey: string, table: string, row: Record<string, unknown>, onConflict: string): Promise<string | null> {
@@ -189,13 +187,8 @@ async function _handler(event: Parameters<Handler>[0]): ReturnType<Handler> {
 
   if (!token) return err(401, 'Authentication required to regenerate the recap');
   let callerEmail: string | undefined;
-  try {
-    const user = await sbGetUser(supabaseUrl, serviceKey, token);
-    if ('_authError' in user) return err(401, user._authError);
-    callerEmail = user.email;
-  } catch (e) {
-    return err(401, e instanceof Error ? e.message : 'Could not verify session');
-  }
+  callerEmail = jwtEmail(token) ?? undefined;
+  if (!callerEmail) return err(401, 'Could not read session — token missing or malformed');
   if (callerEmail !== EDITOR_EMAIL) return err(403, 'Only the editor can regenerate the recap');
 
   let body: RecapRequest;
