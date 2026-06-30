@@ -136,6 +136,15 @@ async function callAnthropic(apiKey: string, model: string, prompt: string): Pro
 }
 
 export const handler: Handler = async (event) => {
+  try {
+    return await _handler(event);
+  } catch (e) {
+    console.error('macro-recap uncaught error:', e);
+    return err(500, `Uncaught error: ${e instanceof Error ? e.message : String(e)}`);
+  }
+};
+
+async function _handler(event: Parameters<Handler>[0]): ReturnType<Handler> {
   if (event.httpMethod !== 'POST') return err(405, 'Method not allowed');
 
   const authHeader = event.headers.authorization ?? event.headers.Authorization ?? '';
