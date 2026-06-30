@@ -171,7 +171,7 @@ export function MacroView() {
       {/* ── Module 1: Market Regime Banner ─────────────────────────── */}
       <section>
         <ModuleHeader title="Market Regime" help={HELP.regime} />
-        <RegimeBanner regime={regime} updatedAt={updatedAt} direction={regimeDirection} />
+        <RegimeBanner regime={dataReady ? regime : null} updatedAt={updatedAt} direction={regimeDirection} />
       </section>
 
       {/* ── Module 2: Module Score Strip ───────────────────────────── */}

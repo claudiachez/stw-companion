@@ -19,6 +19,9 @@
 [functions."ibkr-flex"]
   timeout = 26
 
+[functions."macro-recap-scheduled"]
+  timeout = 60
+
 [[redirects]]
   from   = "/*"
   to     = "/index.html"
