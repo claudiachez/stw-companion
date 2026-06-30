@@ -22,7 +22,6 @@
  *   MACRO_RECAP_MODEL  (defaults to claude-sonnet-4-6, then claude-haiku-4-5-20251001)
  */
 import { schedule } from '@netlify/functions';
-import { createClient } from '@supabase/supabase-js';
 import {
   trendBucket, trendSleeveScore, trendSleeveLabel,
   vixScore, volatilityStressScore, stressLabel,
@@ -34,6 +33,32 @@ import {
 } from '@stw/shared';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
+// Direct REST helpers — avoid @supabase/supabase-js which throws on Node 20
+// due to the Realtime client requiring native WebSocket (only in Node 22+).
+
+async function sbSelect<T>(url: string, serviceKey: string, table: string, query: string): Promise<T | null> {
+  const res = await fetch(`${url}/rest/v1/${table}?${query}&limit=1`, {
+    headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, Accept: 'application/json' },
+  });
+  if (!res.ok) return null;
+  const rows = await res.json() as T[];
+  return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+}
+
+async function sbUpsert(url: string, serviceKey: string, table: string, row: Record<string, unknown>): Promise<string | null> {
+  const res = await fetch(`${url}/rest/v1/${table}`, {
+    method: 'POST',
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+      'Content-Type': 'application/json',
+      Prefer: 'resolution=merge-duplicates,return=minimal',
+    },
+    body: JSON.stringify(row),
+  });
+  if (!res.ok) return (await res.text()).slice(0, 200);
+  return null;
+}
 
 function sma(closes: number[], period: number): number | null {
   if (closes.length < period) return null;
@@ -139,15 +164,12 @@ const scheduledHandler = async () => {
     return;
   }
 
-  const supabase = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
   const weekKey = isoWeekKey();
 
   // Idempotency check — skip if this week's recap was already generated.
-  const { data: existing } = await supabase
-    .from('macro_weekly_recaps')
-    .select('week_key')
-    .eq('week_key', weekKey)
-    .maybeSingle();
+  const existing = await sbSelect<{ week_key: string }>(
+    supabaseUrl, serviceKey, 'macro_weekly_recaps', `select=week_key&week_key=eq.${weekKey}`,
+  );
 
   if (existing) {
     console.log(`macro-recap-scheduled: recap for ${weekKey} already exists — skipping`);
@@ -195,12 +217,9 @@ const scheduledHandler = async () => {
   const ratesScore = ratesDollarScore([us10yScore(us10y, us10yDelta5, stressRising), uupScore(uupAbove9, uupAbove21)]);
 
   // ── GEX from Supabase signals ──
-  const { data: signalRow } = await supabase
-    .from('signals')
-    .select('bias, bias_note, spx, qqq, last_updated')
-    .order('date', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  const signalRow = await sbSelect<{ bias: string; bias_note: string; spx: unknown; qqq: unknown; last_updated: string }>(
+    supabaseUrl, serviceKey, 'signals', 'select=bias,bias_note,spx,qqq,last_updated&order=date.desc',
+  );
 
   const gexBias = signalRow?.bias ?? null;
   const gexScoreVal = gexScore(gexBias);
@@ -286,12 +305,12 @@ const scheduledHandler = async () => {
     }
 
     const generatedAt = new Date().toISOString();
-    const { error: upsertError } = await supabase
-      .from('macro_weekly_recaps')
-      .upsert({ week_key: weekKey, recap, model, generated_at: generatedAt }, { onConflict: 'week_key' });
+    const upsertError = await sbUpsert(supabaseUrl, serviceKey, 'macro_weekly_recaps', {
+      week_key: weekKey, recap, model, generated_at: generatedAt,
+    });
 
     if (upsertError) {
-      console.error('macro-recap-scheduled: upsert failed:', upsertError.message);
+      console.error('macro-recap-scheduled: upsert failed:', upsertError);
     } else {
       console.log(`macro-recap-scheduled: recap for ${weekKey} generated and persisted (${model})`);
     }

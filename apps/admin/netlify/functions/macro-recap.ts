@@ -16,8 +16,33 @@
  *   MACRO_RECAP_MODEL  (defaults to claude-sonnet-4-6, then claude-haiku-4-5-20251001)
  */
 import type { Handler } from '@netlify/functions';
-import { createClient } from '@supabase/supabase-js';
 import { isoWeekKey } from '@stw/shared';
+
+// Use direct REST calls instead of @supabase/supabase-js to avoid the
+// supabase-js Realtime client's Node 20 WebSocket error (it throws on import
+// when native WebSocket is absent, crashing the function with a 502).
+async function sbGetUser(url: string, serviceKey: string, token: string): Promise<{ email?: string } | null> {
+  const res = await fetch(`${url}/auth/v1/user`, {
+    headers: { apikey: serviceKey, Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return null;
+  return res.json() as Promise<{ email?: string }>;
+}
+
+async function sbUpsert(url: string, serviceKey: string, table: string, row: Record<string, unknown>, onConflict: string): Promise<string | null> {
+  const res = await fetch(`${url}/rest/v1/${table}`, {
+    method: 'POST',
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+      'Content-Type': 'application/json',
+      Prefer: `resolution=merge-duplicates,return=minimal`,
+    },
+    body: JSON.stringify(row),
+  });
+  if (!res.ok) return (await res.text()).slice(0, 200);
+  return null;
+}
 
 const EDITOR_EMAIL = 'cc@claudiachez.com';
 
@@ -158,14 +183,12 @@ async function _handler(event: Parameters<Handler>[0]): ReturnType<Handler> {
   if (!serviceKey) return err(500, 'Server config error: SUPABASE_SERVICE_ROLE_KEY not set on this Netlify site');
   if (!anthropicKey) return err(500, 'AI service not configured: ANTHROPIC_API_KEY not set on this Netlify site');
 
-  const supabase = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
-
   if (!token) return err(401, 'Authentication required to regenerate the recap');
   let callerEmail: string | undefined;
   try {
-    const { data, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !data.user) return err(401, 'Invalid session');
-    callerEmail = data.user.email;
+    const user = await sbGetUser(supabaseUrl, serviceKey, token);
+    if (!user) return err(401, 'Invalid session');
+    callerEmail = user.email;
   } catch (e) {
     return err(401, e instanceof Error ? e.message : 'Could not verify session');
   }
@@ -194,16 +217,14 @@ async function _handler(event: Parameters<Handler>[0]): ReturnType<Handler> {
         if (!m) return err(500, 'Could not parse AI response');
         const recap = JSON.parse(m[0]);
         const generatedAt = new Date().toISOString();
-        const { error: upsertError } = await supabase
-          .from('macro_weekly_recaps')
-          .upsert({
-            week_key: isoWeekKey(),
-            recap,
-            admin_note: body.note?.trim() || null,
-            model,
-            generated_at: generatedAt,
-          }, { onConflict: 'week_key' });
-        if (upsertError) console.error('macro-recap: failed to persist recap:', upsertError.message);
+        const upsertError = await sbUpsert(supabaseUrl, serviceKey, 'macro_weekly_recaps', {
+          week_key: isoWeekKey(),
+          recap,
+          admin_note: body.note?.trim() || null,
+          model,
+          generated_at: generatedAt,
+        }, 'week_key');
+        if (upsertError) console.error('macro-recap: failed to persist recap:', upsertError);
         return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...recap, generatedAt }) };
       }
       lastErr = { status: r.status, detail: r.detail };
