@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { trendBucket, relativeStrength, RS_LOOKBACKS, SECTOR_ETFS, SECTOR_CONSTITUENTS, rankSectorConstituents } from '@stw/shared';
 import type { SectorRotationRow } from '@stw/shared';
-import { tdDailyCloses, loadCloses, loadLastDate, sma, fetchClosesChunked } from './maCache';
+import { loadCloses, loadLastDate, sma, fetchClosesChunked } from './maCache';
 
 export interface SectorConstituents {
   leaders: SectorRotationRow[];
@@ -49,10 +49,11 @@ export function useSectorRotation(twelveDataKey?: string) {
 
     async function fetchAll() {
       const symbols = ['SPY', ...SECTOR_ETFS.map((s) => s.symbol)];
-      const closesMap: Record<string, number[]> = {};
-      await Promise.all(symbols.map(async (sym) => {
-        closesMap[sym] = twelveDataKey ? await tdDailyCloses(sym, twelveDataKey, 252) : loadCloses(sym);
-      }));
+      // Sequential fetches (not concurrent) — TwelveData free tier rejects bursts of
+      // parallel requests; 12 at once reliably drops the later symbols to empty.
+      const closesMap: Record<string, number[]> = twelveDataKey
+        ? await fetchClosesChunked(symbols, twelveDataKey, 252, 6, 1500)
+        : Object.fromEntries(symbols.map((sym) => [sym, loadCloses(sym)]));
 
       if (cancelled) return;
 
