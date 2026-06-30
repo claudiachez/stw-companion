@@ -145,8 +145,9 @@ export const handler: Handler = async (event) => {
   const serviceKey   = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
   const anthropicKey = process.env.ANTHROPIC_API_KEY ?? '';
 
-  if (!supabaseUrl || !serviceKey) return err(500, 'Server config error');
-  if (!anthropicKey) return err(500, 'AI service not configured');
+  if (!supabaseUrl) return err(500, 'Server config error: VITE_SUPABASE_URL (or SUPABASE_URL) not set on this Netlify site');
+  if (!serviceKey) return err(500, 'Server config error: SUPABASE_SERVICE_ROLE_KEY not set on this Netlify site');
+  if (!anthropicKey) return err(500, 'AI service not configured: ANTHROPIC_API_KEY not set on this Netlify site');
 
   const supabase = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
 
