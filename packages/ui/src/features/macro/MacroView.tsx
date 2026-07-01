@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useRef } from 'react';
+import { useMemo } from 'react';
 import {
   environmentScore, regimeBand, trendSleeveScore, trendSleeveLabel, trendSubScore, gexScore,
   gexBiasLabel, stressLabel, creditLabel, ratesDollarLabel, regimeDirectionLabel,
@@ -70,7 +70,7 @@ export function MacroView() {
   const stressRising = (volatility?.vixDelta5 ?? 0) > 0.5 || credit?.aboveMa50 === false;
   const { data: rates, loading: ratesLoading } = useRatesDollar(twelveDataKey, stressRising);
   const { score, loading: sentLoading } = useSentimentGauge(finnhubKey, twelveDataKey);
-  const { recap, recapDate, recapSession, loading: recapLoading, error: recapError, loaded: recapLoaded, generate } = useDailyRecap();
+  const { recap, recapDate, recapSession, loading: recapLoading, error: recapError, generate } = useDailyRecap();
   const { read: eventsRead, loading: eventsLoading, error: eventsError, warning: eventsWarning } = useMacroEvents();
   const { rows: sectorRows, loading: sectorLoading, asOf: sectorAsOf, constituents: sectorConstituents, constituentsLoading: sectorConstituentsLoading } = useSectorRotation(twelveDataKey);
 
@@ -152,15 +152,8 @@ export function MacroView() {
   // Auto-generate today's PM recap on first load once the sleeves have settled.
   // Only fires if there's no recap for TODAY yet (date check). Subscribers just
   // wait for the cross-device row to come back; only the editor auto-triggers it.
-  const autoTriedRef = useRef(false);
-  useEffect(() => {
-    if (!canEdit || autoTriedRef.current || recapLoading || !recapLoaded || !regime || !dataReady) return;
-    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-    if (recapDate === today) return; // today's note already exists (any session)
-    autoTriedRef.current = true;
-    handleRefreshRecap(undefined, 'pm');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canEdit, dataReady, regime, recapDate, recapLoading, recapLoaded]);
+  // No auto-generate for daily recaps — the AM and PM scheduled Netlify functions
+  // own generation. Admin uses the Regenerate button for intentional rewrites only.
 
   return (
     // Layout's <main> is overflow:hidden inside a 100dvh shell — this view owns its scroll.
