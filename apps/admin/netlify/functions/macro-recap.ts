@@ -16,7 +16,6 @@
  *   MACRO_RECAP_MODEL  (defaults to claude-sonnet-4-6, then claude-haiku-4-5-20251001)
  */
 import type { Handler } from '@netlify/functions';
-import { isoWeekKey } from '@stw/shared';
 
 // Decode the Supabase JWT locally — avoids a round-trip to /auth/v1/user and
 // the API-key mismatch (service role key is rejected as apikey on that endpoint).
@@ -65,6 +64,7 @@ interface RecapRequest {
   };
   eventRisk?: { level: string; event: string; time: string; consensus?: string; previous?: string; overlay?: string } | null;
   note?: string;
+  session?: 'am' | 'pm';
 }
 
 function moduleLine(name: string, m: RecapModule | undefined): string {
@@ -85,9 +85,12 @@ function levelLine(name: string, ls: LevelSet | null | undefined): string {
   return parts ? `  ${name}: ${parts}` : '';
 }
 
-function buildPrompt(body: RecapRequest): string {
+function buildPrompt(body: RecapRequest, session: 'am' | 'pm' = 'pm'): string {
   const { regime, modules, context, eventRisk } = body;
   const ctx = context ?? {};
+  const sessionFrame = session === 'am'
+    ? 'PRE-MARKET note for active traders — what to watch and how to think about TODAY\'s session before the open. Frame as "what to watch today" and "how to set up", not a recap.'
+    : 'POST-MARKET recap for active traders — what happened today and what it means for TOMORROW\'s setup. Frame as "what happened" and "what to set up for tomorrow".';
 
   const indicatorLines = (ctx.indicators ?? [])
     .map((i) => `- ${i.symbol} (${i.name}): ${i.bucket ?? 'n/a'}${i.chgPct != null ? `, ${i.chgPct >= 0 ? '+' : ''}${i.chgPct.toFixed(2)}% on the day` : ''}`)
@@ -115,7 +118,7 @@ function buildPrompt(body: RecapRequest): string {
     ? `\nEDITOR GUIDANCE FOR THIS REWRITE: "${body.note.trim()}"\nWeave this angle/focus into the note while still obeying the grounding rules below — never let it justify inventing a figure you weren't given.\n`
     : '';
 
-  return `You are a sharp markets strategist writing a WEEK-CLOSE note plus NEXT-WEEK expectations for active traders. Write in the voice of a desk strategist: confident, specific, and narrative — short punchy paragraphs, not bullet dumps.
+  return `You are a sharp markets strategist writing a ${sessionFrame} Write in the voice of a desk strategist: confident, specific, and narrative — short punchy paragraphs, not bullet dumps.
 ${noteBlock}
 CRITICAL GROUNDING RULES:
 - Use ONLY the data provided below. Do NOT invent specific figures (dollar flows, exact streak counts, sector names, fund names) you were not given.
@@ -140,12 +143,12 @@ ${gexBlock}
 ${eventLine}
 
 Respond with ONLY a JSON object (no markdown fences) with exactly these fields:
-- headline: a punchy one-line hook capturing the week's defining theme/contradiction
-- verdict: 2-4 short paragraphs (separate with \\n\\n) — the weekly read: what happened beneath the surface, what's driving it
-- bigStory: 1-2 paragraphs on the single dominant theme of the week (e.g. rotation, dealer positioning, a regime shift)
-- scenarios: an object { "bull": "...", "base": "...", "bear": "..." } — one tight sentence each for the week ahead
-- playbook: 1-2 paragraphs on next-week expectations and how to position
-- watching: one line naming the key levels to watch (use the GEX levels above), e.g. "Watch 7,435 above and 7,339 below."
+- headline: a punchy one-line hook capturing today's defining theme
+- verdict: 2-3 short paragraphs (separate with \\n\\n) — the read: what's happening beneath the surface, what's driving it
+- bigStory: 1 paragraph on the single dominant theme of the session
+- scenarios: an object { "bull": "...", "base": "...", "bear": "..." } — one tight sentence each for the ${session === 'am' ? 'current session' : 'next session'}
+- playbook: 1-2 paragraphs on ${session === 'am' ? 'how to approach today — what setups, what to avoid' : 'next-day setup — what followed through, how to position overnight'}
+- watching: one line naming the key levels${session === 'am' ? ' that decide today\'s tone' : ' for tomorrow'}, e.g. "Watch 5,435 above and 5,339 below."
 - tradingMode: a short action label consistent with the regime ("Risk-On", "Selective", "Defensive", "Risk-Off")
 - finalWord: a short, memorable closing line`;
 }
@@ -198,7 +201,8 @@ async function _handler(event: Parameters<Handler>[0]): ReturnType<Handler> {
     return err(400, 'Invalid request body');
   }
 
-  const prompt = buildPrompt(body);
+  const session: 'am' | 'pm' = body.session === 'am' ? 'am' : 'pm';
+  const prompt = buildPrompt(body, session);
 
   const models = [...new Set([
     process.env.MACRO_RECAP_MODEL || 'claude-sonnet-4-6',
@@ -214,13 +218,14 @@ async function _handler(event: Parameters<Handler>[0]): ReturnType<Handler> {
         if (!m) return err(500, 'Could not parse AI response');
         const recap = JSON.parse(m[0]);
         const generatedAt = new Date().toISOString();
-        const upsertError = await sbUpsert(supabaseUrl, serviceKey, 'macro_weekly_recaps', {
-          week_key: isoWeekKey(),
+        const date = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+        const upsertError = await sbUpsert(supabaseUrl, serviceKey, 'macro_daily_recaps', {
+          date,
+          session,
           recap,
-          admin_note: body.note?.trim() || null,
           model,
           generated_at: generatedAt,
-        }, 'week_key');
+        }, 'date,session');
         if (upsertError) console.error('macro-recap: failed to persist recap:', upsertError);
         return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...recap, generatedAt }) };
       }

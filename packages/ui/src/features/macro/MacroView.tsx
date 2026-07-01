@@ -12,7 +12,7 @@ import { useSentimentGauge } from './useSentimentGauge';
 import { useVolatilityStress } from './useVolatilityStress';
 import { useCreditLiquidity } from './useCreditLiquidity';
 import { useRatesDollar } from './useRatesDollar';
-import { useWeeklyRecap } from './useWeeklyRecap';
+import { useDailyRecap } from './useDailyRecap';
 import { useSectorRotation } from './useSectorRotation';
 import { useMacroPrefs } from './useMacroPrefs';
 import { useMacroTrendHistory } from './useMacroTrendHistory';
@@ -42,7 +42,7 @@ const HELP = {
   rates: 'Are macro headwinds building? Rising 10-year yields and a strengthening dollar pressure growth and speculative stocks. Key nuance: yields falling while stress rises is a flight to safety, not a growth tailwind.',
   gex: "STW Graddox's options-positioning read (dealer gamma exposure) — Bullish / Flat / Conflicted / Bearish, with key SPY and QQQ levels. A tactical overlay: it helps time entries and spot pivots, but doesn't set the whole macro picture on its own.",
   riskAppetite: 'How much fear vs greed is priced right now (0 = extreme fear, 100 = extreme greed). A different question from the regime: the regime is what the environment IS; this is how emotional the tape is. Built from momentum, VIX, IV premium, tail risk, GEX, credit and breadth.',
-  recap: 'An AI summary that turns all the module scores into a plain-English read plus a suggested trading mode. Generates automatically and refreshes weekly.',
+  recap: 'An AI note that turns all the module scores into a plain-English read plus a suggested trading mode. Auto-generates twice daily: a pre-market note at 8am ET and a post-market recap at 4:30pm ET.',
   eventRisk: "What scheduled macro events (CPI, FOMC, jobs, etc.) could change the setup in the next 1-2 days. This is a temporary OVERLAY, not a permanent change to the regime score — it fades a few trading days after the print unless the structure actually shifted. MVP data source: MarketWatch's economic calendar; cross-check FXStreet for confirmation.",
   sectorRotation: "Where money is rotating across the 11 SPDR sectors, ranked #1 (leading) to #11 (lagging) by structure + 1-month RS. Structure = the same 9/21/200-day trend bucketing used in the Trend module; the radar plots each sector's RS vs SPY (percentage points) across Week/1M/3M/6M/1Y. Leaders/Setting Up below each radar are names from that sector with confirmed bullish structure (Leaders) or turning positive on 1M RS (Setting Up) — useful context for understanding where the sector is headed.",
 };
@@ -70,7 +70,7 @@ export function MacroView() {
   const stressRising = (volatility?.vixDelta5 ?? 0) > 0.5 || credit?.aboveMa50 === false;
   const { data: rates, loading: ratesLoading } = useRatesDollar(twelveDataKey, stressRising);
   const { score, loading: sentLoading } = useSentimentGauge(finnhubKey, twelveDataKey);
-  const { recap, loading: recapLoading, error: recapError, loaded: recapLoaded, generate } = useWeeklyRecap();
+  const { recap, recapDate, recapSession, loading: recapLoading, error: recapError, loaded: recapLoaded, generate } = useDailyRecap();
   const { read: eventsRead, loading: eventsLoading, error: eventsError, warning: eventsWarning } = useMacroEvents();
   const { rows: sectorRows, loading: sectorLoading, asOf: sectorAsOf, constituents: sectorConstituents, constituentsLoading: sectorConstituentsLoading } = useSectorRotation(twelveDataKey);
 
@@ -125,7 +125,7 @@ export function MacroView() {
 
   const updatedAt = useMemo(() => (indLoading ? null : new Date()), [indLoading]);
 
-  function handleRefreshRecap(note?: string) {
+  function handleRefreshRecap(note?: string, session?: 'am' | 'pm') {
     if (!regime) return;
     generate({
       regime: { score: regime.score, label: regime.label, tradingMode: regime.tradingMode, fiveDayDelta: trendHistory.deltas.regime.fiveDayDelta },
@@ -146,22 +146,21 @@ export function MacroView() {
         gex: graddox ? { bias: graddox.bias, biasNote: graddox.bias_note, lastUpdated: graddox.last_updated, spx: graddox.spx, qqq: graddox.qqq } : null,
       },
       eventRisk: null,
-    }, note);
+    }, note, session);
   }
 
-  // Auto-generate the recap on first load once the sleeves have settled — no
-  // manual Refresh needed (cached per ISO week, so this fires at most once/week).
-  // Regeneration is a real, costly Anthropic call and writes the shared cross-device
-  // recap, so only the editor triggers it — subscribers just wait for the cross-device
-  // row (recapLoaded) to come back. Also wait for recapLoaded so we don't regenerate
-  // before knowing this week's recap already exists.
+  // Auto-generate today's PM recap on first load once the sleeves have settled.
+  // Only fires if there's no recap for TODAY yet (date check). Subscribers just
+  // wait for the cross-device row to come back; only the editor auto-triggers it.
   const autoTriedRef = useRef(false);
   useEffect(() => {
-    if (!canEdit || autoTriedRef.current || recap || recapLoading || !recapLoaded || !regime || !dataReady) return;
+    if (!canEdit || autoTriedRef.current || recapLoading || !recapLoaded || !regime || !dataReady) return;
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    if (recapDate === today) return; // today's note already exists (any session)
     autoTriedRef.current = true;
-    handleRefreshRecap();
+    handleRefreshRecap(undefined, 'pm');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canEdit, dataReady, regime, recap, recapLoading, recapLoaded]);
+  }, [canEdit, dataReady, regime, recapDate, recapLoading, recapLoaded]);
 
   return (
     // Layout's <main> is overflow:hidden inside a 100dvh shell — this view owns its scroll.
@@ -260,6 +259,8 @@ export function MacroView() {
         <ModuleHeader title="Market Recap" help={HELP.recap} />
         <MacroRecapCard
           recap={recap}
+          recapDate={recapDate}
+          recapSession={recapSession}
           loading={recapLoading}
           error={recapError}
           canEdit={canEdit}

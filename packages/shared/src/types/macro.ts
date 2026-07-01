@@ -117,6 +117,32 @@ export interface SentimentScore {
 }
 
 // ── Module 10: AI Recap / Trading Mode ──────────────────────────────
+export type RecapSession = 'am' | 'pm';
+
+/** A daily market note — pre-market (am) or post-market (pm). */
+export interface MacroDailyRecap {
+  /** Punchy hook line capturing today's defining theme. */
+  headline: string;
+  /** Main narrative — 2–3 paragraphs separated by blank lines. */
+  verdict: string;
+  /** The dominant story / rotation / setup. */
+  bigStory: string;
+  /** Bull / base / bear reads for the session or next day ahead. */
+  scenarios: { bull: string; base: string; bear: string };
+  /** Actionable game plan — levels to watch, setups in play. */
+  playbook: string;
+  /** Key levels one-liner, e.g. "Watch 5,435 above and 5,339 below." */
+  watching: string;
+  /** Selective / Defensive / Risk-On … keyed off the regime band. */
+  tradingMode: string;
+  /** Closing punch line. */
+  finalWord: string;
+  /** 'am' | 'pm' — which session generated this note. */
+  session?: RecapSession;
+  /** ISO timestamp this recap was generated. */
+  generatedAt?: string | null;
+}
+
 // A full week-close note + next-week expectations, grounded ONLY in the data
 // passed to the generator (no fabricated figures).
 export interface MacroRecap {

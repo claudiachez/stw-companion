@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { trendBucket, relativeStrength, RS_LOOKBACKS, SECTOR_ETFS, SECTOR_CONSTITUENTS, rankSectorConstituents } from '@stw/shared';
 import type { SectorRotationRow } from '@stw/shared';
-import { loadCloses, loadLastDate, sma, fetchClosesChunked } from './maCache';
+import { loadCloses, loadLastDate, sma, tdBatchCloses, fetchClosesChunked } from './maCache';
 
 export interface SectorConstituents {
   leaders: SectorRotationRow[];
@@ -49,10 +49,10 @@ export function useSectorRotation(twelveDataKey?: string) {
 
     async function fetchAll() {
       const symbols = ['SPY', ...SECTOR_ETFS.map((s) => s.symbol)];
-      // Sequential fetches (not concurrent) — TwelveData free tier rejects bursts of
-      // parallel requests; 12 at once reliably drops the later symbols to empty.
+      // One batched TwelveData call for all 12 ETFs — avoids the 8-req/min rate
+      // limit that sequential or parallel per-symbol calls hit on the free tier.
       const closesMap: Record<string, number[]> = twelveDataKey
-        ? await fetchClosesChunked(symbols, twelveDataKey, 252, 6, 1500)
+        ? await tdBatchCloses(symbols, twelveDataKey, 252)
         : Object.fromEntries(symbols.map((sym) => [sym, loadCloses(sym)]));
 
       if (cancelled) return;

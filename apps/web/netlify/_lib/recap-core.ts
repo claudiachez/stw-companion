@@ -10,7 +10,6 @@ import {
   us10yScore, uupScore, ratesDollarScore, ratesDollarLabel,
   gexScore, gexBiasLabel,
   environmentScore, regimeBand,
-  isoWeekKey,
 } from '@stw/shared';
 
 // ── Supabase REST helpers (no supabase-js — it throws on Node 20 due to Realtime WebSocket) ──
@@ -55,7 +54,12 @@ async function fetchCloses(symbol: string, apiKey: string): Promise<number[]> {
   return data.values.reverse().map((v) => parseFloat(v.close)).filter((v) => !isNaN(v));
 }
 
-// ── Prompt builder ────────────────────────────────────────────────────────────
+/** Today's date in ET as YYYY-MM-DD (used as the daily recap key). */
+function todayEt(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD
+}
+
+// ── Prompt builders ────────────────────────────────────────────────────────────
 
 interface RecapModule { score: number | null; label: string }
 interface LevelSet { resistance: number | null; gex1: number | null; put_support: number | null }
@@ -83,10 +87,10 @@ function levelLine(name: string, ls: LevelSet | null): string {
   return parts ? `  ${name}: ${parts}` : '';
 }
 
-function buildPrompt(body: RecapBody): string {
+function buildAmPrompt(body: RecapBody): string {
   const { regime, modules, context } = body;
   const indicatorLines = context.indicators
-    .map((i) => `- ${i.symbol} (${i.name}): ${i.bucket ?? 'n/a'}${i.chgPct != null ? `, ${i.chgPct >= 0 ? '+' : ''}${i.chgPct.toFixed(2)}% on the day` : ''}`)
+    .map((i) => `- ${i.symbol} (${i.name}): ${i.bucket ?? 'n/a'}${i.chgPct != null ? `, ${i.chgPct >= 0 ? '+' : ''}${i.chgPct.toFixed(2)}% yesterday` : ''}`)
     .join('\n');
   const gex = context.gex;
   const gexBlock = gex ? [
@@ -96,13 +100,14 @@ function buildPrompt(body: RecapBody): string {
     levelLine('QQQ levels', gex.qqq),
   ].filter(Boolean).join('\n') : 'GEX: n/a';
 
-  return `You are a sharp markets strategist writing a WEEK-CLOSE note plus NEXT-WEEK expectations for active traders. Write in the voice of a desk strategist: confident, specific, and narrative — short punchy paragraphs, not bullet dumps.
+  return `You are a sharp markets strategist writing a PRE-MARKET note for active traders — what to watch and how to think about today's session before the open.
 
 CRITICAL GROUNDING RULES:
 - Use ONLY the data provided below. Do NOT invent specific figures (dollar flows, exact streak counts, sector names, fund names) you were not given.
-- You MAY interpret and tell a story (rotation, risk-on/off, where leadership sits) but every concrete number you cite must come from the data below.
+- You MAY interpret and tell a story but every concrete number you cite must come from the data below.
 - If the data is thin, write a shorter note rather than padding with invented detail.
 - Quote price levels exactly as given (SPX/QQQ levels are in index points).
+- This is a MORNING note — frame it as "what to watch today" and "how to set up", not a recap of what happened.
 
 DATA
 Market Regime: ${regime.score ?? 'n/a'}/100 — ${regime.label}. Trading-mode guidance: ${regime.tradingMode}.
@@ -116,22 +121,67 @@ Index structure (vs 9/21/200-day MAs):
 ${indicatorLines || '- n/a'}
 VIX ${context.volatility.vix ?? 'n/a'}
 ${gexBlock}
-No major scheduled event risk noted.
 
 Respond with ONLY a JSON object (no markdown fences) with exactly these fields:
-- headline: a punchy one-line hook capturing the week's defining theme/contradiction
-- verdict: 2-4 short paragraphs (separate with \\n\\n) — the weekly read: what happened beneath the surface, what's driving it
-- bigStory: 1-2 paragraphs on the single dominant theme of the week (e.g. rotation, dealer positioning, a regime shift)
-- scenarios: an object { "bull": "...", "base": "...", "bear": "..." } — one tight sentence each for the week ahead
-- playbook: 1-2 paragraphs on next-week expectations and how to position
-- watching: one line naming the key levels to watch (use the GEX levels above), e.g. "Watch 7,435 above and 7,339 below."
+- headline: a punchy one-line hook for today's pre-market setup / theme to watch
+- verdict: 2-3 short paragraphs (separate with \\n\\n) — the morning read: what the structure is telling you heading into the session
+- bigStory: 1 paragraph on the single most important thing to watch or understand for today
+- scenarios: an object { "bull": "...", "base": "...", "bear": "..." } — one tight sentence each for TODAY's session
+- playbook: 1-2 paragraphs on how to approach today — what setups, what to avoid, when to act
+- watching: one line naming the key levels that decide today's tone, e.g. "Hold above 5,435 = bulls in control; lose it and 5,339 is next."
+- tradingMode: a short action label consistent with the regime ("Risk-On", "Selective", "Defensive", "Risk-Off")
+- finalWord: a short, memorable line to carry into the session`;
+}
+
+function buildPmPrompt(body: RecapBody): string {
+  const { regime, modules, context } = body;
+  const indicatorLines = context.indicators
+    .map((i) => `- ${i.symbol} (${i.name}): ${i.bucket ?? 'n/a'}${i.chgPct != null ? `, ${i.chgPct >= 0 ? '+' : ''}${i.chgPct.toFixed(2)}% on the day` : ''}`)
+    .join('\n');
+  const gex = context.gex;
+  const gexBlock = gex ? [
+    `GEX bias: ${gex.bias || 'n/a'}`,
+    gex.biasNote ? `GEX note (from the desk): "${gex.biasNote}"` : '',
+    levelLine('SPX levels', gex.spx),
+    levelLine('QQQ levels', gex.qqq),
+  ].filter(Boolean).join('\n') : 'GEX: n/a';
+
+  return `You are a sharp markets strategist writing a POST-MARKET recap for active traders — what happened today and what it means for tomorrow's setup.
+
+CRITICAL GROUNDING RULES:
+- Use ONLY the data provided below. Do NOT invent specific figures (dollar flows, exact streak counts, sector names, fund names) you were not given.
+- You MAY interpret and tell a story but every concrete number you cite must come from the data below.
+- If the data is thin, write a shorter note rather than padding with invented detail.
+- Quote price levels exactly as given (SPX/QQQ levels are in index points).
+- This is an EVENING note — frame it as "what happened" and "what to set up for tomorrow".
+
+DATA
+Market Regime: ${regime.score ?? 'n/a'}/100 — ${regime.label}. Trading-mode guidance: ${regime.tradingMode}.
+Module scores (0-100, higher = more risk-on / less stress):
+${moduleLine('Trend / Structure', modules.trend)}
+${moduleLine('Volatility / Stress', modules.volatility)}
+${moduleLine('Credit / Liquidity', modules.credit)}
+${moduleLine('Rates + Dollar', modules.ratesDollar)}
+${moduleLine('GEX / Positioning', modules.gex)}
+Index structure (vs 9/21/200-day MAs):
+${indicatorLines || '- n/a'}
+VIX ${context.volatility.vix ?? 'n/a'}
+${gexBlock}
+
+Respond with ONLY a JSON object (no markdown fences) with exactly these fields:
+- headline: a punchy one-line hook capturing today's defining theme or move
+- verdict: 2-3 short paragraphs (separate with \\n\\n) — what happened beneath the surface, what's driving it
+- bigStory: 1 paragraph on the single dominant theme of the session (rotation, VIX move, dealer positioning, etc.)
+- scenarios: an object { "bull": "...", "base": "...", "bear": "..." } — one tight sentence each for TOMORROW's session
+- playbook: 1-2 paragraphs on the next-day setup — what followed through, what failed, how to position overnight
+- watching: one line naming the key levels for tomorrow, e.g. "Watch 5,435 above and 5,339 below."
 - tradingMode: a short action label consistent with the regime ("Risk-On", "Selective", "Defensive", "Risk-Off")
 - finalWord: a short, memorable closing line`;
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-export async function generateWeeklyRecap(tag: string): Promise<void> {
+export async function generateDailyRecap(tag: string, session: 'am' | 'pm'): Promise<void> {
   const supabaseUrl  = process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? '';
   const serviceKey   = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
   const anthropicKey = process.env.ANTHROPIC_API_KEY ?? '';
@@ -142,19 +192,19 @@ export async function generateWeeklyRecap(tag: string): Promise<void> {
     return;
   }
 
-  const weekKey = isoWeekKey();
+  const date = todayEt();
 
-  // Idempotency — skip if this week's recap already exists.
-  const existing = await sbSelect<{ week_key: string }>(
-    supabaseUrl, serviceKey, 'macro_weekly_recaps', `select=week_key&week_key=eq.${weekKey}`,
+  // Idempotency — skip if today's session recap already exists.
+  const existing = await sbSelect<{ date: string }>(
+    supabaseUrl, serviceKey, 'macro_daily_recaps', `select=date&date=eq.${date}&session=eq.${session}`,
   );
   if (existing) {
-    console.log(`${tag}: recap for ${weekKey} already exists — skipping`);
+    console.log(`${tag}: recap for ${date}/${session} already exists — skipping`);
     return;
   }
 
   // Fetch TwelveData closes sequentially (free-tier rate limit).
-  console.log(`${tag}: fetching market data...`);
+  console.log(`${tag}: fetching market data for ${date} ${session}...`);
   const SYMBOLS = ['SPY', 'QQQ', 'VIX', 'HYG', 'TNX', 'UUP'];
   const closesMap: Record<string, number[]> = {};
   for (const sym of SYMBOLS) {
@@ -237,6 +287,8 @@ export async function generateWeeklyRecap(tag: string): Promise<void> {
     },
   };
 
+  const prompt = session === 'am' ? buildAmPrompt(body) : buildPmPrompt(body);
+
   const models = [...new Set([
     process.env.MACRO_RECAP_MODEL || 'claude-sonnet-4-6',
     'claude-haiku-4-5-20251001',
@@ -246,7 +298,7 @@ export async function generateWeeklyRecap(tag: string): Promise<void> {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model, max_tokens: 2500, messages: [{ role: 'user', content: buildPrompt(body) }] }),
+      body: JSON.stringify({ model, max_tokens: 2500, messages: [{ role: 'user', content: prompt }] }),
     });
 
     if (!res.ok) {
@@ -265,12 +317,12 @@ export async function generateWeeklyRecap(tag: string): Promise<void> {
     try { recap = JSON.parse(match[0]); } catch (e) { console.error(`${tag}: JSON parse error:`, e); return; }
 
     const generatedAt = new Date().toISOString();
-    const upsertError = await sbUpsert(supabaseUrl, serviceKey, 'macro_weekly_recaps', {
-      week_key: weekKey, recap, model, generated_at: generatedAt,
+    const upsertError = await sbUpsert(supabaseUrl, serviceKey, 'macro_daily_recaps', {
+      date, session, recap, model, generated_at: generatedAt,
     });
 
     if (upsertError) console.error(`${tag}: upsert failed:`, upsertError);
-    else console.log(`${tag}: recap for ${weekKey} generated (${model})`);
+    else console.log(`${tag}: ${session.toUpperCase()} recap for ${date} generated (${model})`);
     return;
   }
 

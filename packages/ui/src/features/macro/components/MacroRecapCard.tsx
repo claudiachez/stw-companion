@@ -1,13 +1,15 @@
 import { useState } from 'react';
-import type { MacroRecap } from '@stw/shared';
-import { fmtDateTime, formatDate, weekRange } from '@stw/shared';
+import type { MacroDailyRecap, RecapSession } from '@stw/shared';
+import { fmtDateTime } from '@stw/shared';
 
 interface Props {
-  recap: MacroRecap | null;
+  recap: MacroDailyRecap | null;
+  recapDate: string | null;
+  recapSession: RecapSession | null;
   loading: boolean;
   error: string | null;
   canEdit: boolean;
-  onRefresh: (note?: string) => void;
+  onRefresh: (note?: string, session?: RecapSession) => void;
 }
 
 function Paragraphs({ text, size = 14, color = 'var(--text)' }: { text?: string; size?: number; color?: string }) {
@@ -39,25 +41,49 @@ function ScenarioRow({ label, text, color }: { label: string; text?: string; col
   );
 }
 
-export function MacroRecapCard({ recap, loading, error, canEdit, onRefresh }: Props) {
+function sessionLabel(session: RecapSession | null): string {
+  if (session === 'am') return 'Pre-Market';
+  if (session === 'pm') return 'Post-Market';
+  return 'Market Note';
+}
+
+function formatRecapDate(dateStr: string | null): string {
+  if (!dateStr) return '';
+  // dateStr is YYYY-MM-DD ET — parse as local to avoid UTC midnight shift
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+export function MacroRecapCard({ recap, recapDate, recapSession, loading, error, canEdit, onRefresh }: Props) {
   const [note, setNote] = useState('');
+  const [editSession, setEditSession] = useState<RecapSession>('pm');
 
   return (
     <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
-      {loading && <div style={{ color: 'var(--t3)', fontSize: 12 }}>Writing this week's recap…</div>}
+      {loading && <div style={{ color: 'var(--t3)', fontSize: 12 }}>Writing today's {sessionLabel(editSession).toLowerCase()} note…</div>}
 
       {error && !loading && <div style={{ color: 'var(--c1)', fontSize: 12 }}>{error}</div>}
 
       {recap && !loading && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {recap.generatedAt && (() => {
-            const { start, end } = weekRange(new Date(recap.generatedAt!));
-            return (
-              <div style={{ fontSize: 10, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                Week of {formatDate(start)}–{formatDate(end)} · Generated: {fmtDateTime(recap.generatedAt)}
-              </div>
-            );
-          })()}
+          {/* Session badge + date */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{
+              fontSize: 10, fontWeight: 700, color: '#fff',
+              background: recapSession === 'am' ? 'var(--c3)' : 'var(--c4)',
+              borderRadius: 4, padding: '2px 7px', textTransform: 'uppercase', letterSpacing: '0.06em',
+            }}>
+              {sessionLabel(recapSession)}
+            </span>
+            {recapDate && (
+              <span style={{ fontSize: 11, color: 'var(--t3)' }}>
+                {formatRecapDate(recapDate)}
+                {recap.generatedAt ? ` · Generated: ${fmtDateTime(recap.generatedAt)}` : ''}
+              </span>
+            )}
+          </div>
+
           {recap.headline && (
             <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--text)', lineHeight: 1.4 }}>{recap.headline}</p>
           )}
@@ -75,7 +101,7 @@ export function MacroRecapCard({ recap, loading, error, canEdit, onRefresh }: Pr
 
           {recap.scenarios && (recap.scenarios.bull || recap.scenarios.base || recap.scenarios.bear) && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: '1px solid var(--bsub)', paddingTop: 12 }}>
-              <SubHeader>Week Ahead</SubHeader>
+              <SubHeader>{recapSession === 'am' ? "Today's Scenarios" : "Tomorrow's Scenarios"}</SubHeader>
               <ScenarioRow label="Bull" text={recap.scenarios.bull} color="var(--c5)" />
               <ScenarioRow label="Base" text={recap.scenarios.base} color="var(--c3)" />
               <ScenarioRow label="Bear" text={recap.scenarios.bear} color="var(--c1)" />
@@ -84,7 +110,7 @@ export function MacroRecapCard({ recap, loading, error, canEdit, onRefresh }: Pr
 
           {recap.playbook && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: '1px solid var(--bsub)', paddingTop: 12 }}>
-              <SubHeader>Next Week</SubHeader>
+              <SubHeader>{recapSession === 'am' ? "Today's Playbook" : "Next-Day Setup"}</SubHeader>
               <Paragraphs text={recap.playbook} size={13} color="var(--t2)" />
             </div>
           )}
@@ -109,23 +135,37 @@ export function MacroRecapCard({ recap, loading, error, canEdit, onRefresh }: Pr
       )}
 
       {!recap && !loading && !error && (
-        <div style={{ color: 'var(--t3)', fontSize: 12 }}>No recap for this week yet — check back after 4:30pm ET on a weekday.</div>
+        <div style={{ color: 'var(--t3)', fontSize: 12 }}>No note yet today — auto-generates at 8am and 4:30pm ET on weekdays.</div>
       )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 10, color: 'var(--t3)' }}>AI-generated weekly from the module scores + GEX read · refreshes weekly</span>
+        <span style={{ fontSize: 10, color: 'var(--t3)' }}>AI-generated from module scores + GEX · auto-updates twice daily</span>
         {canEdit && (
-          <button
-            onClick={() => onRefresh(note)}
-            disabled={loading}
-            style={{
-              fontSize: 11, padding: '3px 10px', borderRadius: 4, border: '1px solid var(--border)',
-              background: 'transparent', color: loading ? 'var(--t3)' : 'var(--t2)',
-              cursor: loading ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {loading ? 'Generating…' : 'Regenerate'}
-          </button>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <select
+              value={editSession}
+              onChange={(e) => setEditSession(e.target.value as RecapSession)}
+              disabled={loading}
+              style={{
+                fontSize: 11, padding: '3px 6px', borderRadius: 4, border: '1px solid var(--border)',
+                background: 'var(--s2)', color: 'var(--t2)', cursor: loading ? 'not-allowed' : 'pointer',
+              }}
+            >
+              <option value="am">AM</option>
+              <option value="pm">PM</option>
+            </select>
+            <button
+              onClick={() => onRefresh(note, editSession)}
+              disabled={loading}
+              style={{
+                fontSize: 11, padding: '3px 10px', borderRadius: 4, border: '1px solid var(--border)',
+                background: 'transparent', color: loading ? 'var(--t3)' : 'var(--t2)',
+                cursor: loading ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {loading ? 'Generating…' : 'Regenerate'}
+            </button>
+          </div>
         )}
       </div>
 
@@ -135,10 +175,11 @@ export function MacroRecapCard({ recap, loading, error, canEdit, onRefresh }: Pr
           value={note}
           onChange={(e) => setNote(e.target.value)}
           disabled={loading}
-          placeholder="Optional: steer the next rewrite, e.g. focus more on credit stress this week"
+          placeholder="Optional: steer the rewrite, e.g. focus more on credit stress"
           style={{
             width: '100%', marginTop: 8, fontSize: 12, padding: '6px 10px', borderRadius: 4,
             border: '1px solid var(--border)', background: 'var(--s2)', color: 'var(--text)',
+            boxSizing: 'border-box',
           }}
         />
       )}

@@ -72,6 +72,50 @@ function delay(ms: number): Promise<void> {
 }
 
 /**
+ * Fetch daily closes for multiple symbols in ONE TwelveData API call (comma-
+ * separated symbol list). One HTTP request avoids the 8-req/min rate-limit
+ * that chunks of parallel per-symbol calls hit. Already-cached symbols are
+ * served from localStorage without any network call.
+ */
+export async function tdBatchCloses(
+  symbols: string[],
+  key: string,
+  outputsize = 252,
+): Promise<Record<string, number[]>> {
+  const result: Record<string, number[]> = {};
+  const toFetch = symbols.filter((sym) => {
+    const cached = loadCloses(sym);
+    if (cached.length > 0 && cacheFresh(sym)) { result[sym] = cached; return false; }
+    return true;
+  });
+  if (toFetch.length === 0) return result;
+
+  try {
+    const symList = toFetch.join(',');
+    const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(symList)}&interval=1day&outputsize=${outputsize}&timezone=UTC&apikey=${key}`;
+    const data = await (await fetch(url)).json() as Record<string, unknown>;
+
+    for (const sym of toFetch) {
+      // Single-symbol responses come back as { status, values } directly;
+      // multi-symbol responses come back as { SYM: { status, values } }.
+      const d = (toFetch.length === 1 ? data : data[sym]) as Record<string, unknown> | undefined;
+      if (d?.status === 'ok' && Array.isArray(d.values)) {
+        const vals = d.values as Record<string, string>[];
+        const lastDate = vals[0]?.datetime ?? null;
+        const closes = [...vals].reverse().map((v) => parseFloat(v.close)).filter((v) => !isNaN(v));
+        saveCloses(sym, closes, lastDate);
+        result[sym] = closes;
+      } else {
+        result[sym] = loadCloses(sym); // stale cache fallback
+      }
+    }
+  } catch {
+    for (const sym of toFetch) result[sym] = loadCloses(sym);
+  }
+  return result;
+}
+
+/**
  * Daily closes for many symbols, fetched in small sequential chunks so a large
  * symbol list (e.g. sector constituents) doesn't blow through TwelveData's
  * free-tier rate limit the way one big Promise.all would. Already-cached
