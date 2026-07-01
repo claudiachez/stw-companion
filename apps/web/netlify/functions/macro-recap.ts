@@ -39,8 +39,9 @@ function jwtEmail(token: string): string | null {
   }
 }
 
-async function sbUpsert(url: string, serviceKey: string, table: string, row: Record<string, unknown>): Promise<string | null> {
-  const res = await fetch(`${url}/rest/v1/${table}`, {
+async function sbUpsert(url: string, serviceKey: string, table: string, row: Record<string, unknown>, onConflict?: string): Promise<string | null> {
+  const qs = onConflict ? `?on_conflict=${encodeURIComponent(onConflict)}` : '';
+  const res = await fetch(`${url.replace(/\/$/, '')}/rest/v1/${table}${qs}`, {
     method: 'POST',
     headers: {
       apikey: serviceKey,
@@ -229,7 +230,7 @@ export const handler: Handler = async (event) => {
           recap,
           model,
           generated_at: generatedAt,
-        });
+        }, 'date,session');
         if (upsertError) console.error('macro-recap: failed to persist recap:', upsertError);
         return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...recap, generatedAt }) };
       }

@@ -23,8 +23,9 @@ async function sbSelect<T>(url: string, serviceKey: string, table: string, query
   return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
 }
 
-async function sbUpsert(url: string, serviceKey: string, table: string, row: Record<string, unknown>): Promise<string | null> {
-  const res = await fetch(`${url.replace(/\/$/, '')}/rest/v1/${table}`, {
+async function sbUpsert(url: string, serviceKey: string, table: string, row: Record<string, unknown>, onConflict?: string): Promise<string | null> {
+  const qs = onConflict ? `?on_conflict=${encodeURIComponent(onConflict)}` : '';
+  const res = await fetch(`${url.replace(/\/$/, '')}/rest/v1/${table}${qs}`, {
     method: 'POST',
     headers: {
       apikey: serviceKey,
@@ -319,7 +320,7 @@ export async function generateDailyRecap(tag: string, session: 'am' | 'pm'): Pro
     const generatedAt = new Date().toISOString();
     const upsertError = await sbUpsert(supabaseUrl, serviceKey, 'macro_daily_recaps', {
       date, session, recap, model, generated_at: generatedAt,
-    });
+    }, 'date,session');
 
     if (upsertError) console.error(`${tag}: upsert failed:`, upsertError);
     else console.log(`${tag}: ${session.toUpperCase()} recap for ${date} generated (${model})`);
