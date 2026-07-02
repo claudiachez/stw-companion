@@ -1,12 +1,11 @@
 # STW Companion — Claude Code Guide
 
 > **⚠️ START HERE — branch.** **`staging` is the active trunk** — all feature work happens here.
-> As of **2026-06-23** `main` was brought **level with `staging`** (the event-sourcing migration plan
-> was completed and promoted) — but `staging` has since moved well ahead again (currently **72 commits**
-> ahead of `main`, all Macro Dashboard v2 work, **not yet promoted**). `staging` migrations run to
-> **049** (`048_macro_daily_snapshots`, `049_macro_weekly_recaps`); PROD/sandbox application of 048/049
-> was **not verified** as of 2026-06-29 (Supabase MCP access was unavailable that session) — confirm
-> before assuming either env has them. If migrations stop at 021 you are on a stale checkout, re-sync.
+> `staging` is **85+ commits ahead of `main`** (all Macro Dashboard v2 work + QA fixes, NOT yet on production).
+> Migrations run to **051** (`048_macro_daily_snapshots`, `049_macro_weekly_recaps`, `050_macro_snapshot_scores`,
+> `051_macro_daily_recaps`) — all verified applied on both PROD (`usmqbohcjcyszjxxvnqu`) and sandbox
+> (`uolabcgbnrkhzpwuvzlk`) as of 2026-07-02.
+> If migrations stop at 021 you are on a stale checkout, re-sync.
 > **First command every session:**
 > `git fetch origin && git checkout staging && git pull --ff-only`.
 > Feature branches cut from `staging`, PR to `staging`. `main` is promoted only by an approved
@@ -24,13 +23,13 @@
 
 ---
 
-## Current Status — Macro Dashboard v2 complete: all 11 modules built (handoff 2026-06-29)
+## Current Status — Macro Dashboard QA complete (handoff 2026-07-02)
 
-**NEXT SESSION = host is doing manual QA on the full Macro tab; expect to start with QA-driven bug
-fixes rather than the next roadmap item below.** The Macro tab's full v2 rebuild (spec:
-[`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md)) is now **feature-complete on
-`staging`** — all 11 modules, including the two that were previously deferred (P2 5D trend engine, P3
-Event Risk) and Sector Rotation, are built and merged. Read the spec first if extending any module.
+**NEXT SESSION = Macro tab QA is done. All known bugs fixed. Ready for the next roadmap item (see
+Next Steps) or production deploy approval.** The Macro tab's full v2 rebuild (spec:
+[`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md)) is now **feature-complete and
+QA-verified on `staging`** — all 11 modules, including the two that were previously deferred (P2 5D
+trend engine, P3 Event Risk) and Sector Rotation. Read the spec first if extending any module.
 
 **Architecture (the v2 fix):** the old single MA table mixed trend, stress, rates and positioning into
 one bucket. Now each module answers one question, and the **Market Regime is a weighted score**, not a
@@ -47,26 +46,27 @@ US10Y in Rates+Dollar. Pure scorers + 94 unit tests in `packages/shared/src/util
 - **Module 7 Rates + Dollar** (`RatesDollarCard.tsx`) — US10Y yield + UUP; flight-to-safety cross-check (falling yields during stress ≠ bullish).
 - **Module 8 GEX / Positioning** (`GexPositioningCard.tsx`) — Graddox bias score + **SPY (SPX÷10) and QQQ** levels + trigger/implication.
 - **Module 9 Risk Appetite** (`SentimentGauge.tsx`) — renamed from Sentiment; **`react-gauge-component`** library gauge; two-column (gauge ┃ breakdown); 7 inputs (Dollar dropped, Breadth added, percentile VVIX); each row shows its fear/greed word.
-- **Module 10 Recap** (`MacroRecapCard.tsx` + `macro-recap.ts`) — **full weekly week-close note** (headline · verdict · big story · bull/base/bear · next-week playbook · watching levels · final word), grounded ONLY in passed data (no fabricated figures), Sonnet→Haiku fallback, auto-generates. Now **persisted cross-device in Supabase** (`macro_weekly_recaps`, migration 049) — written only by the `macro-recap` function's service-role key, which hard-rejects regeneration from anyone but the editor; subscribers only ever read. **Web-only** (admin has no Netlify functions).
+- **Module 10 Recap** (`MacroRecapCard.tsx` + `macro-recap.ts`) — **daily market note**, updated twice per weekday: pre-market AM (8am ET, `macro-recap-am.ts`) and post-market PM (4:30pm ET, `macro-recap-pm.ts`). Headline · verdict · big story · bull/base/bear · playbook · watching levels · final word. Grounded ONLY in passed data (no fabricated figures), Sonnet→Haiku fallback. **Persisted cross-device in Supabase** (`macro_daily_recaps`, migration 051, keyed by `date + session`). Written only by the scheduled functions or the admin Regenerate button (editor-only gate, hard 403); subscribers only ever read. Admin site has a session selector (AM/PM) on the Regenerate button. Both web and admin have their own `macro-recap.ts` function (site-scoped). The old `macro_weekly_recaps` table (migration 049) remains in the DB but nothing writes to it — can be dropped later.
 - **Module 11 Sector Rotation** (`SectorRotationCard.tsx` + `useSectorRotation.ts`) — 11 SPDR sectors as per-sector cards, ranked leader-to-laggard by structure + 1M RS; each card has a `recharts` radar (RS vs SPY across Week/1M/3M/6M/1Y) plus "Leaders"/"Setting Up" chip rows (that sector's own constituents, not STW holdings). Built on `claude/sector-rotation-tooltips`, merged via **PR #61**.
-- **P2 — 5D trend engine** (`useMacroTrendHistory.ts`) — daily snapshots (now via `macro_daily_snapshots`, migration 048, written by the `macro-snapshot` scheduled function) drive the banner's 5D direction descriptor, the score-strip 5D deltas, and the gauge 5D delta.
+- **P2 — 5D trend engine** (`useMacroTrendHistory.ts`) — daily snapshots via `macro_daily_snapshots` (migration 048), written by the `macro-snapshot` Netlify scheduled function at 4:30pm ET weekdays. Drives the banner's 5D direction descriptor, score-strip 5D deltas, and gauge 5D delta. **Note: `macro-snapshot.ts` was broken (used `@supabase/supabase-js` which crashes Node 20) — fixed 2026-07-02; first real snapshot writes at 4:30pm ET that day.**
 - **P3 — Macro Event Risk** (`useMacroEvents.ts` + `macro-events` fn + `MacroEventRiskCard.tsx`) — CPI/PCE/FOMC/NFP overlay, wired into `MacroView.tsx`.
 - **Help**: every module header has a collapsible ⓘ (`ModuleHeader`) — tap to expand a "what/why/how" blurb; collapsed by default.
 
-**DB — migrations 048 + 049 added this arc** (`macro_daily_snapshots`, `macro_weekly_recaps` — both
-RLS read-only for `authenticated`, written only by their respective Netlify functions' service-role
-keys). **Application status on PROD and sandbox was NOT verified as of 2026-06-29** — Supabase MCP
-access was denied that session. Confirm both environments have 048/049 applied (check the tables exist)
-before relying on the recap/trend-history features working cross-device there.
+**DB — migrations 048–051 applied on both PROD and sandbox (verified 2026-07-02):**
+- `048_macro_daily_snapshots` — written by `macro-snapshot` scheduled fn (4:30pm ET weekdays)
+- `049_macro_weekly_recaps` — legacy, nothing writes to it now (replaced by 051)
+- `050_macro_snapshot_scores` — score columns on snapshots
+- `051_macro_daily_recaps` — written by `macro-recap-am/pm` scheduled fns + admin Regenerate; RLS read-only for `authenticated`
 
-**Netlify env vars (web site):** `ANTHROPIC_API_KEY` (already added, required for the recap).
-Optional `MACRO_RECAP_MODEL` to override the recap model (defaults Sonnet→Haiku).
+**Netlify env vars required:**
+- Web site: `ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL`, `VITE_TWELVEDATA_KEY`
+- Admin site: `ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL`
+- Optional: `MACRO_RECAP_MODEL` (overrides default claude-sonnet-4-6 → haiku fallback)
+- **All Netlify functions now use `.trim()` on env vars** to guard against pasted-key whitespace.
 
-**⏳ PENDING — production deploy:** `staging` is **72 commits ahead of `main`** (verified
-2026-06-29 via `git log --oneline origin/main..origin/staging`) — everything since the 2026-06-23
-event-sourcing promotion, including PRs #50–#61 and all Macro Dashboard v2 work, is staging-only,
-**NOT on production**. Promoting `staging → main` is the production deploy and needs **explicit
-approval**.
+**⏳ PENDING — production deploy:** `staging` is **85+ commits ahead of `main`** — everything since
+the 2026-06-23 event-sourcing promotion, including PRs #50–#63 and all Macro Dashboard v2 + QA work,
+is staging-only, **NOT on production**. Promoting `staging → main` needs **explicit approval**.
 
 **Event-sourcing migration plan is CLOSED (on `main` since 2026-06-23) — do not reopen.** The weight model,
 locked decisions, and Phase-5 routine semantics below remain authoritative reference.
@@ -197,12 +197,11 @@ run DDL locally — apply migrations via the Supabase SQL editor). Prod service 
 
 ## Next Steps
 
-0. **Host is doing manual QA on the Macro tab now (2026-06-29) — likely first task next session is
-   fixing whatever QA turns up**, ahead of any item below. Check for new instructions before starting
-   on the roadmap.
+0. **Remove the temporary diagnostic log** from `apps/admin/netlify/functions/macro-recap.ts` (line
+   that logs `key_tail` — added for debugging "Invalid API key", no longer needed). One-line delete, push to staging.
 
-1. **Promote `staging → main` when approved (production deploy).** `staging` is 72 commits ahead of
-   `main` (PRs #50–#61 + all Macro Dashboard v2 work, now feature-complete). Open a `staging → main`
+1. **Promote `staging → main` when approved (production deploy).** `staging` is 85+ commits ahead of
+   `main` (PRs #50–#63 + all Macro Dashboard v2 + QA work). Open a `staging → main`
    PR **only on explicit host approval**.
 
 2. **Macro Dashboard — remaining roadmap item (spec: [`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md)).**
@@ -464,16 +463,17 @@ subscriber function reads the subscriber's own account. Do not conflate them.
 
 ### Netlify Functions
 - **Anthropic:** use **direct `fetch()` to `https://api.anthropic.com/v1/messages`** — do NOT import `@anthropic-ai/sdk` (ESM/CJS bundling issues in the Netlify Node runtime → 502s). Pass `x-api-key`, `anthropic-version: 2023-06-01`, JSON body. See `apps/web/netlify/functions/macro-recap.ts`.
-- **Supabase JWT verify:** create the client with `createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })`. Without those options supabase-js tries to use browser session storage in the Node runtime and **throws** (this was the macro-recap "Auth check failed" bug). Match `ibkr-flex.ts`.
-- **Functions are web-only.** Only the **web** app deploys `netlify/functions`; the **admin** app has none. Any feature needing a serverless function (e.g. the macro recap, IBKR flex) works on web only — don't rely on it from admin.
+- **Supabase — NO `@supabase/supabase-js` in Netlify Functions.** `createClient` from supabase-js 2.100+ throws on Node 20 because the Realtime client tries to open a WebSocket at import time and crashes the function. Use **direct REST `fetch()`** for all Supabase reads/writes in functions — `GET /rest/v1/<table>?...` with `apikey` + `Authorization: Bearer <key>` headers. See `apps/web/netlify/_lib/recap-core.ts` for the pattern. This replaces the old guidance about `createClient` options.
+- **Env var whitespace:** always call `.trim()` on env vars read in functions — pasted keys/URLs sometimes carry a trailing newline that causes "Invalid API key" from Supabase even when the value looks correct in the Netlify UI.
+- **Both web and admin deploy functions.** Both `apps/web/netlify/functions/` and `apps/admin/netlify/functions/` are deployed by their respective Netlify sites. Functions that must work on both sites (e.g. `macro-recap.ts`) need a copy in each app — Netlify functions are site-scoped, not cross-domain callable.
 
 ### Macro data sources & module structure
 - **Finnhub** (`VITE_FINNHUB_KEY`): live quotes for stock symbols only. Free tier does NOT serve index symbols (`^VIX`, `^TNX`, etc.) — they return empty. For index indicators, fall back to TwelveData last daily close.
 - **TwelveData** (`VITE_TWELVEDATA_KEY`): daily OHLC for MA computation. Cache via `packages/ui/src/features/macro/maCache.ts` (`tdDailyCloses`, `loadCloses`, `loadLastDate`, `sma`), keyed `macro-ma-{symbol}` with `date` + `lastDate` (refresh once per day). Also the authoritative close source for VIX/US10Y/CBOE-TNX.
 - Without `VITE_TWELVEDATA_KEY`, MA/score cells degrade to `—` gracefully.
 - **Module structure (v2):** the Macro tab is **weighted module scores**, NOT a single MA table. The 9/21/200 MA table is **Trend only**; **VIX → Volatility/Stress**, **US10Y → Rates+Dollar** — never put stress/rates indicators in the trend table. Pure scorers live in `packages/shared/src/utils/macro.ts` (unit-tested); fetching lives in the per-module hooks. Every macro card shows a **source + data-age** footer (`SourceNote`); daily series show their latest close date (`loadLastDate`).
-- **Macro recap** (`macro-recap` fn): a weekly note grounded ONLY in the data passed to it — **never let it fabricate figures** (dollar flows, streak counts, sector/fund names) it wasn't given. Prefers Sonnet, falls back to Haiku; override with `MACRO_RECAP_MODEL`. **Persisted cross-device** in `public.macro_weekly_recaps` (migration 049, one row per ISO week) — the function writes with its service-role key and hard-rejects regeneration from anyone but the editor; the table's RLS grants read-only `SELECT` to `authenticated`, no client ever writes it directly.
-- **5D trend engine** (`useMacroTrendHistory.ts`): daily module/indicator-score snapshots, now persisted server-side in `public.macro_daily_snapshots` (migration 048, one row per weekday, written by the `macro-snapshot` scheduled Netlify function at 4:30pm ET) rather than per-browser localStorage — so the banner direction descriptor, score-strip deltas, and gauge delta are consistent across devices.
+- **Macro recap** (`macro-recap-am/pm` scheduled fns + `macro-recap.ts` manual fn): a **daily** note, two sessions per weekday (AM pre-market, PM post-market). Grounded ONLY in data passed to it — **never fabricate figures**. Prefers Sonnet, falls back to Haiku; override with `MACRO_RECAP_MODEL`. **Persisted cross-device** in `public.macro_daily_recaps` (migration 051, unique on `(date, session)`) — functions write with service-role key; RLS grants read-only `SELECT` to `authenticated`; admin-only Regenerate button with AM/PM selector. Scheduled: AM at 12:00 UTC (8am EDT), PM at 21:30 UTC (4:30pm EDT). Hook: `useDailyRecap.ts`.
+- **5D trend engine** (`useMacroTrendHistory.ts`): daily module/indicator-score snapshots persisted server-side in `public.macro_daily_snapshots` (migration 048, one row per weekday, written by the `macro-snapshot` scheduled Netlify function at 4:30pm ET). **`macro-snapshot.ts` was broken (imported `@supabase/supabase-js` which crashes Node 20) — fixed 2026-07-02 to use direct REST fetch. Table was empty until that fix deployed.** Banner direction descriptor, score-strip deltas, and gauge delta are consistent across devices once rows accumulate.
 - **Sector Rotation** (Module 11, `useSectorRotation.ts` + `SectorRotationCard.tsx`): per-sector radar cards (RS vs SPY across Week/1M/3M/6M/1Y via `recharts`) plus "Leaders"/"Setting Up" constituent chips, fetched via `fetchClosesChunked` in `maCache.ts` (small sequential chunks to respect TwelveData's free-tier rate limit for the larger constituent symbol list).
 
 ### Timestamps
