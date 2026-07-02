@@ -181,9 +181,9 @@ async function _handler(event: Parameters<Handler>[0]): ReturnType<Handler> {
   const authHeader = event.headers.authorization ?? event.headers.Authorization ?? '';
   const token = authHeader.replace(/^Bearer\s+/i, '');
 
-  const supabaseUrl  = process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? '';
-  const serviceKey   = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
-  const anthropicKey = process.env.ANTHROPIC_API_KEY ?? '';
+  const supabaseUrl  = (process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? '').trim();
+  const serviceKey   = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim();
+  const anthropicKey = (process.env.ANTHROPIC_API_KEY ?? '').trim();
 
   if (!supabaseUrl) return err(500, 'Server config error: VITE_SUPABASE_URL (or SUPABASE_URL) not set on this Netlify site');
   if (!serviceKey) return err(500, 'Server config error: SUPABASE_SERVICE_ROLE_KEY not set on this Netlify site');

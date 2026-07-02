@@ -183,10 +183,10 @@ Respond with ONLY a JSON object (no markdown fences) with exactly these fields:
 // ── Main export ───────────────────────────────────────────────────────────────
 
 export async function generateDailyRecap(tag: string, session: 'am' | 'pm'): Promise<void> {
-  const supabaseUrl  = process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? '';
-  const serviceKey   = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
-  const anthropicKey = process.env.ANTHROPIC_API_KEY ?? '';
-  const twelveKey    = process.env.VITE_TWELVEDATA_KEY ?? '';
+  const supabaseUrl  = (process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? '').trim();
+  const serviceKey   = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim();
+  const anthropicKey = (process.env.ANTHROPIC_API_KEY ?? '').trim();
+  const twelveKey    = (process.env.VITE_TWELVEDATA_KEY ?? '').trim();
 
   if (!supabaseUrl || !serviceKey || !anthropicKey || !twelveKey) {
     console.error(`${tag}: missing required env vars — aborting`);
