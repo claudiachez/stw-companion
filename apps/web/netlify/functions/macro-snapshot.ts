@@ -32,7 +32,6 @@
  */
 import type { Handler } from '@netlify/functions';
 import { schedule } from '@netlify/functions';
-import { createClient } from '@supabase/supabase-js';
 import {
   trendBucket, trendSleeveScore, environmentScore,
   vixScore, vvixScore, ivPremiumScore, vixDirectionScore, volatilityStressScore, percentileRank, hv30,
@@ -86,11 +85,36 @@ async function fetchEventRisk(): Promise<{ events: MacroEvent[]; source: string;
   }
 }
 
+async function sbGet<T>(url: string, key: string, table: string, query: string): Promise<T | null> {
+  try {
+    const res = await fetch(`${url.replace(/\/$/, '')}/rest/v1/${table}?${query}&limit=1`, {
+      headers: { apikey: key, Authorization: `Bearer ${key}`, Accept: 'application/json' },
+    });
+    if (!res.ok) return null;
+    const rows = await res.json() as T[];
+    return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  } catch { return null; }
+}
+
+async function sbUpsert(url: string, key: string, table: string, row: Record<string, unknown>, onConflict: string): Promise<string | null> {
+  const res = await fetch(`${url.replace(/\/$/, '')}/rest/v1/${table}?on_conflict=${encodeURIComponent(onConflict)}`, {
+    method: 'POST',
+    headers: {
+      apikey: key, Authorization: `Bearer ${key}`,
+      'Content-Type': 'application/json',
+      Prefer: 'resolution=merge-duplicates,return=minimal',
+    },
+    body: JSON.stringify(row),
+  });
+  if (!res.ok) return (await res.text()).slice(0, 200);
+  return null;
+}
+
 const handlerImpl: Handler = async () => {
-  const finnhubKey = process.env.VITE_FINNHUB_KEY ?? process.env.FINNHUB_KEY;
-  const twelveDataKey = process.env.VITE_TWELVEDATA_KEY ?? process.env.TWELVEDATA_KEY;
-  const supabaseUrl = process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const finnhubKey = (process.env.VITE_FINNHUB_KEY ?? process.env.FINNHUB_KEY ?? '').trim();
+  const twelveDataKey = (process.env.VITE_TWELVEDATA_KEY ?? process.env.TWELVEDATA_KEY ?? '').trim();
+  const supabaseUrl = (process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? '').trim();
+  const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim();
 
   if (!supabaseUrl || !serviceKey) {
     return { statusCode: 500, body: JSON.stringify({ error: 'Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY' }) };
@@ -98,8 +122,6 @@ const handlerImpl: Handler = async () => {
   if (!twelveDataKey) {
     return { statusCode: 500, body: JSON.stringify({ error: 'Missing TWELVEDATA_KEY' }) };
   }
-
-  const supabase = createClient(supabaseUrl, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } });
 
   // ── Module 4: Trend / Market Structure ──────────────────────────────
   const indicatorScores: Record<string, number | null> = {};
@@ -170,12 +192,10 @@ const handlerImpl: Handler = async () => {
   // ── Module 8: GEX (from Supabase signals, written by the morning routine) ──
   let gexBias: string | null = null;
   try {
-    const { data: trader } = await supabase.from('traders').select('id').eq('name', 'Graddox').single();
-    if (trader) {
-      const { data: signal } = await supabase
-        .from('signals').select('bias').eq('trader_id', (trader as { id: string }).id)
-        .order('date', { ascending: false }).limit(1).maybeSingle();
-      gexBias = (signal as { bias?: string } | null)?.bias ?? null;
+    const trader = await sbGet<{ id: string }>(supabaseUrl, serviceKey, 'traders', 'select=id&name=eq.Graddox');
+    if (trader?.id) {
+      const signal = await sbGet<{ bias: string }>(supabaseUrl, serviceKey, 'signals', `select=bias&trader_id=eq.${trader.id}&order=date.desc`);
+      gexBias = signal?.bias ?? null;
     }
   } catch { /* ignore — gexScore(null) below */ }
   const gexSc = gexScore(gexBias);
@@ -228,16 +248,16 @@ const handlerImpl: Handler = async () => {
     risk_appetite: riskAppetiteSc,
   };
 
-  const snapshotDate = new Date().toISOString().slice(0, 10);
-  const { error } = await supabase.from('macro_daily_snapshots').upsert({
+  const snapshotDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const upsertError = await sbUpsert(supabaseUrl, serviceKey, 'macro_daily_snapshots', {
     snapshot_date: snapshotDate,
     module_scores: moduleScores,
     indicator_scores: indicatorScores,
     event_risk: { overlay: eventRiskRead.overlay, riskLevel: eventRiskRead.riskLevel, source: eventRiskResp.source },
-  }, { onConflict: 'snapshot_date' });
+  }, 'snapshot_date');
 
-  if (error) {
-    return { statusCode: 500, body: JSON.stringify({ error: error.message }) };
+  if (upsertError) {
+    return { statusCode: 500, body: JSON.stringify({ error: upsertError }) };
   }
 
   return { statusCode: 200, body: JSON.stringify({ snapshotDate, moduleScores }) };
