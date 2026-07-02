@@ -185,6 +185,9 @@ async function _handler(event: Parameters<Handler>[0]): ReturnType<Handler> {
   const serviceKey   = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim();
   const anthropicKey = (process.env.ANTHROPIC_API_KEY ?? '').trim();
 
+  // Temporary diagnostic — logs which project + key suffix the function is actually using.
+  console.log(`macro-recap-admin: url=${supabaseUrl} key_len=${serviceKey.length} key_tail=${serviceKey.slice(-4)}`);
+
   if (!supabaseUrl) return err(500, 'Server config error: VITE_SUPABASE_URL (or SUPABASE_URL) not set on this Netlify site');
   if (!serviceKey) return err(500, 'Server config error: SUPABASE_SERVICE_ROLE_KEY not set on this Netlify site');
   if (!anthropicKey) return err(500, 'AI service not configured: ANTHROPIC_API_KEY not set on this Netlify site');
