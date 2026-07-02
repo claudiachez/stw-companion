@@ -227,7 +227,10 @@ async function _handler(event: Parameters<Handler>[0]): ReturnType<Handler> {
           model,
           generated_at: generatedAt,
         }, 'date,session');
-        if (upsertError) console.error('macro-recap: failed to persist recap:', upsertError);
+        if (upsertError) {
+          console.error('macro-recap: failed to persist recap:', upsertError);
+          return err(500, `Generated but failed to save: ${upsertError}`);
+        }
         return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...recap, generatedAt }) };
       }
       lastErr = { status: r.status, detail: r.detail };
