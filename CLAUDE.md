@@ -1,10 +1,11 @@
 # STW Companion — Claude Code Guide
 
 > **⚠️ START HERE — branch.** **`staging` is the active trunk** — all feature work happens here.
-> `staging` is **85+ commits ahead of `main`** (all Macro Dashboard v2 work + QA fixes, NOT yet on production).
-> Migrations run to **051** (`048_macro_daily_snapshots`, `049_macro_weekly_recaps`, `050_macro_snapshot_scores`,
-> `051_macro_daily_recaps`) — all verified applied on both PROD (`usmqbohcjcyszjxxvnqu`) and sandbox
-> (`uolabcgbnrkhzpwuvzlk`) as of 2026-07-02.
+> `staging` is **96 commits ahead of `main`** (all Macro Dashboard v2 work + QA fixes, NOT yet on production).
+> Migrations run to **051** (`048_macro_daily_snapshots`, `049_macro_weekly_recaps` [legacy],
+> `050_run_log_latest_view` [unrelated — GEX Signals "Checked: …" stamp], `051_macro_daily_recaps`) —
+> all verified applied on both PROD (`usmqbohcjcyszjxxvnqu`) and sandbox (`uolabcgbnrkhzpwuvzlk`) as of
+> 2026-07-02.
 > If migrations stop at 021 you are on a stale checkout, re-sync.
 > **First command every session:**
 > `git fetch origin && git checkout staging && git pull --ff-only`.
@@ -23,10 +24,16 @@
 
 ---
 
-## Current Status — Macro Dashboard QA complete (handoff 2026-07-02)
+## Current Status — Macro Dashboard QA complete (handoff 2026-07-02, evening update)
 
 **NEXT SESSION = Macro tab QA is done. All known bugs fixed. Ready for the next roadmap item (see
-Next Steps) or production deploy approval.** The Macro tab's full v2 rebuild (spec:
+Next Steps) or production deploy approval.** No app/repo code changed since the last handoff earlier
+today — a same-day follow-up session did **out-of-repo routine maintenance only** (no commits):
+fixed a dedup bug in the `stw-transcripts` routine (it edits Discord posts in place — see Data
+Ingestion section for the durable rule), processed the missed Episode 29 webinar, and added a
+verbatim portfolio-update archive step to `stw-friday-weighting`. None of this touched
+`packages/`/`apps/`/`supabase/migrations/` — see Data Ingestion below if picking this up, otherwise
+skip straight to Next Steps. The Macro tab's full v2 rebuild (spec:
 [`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md)) is now **feature-complete and
 QA-verified on `staging`** — all 11 modules, including the two that were previously deferred (P2 5D
 trend engine, P3 Event Risk) and Sector Rotation. Read the spec first if extending any module.
@@ -48,15 +55,25 @@ US10Y in Rates+Dollar. Pure scorers + 94 unit tests in `packages/shared/src/util
 - **Module 9 Risk Appetite** (`SentimentGauge.tsx`) — renamed from Sentiment; **`react-gauge-component`** library gauge; two-column (gauge ┃ breakdown); 7 inputs (Dollar dropped, Breadth added, percentile VVIX); each row shows its fear/greed word.
 - **Module 10 Recap** (`MacroRecapCard.tsx` + `macro-recap.ts`) — **daily market note**, updated twice per weekday: pre-market AM (8am ET, `macro-recap-am.ts`) and post-market PM (4:30pm ET, `macro-recap-pm.ts`). Headline · verdict · big story · bull/base/bear · playbook · watching levels · final word. Grounded ONLY in passed data (no fabricated figures), Sonnet→Haiku fallback. **Persisted cross-device in Supabase** (`macro_daily_recaps`, migration 051, keyed by `date + session`). Written only by the scheduled functions or the admin Regenerate button (editor-only gate, hard 403); subscribers only ever read. Admin site has a session selector (AM/PM) on the Regenerate button. Both web and admin have their own `macro-recap.ts` function (site-scoped). The old `macro_weekly_recaps` table (migration 049) remains in the DB but nothing writes to it — can be dropped later.
 - **Module 11 Sector Rotation** (`SectorRotationCard.tsx` + `useSectorRotation.ts`) — 11 SPDR sectors as per-sector cards, ranked leader-to-laggard by structure + 1M RS; each card has a `recharts` radar (RS vs SPY across Week/1M/3M/6M/1Y) plus "Leaders"/"Setting Up" chip rows (that sector's own constituents, not STW holdings). Built on `claude/sector-rotation-tooltips`, merged via **PR #61**.
-- **P2 — 5D trend engine** (`useMacroTrendHistory.ts`) — daily snapshots via `macro_daily_snapshots` (migration 048), written by the `macro-snapshot` Netlify scheduled function at 4:30pm ET weekdays. Drives the banner's 5D direction descriptor, score-strip 5D deltas, and gauge 5D delta. **Note: `macro-snapshot.ts` was broken (used `@supabase/supabase-js` which crashes Node 20) — fixed 2026-07-02; first real snapshot writes at 4:30pm ET that day.**
+- **P2 — 5D trend engine** (`useMacroTrendHistory.ts`) — daily snapshots via `macro_daily_snapshots` (migration 048), written by the `macro-snapshot` Netlify scheduled function at 4:30pm ET weekdays. Drives the banner's 5D direction descriptor, score-strip 5D deltas, and gauge 5D delta. **Note: `macro-snapshot.ts` was broken (used `@supabase/supabase-js` which crashes Node 20) — fixed 2026-07-02, but the table was still empty as of that evening — see the ⚠️ note in the DB section above; verify before trusting this module's 5D data.**
 - **P3 — Macro Event Risk** (`useMacroEvents.ts` + `macro-events` fn + `MacroEventRiskCard.tsx`) — CPI/PCE/FOMC/NFP overlay, wired into `MacroView.tsx`.
 - **Help**: every module header has a collapsible ⓘ (`ModuleHeader`) — tap to expand a "what/why/how" blurb; collapsed by default.
 
-**DB — migrations 048–051 applied on both PROD and sandbox (verified 2026-07-02):**
-- `048_macro_daily_snapshots` — written by `macro-snapshot` scheduled fn (4:30pm ET weekdays)
+**DB — migrations 048–051 applied on both PROD and sandbox (re-verified 2026-07-02):**
+- `048_macro_daily_snapshots` — written by `macro-snapshot` scheduled fn (4:30pm ET weekdays); table
+  includes its own `module_scores`/`indicator_scores` JSONB columns directly (no separate scores migration)
 - `049_macro_weekly_recaps` — legacy, nothing writes to it now (replaced by 051)
-- `050_macro_snapshot_scores` — score columns on snapshots
+- `050_run_log_latest_view` — **unrelated feature**: a subscriber-safe `run_log_latest` view (one row
+  per `run_type`) backing the GEX Signals "Checked: …" stamp. (Earlier handoffs called this
+  "050_macro_snapshot_scores" — that migration doesn't exist; this was a documentation error, now fixed.)
 - `051_macro_daily_recaps` — written by `macro-recap-am/pm` scheduled fns + admin Regenerate; RLS read-only for `authenticated`
+
+**⚠️ Unverified this session:** `macro_daily_snapshots` (048) was still **empty on PROD** as of
+2026-07-02 ~7:48pm ET, well after the 4:30pm ET scheduled run and after the `macro-snapshot.ts` fix
+(commit `3aa5528`) was pushed to `staging` earlier the same day. `macro_daily_recaps` (051) DID get a
+fresh PM row that day, confirming scheduled functions are firing on this branch/site — so either the
+snapshot function needs another scheduled cycle to prove out, or it's still failing silently. **Check
+`macro_daily_snapshots` for a row dated 2026-07-02 or later before trusting the 5D trend engine.**
 
 **Netlify env vars required:**
 - Web site: `ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL`, `VITE_TWELVEDATA_KEY`
@@ -64,7 +81,7 @@ US10Y in Rates+Dollar. Pure scorers + 94 unit tests in `packages/shared/src/util
 - Optional: `MACRO_RECAP_MODEL` (overrides default claude-sonnet-4-6 → haiku fallback)
 - **All Netlify functions now use `.trim()` on env vars** to guard against pasted-key whitespace.
 
-**⏳ PENDING — production deploy:** `staging` is **85+ commits ahead of `main`** — everything since
+**⏳ PENDING — production deploy:** `staging` is **96 commits ahead of `main`** — everything since
 the 2026-06-23 event-sourcing promotion, including PRs #50–#63 and all Macro Dashboard v2 + QA work,
 is staging-only, **NOT on production**. Promoting `staging → main` needs **explicit approval**.
 
@@ -199,32 +216,39 @@ run DDL locally — apply migrations via the Supabase SQL editor). Prod service 
 
 0. **Remove the temporary diagnostic log** from `apps/admin/netlify/functions/macro-recap.ts` (line
    that logs `key_tail` — added for debugging "Invalid API key", no longer needed). One-line delete, push to staging.
+   **Still not done as of 2026-07-02 evening** — checked and confirmed still present (line 189).
 
-1. **Promote `staging → main` when approved (production deploy).** `staging` is 85+ commits ahead of
+1. **Verify `macro_daily_snapshots` (migration 048) is actually populating** after the
+   `macro-snapshot.ts` fix (commit `3aa5528`). It was still empty on PROD as of 2026-07-02 ~7:48pm ET,
+   despite `macro_daily_recaps` getting a fresh PM row the same evening (proving scheduled functions
+   do fire on this site/branch). Check for a row dated 2026-07-02 or later; if still empty after another
+   weekday cycle, check the Netlify function logs for the `macro-snapshot` scheduled function.
+
+2. **Promote `staging → main` when approved (production deploy).** `staging` is 96 commits ahead of
    `main` (PRs #50–#63 + all Macro Dashboard v2 + QA work). Open a `staging → main`
    PR **only on explicit host approval**.
 
-2. **Macro Dashboard — remaining roadmap item (spec: [`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md)).**
+3. **Macro Dashboard — remaining roadmap item (spec: [`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md)).**
    All 11 modules (Regime Banner through Sector Rotation, plus the 5D trend engine and Event Risk) are
    built and on staging. The one item left from the spec:
    - **Portfolio Heatmap** — treemap block on `PortfolioDashboard`, box ∝ `current_weight`,
      Today/Total + By Basket/All toggles. Spec § "Phase 4: Portfolio Heatmap".
 
-3. **Overview/experience enrichment (host-requested, queued).** Stop the click-each-ticker experience:
+4. **Overview/experience enrichment (host-requested, queued).** Stop the click-each-ticker experience:
    - **Transcripts library tab** — a NEW subscriber-facing **episode recap** (host's *trading psychology* +
      that episode's *per-ticker commentary*). **NOT** the local methodology `.md` files (apps never read those).
      Needs a new `webinars` table written by `stw-transcripts` + a new tab.
    - **Global Activity Feed** — one cross-ticker, reverse-chron feed merging Commentary + Transactions across
      all holdings, filterable. No schema (reads `conviction_comments` + `leg_transactions`). Low-cost.
 
-4. **Phase 4 — admin Config + Manage area** — spec'd in
+5. **Phase 4 — admin Config + Manage area** — spec'd in
    [`plans/phase4_admin_manage.md`](plans/phase4_admin_manage.md). Config page edits `app_config`
    (`equity_options_default` / `options_short_long_default`); `useAppConfig` read hook in `@stw/ui`
    (note: `deriveLegWeights` has **no call sites** today, so app-side split-wiring is forward-looking).
    Manage area: **categories CRUD** (delete-guarded), **traders read-only**. One "Manage" nav entry,
    admin-local. No migrations expected. (Host was "gathering info" as of 2026-06-25 — confirm before building.)
 
-5. **Future features (not migration work):** **My Portfolio closed/realized transactions** — the subscriber
+6. **Future features (not migration work):** **My Portfolio closed/realized transactions** — the subscriber
    IBKR Flex query returns *open positions only*, so the tab can't show closed trades; needs a different IBKR
    query (trade-history/flex statement) + storage before a closed view is possible (host asked 2026-06-25).
    Also: inline 2-line leg editing in the modal (deferred); `$100k` notional + SPY benchmark (the `spy_daily`
@@ -401,6 +425,7 @@ documented here because the Supabase schema is the contract between it (writer) 
 - Writes to Supabase via `curl` to the REST API using the **service-role key** (from `~/Documents/Claude/Scheduled/.supabase-service-key`), bypassing RLS. Every write uses `Prefer: return=representation` and is verified — an empty `[]` body is treated as failure.
 - **High-water mark:** each routine first reads the newest `run_log.last_message_ts` for its channel, processes only messages newer than that, then writes a fresh `run_log` row. This makes every run idempotent — a message/recording/snapshot is processed exactly once, no matter which path fires. **Completeness is critical:** scroll Discord back to the *prior* mark and process EVERY message in the gap before advancing — the newest screenful loads first, so stopping early silently skips mid-gap messages while the mark moves past them (this dropped SYNA/TENB/GDYN on 6/26).
 - **Extract intent, not the surface verb.** The host **deliberately obfuscates alerts to fool copy-bots** (confirmed 2026-06-26): a disguised "buy / hang on / revisit" can be a real **Close** (tells: "tossed/stopped out", "rules are rules", "I often sell bottoms"), and he may **omit the ticker** (name only, e.g. "Agility Robotics SPAC" = $CCXI → research and resolve the symbol). Still never infer weights/conviction from sizing; flag genuinely ambiguous actions rather than guessing.
+- **Edited posts can defeat a naive high-water mark** (confirmed 2026-07-02, `stream-library-stw`): the host routinely **edits the same Discord message in place** to add new content (e.g. appending Episode 29 to the same post that already held Episodes 25–28), only posting a new message when he hits the character limit. Discord edits do **not** change a message's `id` or original `timestamp` — only `edited_timestamp` moves — so an ID/timestamp-only dedup check can silently treat a freshly-edited post as already processed. `stw-transcripts`' `SKILL.md` now checks for an "(edited)" marker and cross-references the post's stated episode number against `run_log.summary` before skipping; apply the same caution to any routine reading a channel where the host might behave the same way.
 
 **The four routines:**
 
