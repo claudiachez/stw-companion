@@ -1,6 +1,7 @@
 // ── Context ───────────────────────────────────────────────────
 export { AppCapabilitiesProvider, useCapabilities } from './context/AppCapabilities';
 export type { AppCapabilities } from './context/AppCapabilities';
+export type { IbkrOrderSpec, IbkrOrderResult } from './features/picks/ibkrOrder';
 
 // ── Lib (injected per-app) ────────────────────────────────────
 export { setSupabaseClient, getSupabase } from './lib/supabase';
@@ -24,6 +25,7 @@ export { useThemeStore } from './store/theme';
 // ── Hooks ─────────────────────────────────────────────────────
 export { useQuote, useLivePrice } from './hooks/useLivePrice';
 export { useIsMobile } from './hooks/useIsMobile';
+export { useAppConfig } from './hooks/useAppConfig';
 
 // ── Primitives ────────────────────────────────────────────────
 export { LoadingSpinner } from './primitives/LoadingSpinner';

@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   legUnrealizedPnlPct, legPnlPct, holdingPnlPct, holdingType,
   legMarkReason, fmtLegInstrument, computeRealizedPct, humanizeLegEnum, deriveLegWeights,
-  positionWeight, displayInitialWeight, closedPnlPct, hasClosedPnl, closedPnlContribution, type Leg,
+  positionWeight, displayInitialWeight, closedPnlPct, hasClosedPnl, closedPnlContribution,
+  suggestOrderQuantity, type Leg,
 } from './legs';
 
 // Minimal leg factory — only the fields the pure functions read.
@@ -237,5 +238,27 @@ describe('fmtLegInstrument', () => {
     expect(fmtLegInstrument(leg({ instrument_type: 'SHARES' }))).toBe('Common');
     expect(fmtLegInstrument(leg({ instrument_type: 'OPTION', option_strike: 30, option_right: 'CALL', option_expiry: '2026-09-18' }))).toBe("$30C Sep '26");
     expect(fmtLegInstrument(leg({ instrument_type: 'OPTION', option_strike: 35, option_right: 'PUT', option_expiry: '2026-09-18' }))).toBe("$35P Sep '26");
+  });
+});
+
+describe('suggestOrderQuantity', () => {
+  it('shares: $40k capital, 5% deploy, $119.55 price -> 16 shares, $1912.80', () => {
+    expect(suggestOrderQuantity(40000, 0.05, 119.55, 'SHARES')).toEqual({ quantity: 16, totalCost: 1912.8 });
+  });
+  it('options: per-unit cost is price × 100 (one contract = 100 shares)', () => {
+    // $40k capital, 5% deploy ($2000 budget), $9.20 premium -> per-contract cost $920 -> 2 contracts, $1840
+    expect(suggestOrderQuantity(40000, 0.05, 9.2, 'OPTION')).toEqual({ quantity: 2, totalCost: 1840 });
+  });
+  it('floors rather than rounding up (never exceeds the budget)', () => {
+    const { quantity, totalCost } = suggestOrderQuantity(1000, 0.5, 51, 'SHARES');
+    expect(quantity).toBe(9); // 500 / 51 = 9.8 -> 9
+    expect(totalCost).toBeCloseTo(459, 6);
+  });
+  it('zeros out on missing or non-positive inputs, never negative/fractional', () => {
+    expect(suggestOrderQuantity(null, 0.05, 100, 'SHARES')).toEqual({ quantity: 0, totalCost: 0 });
+    expect(suggestOrderQuantity(40000, 0, 100, 'SHARES')).toEqual({ quantity: 0, totalCost: 0 });
+    expect(suggestOrderQuantity(40000, 0.05, 0, 'SHARES')).toEqual({ quantity: 0, totalCost: 0 });
+    expect(suggestOrderQuantity(40000, 0.05, null, 'OPTION')).toEqual({ quantity: 0, totalCost: 0 });
+    expect(suggestOrderQuantity(-1, 0.05, 100, 'SHARES')).toEqual({ quantity: 0, totalCost: 0 });
   });
 });

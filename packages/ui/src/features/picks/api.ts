@@ -140,6 +140,11 @@ export interface LegEvent {
   close_reason: string | null;
   executed_at: string;
   notes: string | null;            // the host's words (routine-written); the admin can append context
+  // Admin-only real-order linkage (migration 052) — set only via the "Execute/Close
+  // via IBKR" flow in LegTimeline; null for every hand-logged row.
+  broker_order_id: string | null;
+  broker_status: string | null;
+  broker_fill_price: number | null;
   // embedded leg context (for the timeline display)
   leg: {
     ticker: string;
@@ -151,7 +156,7 @@ export interface LegEvent {
 }
 
 const LEG_EVENT_COLS =
-  'id,leg_id,action_type,action_label,price,weight,close_reason,executed_at,notes';
+  'id,leg_id,action_type,action_label,price,weight,close_reason,executed_at,notes,broker_order_id,broker_status,broker_fill_price';
 
 // The position's evolution — every leg event for a ticker, oldest→newest. Joined to `legs` so the
 // timeline reads from the SAME source as the legs (no second, conflicting table).
@@ -171,17 +176,35 @@ export type LegEventInput = Pick<LegEvent, 'action_type' | 'action_label' | 'pri
 };
 
 // Append an event to a leg. The 040 trigger re-derives the leg's state from all its events.
-export async function insertLegTransaction(legId: string, ev: LegEventInput): Promise<void> {
+// `broker` is set only by the "Close via IBKR" flow (LegTimeline) — a confirmed-fill close
+// carries its order linkage straight onto the new row instead of a separate patch.
+export async function insertLegTransaction(
+  legId: string,
+  ev: LegEventInput,
+  broker?: Partial<Pick<LegEvent, 'broker_order_id' | 'broker_status' | 'broker_fill_price'>>,
+): Promise<void> {
   const trader_id = await getTraderId(STW);
   const { error } = await getSupabase()
     .from('leg_transactions')
-    .insert({ leg_id: legId, trader_id, ...ev });
+    .insert({ leg_id: legId, trader_id, ...ev, ...(broker ?? {}) });
   if (error) throw error;
 }
 
 // Edit an existing diary row — the trigger replays and re-derives the leg (so the scoreboard and
 // the ledger can never disagree).
 export async function updateLegTransaction(id: string, fields: Partial<LegEventInput>): Promise<void> {
+  const { error } = await getSupabase().from('leg_transactions').update(fields).eq('id', id);
+  if (error) throw error;
+}
+
+// Patch a diary row's broker-order linkage after a confirmed IBKR fill — always the
+// actual fill price, never the originally-typed one (same rule as every other close
+// in this ledger). Kept separate from LegEventInput since these fields are never
+// hand-edited through the normal Add/Edit event form.
+export async function updateLegBrokerFields(
+  id: string,
+  fields: Partial<Pick<LegEvent, 'price' | 'broker_order_id' | 'broker_status' | 'broker_fill_price'>>,
+): Promise<void> {
   const { error } = await getSupabase().from('leg_transactions').update(fields).eq('id', id);
   if (error) throw error;
 }
