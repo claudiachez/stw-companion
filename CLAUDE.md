@@ -13,14 +13,23 @@
 > UI testing — no IB Gateway was connected, so no order was ever actually placed; flip it back to `0`
 > on sandbox once you're done testing, see Next Steps).
 > If migrations stop at 021 you are on a stale checkout, re-sync.
-> **First command every session:**
-> `git fetch origin && git checkout staging && git pull --ff-only`.
-> Feature branches cut from `staging`, PR to `staging`. `main` is promoted only by an approved
-> staging→main PR (= a production deploy). (Note: `memory/` lives in local `~/.claude/`, NOT in the repo —
-> never reference it in a prompt meant for a remote session; put anything a future session needs into the repo.)
+> **First commands every session:**
+> `git fetch origin && git checkout staging && git pull --ff-only`, **then cut a feature branch**
+> before making any change: `git checkout -b claude/<short-feature-name>`. **Never commit directly to
+> `staging`** — work on the branch, push it, open a PR back to `staging` (host merges/approves).
+> `main` is promoted only by an approved staging→main PR (= a production deploy).
+> **Known exception:** commits `bf1359c`…`731dfdc` (2026-06-29 evening through 2026-07-03, ~18 commits
+> incl. this session's regime-badge/IBKR-trading work) went **directly to `staging`**, no branch — the
+> host confirmed (2026-07-03) this was drift, not the intended workflow, and asked to resume
+> feature-branch-per-session starting now. Don't treat that run as precedent.
+> (Note: `memory/` lives in local `~/.claude/`, NOT in the repo — never reference it in a prompt meant
+> for a remote session; put anything a future session needs into the repo.)
 
 ## Ground Rules
 - If instructions seem to conflict, **always ask before doing anything**
+- **Never commit directly to `staging`** — cut a `claude/<feature>` branch first, every session (see
+  Branch Strategy). `staging` auto-deploys on every push, so direct commits put unreviewed/in-progress
+  work straight onto the deployed staging site.
 - Never force-push or reset `staging` or `main`
 - Never push to `main` without explicit approval — that is production
 - Write shared styling/logic/data **once** in the shared packages, never twice across apps
@@ -414,7 +423,11 @@ CLAUDE.md                    this file
 | `staging` | Trunk / staging | both Netlify sites — staging |
 
 Feature branches: `claude/<feature>` → branch from `staging` → PR to `staging` →
-PR `staging` → `main` when approved.
+PR `staging` → `main` when approved. **This is enforced, not aspirational** (host 2026-07-03, after a
+~2-week drift where ~18 commits landed on `staging` directly — see the top banner's "Known exception")
+— `staging` auto-deploys to both Netlify staging sites on every push, so a branch is what keeps an
+in-progress/broken commit off the deployed site until the PR actually merges. Every session cuts one,
+every session.
 
 ```bash
 git checkout -b claude/my-feature origin/staging
