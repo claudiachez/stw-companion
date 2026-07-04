@@ -559,6 +559,56 @@ export function rankSectorConstituents(rows: SectorRotationRow[]): { leaders: Se
   return { leaders, settingUp };
 }
 
+// ── Ticker → Sector classification (per-ticker regime badge) ───────────────
+// Normalizes a data provider's free-text industry label (e.g. Finnhub's
+// `finnhubIndustry`) to one of the 11 SPDR sector ETF symbols, so an arbitrary
+// held ticker's sector can be resolved without a hand-maintained STW-basket
+// mapping (STW's own thematic baskets don't align cleanly to GICS sectors, and
+// a hand-authored table would need upkeep every time a new theme is added).
+// Keyword matching rather than an exact-string table, since a provider's exact
+// enum values can't be pinned down without live data — this degrades gracefully
+// to an unmatched (null) sector instead of silently mis-classifying.
+// Order matters: more specific categories are checked first so a broad keyword
+// (e.g. XLK's "technology") can't shadow a narrower match (e.g. "biotechnology" → XLV).
+const SECTOR_KEYWORDS: { symbol: string; keywords: string[] }[] = [
+  { symbol: 'XLV',  keywords: ['pharma', 'biotech', 'health', 'medical', 'life sciences', 'drug'] },
+  { symbol: 'XLRE', keywords: ['real estate', 'reit'] },
+  { symbol: 'XLK',  keywords: ['software', 'semiconductor', 'technology', 'internet', 'hardware', 'it services', 'electronic'] },
+  { symbol: 'XLF',  keywords: ['bank', 'insurance', 'financial', 'capital markets', 'asset management', 'brokerage', 'fintech'] },
+  { symbol: 'XLE',  keywords: ['oil', 'gas', 'energy', 'petroleum', 'drilling'] },
+  { symbol: 'XLI',  keywords: ['industrial', 'aerospace', 'defense', 'machinery', 'transportation', 'airline', 'logistics', 'construction', 'engineering'] },
+  { symbol: 'XLY',  keywords: ['retail', 'restaurant', 'consumer discretionary', 'auto', 'apparel', 'leisure', 'hotel', 'homebuilder'] },
+  { symbol: 'XLP',  keywords: ['food', 'beverage', 'household', 'consumer staples', 'tobacco', 'grocery'] },
+  { symbol: 'XLU',  keywords: ['utilit', 'electric power', 'water utility'] },
+  { symbol: 'XLB',  keywords: ['material', 'chemical', 'mining', 'metal', 'steel', 'paper', 'packaging'] },
+  { symbol: 'XLC',  keywords: ['communication', 'media', 'telecom', 'entertainment', 'advertising', 'publishing'] },
+];
+
+/** Resolve a provider's free-text industry label to one of the 11 `SECTOR_ETFS` symbols. */
+export function mapIndustryToSector(industry: string | null | undefined): string | null {
+  if (!industry) return null;
+  const s = industry.toLowerCase();
+  for (const { symbol, keywords } of SECTOR_KEYWORDS) {
+    if (keywords.some((kw) => s.includes(kw))) return symbol;
+  }
+  return null;
+}
+
+/**
+ * A sector's own trend-bucket read, reused as a coarse Leader / Setting Up /
+ * Laggard standing for "this ticker's sector context" — same classification
+ * boundary as `rankSectorConstituents`, applied to the sector's own row instead
+ * of an individual stock within it.
+ */
+export type SectorStanding = 'leader' | 'setting_up' | 'laggard';
+
+export function sectorStanding(bucket: TrendBucket | null): SectorStanding | null {
+  if (bucket === null) return null;
+  if (bucket === 'momentum' || bucket === 'healthy_pullback') return 'leader';
+  if (bucket === 'mid_caution' || bucket === 'bear_rally') return 'setting_up';
+  return 'laggard'; // risk_off
+}
+
 /**
  * Relative strength of a series vs a benchmark over `lookback` trading days:
  * (seriesReturn − benchmarkReturn) in percentage points. Null if either series

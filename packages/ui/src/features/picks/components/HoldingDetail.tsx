@@ -12,6 +12,8 @@ import { PositionEditor } from './PositionEditor';
 import { LegTimeline } from './LegTimeline';
 import { ConvictionTimeline } from './ConvictionTimeline';
 import { SourceLink } from './SourceLink';
+import { RegimeBadge } from './RegimeBadge';
+import type { TickerRegime } from '../useTickerRegime';
 
 function PriceEmptyState({ fetchStatus }: { fetchStatus: string }) {
   if (fetchStatus === 'fetching') return <div style={{ fontSize: 12, color: 'var(--t3)', fontStyle: 'italic' }}>Loading…</div>;
@@ -53,9 +55,11 @@ interface Props {
   isMobile?: boolean;
   /** Newest IBKR options-sync time across the portfolio; lets us flag a stale price. */
   latestOptionsSync?: Date | null;
+  /** This ticker's own trend structure + sector standing (undefined while still loading). */
+  regime?: TickerRegime;
 }
 
-export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = false, latestOptionsSync = null }: Props) {
+export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = false, latestOptionsSync = null, regime }: Props) {
   const { canEdit, canViewHistory, isAdmin } = useCapabilities();
   const showHistory = canViewHistory || isAdmin;
   const [editing, setEditing] = useState(false);
@@ -478,6 +482,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
           <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4, color: tier.color, background: tier.bg, border: `1px solid ${tier.border}` }}>
             {tier.short}
           </span>
+          {h.ticker !== 'CASH' && <RegimeBadge regime={regime} />}
         </div>
 
         {/* Edit — a single modal: position fields + legs together (admin only) */}

@@ -13,6 +13,7 @@ import {
   SECTOR_ETFS, RS_LOOKBACKS, relativeStrength,
   weekRange,
   SECTOR_CONSTITUENTS, rankSectorConstituents,
+  mapIndustryToSector, sectorStanding,
 } from './macro';
 import type { MacroEvent, SectorRotationRow } from '../types/macro';
 
@@ -567,5 +568,49 @@ describe('rankSectorConstituents', () => {
   it('caps each list at 5 names', () => {
     const rows = Array.from({ length: 8 }, (_, i) => row(`S${i}`, 'momentum', 8 - i));
     expect(rankSectorConstituents(rows).leaders).toHaveLength(5);
+  });
+});
+
+describe('mapIndustryToSector', () => {
+  it('matches common industry labels to the right SPDR sector', () => {
+    expect(mapIndustryToSector('Semiconductors')).toBe('XLK');
+    expect(mapIndustryToSector('Software - Infrastructure')).toBe('XLK');
+    expect(mapIndustryToSector('Biotechnology')).toBe('XLV');
+    expect(mapIndustryToSector('Banks - Regional')).toBe('XLF');
+    expect(mapIndustryToSector('Oil & Gas E&P')).toBe('XLE');
+    expect(mapIndustryToSector('Aerospace & Defense')).toBe('XLI');
+    expect(mapIndustryToSector('Specialty Retail')).toBe('XLY');
+    expect(mapIndustryToSector('Household & Personal Products')).toBe('XLP');
+    expect(mapIndustryToSector('Utilities - Regulated Electric')).toBe('XLU');
+    expect(mapIndustryToSector('REIT - Industrial')).toBe('XLRE');
+    expect(mapIndustryToSector('Chemicals')).toBe('XLB');
+    expect(mapIndustryToSector('Telecom Services')).toBe('XLC');
+  });
+
+  it('is case-insensitive', () => {
+    expect(mapIndustryToSector('SEMICONDUCTORS')).toBe('XLK');
+  });
+
+  it('returns null for an unrecognized or missing label', () => {
+    expect(mapIndustryToSector('Some Made Up Industry')).toBeNull();
+    expect(mapIndustryToSector(null)).toBeNull();
+    expect(mapIndustryToSector(undefined)).toBeNull();
+  });
+});
+
+describe('sectorStanding', () => {
+  it('momentum and healthy_pullback → leader', () => {
+    expect(sectorStanding('momentum')).toBe('leader');
+    expect(sectorStanding('healthy_pullback')).toBe('leader');
+  });
+  it('mid_caution and bear_rally → setting_up', () => {
+    expect(sectorStanding('mid_caution')).toBe('setting_up');
+    expect(sectorStanding('bear_rally')).toBe('setting_up');
+  });
+  it('risk_off → laggard', () => {
+    expect(sectorStanding('risk_off')).toBe('laggard');
+  });
+  it('null bucket → null', () => {
+    expect(sectorStanding(null)).toBeNull();
   });
 });

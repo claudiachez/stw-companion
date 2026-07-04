@@ -29,7 +29,13 @@ function buildRow(meta: { symbol: string; name: string }, closes: number[], spyC
 // Module 11: Sector Rotation. Reuses the Module 4 9/21/200 trend-bucket logic
 // per sector, plus relative strength vs SPY across Week/1M/3M/6M/1Y. Needs the
 // fullest daily-close history TwelveData's free tier allows (252 bars ≈ 1Y).
-export function useSectorRotation(twelveDataKey?: string) {
+//
+// `skipConstituents` lets a caller that only needs the 12 sector-level rows (e.g.
+// the Picks tab's per-ticker regime badge — see useTickerRegime.ts) opt out of the
+// ~66-symbol constituent fetch used only for this module's own Leaders/Setting Up
+// stock chips. Without this, every Picks tab visit would also trigger that fetch
+// and compete with it for TwelveData's free-tier rate limit.
+export function useSectorRotation(twelveDataKey?: string, skipConstituents = false) {
   const [rows, setRows] = useState<SectorRotationRow[]>([]);
   const [asOf, setAsOf] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -66,6 +72,11 @@ export function useSectorRotation(twelveDataKey?: string) {
         setLoading(false);
       }
 
+      if (skipConstituents) {
+        if (!cancelled && mountedRef.current) setConstituentsLoading(false);
+        return;
+      }
+
       // Leaders / Setting Up draw from each sector's own constituent stocks (not
       // STW's holdings) — ~6x more symbols than the rows above, so this is fetched
       // separately in small chunks to stay under TwelveData's free-tier rate limit
@@ -92,7 +103,7 @@ export function useSectorRotation(twelveDataKey?: string) {
 
     fetchAll();
     return () => { cancelled = true; };
-  }, [twelveDataKey]);
+  }, [twelveDataKey, skipConstituents]);
 
   return { rows, asOf, loading, constituents, constituentsLoading };
 }
