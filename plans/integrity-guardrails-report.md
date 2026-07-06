@@ -69,6 +69,20 @@ conversion) — only genuine intraday timestamps get ET-localized. The full list
 handed to the host directly in-session; **host offered to supply corrected times for the list** — no
 Discord-research pass was run this session since it wasn't the actual blocker.
 
+**Follow-up (same session): all 36 rows given a real time-of-day.** Rather than research each row's
+true alert time via Discord, the host decided a simpler resolution: stamp every remaining midnight-UTC
+row with **4:00pm ET (market close)** on its existing, already-confirmed-correct calendar date. Applied
+directly via `UPDATE leg_transactions SET executed_at = (executed_at::date + time '16:00:00') AT TIME
+ZONE 'America/New_York' WHERE executed_at::time AT TIME ZONE 'UTC' = '00:00:00'` — correctly
+DST-adjusted per date (e.g. `2026-05-15` → `20:00:00+00` = 4pm EDT; `2026-02-27` → `21:00:00+00` = 4pm
+EST). This is an **assumed placeholder time (market close), not a recovered real alert timestamp** — the
+calendar date was already verified correct; only the time-of-day was synthetic/missing before this fix.
+Applied to both PROD (36 rows) and sandbox (37 rows — sandbox's seed data differs slightly), each logged
+to `ops_log`. Once applied, these rows no longer trip `tradingDateET()`'s midnight-UTC special case at
+all (they're now genuine non-midnight timestamps) — that special-case code stays in place as a general
+safeguard for any future manual entry that mistakenly uses a bare date, per the SKILL.md amendments in
+Item 5.
+
 ## Item 2 — limits engine
 
 - `packages/shared/src/utils/limits.ts` — pure functions (`positionConcentration`,
@@ -174,12 +188,17 @@ date-signed fields. No code.
 2. Item 1's `source='snapshot_reconciled'` detector is the actual notes content, not the literal phrase
    the spec named (which doesn't exist in the data).
 3. Item 1's midnight-UTC audit scope was cut from "36 hits" down to those the host actually flagged as
-   real anomalies — the host confirmed dates are already correct and offered to supply real times
-   separately; no Discord-research pass was run.
+   real anomalies — the host confirmed dates are already correct, and instead of a Discord-research
+   pass, all 36 rows (both environments) were stamped with an assumed 4:00pm ET market-close time on
+   their existing correct date (DST-adjusted) rather than left as ambiguous bare dates.
 4. Item 2 ships without a second live (non-synthetic) account to prove multi-tenancy at the DB layer —
    proven at the pure-function layer only.
 5. Item 3's historical backfill was not executed this session (quota exhaustion) — schema, pure
    functions, and the backfill/daily-append function are all built, typechecked, and ready to invoke.
+6. Item 2 was extended beyond its original "apps/admin only this week" scope, same session, per host
+   decision: subscribers now get their own editable `risk_config` via a Premium-gated Settings card,
+   sharing a new `packages/ui/src/features/limits/LimitsPanel.tsx` with the admin panel. See the
+   dedicated subsection under Item 2 above for the full breakdown.
 
 ## Definition of done — status
 
