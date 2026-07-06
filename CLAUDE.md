@@ -34,6 +34,11 @@
 - Write shared styling/logic/data **once** in the shared packages, never twice across apps
 - **Every timestamp uses `fmtDateTime` from `@stw/shared`** — never `toLocaleString`/`toLocaleTimeString` or a local date helper (see Conventions → Timestamps)
 - **All UI changes must work on mobile** — design for ≤390px first; test layouts at narrow width before pushing
+- **Refer to the host generically in prose, never by name** — specs, code comments, reports, and
+  commit message bodies say "the host" (confirmed as a standing rule, 2026-07-05), matching existing
+  practice throughout this file. Exception: literal technical identifiers that must stay accurate to
+  be useful (an RLS policy's email, an org/task UUID) — those aren't narrative attribution and are fine
+  as-is.
 - **After ~10 commits in a chat**, run the Session Close routine (see section below)
 
 ---
