@@ -93,6 +93,39 @@ Discord-research pass was run this session since it wasn't the actual blocker.
   tested; provisioning a second real account felt out of scope for this pass). RLS itself is identical
   to the already-proven `user_positions` pattern.
 
+### Extended to a subscriber-facing feature (host decision, 2026-07-06, same session)
+
+The original spec scoped Item 2 to "apps/admin only this week" — the host reviewed the shipped admin
+panel and decided to extend it to subscribers now rather than as separate future work, with subscribers
+editing their own thresholds freely, gated behind the **Premium** tier:
+
+- Refactored the violation-list/sync-on-evaluate UI out of `apps/admin` into a shared
+  `packages/ui/src/features/limits/LimitsPanel.tsx` — now used by **both** apps/admin (the operator's own
+  book, unrestricted) and apps/web (each subscriber's own book, Premium-gated). Same component, same
+  data shape; each instance reads/writes only the signed-in user's own `risk_config`/`user_positions`
+  rows via the existing RLS.
+- Added `RiskConfigForm.tsx` — an editable single-card/single-Save thresholds form (position %, sector
+  %, gross %, 2-step drawdown ladder), matching `ConfigPage.tsx`'s pattern but per-user instead of
+  per-app-global. The admin panel gained this editing capability too (it was read-only before).
+- Added `useEnsureRiskConfig()` — auto-creates a default `risk_config` row (10%/25%/100%/ladder
+  -10%→70%,-15%→50%, `is_placeholder=true`) the first time a user without one loads the panel, so
+  subscribers don't need a manual seed like the operator's migration-055 row.
+- `supabase/migrations/058_limits_premium_tier.sql` — adds `'limits'` to the `premium` tier's `modules`
+  array (existing `tiers`/`useTierAccess()` mechanism, same as `picks`/`signals`/`portfolio`). **Could
+  not be applied to sandbox** — sandbox has no `tiers`/`profiles` tables at all (a pre-existing,
+  documented gap: sandbox is admin-dev-only, never wired for subscriber auth). Applied to PROD only.
+- New card in `apps/web/src/features/settings/SettingsPage.tsx`, next to the existing IBKR Connection
+  card, showing `<LimitsPanel />` if `useTierAccess('limits')` passes, or a locked upsell notice if not.
+- **Verified in-browser end-to-end** on the admin panel (which reads sandbox locally, confirmed by
+  checking DB state before/after, not just the UI): typed a new `max_position_pct` value via the form,
+  clicked Save, and confirmed the write landed in sandbox's `risk_config` row (`is_placeholder` flipped
+  `true→false`, `updated_at` bumped) — then reverted the test value back to the seeded default so it
+  doesn't read as a deliberate operator change. Note for future browser-automation: React controlled
+  `<input>` elements don't pick up a raw `.value =` assignment + dispatched event; `preview_fill` and a
+  manual native-setter dispatch both left React's state stale (Save stayed disabled) — the reliable path
+  was focusing the input and using `document.execCommand('insertText', ...)`, which fires a real
+  `input` event React's synthetic listener recognizes.
+
 ## Item 3 — regime_daily + regimeGate() + advisory light
 
 - `packages/shared/src/utils/regime.ts` — `regimeGate()` (frozen `engine_version = '1.1.0'`, 4-cell

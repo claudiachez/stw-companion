@@ -54,7 +54,11 @@ export { saveIbkrSettings } from './features/portfolio/api';
 export type { UserPosition, IbkrSettings } from './features/portfolio/api';
 
 // ── Limits engine (Item 2, plans/integrity-guardrails.md) ──────
-export { useRiskConfig, useSectorMap, useViolationAcks, useAcknowledgeViolation } from './features/limits/useRiskConfig';
+// Shared by both apps/admin (operator's own book) and apps/web (each
+// subscriber's own book, Premium-gated) — LimitsPanel is the whole feature.
+export { LimitsPanel } from './features/limits/LimitsPanel';
+export { RiskConfigForm } from './features/limits/RiskConfigForm';
+export { useRiskConfig, useSectorMap, useViolationAcks, useAcknowledgeViolation, useEnsureRiskConfig, useSaveRiskConfig } from './features/limits/useRiskConfig';
 export type { RiskConfigRow, ViolationAck, AckStatus, ViolationType } from './features/limits/api';
 
 // ── Advisory regime light (Item 3, plans/integrity-guardrails.md) ─────

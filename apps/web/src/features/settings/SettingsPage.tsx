@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useIbkrSettings, saveIbkrSettings, useAuthStore, useSyncPortfolio, LoadingSpinner } from '@stw/ui';
+import { useIbkrSettings, saveIbkrSettings, useAuthStore, useSyncPortfolio, LoadingSpinner, LimitsPanel } from '@stw/ui';
+import { useTierAccess } from '../../shared/hooks/useTierAccess';
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
@@ -20,6 +21,7 @@ export function SettingsPage() {
   const queryClient = useQueryClient();
   const { data: settings, isLoading } = useIbkrSettings();
   const { sync, isSyncing, syncError, lastResult } = useSyncPortfolio();
+  const canUseLimits = useTierAccess('limits');
 
   const [token, setToken] = useState('');
   const [queryId, setQueryId] = useState('');
@@ -207,6 +209,25 @@ export function SettingsPage() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Limits engine card — Premium only (plans/integrity-guardrails.md Item 2) */}
+      <div style={{ marginTop: 16 }}>
+        {canUseLimits ? (
+          <LimitsPanel />
+        ) : (
+          <div style={{
+            background: 'var(--surface)', border: '1px solid var(--border)',
+            borderRadius: 12, padding: '16px', display: 'flex', flexDirection: 'column', gap: 6,
+          }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>Limits engine 🔒</span>
+            <span style={{ fontSize: 12, color: 'var(--t3)' }}>
+              Flag concentration and gross-exposure breaches in your own IBKR book — requires a
+              <strong style={{ color: 'var(--t2)' }}> Premium</strong> subscription. Contact your STW
+              administrator to upgrade.
+            </span>
+          </div>
+        )}
       </div>
     </div>
     </div>
