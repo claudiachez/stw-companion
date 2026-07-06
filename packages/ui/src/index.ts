@@ -53,6 +53,15 @@ export { useSyncPortfolio } from './features/portfolio/useSyncPortfolio';
 export { saveIbkrSettings } from './features/portfolio/api';
 export type { UserPosition, IbkrSettings } from './features/portfolio/api';
 
+// ── Limits engine (Item 2, plans/integrity-guardrails.md) ──────
+export { useRiskConfig, useSectorMap, useViolationAcks, useAcknowledgeViolation } from './features/limits/useRiskConfig';
+export type { RiskConfigRow, ViolationAck, AckStatus, ViolationType } from './features/limits/api';
+
+// ── Advisory regime light (Item 3, plans/integrity-guardrails.md) ─────
+export { RegimeLight } from './features/regime/RegimeLight';
+export { useLatestRegime } from './features/regime/useLatestRegime';
+export type { RegimeDailyRow } from './features/regime/api';
+
 // ── Macro ─────────────────────────────────────────────────────
 export { MacroView } from './features/macro/MacroView';
 

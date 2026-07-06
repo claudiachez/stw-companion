@@ -25,6 +25,13 @@
 [functions."macro-recap-pm"]
   timeout = 60
 
+[functions."macro-snapshot"]
+  # No override existed before (silently falling back to Netlify's short default) —
+  # this function makes ~10 sequential external calls (TwelveData/Finnhub/internal),
+  # more than any sibling scheduled function above, and macro_daily_snapshots sat at
+  # zero rows since migration 048 shipped. See macro-snapshot.ts's header comment.
+  timeout = 60
+
 [[redirects]]
   from   = "/*"
   to     = "/index.html"
