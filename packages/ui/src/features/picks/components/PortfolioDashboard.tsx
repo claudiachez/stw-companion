@@ -1,8 +1,9 @@
-import { bColor, holdingPnlPct, holdingType, legMarkReason, fmtLegInstrument, fmtDateTime } from '@stw/shared';
+import { bColor, holdingPnlPct, legIsOpen, legMarkReason, fmtLegInstrument, fmtDateTime, TIERS } from '@stw/shared';
 import { usePriceCacheStore } from '../../../store/priceCache';
 import { useRecentChanges } from '../useRecentChanges';
-import { useLatestWebinar } from '../useLatestWebinar';
+import { useConvictionChanges, type ConvictionChange, type ChangeDir } from '../useConvictionChanges';
 import { TickerLink } from '../../../primitives/TickerLink';
+import { SourceLink } from './SourceLink';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 import { useCapabilities } from '../../../context/AppCapabilities';
 import type { Holding } from '../api';
@@ -54,6 +55,59 @@ function renderDigest(
   });
 }
 
+function trimSnippet(s: string, n = 180): string {
+  return s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s;
+}
+
+// Per-direction presentation: a directional glyph (the change indicator) + a color-coded badge.
+const CHANGE_META: Record<ChangeDir, { label: string; color: string; bg: string; arrow: string }> = {
+  up:   { label: 'Upgraded',   color: 'var(--c5)', bg: 'var(--c5bg)', arrow: '▲' },
+  down: { label: 'Downgraded', color: 'var(--c1)', bg: 'var(--c1bg)', arrow: '▼' },
+  new:  { label: 'New',        color: 'var(--c4)', bg: 'var(--c4bg)', arrow: '★' },
+  same: { label: 'Reaffirmed', color: 'var(--t3)', bg: 'var(--s2)',  arrow: '•' },
+};
+
+// One conviction-change line, styled to match the "Latest Portfolio Changes" digest (13px body,
+// linkified ticker, lineHeight 1.6 from the card). Reads:
+//   TICKER ↗ [BADGE] Prev → Current: why
+function ConvictionChangeRow({ c, onSelectTicker }: {
+  c: ConvictionChange;
+  onSelectTicker?: (t: string) => void;
+}) {
+  const m = CHANGE_META[c.dir];
+  const toTier = TIERS[c.level] ?? TIERS[0];
+  const fromTier = c.prevLevel != null ? (TIERS[c.prevLevel] ?? TIERS[0]) : null;
+  return (
+    <div style={{ marginBottom: 5 }}>
+      <TickerLink ticker={c.ticker} onSelect={onSelectTicker} />
+      {' '}
+      <span style={{ color: m.color, fontWeight: 700 }}>{m.arrow}</span>
+      {' '}
+      <span style={{
+        display: 'inline-block', verticalAlign: 'middle',
+        fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+        color: m.color, background: m.bg, border: `1px solid ${m.color}33`,
+        borderRadius: 4, padding: '1px 5px',
+      }}>{m.label}</span>
+      {' '}
+      <span style={{ fontWeight: 600 }}>
+        {fromTier && (
+          <>
+            <span style={{ color: fromTier.color }}>{fromTier.short}</span>
+            <span style={{ color: 'var(--t3)' }}> → </span>
+          </>
+        )}
+        <span style={{ color: toTier.color }}>{toTier.short}</span>
+      </span>
+      <span style={{ color: 'var(--t3)' }}>: </span>
+      {trimSnippet(c.comment)}
+      {c.sourceUrl && (
+        <SourceLink url={c.sourceUrl} title="Open original message" style={{ verticalAlign: 'middle', marginLeft: 4 }} />
+      )}
+    </div>
+  );
+}
+
 // ── Portfolio dashboard (shown when no ticker selected) ───────
 export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps) {
   const isMobile = useIsMobile();
@@ -63,7 +117,7 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
   const cache = usePriceCacheStore((s) => s.cache);
   const { data: changes } = useRecentChanges(1);
   const latestChange = changes?.[0] ?? null;
-  const { data: webinar } = useLatestWebinar();
+  const convBatch = useConvictionChanges(holdings);
 
   const active = holdings.filter((h) => h.ticker !== 'CASH' && h.last_action !== 'Closed');
 
@@ -76,19 +130,30 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
     ? pnlValues.reduce((s, v) => s + v, 0) / pnlValues.length
     : null;
 
-  // Equity : Options ratio by portfolio weight (matches the host's Friday update)
-  // Mixed positions (shares + options overlay) count as equity weight
-  let equityWeight = 0;
-  let optionsWeight = 0;
+  // Equity : Options ratio by current MARKET VALUE, per leg. The host quotes the split by what
+  // each sleeve is worth now (not premium paid) — so winning option legs weigh more. Shares ride
+  // the live quote; option legs use their stored IBKR mark; each leg's cost weight is grossed up
+  // by mark÷entry. Per-leg (not whole-holding), so a shares+call overlay counts on BOTH sides —
+  // the old whole-holding classification dumped every mixed position into equity (read ~97:3).
+  // Falls back to the leg's cost weight when a price is missing.
+  let equityVal = 0;
+  let optionsVal = 0;
   active.forEach((h) => {
-    const w = h.current_weight ?? h.initial_weight ?? 0;
-    const t = holdingType(h.legs);
-    if (t === 'options') optionsWeight += w;
-    else if (w > 0) equityWeight += w; // shares, mixed, or unclassified
+    const live = cache[h.ticker]?.c ?? null;
+    for (const leg of h.legs) {
+      if (!legIsOpen(leg)) continue;
+      const w = leg.weight ?? 0;
+      if (w <= 0) continue;
+      const isOpt = leg.instrument_type === 'OPTION';
+      const ref = isOpt ? leg.mark_price : live;
+      const mult = (ref != null && leg.entry_price && leg.entry_price > 0) ? ref / leg.entry_price : 1;
+      const val = w * mult;
+      if (isOpt) optionsVal += val; else equityVal += val;
+    }
   });
-  const typeTotal = equityWeight + optionsWeight;
-  const equityPct  = typeTotal > 0 ? Math.round(equityWeight  / typeTotal * 100) : null;
-  const optionsPct = typeTotal > 0 ? Math.round(optionsWeight / typeTotal * 100) : null;
+  const typeTotal = equityVal + optionsVal;
+  const equityPct  = typeTotal > 0 ? Math.round(equityVal  / typeTotal * 100) : null;
+  const optionsPct = typeTotal > 0 ? Math.round(optionsVal / typeTotal * 100) : null;
 
   // Sector distribution by weight
   const sectorMap: Record<string, number> = {};
@@ -123,7 +188,7 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
   const stalePrices = holdings.flatMap((h) => {
     if (h.ticker === 'CASH' || h.last_action === 'Closed' || !optionsSynced) return [];
     const stale = h.legs.filter(
-      (l) => l.instrument_type === 'OPTION' && l.mark_price != null && l.mark_price_at != null &&
+      (l) => l.instrument_type === 'OPTION' && l.status === 'OPEN' && l.mark_price != null && l.mark_price_at != null &&
         new Date(l.mark_price_at).getTime() < optionsSynced.getTime(),
     );
     if (!stale.length) return [];
@@ -172,7 +237,7 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
               {optionsPct ?? '—'}
             </span>
           </div>
-          <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>Equity : Options (by weight)</div>
+          <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>Equity : Options (by market value)</div>
         </div>
       </div>
 
@@ -212,26 +277,35 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
       {/* Right column — activity + data status */}
       <div>
 
-      {/* Conviction Notes Updates — which positions had conviction notes refreshed by the latest stream */}
-      {webinar && webinar.tickers.length > 0 && (
+      {/* Conviction Changes — the latest batch, classified ▲ upgraded / ▼ downgraded / ★ new, each
+          with the level move and a one-line why. Reaffirmed (unchanged) collapse to a chip list. */}
+      {convBatch && convBatch.changes.length > 0 && (
         <div style={{ marginTop: isMobile ? 28 : 0 }}>
           <SectionHeader
-            title="Conviction Notes Updates"
-            updatedAt={webinar.updatedAt ? new Date(webinar.updatedAt) : null}
+            title="Conviction Changes"
+            updatedAt={convBatch.updatedAt ? new Date(convBatch.updatedAt) : null}
           />
+          {/* Same card chrome + type scale as "Latest Portfolio Changes" for consistency. */}
           <div style={{
             padding: '12px 14px', borderRadius: 8,
             background: 'var(--s2)', border: '1px solid var(--acc)',
             fontSize: 13, color: 'var(--t2)', lineHeight: 1.6,
           }}>
-            <div style={{ color: 'var(--text)', marginBottom: 8 }}>
-              📺 Conviction notes updated for {webinar.tickers.length} {webinar.tickers.length === 1 ? 'position' : 'positions'}
-            </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px 12px' }}>
-              {webinar.tickers.map((t) => (
-                <TickerLink key={t} ticker={t} onSelect={onSelectTicker} />
-              ))}
-            </div>
+            {/* meaningful changes (up / down / new), one line each */}
+            {convBatch.changes.filter((c) => c.dir !== 'same').map((c) => (
+              <ConvictionChangeRow key={c.ticker} c={c} onSelectTicker={onSelectTicker} />
+            ))}
+            {/* reaffirmed → a trailing "Also noted"-style line */}
+            {convBatch.changes.some((c) => c.dir === 'same') && (
+              <div style={{ marginTop: convBatch.changes.some((c) => c.dir !== 'same') ? 4 : 0 }}>
+                <span style={{ color: 'var(--t3)' }}>Reaffirmed: </span>
+                {convBatch.changes.filter((c) => c.dir === 'same').map((c, i, arr) => (
+                  <span key={c.ticker}>
+                    <TickerLink ticker={c.ticker} onSelect={onSelectTicker} />{i < arr.length - 1 ? '  ' : ''}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -293,7 +367,7 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
             ))}
           </div>
           <div style={{ fontSize: 9, color: 'var(--t3)', marginTop: 4 }}>
-            Showing prices from an earlier sync — the latest IBKR sync didn't refresh these.{canEdit ? ' Re-run the sync.' : ''}
+            {canEdit ? 'Showing prices from an earlier sync — the latest IBKR sync didn\'t refresh these. Re-run the sync.' : 'These option prices are from an earlier session.'}
           </div>
           </div>
         </div>

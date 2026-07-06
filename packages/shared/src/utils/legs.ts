@@ -327,3 +327,38 @@ export function fmtLegWeightLine(legs: Leg[]): string {
     })
     .join(' · ');
 }
+
+export interface SuggestedOrderQuantity {
+  /** Whole units (shares, or option contracts) — floored, never fractional. */
+  quantity: number;
+  /** quantity × per-unit cost — what actually gets deployed at this quantity. */
+  totalCost: number;
+}
+
+/**
+ * A starting-point quantity for the admin IBKR order modal, so sizing a real
+ * order doesn't require doing this math by hand every time. `capital` and `pct`
+ * come from the admin's own app_config defaults (total_capital,
+ * default_shares_deploy_pct / default_options_deploy_pct); the admin can still
+ * freely overwrite the suggested quantity before submitting.
+ *
+ * An option contract represents 100 shares, so its per-unit cost is
+ * `price × 100` (the premium is quoted per share); a share's per-unit cost is
+ * just `price`. Returns zeros (never a negative or fractional quantity) when
+ * any input is missing or non-positive — the modal's own quantity field stays
+ * blank/manual in that case rather than showing a misleading suggestion.
+ */
+export function suggestOrderQuantity(
+  capital: number | null | undefined,
+  pct: number | null | undefined,
+  price: number | null | undefined,
+  instrument: LegInstrument,
+): SuggestedOrderQuantity {
+  if (!capital || capital <= 0 || !pct || pct <= 0 || !price || price <= 0) {
+    return { quantity: 0, totalCost: 0 };
+  }
+  const perUnitCost = instrument === 'OPTION' ? price * 100 : price;
+  const budget = capital * pct;
+  const quantity = Math.floor(budget / perUnitCost);
+  return { quantity, totalCost: Math.round(quantity * perUnitCost * 100) / 100 };
+}

@@ -1,0 +1,47 @@
+import { stressLabel } from '@stw/shared';
+import type { VolatilityStress } from '../useVolatilityStress';
+import { StatTile, SleeveSummary, TileGrid, SourceNote } from './macroVisuals';
+
+interface Props {
+  data: VolatilityStress | null;
+  loading: boolean;
+}
+
+function fmtDelta(v: number | null): string {
+  if (v === null) return '';
+  return `5D ${v >= 0 ? '+' : ''}${v.toFixed(1)}`;
+}
+
+export function VolatilityStressCard({ data, loading }: Props) {
+  if (loading && !data) return <div style={{ color: 'var(--t3)', fontSize: 12 }}>Loading volatility…</div>;
+  if (!data) return <div style={{ color: 'var(--t3)', fontSize: 12 }}>Volatility data unavailable.</div>;
+
+  const { vix, vixPercentile, vixDelta5, vvix, ivPremium, spyHv30, subScores, sleeveScore } = data;
+
+  return (
+    <div>
+      <SleeveSummary score={sleeveScore} label={stressLabel(sleeveScore)} hint="higher = calmer" />
+      <TileGrid>
+        <StatTile
+          label="VIX"
+          value={vix !== null ? vix.toFixed(1) : '—'}
+          sub={[vixPercentile !== null ? `${vixPercentile}th pct` : '', fmtDelta(vixDelta5)].filter(Boolean).join(' · ')}
+          score={subScores.vix}
+        />
+        <StatTile
+          label="VVIX · Tail Risk"
+          value={vvix !== null ? vvix.toFixed(0) : '—'}
+          sub={vvix !== null ? 'vol-of-vol' : 'unavailable'}
+          score={subScores.vvix}
+        />
+        <StatTile
+          label="IV Premium"
+          value={ivPremium !== null ? ivPremium.toFixed(2) : '—'}
+          sub={spyHv30 !== null ? `VIX ÷ HV30 (${spyHv30.toFixed(1)}%)` : 'VIX ÷ 30D realized'}
+          score={subScores.ivPremium}
+        />
+      </TileGrid>
+      <SourceNote source="VIX/VVIX: Finnhub live · history: TwelveData daily" asOf={data.asOf} />
+    </div>
+  );
+}

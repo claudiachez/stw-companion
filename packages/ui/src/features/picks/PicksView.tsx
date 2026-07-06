@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useHoldings } from './useHoldings';
 import { useFiltersStore, applyFilters, sortFlat, sortByPnl } from './useFilters';
 import { usePicksTabStore, coercePicksTab, PICKS_TAB_LABELS, type PicksTab } from './usePicksTab';
@@ -15,6 +16,7 @@ import { useIsMobile } from '../../hooks/useIsMobile';
 import { useCapabilities } from '../../context/AppCapabilities';
 import { useUserPositions } from '../portfolio/useUserPositions';
 import { cleanUnderlying } from '../portfolio/api';
+import { useTickerRegime } from './useTickerRegime';
 
 const PRICE_CACHE_KEY = 'finnhub_prices';
 const PRICE_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
@@ -32,13 +34,20 @@ function saveLocalPrices(c: LocalPriceCache) {
 // ── Picks content (shared by web + admin) ─────────────────────
 // Paywall/tier gating lives in each app shell, not here.
 export function PicksView() {
-  const { finnhubKey } = useCapabilities();
+  const { finnhubKey, twelveDataKey } = useCapabilities();
   const { data: holdings = [], isLoading, error } = useHoldings();
   const { data: userPositions = [] } = useUserPositions();
   const heldTickers = useMemo(
     () => new Set(userPositions.map((p) => cleanUnderlying(p.underlying))),
     [userPositions],
   );
+  const positionTickers = useMemo(
+    () => holdings.map((h) => h.ticker).filter((t) => t !== 'CASH'),
+    [holdings],
+  );
+  // Per-ticker regime badge (own trend structure + sector standing) — computed once
+  // here and passed down to both the list rows and the detail view.
+  const { regimes } = useTickerRegime(positionTickers, finnhubKey, twelveDataKey);
   // Newest IBKR options-sync time across all legs. A leg priced earlier than this is stale
   // (the last sync didn't refresh it) — passed to HoldingDetail so the detail page can flag
   // an old price instead of it looking freshly synced.
@@ -104,10 +113,24 @@ export function PicksView() {
     if (ticker) setActiveTab('positions');
   }
 
+  // Cross-route deep link: another page (e.g. My Portfolio) can navigate to
+  // `/picks?ticker=XYZ` to open a holding's detail. Consume the param once, then
+  // strip it so a refresh/back doesn't re-open it.
+  const [searchParams, setSearchParams] = useSearchParams();
   useEffect(() => {
-    if (!finnhubKey || holdings.length === 0) return;
+    const t = searchParams.get('ticker');
+    if (!t) return;
+    selectTicker(t.toUpperCase());
+    const next = new URLSearchParams(searchParams);
+    next.delete('ticker');
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    const tickers = holdings.map((h) => h.ticker).filter((t) => t !== 'CASH');
+  useEffect(() => {
+    if (!finnhubKey || positionTickers.length === 0) return;
+
+    const tickers = positionTickers;
     const now = Date.now();
     const local = loadLocalPrices();
 
@@ -146,7 +169,7 @@ export function PicksView() {
           .finally(() => { if (++completed === stale.length) setFetchStatus('done'); });
       }, i * 1100);
     });
-  }, [holdings.length, setPrice, setFetchStatus, finnhubKey]);
+  }, [positionTickers, setPrice, setFetchStatus, finnhubKey]);
 
   if (isLoading) return <LoadingSpinner className="mt-16" />;
   if (error) return <EmptyState message="Failed to load holdings." />;
@@ -203,6 +226,7 @@ export function PicksView() {
             onClick={() => setSelectedTicker(h.ticker === selectedTicker ? null : h.ticker)}
             isUserHeld={heldTickers.has(h.ticker)}
             compact={listCompact}
+            regime={regimes[h.ticker]}
           />
         )),
       ];
@@ -220,6 +244,7 @@ export function PicksView() {
           onClick={() => setSelectedTicker(h.ticker === selectedTicker ? null : h.ticker)}
           isUserHeld={heldTickers.has(h.ticker)}
           compact={listCompact}
+          regime={regimes[h.ticker]}
         />
       ));
 
@@ -284,6 +309,7 @@ export function PicksView() {
                 onClose={() => setSelectedTicker(null)}
                 isMobile
                 latestOptionsSync={latestOptionsSync}
+                regime={regimes[selected.ticker]}
               />
             </div>
           ) : (
@@ -331,6 +357,7 @@ export function PicksView() {
                     totalCount={holdings.length}
                     onClose={() => setSelectedTicker(null)}
                     latestOptionsSync={latestOptionsSync}
+                    regime={regimes[selected.ticker]}
                   />
                 </div>
               </>

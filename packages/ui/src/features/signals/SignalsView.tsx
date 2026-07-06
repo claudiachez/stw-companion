@@ -1,4 +1,4 @@
-import { useGraddox } from './useGraddox';
+import { useGraddox, useLastMorningRun } from './useGraddox';
 import { LevelCard } from './components/LevelCard';
 import { SignalsTable } from './components/SignalsTable';
 import { BiasChip } from './components/BiasChip';
@@ -18,6 +18,7 @@ const scale10 = (v: number | null | undefined) => (v != null ? +(v / 10).toFixed
 // Paywall/tier gating lives in each app shell, not here.
 export function SignalsView() {
   const { data: gx, isLoading, error } = useGraddox();
+  const { data: lastMorningRun } = useLastMorningRun();
   const isMobile = useIsMobile();
 
   if (isLoading) return <LoadingSpinner className="mt-16" />;
@@ -31,6 +32,15 @@ export function SignalsView() {
   const updStr = upd ? fmtDateTime(upd) : '–';
   const priceTime = upd ? '@ ' + upd.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', ...ET }) : '';
 
+  // Stale = the latest read is from a day before today (ET) — i.e. there's no fresh GEX report for
+  // the current session (e.g. host on break). We still show the last read's levels below, but the
+  // subheader makes clear it's the last read, not today's, and surfaces any resume note.
+  const todayET = new Date().toLocaleDateString('en-CA', ET); // YYYY-MM-DD in ET
+  const isStale = !!gx.date && gx.date < todayET;
+  const shortDate = gx.date
+    ? new Date(gx.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })
+    : '';
+
   // SPY levels = SPX ÷ 10 (the chart + ladder both show SPY scale).
   const spyLevels: LevelSet = {
     resistance: scale10(gx.spx.resistance),
@@ -43,14 +53,35 @@ export function SignalsView() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Subheader: date + bias + note + updated */}
+      {/* Subheader: date + bias + note + updated. When stale, lead with "No new report" and frame
+          the read as the last one, plus any resume note (status_note). */}
       <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', padding: '9px 20px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>{dateStr}</span>
-        <BiasChip bias={gx.bias} />
-        {gx.bias_note && <span style={{ fontSize: 11, color: 'var(--t2)' }}>{gx.bias_note}</span>}
-        <span style={{ marginLeft: isMobile ? 0 : 'auto', fontSize: 11, color: 'var(--t3)', whiteSpace: 'nowrap', width: isMobile ? '100%' : undefined }}>
-          Updated: {updStr}
-        </span>
+        {isStale ? (
+          <>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--c3)' }}>No new report</span>
+            <span style={{ fontSize: 12, color: 'var(--t2)' }}>Last GEX read:</span>
+            <BiasChip bias={gx.bias} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>{shortDate}</span>
+            {gx.status_note && <span style={{ fontSize: 11, color: 'var(--t2)' }}>· {gx.status_note}</span>}
+          </>
+        ) : (
+          <>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>{dateStr}</span>
+            <BiasChip bias={gx.bias} />
+            {gx.bias_note && <span style={{ fontSize: 11, color: 'var(--t2)' }}>{gx.bias_note}</span>}
+          </>
+        )}
+        {isStale ? (
+          <span style={{ marginLeft: isMobile ? 0 : 'auto', fontSize: 11, color: 'var(--t3)', whiteSpace: 'nowrap', width: isMobile ? '100%' : undefined }}>
+            {lastMorningRun
+              ? <>Checked: <span style={{ color: 'var(--t2)' }}>{fmtDateTime(lastMorningRun)}</span> · Last report: {updStr}</>
+              : `Last report: ${updStr}`}
+          </span>
+        ) : (
+          <span style={{ marginLeft: isMobile ? 0 : 'auto', fontSize: 11, color: 'var(--t3)', whiteSpace: 'nowrap', width: isMobile ? '100%' : undefined }}>
+            Updated: {updStr}
+          </span>
+        )}
       </div>
 
       {/* Body */}
@@ -65,7 +96,7 @@ export function SignalsView() {
         <div style={{ flex: 1, overflowY: isMobile ? 'visible' : 'auto', padding: isMobile ? 10 : 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <GexCharts spyLevels={spyLevels} qqqLevels={gx.qqq} />
           {gx.signals.length > 0 && <SignalsTable signals={gx.signals} />}
-          {gx.log.length > 0 && <DayLog log={gx.log} />}
+          {gx.log.length > 0 && <DayLog log={gx.log} date={gx.date} />}
         </div>
       </div>
     </div>

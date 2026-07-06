@@ -14,10 +14,11 @@ click Advanced → Proceed to accept the self-signed cert (one-time only).
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-from ib_insync import IB, Option
+from ib_insync import IB, Option, Stock, Order
 from datetime import date, timedelta
 import asyncio
 import logging
+import os
 import random
 
 logging.getLogger('ib_insync').setLevel(logging.WARNING)
@@ -37,7 +38,10 @@ def _allow_private_network(resp):
     return resp
 
 IB_HOST = '127.0.0.1'
-IB_PORT = 4001   # 4001 = live, 4002 = paper
+# 4001 = live, 4002 = paper. Override via `IB_PORT=4002 python3 ibkr_proxy.py` so
+# testing /place_order in paper mode never requires editing this file (and
+# forgetting to switch it back before running live).
+IB_PORT = int(os.environ.get('IB_PORT', 4001))
 
 
 def _new_client_id():
@@ -246,6 +250,156 @@ def option_prices():
         if not specs:
             return jsonify({'error': 'empty request body'}), 400
         result = asyncio.run(_price_options(specs))
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 503
+
+
+# ── Place order (admin-only, real money) ────────────────────
+# Scope guardrail: this proxy is local-only and never deployed (see the module
+# docstring). This endpoint places a REAL order against whatever account IB
+# Gateway is logged into — it is not, and must never become, reachable for
+# arbitrary subscribers. The admin UI gates the button behind the
+# `ibkr_live_trading_enabled` app_config flag (migration 052); this endpoint
+# itself has no additional gate, so treat that UI gate as the only safety
+# check and keep this proxy off the public internet.
+#
+# NOT YET VERIFIED against a live/paper Gateway — test in paper mode
+# (IB_PORT = 4002) before ever pointing this at port 4001 (live).
+async def _place_order(spec):
+    """
+    spec: { symbol, instrument: 'SHARES'|'OPTION', side: 'BUY'|'SELL', quantity,
+            order_type: 'MKT'|'LMT', limit_price?, strike?, right?, expiry? }
+    Returns { status, order_id, perm_id, avg_fill_price?, filled_quantity?, error? }.
+    Resolves the contract with the same qualify → 3rd-Friday fallback → ask-IB
+    passes /option_prices uses (so a leg's expiry string resolves identically
+    whether it's being priced or traded), places the order, then polls the
+    live connection briefly for a fill. IBKR fills are asynchronous — a still-
+    working order comes back `Submitted` with an order_id for /order_status.
+    """
+    ib = IB()
+    try:
+        await ib.connectAsync(IB_HOST, IB_PORT, clientId=_new_client_id(), readonly=False)
+
+        if spec['instrument'] == 'SHARES':
+            contract = Stock(spec['symbol'], 'SMART', currency='USD')
+            try:
+                await ib.qualifyContractsAsync(contract)
+            except Exception as exc:
+                return {'error': str(exc)}
+            if not (contract.conId and contract.conId > 0):
+                return {'error': 'unresolved'}
+        else:
+            raw = str(spec['expiry'])
+            is_month = len(raw) == 6 and raw.isdigit()
+
+            def _opt(exp):
+                return Option(spec['symbol'], str(exp), float(spec['strike']), spec['right'].upper(), 'SMART', currency='USD')
+
+            contract = _opt(raw)
+            try:
+                await ib.qualifyContractsAsync(contract)
+            except Exception:
+                pass
+
+            if not (contract.conId and contract.conId > 0) and is_month:
+                contract = _opt(_third_friday(raw))
+                try:
+                    await ib.qualifyContractsAsync(contract)
+                except Exception:
+                    pass
+
+            if not (contract.conId and contract.conId > 0):
+                try:
+                    details = await ib.reqContractDetailsAsync(_opt(raw))
+                except Exception as exc:
+                    return {'error': str(exc)}
+                contracts = [d.contract for d in details if d.contract.conId and d.contract.conId > 0]
+                if not contracts:
+                    return {
+                        'error': 'ambiguous',
+                        'possibles': [
+                            {'expiry': d.contract.lastTradeDateOrContractMonth,
+                             'strike': d.contract.strike, 'right': d.contract.right}
+                            for d in details
+                        ],
+                    }
+                if is_month:
+                    tf = _third_friday(raw)
+                    contract = next(
+                        (c for c in contracts if c.lastTradeDateOrContractMonth in (tf, raw)),
+                        max(contracts, key=lambda c: c.lastTradeDateOrContractMonth),
+                    )
+                else:
+                    contract = contracts[0]
+
+        order_type = spec.get('order_type', 'MKT')
+        order = Order(action=spec['side'].upper(), totalQuantity=float(spec['quantity']), orderType=order_type)
+        if order_type == 'LMT':
+            order.lmtPrice = float(spec['limit_price'])
+
+        trade = ib.placeOrder(contract, order)
+
+        # Fills are async — poll this same live connection for a bounded window
+        # rather than blocking indefinitely on a partial/rejected fill.
+        for _ in range(15):
+            await ib.sleep(1)
+            if trade.orderStatus.status in ('Filled', 'Cancelled', 'ApiCancelled', 'Rejected', 'Inactive'):
+                break
+
+        status = trade.orderStatus.status
+        result = {'status': status, 'order_id': trade.order.orderId, 'perm_id': trade.order.permId}
+        if status == 'Filled':
+            result['avg_fill_price'] = trade.orderStatus.avgFillPrice
+            result['filled_quantity'] = trade.orderStatus.filled
+        elif status in ('Cancelled', 'ApiCancelled', 'Rejected', 'Inactive'):
+            result['error'] = '; '.join(str(e) for e in trade.log[-3:]) or status
+        return result
+    finally:
+        if ib.isConnected():
+            ib.disconnect()
+
+
+@app.route('/place_order', methods=['POST'])
+def place_order():
+    try:
+        spec = request.get_json()
+        if not spec:
+            return jsonify({'error': 'empty request body'}), 400
+        result = asyncio.run(_place_order(spec))
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 503
+
+
+# ── Order status (poll a still-working order from /place_order) ──
+# A fresh connection's ib.trades() starts empty — request open + completed
+# orders to hydrate it before searching, since the placing session may have
+# already disconnected by the time the UI polls again.
+async def _order_status(order_id):
+    ib = IB()
+    try:
+        await ib.connectAsync(IB_HOST, IB_PORT, clientId=_new_client_id(), readonly=True)
+        ib.reqAllOpenOrders()
+        ib.reqCompletedOrders(apiOnly=False)
+        await ib.sleep(1.5)
+        for trade in ib.trades():
+            if trade.order.orderId == order_id:
+                result = {'status': trade.orderStatus.status, 'order_id': order_id}
+                if trade.orderStatus.status == 'Filled':
+                    result['avg_fill_price'] = trade.orderStatus.avgFillPrice
+                    result['filled_quantity'] = trade.orderStatus.filled
+                return result
+        return {'error': 'order not found in this session'}
+    finally:
+        if ib.isConnected():
+            ib.disconnect()
+
+
+@app.route('/order_status/<int:order_id>')
+def order_status(order_id):
+    try:
+        result = asyncio.run(_order_status(order_id))
         return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 503

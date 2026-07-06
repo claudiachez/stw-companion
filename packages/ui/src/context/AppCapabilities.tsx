@@ -1,5 +1,6 @@
 import { createContext, useContext, type ReactNode } from 'react';
 import type { Holding } from '../features/picks/api';
+import type { IbkrOrderSpec, IbkrOrderResult } from '../features/picks/ibkrOrder';
 
 /**
  * The single seam between the subscriber (web) and admin shells. Shared
@@ -21,6 +22,14 @@ export interface AppCapabilities {
   finnhubKey?: string;
   /** TwelveData API key for GEX-signal candlestick charts — injected per-app. */
   twelveDataKey?: string;
+  /**
+   * Places a real IBKR order via the admin's local proxy (ibkr_proxy.py). Admin-only:
+   * wired by apps/admin's root (see apps/admin/src/features/ibkr/placeOrder.ts);
+   * apps/web never sets this, so the "Execute/Close via IBKR" affordances in
+   * LegTimeline never render there, and this package never needs the proxy's URL.
+   * Further gated in the UI by the `ibkr_live_trading_enabled` app_config flag.
+   */
+  onExecuteIbkrOrder?: (spec: IbkrOrderSpec) => Promise<IbkrOrderResult>;
 }
 
 const DEFAULTS: AppCapabilities = {

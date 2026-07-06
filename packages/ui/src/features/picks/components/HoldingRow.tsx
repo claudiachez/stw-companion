@@ -1,6 +1,8 @@
 import type { Holding } from '../api';
 import { TIERS, ACTION_VARS, bColor, holdingPnlPct } from '@stw/shared';
 import { useQuote } from '../../../hooks/useLivePrice';
+import { RegimeBadge } from './RegimeBadge';
+import type { TickerRegime } from '../useTickerRegime';
 
 function fmtDate(s: string | null): string {
   if (!s) return '–';
@@ -16,9 +18,11 @@ interface Props {
   isUserHeld?: boolean;
   /** Narrow list pane (split dragged small): drop the secondary badges so nothing overlaps. */
   compact?: boolean;
+  /** This ticker's own trend structure + sector standing (undefined while still loading). */
+  regime?: TickerRegime;
 }
 
-export function HoldingRow({ holding: h, isSelected, maxWeight, onClick, isUserHeld, compact = false }: Props) {
+export function HoldingRow({ holding: h, isSelected, maxWeight, onClick, isUserHeld, compact = false, regime }: Props) {
   const quote = useQuote(h.ticker);
   const tier = TIERS[h.conviction] ?? TIERS[0];
   const basketColor = bColor(h.basket);
@@ -82,6 +86,7 @@ export function HoldingRow({ holding: h, isSelected, maxWeight, onClick, isUserH
               Held
             </span>
           )}
+          {!compact && <RegimeBadge regime={regime} compact />}
         </div>
         <div style={{ fontSize: 11, color: 'var(--t2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {h.name}

@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthGuard, LoginPage, Layout, ProfilePage, PortfolioPage, type NavItem } from '@stw/ui';
+import { AuthGuard, LoginPage, Layout, ProfilePage, PortfolioPage, MacroView, type NavItem } from '@stw/ui';
 import { PicksRoute } from './features/picks/PicksRoute';
 import { SignalsRoute } from './features/signals/SignalsRoute';
 import { SettingsPage } from './features/settings/SettingsPage';
@@ -7,6 +7,7 @@ import { SettingsPage } from './features/settings/SettingsPage';
 const WEB_NAV: NavItem[] = [
   { to: '/picks',     label: 'Stock Picks', short: 'Picks'     },
   { to: '/signals',   label: 'GEX Signals', short: 'Signals'   },
+  { to: '/macro',     label: 'Macro',       short: 'Macro'     },
   { to: '/portfolio', label: 'My Portfolio', short: 'Portfolio' },
 ];
 
@@ -20,6 +21,7 @@ export default function App() {
             <Route index element={<Navigate to="/picks" replace />} />
             <Route path="/picks"     element={<PicksRoute />} />
             <Route path="/signals"   element={<SignalsRoute />} />
+            <Route path="/macro"     element={<MacroView />} />
             <Route path="/portfolio" element={<PortfolioPage />} />
             <Route path="/profile"   element={<ProfilePage />} />
             <Route path="/settings"  element={<SettingsPage />} />
