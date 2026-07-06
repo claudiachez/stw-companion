@@ -1,18 +1,20 @@
 # STW Companion — Claude Code Guide
 
 > **⚠️ START HERE — branch.** **`staging` is the active trunk** — all feature work happens here.
-> **`staging` and `main` are in sync as of 2026-07-05** (`staging → main` PR #66 merged — full
-> production promotion of Macro Dashboard v2 + QA fixes + regime badges + admin IBKR trading + this
-> session's TwelveData rate-limit fix). Cut new feature branches from `staging`; it's currently
-> identical to `main`.
-> Migrations run to **053** (`048_macro_daily_snapshots`, `049_macro_weekly_recaps` [legacy],
-> `050_run_log_latest_view` [unrelated — GEX Signals "Checked: …" stamp], `051_macro_daily_recaps`,
-> `052_ibkr_live_trading` [admin IBKR kill switch + `leg_transactions.broker_*` columns],
-> `053_capital_allocation` [admin IBKR order-quantity suggestion defaults]) — all verified applied on
-> both PROD (`usmqbohcjcyszjxxvnqu`) and sandbox (`uolabcgbnrkhzpwuvzlk`) as of 2026-07-05 (applied via
-> the Supabase MCP directly, not the SQL editor — same effect).
-> `app_config.ibkr_live_trading_enabled` = **`0` on both PROD and sandbox** (confirmed 2026-07-05 —
-> sandbox was left on `1` from prior UI testing, now turned back off via the Config page).
+> **`staging` is 2 commits ahead of `main` as of 2026-07-06** (`a57f166`/`af174fc`, pre-existing from the
+> prior session — unrelated to this session's work). **This session's entire Week-1 integrity-guardrails
+> build is on an OPEN, UNMERGED PR** — [PR #67](https://github.com/claudiachez/stw-companion/pull/67)
+> (`claude/week1-integrity-guardrails` → `staging`) plus one follow-up commit — **not on `staging` at
+> all yet**, host review pending. Do not assume any of that work is live until the PR merges.
+> Cut new feature branches from `staging` (not from the open PR branch, unless you're continuing that
+> exact work — ask if unsure).
+> Migrations run to **058** (`054_integrity_guardrails` [ops_log + closed-weight invariant trigger +
+> leg_transactions provenance columns], `055_risk_limits_engine` [risk_config + ticker_sector_map],
+> `056_risk_violation_acks`, `057_regime_daily` [+ `traders.regime_proxy`],
+> `058_limits_premium_tier` [PROD only — see below]) — **054–057 verified applied on both PROD
+> (`usmqbohcjcyszjxxvnqu`) and sandbox (`uolabcgbnrkhzpwuvzlk`) as of 2026-07-06**; **058 is PROD-only**
+> (sandbox has no `tiers`/`profiles` tables at all — a pre-existing, documented gap, not a pending task).
+> `app_config.ibkr_live_trading_enabled` = `0` on both PROD and sandbox (confirmed 2026-07-05).
 > If migrations stop at 021 you are on a stale checkout, re-sync.
 > **First commands every session:**
 > `git fetch origin && git checkout staging && git pull --ff-only`, **then cut a feature branch**
@@ -43,35 +45,44 @@
 
 ---
 
-## Current Status — TwelveData rate-limit bug fixed + shipped to production (handoff 2026-07-05)
+## Current Status — Week 1 integrity guardrails built, awaiting PR review (handoff 2026-07-06)
 
-**NEXT SESSION = `staging` and `main` are in sync — everything is in production, including this
-session's fix.** This session found the REAL reason the per-ticker regime badge never rendered: it
-was never the "daily quota exhausted" cause diagnosed on 2026-07-03 — that was a real, separate event,
-but the actual structural bug (still present after that quota reset) is that `tdBatchCloses()` bundled
-many symbols into one comma-joined TwelveData call assuming that avoided the free tier's rate limit;
-TwelveData actually bills **1 credit per symbol, not per HTTP call**, so any batch over 8 symbols
-429'd unconditionally, every time — this was also silently degrading the already-shipped Macro tab
-(Sector Rotation, Trend Structure, Volatility/Stress, Sentiment Gauge breadth all fire their own
-uncoordinated batch calls on load). Fixed by chunking to ≤8 symbols with ~65s pacing (see "New this
-session" below) — verified at the network level (429→200, pacing recovers across chunk boundaries),
-merged to `staging` via PR #65, then promoted `staging → main` via PR #66 (host-approved) — **the
-regime badge fix is live in production, but its actual visual render (the trend-structure chip
-appearing on a held ticker) was NOT re-confirmed in-browser after the fix** — a cold load takes
-several minutes to fully populate (paced ≤8 symbols/65s), so re-check on a real session rather than
-assuming. The IBKR order flow remains **functionally verified in the browser but never tested against
-a real IB Gateway** (no Gateway access from this environment) — unchanged from last session, still in
-Next Steps. Below that, the Macro Dashboard v2 work from the 2026-07-02 handoff is unchanged — no
-app/repo code changed there since except the rate-limit fix. That prior session (2026-07-02) also did
-**out-of-repo routine maintenance only** (no commits):
-fixed a dedup bug in the `stw-transcripts` routine (it edits Discord posts in place — see Data
-Ingestion section for the durable rule), processed the missed Episode 29 webinar, and added a
-verbatim portfolio-update archive step to `stw-friday-weighting`. None of this touched
-`packages/`/`apps/`/`supabase/migrations/` — see Data Ingestion below if picking this up, otherwise
-skip straight to Next Steps. The Macro tab's full v2 rebuild (spec:
-[`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md)) is now **feature-complete and
-QA-verified on `staging`** — all 11 modules, including the two that were previously deferred (P2 5D
-trend engine, P3 Event Risk) and Sector Rotation. Read the spec first if extending any module.
+**NEXT SESSION = the entire Week-1 build described below is on an OPEN PR, not on `staging`.**
+[PR #67](https://github.com/claudiachez/stw-companion/pull/67) (`claude/week1-integrity-guardrails` →
+`staging`) plus one follow-up commit implements all 7 items from
+[`plans/integrity-guardrails.md`](plans/integrity-guardrails.md) — full breakdown, verification status,
+and every deviation from the source spec are in
+[`plans/integrity-guardrails-report.md`](plans/integrity-guardrails-report.md) (read that before this
+section if picking up any of this work). In short: fixed the `macro-snapshot` cron's real bug (a
+missing Netlify timeout override, not the non-discovery first suspected), corrected 8 PROD holdings
+with a phantom nonzero weight on Closed positions + added a DB trigger enforcing that invariant, shipped
+an additive integrity migration (`ops_log`, provenance columns on `leg_transactions`, an ET-safe
+trading-date helper), built a new per-user risk-limits engine (flags only, no enforcement — extended
+same-session to a Premium-gated subscriber feature in Settings, see below), and built `regimeGate()` +
+`regime_daily` schema for an advisory market-regime light (deliberately NOT integrated with the Macro
+Dashboard composite below — two separate systems on purpose). **Because none of this is merged yet, the
+Macro tab's known bugs described below (empty `macro_daily_snapshots`) are STILL LIVE on `staging`/`main`
+today** — the fix exists only on the open PR.
+
+**Host-directed extension, same session:** after reviewing the shipped admin-only Limits panel, the host
+asked to extend it to subscribers immediately (Premium tier, self-service, editable thresholds) rather
+than deferring — see the report's "Extended to a subscriber-facing feature" subsection under Item 2.
+
+**Also this session:** all 36 (PROD) / 37 (sandbox) `leg_transactions` rows that were stored as bare
+midnight-UTC placeholders (see the report's Item 1 section) were stamped with an assumed 4:00pm ET
+market-close time-of-day on their existing, already-confirmed-correct date — a direct data fix, not a
+migration; logged to `ops_log` on both environments.
+
+**Host has asked for a UX proposal before any further building** — see Next Steps #1. Do not start
+implementing My Portfolio/Settings changes without presenting and getting sign-off on a proposal first.
+
+The IBKR order flow remains **functionally verified in the browser but never tested against a real IB
+Gateway** (no Gateway access from this environment) — unchanged, still in Next Steps. Below that, the
+Macro Dashboard v2 work is unchanged from the 2026-07-02/07-05 handoffs — no app/repo code changed there
+this session except via the still-unmerged cron fix above. The Macro tab's full v2 rebuild (spec:
+[`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md)) is **feature-complete and QA-verified
+on `staging`** — all 11 modules, including the two that were previously deferred (P2 5D trend engine, P3
+Event Risk) and Sector Rotation. Read the spec first if extending any module.
 
 **Architecture (the v2 fix):** the old single MA table mixed trend, stress, rates and positioning into
 one bucket. Now each module answers one question, and the **Market Regime is a weighted score**, not a
@@ -103,12 +114,15 @@ US10Y in Rates+Dollar. Pure scorers + 94 unit tests in `packages/shared/src/util
   "050_macro_snapshot_scores" — that migration doesn't exist; this was a documentation error, now fixed.)
 - `051_macro_daily_recaps` — written by `macro-recap-am/pm` scheduled fns + admin Regenerate; RLS read-only for `authenticated`
 
-**⚠️ Unverified this session:** `macro_daily_snapshots` (048) was still **empty on PROD** as of
-2026-07-02 ~7:48pm ET, well after the 4:30pm ET scheduled run and after the `macro-snapshot.ts` fix
-(commit `3aa5528`) was pushed to `staging` earlier the same day. `macro_daily_recaps` (051) DID get a
-fresh PM row that day, confirming scheduled functions are firing on this branch/site — so either the
-snapshot function needs another scheduled cycle to prove out, or it's still failing silently. **Check
-`macro_daily_snapshots` for a row dated 2026-07-02 or later before trusting the 5D trend engine.**
+**⚠️ Still true as of 2026-07-06:** `macro_daily_snapshots` (048) is **still empty on both PROD and
+sandbox** — confirmed directly, not assumed. The 2026-07-02 fix (commit `3aa5528`, switching off
+`@supabase/supabase-js`) was necessary but not sufficient: the real remaining bug, found 2026-07-06, is
+that `apps/web/netlify.toml` never gave `macro-snapshot` a timeout override (unlike every sibling
+scheduled function), so it was silently falling back to Netlify's short default given its ~10 sequential
+external API calls. **That fix is built (`plans/integrity-guardrails-report.md` Item 0) but only exists
+on the open PR #67** — until that merges and a scheduled run actually fires, this table stays empty and
+the 5D trend engine has no real data. Don't assume a third new root cause here without first checking
+whether PR #67 has merged and at least one scheduled cycle has passed since.
 
 **Netlify env vars required:**
 - Web site: `ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL`, `VITE_TWELVEDATA_KEY`
@@ -116,11 +130,13 @@ snapshot function needs another scheduled cycle to prove out, or it's still fail
 - Optional: `MACRO_RECAP_MODEL` (overrides default claude-sonnet-4-6 → haiku fallback)
 - **All Netlify functions now use `.trim()` on env vars** to guard against pasted-key whitespace.
 
-**✅ Production deploy done (2026-07-05):** `staging → main` promoted via PR #66 (host-approved) —
-everything since the 2026-06-23 event-sourcing promotion, including PRs #50–#65 and all Macro
-Dashboard v2 + QA + regime-badge/IBKR-trading + rate-limit-fix work, is now live on production.
-`staging` and `main` are identical as of this handoff. Any future promotion still needs **explicit
-approval** — this is a standing rule, not resolved by precedent.
+**Production deploy history (last one 2026-07-05):** `staging → main` promoted via PR #66 (host-approved)
+— everything since the 2026-06-23 event-sourcing promotion, including PRs #50–#65 and all Macro
+Dashboard v2 + QA + regime-badge/IBKR-trading + rate-limit-fix work, was live on production as of that
+date. **As of this handoff (2026-07-06), `staging` has moved 2 commits ahead of `main` again** (this
+session's CLAUDE.md edits) and the entire Week-1 guardrails PR (#67) sits on top of that, unmerged into
+`staging`. Any future promotion still needs **explicit approval** — this is a standing rule, not
+resolved by precedent.
 
 **Event-sourcing migration plan is CLOSED (on `main` since 2026-06-23) — do not reopen.** The weight model,
 locked decisions, and Phase-5 routine semantics below remain authoritative reference.
@@ -227,6 +243,21 @@ close in this ledger.
 `revert_legacy_category.sql` (drops the bad Legacy category) · `040_sandbox_verify.sql` (trigger test) ·
 `legs_inspect.sql` (inspect legs/diary) · `zzadea_populate.sql` (seed test fixture).
 
+**Decisions locked — integrity guardrails / limits engine / regime gate (host, 2026-07-06, PR #67):**
+the limits engine (`packages/shared/src/utils/limits.ts`) is **flags only, forever, by design** —
+nothing in this codebase enforces a position/sector/gross limit or a drawdown-ladder target on any order
+path; it surfaces breaches for a human to act on. Same for the advisory regime gate
+(`packages/shared/src/utils/regime.ts`'s `regimeGate()`) — see `docs/REGIME_EXIT_v0.md` for the
+(unsigned) manual playbook a human would follow off it. **`regimeGate()` must never import from or be
+unified with `macro.ts`'s Macro Dashboard composite** — deliberate, documented duplication; the gate
+stays frozen (bump `engine_version` on any parameter change) while the Macro scorers evolve freely.
+**Limits is a Premium-gated subscriber feature** (host decision, extending the original admin-only
+scope same-session) — subscribers edit their own `risk_config` thresholds freely, no operator approval
+required; gated via the existing `tiers.modules` mechanism (`'limits'` added to the `premium` tier,
+migration 058). `ticker_sector_map` is a small, static, admin-editable table — explicitly not a live
+data-feed integration, and explicitly not the same thing as `macro.ts`'s Finnhub-industry
+`mapIndustryToSector()` algorithm (different, unrelated systems despite the superficial similarity).
+
 **Tooling:** `pnpm` not on PATH — use `corepack pnpm …` or `~/.local/bin/pnpm`. No local Postgres (can't
 run DDL locally — apply migrations via the Supabase SQL editor). Prod service key (read-only checks) at
 `~/Documents/Claude/Scheduled/.supabase-service-key`. Sandbox anon key in `apps/admin/.env.local`.
@@ -310,31 +341,55 @@ it, shipped it to production, then separately investigated + fixed a live data-i
 
 ## Next Steps
 
-1. **Visually confirm the regime badge actually renders** now that the rate-limit fix is live. Open a
-   held ticker's detail page (or the Picks list at normal width) and check for the trend-structure
-   chip — allow several minutes on a cold load (paced ≤8 symbols/65s) before concluding it's still
-   broken. If it's blank even after a full population cycle, that's a new, third bug — don't assume
-   it's the same root cause as the last two.
+1. **PRESENT A PROPOSAL FIRST — do not start building.** The host reviewed this session's shipped
+   Limits panel and asked for a redesign of My Portfolio + Settings before any more code is written.
+   Requested, in the host's own words:
+   - **Settings layout:** put "Limits engine — flags only" and "Your thresholds"
+     (`packages/ui/src/features/limits/LimitsPanel.tsx` + `RiskConfigForm.tsx`, currently stacked
+     single-column under IBKR Connection in `apps/web/src/features/settings/SettingsPage.tsx`) into a
+     2-column layout next to the IBKR Connection card. Also review the Sync button — it currently
+     appears in two places (the IBKR Connection card's own "Sync Portfolio" button, and
+     `LimitsPanel`'s "Sync & Evaluate", both calling the same `useSyncPortfolio`) and needs one logical
+     placement, not a duplicate.
+   - **Move Gross Exposure / Position Concentration / Sector Concentration OUT of Settings, onto My
+     Portfolio instead.** Settings should end up holding only account setup (IBKR connection + editable
+     thresholds); the violation displays belong with the position data they're about, on
+     `packages/ui/src/features/portfolio/PortfolioPage.tsx`.
+   - **Bigger feature:** on My Portfolio, clicking a ticker currently navigates to STW's own tracked
+     position for that ticker. Instead it should open a **detail pane for the user's own position**,
+     cross-referencing: whether the user is tailing that pick vs. STW (or another trader), the new
+     limits/regime indicators from this session, and open/closed P&L (**historic closed-position P&L
+     data is not built yet** — see the old item on this below, still relevant background).
+   - The host was explicit: **write and present a proposal for how My Portfolio changes, get sign-off,
+     before implementing anything.**
 
-2. **Live-test the admin IBKR order flow against a real IB Gateway** — cannot be done from this
+2. **Confirm PR #67's status before continuing any Week-1 guardrails follow-up work.**
+   [PR #67](https://github.com/claudiachez/stw-companion/pull/67) was open, unmerged, host-review-pending
+   as of this handoff. Full detail on what's built vs. deferred:
+   [`plans/integrity-guardrails-report.md`](plans/integrity-guardrails-report.md). Once merged:
+   - Verify a real `macro_daily_snapshots` row lands after the next scheduled run (or invoke
+     `apps/web/netlify/functions/macro-snapshot.ts` directly via `curl` — no code change needed, just
+     needs the fix to be live).
+   - Run the `regime_daily` backfill (`apps/admin/netlify/functions/regime-daily.ts`,
+     `?backfill=1&days=N&before=YYYY-MM-DD`) across enough TwelveData quota cycles to reach the spec's
+     ~2000-present ask, then run the 3 spot-checks from the acceptance criteria (a 2022 double-RED day,
+     a 2024 GREEN+GREEN day, an Aug-2024 vol-inversion day).
+   - Populate `ticker_sector_map` (currently empty on both environments) with real ticker→sector rows —
+     until then, every position in the Limits engine's sector-concentration check rolls up under
+     "Unmapped". Admin-editable table, no code needed, not blocked by anything else.
+
+3. **Live-test the admin IBKR order flow against a real IB Gateway** — cannot be done from this
    environment. In order: (1) `IB_PORT=4002 python3 ibkr_proxy.py` against Gateway in **paper** mode,
    (2) place a real paper order end-to-end from the "Open via IBKR" modal, confirm the fill patches the
    diary row's price correctly, (3) test "Close via IBKR" on an open leg, (4) only after both work
    cleanly, consider port 4001 (live). Flag if `/order_status`'s `reqAllOpenOrders`/`reqCompletedOrders`
    lookup doesn't find a previously-placed order from a new connection.
 
-3. **Phase 4 admin Manage area, Parts B/C — still not built** (Part A, Config, shipped 2026-07-03).
+4. **Phase 4 admin Manage area, Parts B/C — still not built** (Part A, Config, shipped 2026-07-03).
    Spec: [`plans/phase4_admin_manage.md`](plans/phase4_admin_manage.md). **Categories CRUD**
    (delete-guarded — block or reassign-to-Uncategorized on delete) and **Traders** (read-only
    recommended — only 2 seeded, FK'd everywhere, high-risk/low-value to make editable). No migrations
    expected.
-
-4. **Verify `macro_daily_snapshots` (migration 048) is actually populating** — still confirmed **empty
-   on PROD as of 2026-07-05**, well after the `macro-snapshot.ts` fix (commit `3aa5528`, 2026-07-02)
-   shipped. `macro_daily_recaps` (051) IS getting fresh rows, so scheduled functions are firing on this
-   site — either the snapshot function needs more scheduled cycles, or it's still failing silently.
-   Check Netlify function logs for `macro-snapshot` before spending more time re-diagnosing from the DB
-   side alone.
 
 5. **Macro Dashboard — remaining roadmap item** (spec: [`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md)).
    All 11 modules are built and in production. The one item left from the spec:
@@ -348,20 +403,17 @@ it, shipped it to production, then separately investigated + fixed a live data-i
    - **Global Activity Feed** — one cross-ticker, reverse-chron feed merging Commentary + Transactions across
      all holdings, filterable. No schema (reads `conviction_comments` + `leg_transactions`). Low-cost.
 
-7. **Subscriber closed-position P&L history — explicitly postponed by the host, design already
-   researched.** The subscriber IBKR Flex query returns *open positions only* and the sync is
-   delete-all-then-insert; closed history needs a genuinely different append-only, dedup-on-execution-id
-   sync (a second Flex Query template + a new `user_closed_trades` table). Don't build until the host
-   asks again.
+7. **Subscriber closed-position P&L history — now directly relevant to item 1's proposal ask** (the
+   host wants open/closed P&L in the new My Portfolio ticker detail pane), but the underlying data
+   pipeline is still not built: the subscriber IBKR Flex query returns *open positions only* and the
+   sync is delete-all-then-insert; closed history needs a genuinely different append-only,
+   dedup-on-execution-id sync (a second Flex Query template + a new `user_closed_trades` table). Surface
+   this constraint in the item-1 proposal (e.g. a placeholder/"coming soon" state in the detail pane)
+   rather than blocking the whole feature on it.
 
 8. **Future features (not migration work):** inline 2-line leg editing in the modal (deferred); `$100k`
    notional + SPY benchmark (the `spy_daily` table from migration 032 already exists; the population
    cron + benchmark UI are unbuilt).
-
-9. **`plans/integrity-guardrails.md`** — a self-contained build request the host prepared for a NEW
-   session (Week 1: integrity batch + risk guardrails + advisory regime light). Explicitly scoped to
-   NOT integrate with the existing Macro Dashboard scoring — read that file in full before starting;
-   it's meant to be pasted into its own session, not continued from this handoff.
 
 **Sandbox gaps (not blocking, dev-only):** (a) the **`prev_conviction_level` backfill** was never run on
 sandbox, so the Conviction Changes block won't render there until it is (or until a real batch lands); (b) the
@@ -402,7 +454,7 @@ apps/
   admin/                     admin shell: no paywall, Edit + Users + Config + IBKR (pricer + order placement)
     ibkr_proxy.py            local IBKR writer (run on your machine, not deployed)
     netlify.toml             (Netlify base dir = apps/admin)
-supabase/migrations/         001..053 — single source of truth for DB schema/RLS
+supabase/migrations/         001..058 — single source of truth for DB schema/RLS (058 on open PR #67)
 CLAUDE.md                    this file
 ```
 
@@ -484,7 +536,9 @@ OAuth on web does a full-page redirect).
 ## Database (Supabase)
 
 - Project: `usmqbohcjcyszjxxvnqu.supabase.co`; client created per-app and injected into `@stw/ui`.
-- `supabase/migrations/` is the single source of truth (through **053**).
+- `supabase/migrations/` is the single source of truth (through **058**, on the open PR #67 —
+  **054–057 verified applied on both PROD and sandbox; 058 is PROD-only** — sandbox has no
+  `tiers`/`profiles` tables at all, a pre-existing gap, so it's N/A there, not pending).
   **Claude authors migrations; you apply them** via the Supabase SQL editor / `supabase db push`.
 - **Local DB backups → gitignored `backups/`** (never committed — may carry PII), named
   `<date>_<purpose>.json` (e.g. `*_pre-coldrop.json`). Take a fresh logical snapshot of the
@@ -492,11 +546,33 @@ OAuth on web does a full-page redirect).
   `pg_dump`; pull tables via the REST API with the service key, or `select json_agg(...)`.
 - Tables: `holdings`, `signals`, `profiles`, `tiers`, `run_log`,
   `user_positions`, `holding_transactions`, `conviction_comments`, plus the event-sourced
-  `legs` / `leg_transactions`, `categories`, `traders`, `app_config`.
+  `legs` / `leg_transactions`, `categories`, `traders`, `app_config`, and (added by the Week-1
+  guardrails PR #67) `ops_log`, `risk_config`, `ticker_sector_map`, `risk_violation_acks`,
+  `regime_daily` — see "Integrity guardrails" below.
   RLS on `holdings`/`signals` restricts writes to `cc@claudiachez.com`. `user_positions`
   uses user-owned RLS — each subscriber reads and writes only their own rows.
   The admin IBKR proxy now prices STW's option legs and writes **`legs.mark_price`** (the old
   `last_pnl_*` / `ibkr_legs` columns on `holdings` were dropped in 034).
+- **`holdings.current_weight` must be 0 whenever `last_action` is `'Closed'` or `'Expired'`** —
+  structurally enforced by a `BEFORE INSERT OR UPDATE` trigger (`fn_check_closed_weight_zero`,
+  migration 054) that `RAISE EXCEPTION`s rather than silently coalescing. This exists because 8 PROD
+  holdings were found with a phantom nonzero weight on a Closed position (traced to a manual
+  flag-resolution path, not the normal close path) — see
+  [`plans/integrity-guardrails-report.md`](plans/integrity-guardrails-report.md) Item 0.5.
+- **`leg_transactions.weight` is `NOT NULL`** (migration 054) — plus three provenance columns:
+  `weight_status` (stated/split_derived/resolved_late/assumed_split/zero_by_spec — NULL on historical
+  rows = unknown provenance), `source` (live/snapshot_reconciled/backfill, default `'live'`), and
+  `date_precision` (day/week, default `'day'`). Live ingestion routines populate `weight_status`/`source`
+  going forward — see the SKILL.md amendments referenced in Data Ingestion below.
+- **Integrity guardrails (`ops_log`, `risk_config`, etc.):** `ops_log` is a queryable backlog of
+  operational events (outages, maintenance pauses, manual data corrections) — previously these only
+  lived in `run_log` free text. `risk_config`/`ticker_sector_map`/`risk_violation_acks` back the
+  per-user, flag-only limits engine (`packages/shared/src/utils/limits.ts` +
+  `packages/ui/src/features/limits/LimitsPanel.tsx`, shared by apps/admin unrestricted and apps/web
+  Premium-gated via `tiers.modules` including `'limits'`). `regime_daily` + `traders.regime_proxy` back
+  the advisory regime gate (`packages/shared/src/utils/regime.ts`'s `regimeGate()`) — **deliberately not
+  integrated with the Macro Dashboard's `macro.ts` composite; keep these two systems separate.** Full
+  detail in [`plans/integrity-guardrails-report.md`](plans/integrity-guardrails-report.md).
 - **Transaction History is auto-logged by a DB trigger** (`stw_log_holding_transaction`,
   migration 016): any non-`Hold` change to a `holdings` row's `last_action`/`action_date`
   writes a `holding_transactions` row — so every writer (admin Edit form *and* the external
@@ -549,6 +625,13 @@ documented here because the Supabase schema is the contract between it (writer) 
 - **High-water mark:** each routine first reads the newest `run_log.last_message_ts` for its channel, processes only messages newer than that, then writes a fresh `run_log` row. This makes every run idempotent — a message/recording/snapshot is processed exactly once, no matter which path fires. **Completeness is critical:** scroll Discord back to the *prior* mark and process EVERY message in the gap before advancing — the newest screenful loads first, so stopping early silently skips mid-gap messages while the mark moves past them (this dropped SYNA/TENB/GDYN on 6/26).
 - **Extract intent, not the surface verb.** The host **deliberately obfuscates alerts to fool copy-bots** (confirmed 2026-06-26): a disguised "buy / hang on / revisit" can be a real **Close** (tells: "tossed/stopped out", "rules are rules", "I often sell bottoms"), and he may **omit the ticker** (name only, e.g. "Agility Robotics SPAC" = $CCXI → research and resolve the symbol). Still never infer weights/conviction from sizing; flag genuinely ambiguous actions rather than guessing.
 - **Edited posts can defeat a naive high-water mark** (confirmed 2026-07-02, `stream-library-stw`): the host routinely **edits the same Discord message in place** to add new content (e.g. appending Episode 29 to the same post that already held Episodes 25–28), only posting a new message when he hits the character limit. Discord edits do **not** change a message's `id` or original `timestamp` — only `edited_timestamp` moves — so an ID/timestamp-only dedup check can silently treat a freshly-edited post as already processed. `stw-transcripts`' `SKILL.md` now checks for an "(edited)" marker and cross-references the post's stated episode number against `run_log.summary` before skipping; apply the same caution to any routine reading a channel where the host might behave the same way.
+- **A manual/backfilled `leg_transactions` entry must carry the host's real original Discord message
+  timestamp as `executed_at`** (real time-of-day, ET-correct), never a bare date that serializes to
+  midnight UTC — confirmed as a real bug 2026-07-06 (36+ historical rows had exactly this problem; fixed
+  by stamping an assumed 4pm ET market-close time rather than researching each one, see
+  [`plans/integrity-guardrails-report.md`](plans/integrity-guardrails-report.md) Item 1). `source` must
+  also be set (`'snapshot_reconciled'` for a Friday truth-up reconciliation insert, per the cascade in
+  `stw-friday-weighting`'s `SKILL.md`) — the machine-readable marker, never the free-text `notes`.
 
 **The four routines:**
 
@@ -655,6 +738,15 @@ Output format: **`Mon D · H:MM AM ET`** (Eastern Time, year omitted).
 - Label pattern: `[Action]: ${fmtDateTime(value)}` — e.g. `Last synced: Jun 5 · 7:46 AM ET`.
 - Never call `toLocaleString` / `toLocaleTimeString` directly in components for timestamps.
 - **No per-component date helpers** (e.g. a local `fmtStamp`) — import `fmtDateTime`. This covers every full "as of" timestamp: column labels, source lines, tooltips, alerts. (Exceptions: a date-only display like `action_date`, or a compact intraday tag like the Signals `@ 4:00 PM` price time — neither is a full timestamp.)
+- **Trading-date derivation from `leg_transactions.executed_at` uses `tradingDateET()`** (also in
+  `@stw/shared`, next to `fmtDateTime`), never a hand-rolled UTC or ET cast. A naive
+  `executed_at AT TIME ZONE 'America/New_York'` cast mis-assigns evening-ET events (mis-attributing them
+  a day early or late depending on direction) — `tradingDateET()` handles this correctly, **and**
+  special-cases an exact-midnight-UTC timestamp (a placeholder date-only entry with no real captured
+  time) by reading its date directly rather than TZ-converting it, since converting would roll an
+  already-correct date back to the previous day. See
+  [`plans/integrity-guardrails-report.md`](plans/integrity-guardrails-report.md) Item 1 for the bug this
+  prevents (found live: 36+ historical rows would have been silently corrupted by the naive approach).
 
 ### Ticker links
 **Any ticker shown anywhere in the UI must be a hyperlink to its detail page** — never
