@@ -55,8 +55,8 @@ export function useSectorRotation(twelveDataKey?: string, skipConstituents = fal
 
     async function fetchAll() {
       const symbols = ['SPY', ...SECTOR_ETFS.map((s) => s.symbol)];
-      // One batched TwelveData call for all 12 ETFs — avoids the 8-req/min rate
-      // limit that sequential or parallel per-symbol calls hit on the free tier.
+      // 12 ETFs via tdBatchCloses, which chunks + paces internally to respect
+      // the free tier's 8-credit/min cap (1 credit per symbol, not per call).
       const closesMap: Record<string, number[]> = twelveDataKey
         ? await tdBatchCloses(symbols, twelveDataKey, 252)
         : Object.fromEntries(symbols.map((sym) => [sym, loadCloses(sym)]));

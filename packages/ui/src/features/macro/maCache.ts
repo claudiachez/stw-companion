@@ -71,11 +71,20 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// TwelveData's free tier bills ONE credit per symbol, not per HTTP call — a
+// single request for N comma-joined symbols still costs N credits. The plan
+// caps at 8 credits/minute, so any fetch (batched or not) touching more than
+// 8 uncached symbols must be split into ≤8-symbol chunks with a pause between
+// them long enough to clear the per-minute window (60s + a safety margin).
+const TD_CHUNK_SIZE = 8;
+const TD_CHUNK_DELAY_MS = 65_000;
+
 /**
- * Fetch daily closes for multiple symbols in ONE TwelveData API call (comma-
- * separated symbol list). One HTTP request avoids the 8-req/min rate-limit
- * that chunks of parallel per-symbol calls hit. Already-cached symbols are
- * served from localStorage without any network call.
+ * Fetch daily closes for multiple symbols from TwelveData, cached for the day.
+ * Splits into ≤8-symbol chunks (one comma-joined HTTP call per chunk) paced
+ * ~65s apart so a large symbol list never exceeds the free tier's 8-credit/min
+ * cap. Already-cached symbols are served from localStorage without any network
+ * call or pacing delay.
  */
 export async function tdBatchCloses(
   symbols: string[],
@@ -90,27 +99,31 @@ export async function tdBatchCloses(
   });
   if (toFetch.length === 0) return result;
 
-  try {
-    const symList = toFetch.join(',');
-    const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(symList)}&interval=1day&outputsize=${outputsize}&timezone=UTC&apikey=${key}`;
-    const data = await (await fetch(url)).json() as Record<string, unknown>;
+  for (let i = 0; i < toFetch.length; i += TD_CHUNK_SIZE) {
+    const chunk = toFetch.slice(i, i + TD_CHUNK_SIZE);
+    try {
+      const symList = chunk.join(',');
+      const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(symList)}&interval=1day&outputsize=${outputsize}&timezone=UTC&apikey=${key}`;
+      const data = await (await fetch(url)).json() as Record<string, unknown>;
 
-    for (const sym of toFetch) {
-      // Single-symbol responses come back as { status, values } directly;
-      // multi-symbol responses come back as { SYM: { status, values } }.
-      const d = (toFetch.length === 1 ? data : data[sym]) as Record<string, unknown> | undefined;
-      if (d?.status === 'ok' && Array.isArray(d.values)) {
-        const vals = d.values as Record<string, string>[];
-        const lastDate = vals[0]?.datetime ?? null;
-        const closes = [...vals].reverse().map((v) => parseFloat(v.close)).filter((v) => !isNaN(v));
-        saveCloses(sym, closes, lastDate);
-        result[sym] = closes;
-      } else {
-        result[sym] = loadCloses(sym); // stale cache fallback
+      for (const sym of chunk) {
+        // Single-symbol responses come back as { status, values } directly;
+        // multi-symbol responses come back as { SYM: { status, values } }.
+        const d = (chunk.length === 1 ? data : data[sym]) as Record<string, unknown> | undefined;
+        if (d?.status === 'ok' && Array.isArray(d.values)) {
+          const vals = d.values as Record<string, string>[];
+          const lastDate = vals[0]?.datetime ?? null;
+          const closes = [...vals].reverse().map((v) => parseFloat(v.close)).filter((v) => !isNaN(v));
+          saveCloses(sym, closes, lastDate);
+          result[sym] = closes;
+        } else {
+          result[sym] = loadCloses(sym); // stale cache fallback
+        }
       }
+    } catch {
+      for (const sym of chunk) result[sym] = loadCloses(sym);
     }
-  } catch {
-    for (const sym of toFetch) result[sym] = loadCloses(sym);
+    if (i + TD_CHUNK_SIZE < toFetch.length) await delay(TD_CHUNK_DELAY_MS);
   }
   return result;
 }
@@ -125,8 +138,8 @@ export async function fetchClosesChunked(
   symbols: string[],
   key: string,
   outputsize = 252,
-  chunkSize = 8,
-  delayMs = 2000,
+  chunkSize = TD_CHUNK_SIZE,
+  delayMs = TD_CHUNK_DELAY_MS,
 ): Promise<Record<string, number[]>> {
   const result: Record<string, number[]> = {};
   for (let i = 0; i < symbols.length; i += chunkSize) {
