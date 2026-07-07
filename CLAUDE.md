@@ -15,12 +15,13 @@
 > that PR's branch, not from `staging` (staging doesn't have this code yet).
 > **A third branch, `claude/design-system-audit`, is pushed but has no PR open yet** — cut directly
 > from `staging` (independent of PR #67/#69, no stacking), now holds all 4 planned phases of the
-> design-system build (audit → tokens → core components → enforcement/migration plan), all
-> host-reviewed at their checkpoints. **This is the branch to continue from for the actual page
-> migrations (Phase 5, not part of the original 4-phase spec)** — see "Current Status" below for what's
-> done and [`docs/design-system/migration-plan.md`](docs/design-system/migration-plan.md) for the
-> per-page order/effort. Don't open a `staging → main`-style PR for it yet; wait until migrations land
-> or the host asks.
+> design-system build (audit → tokens → core components → enforcement/migration plan) **plus all of
+> Phase 5 (the page migrations, not part of the original 4-phase spec) — Settings, My Portfolio, GEX
+> Signals, Stock Picks, and Macro are all done** (handoff 2026-07-07), all host-reviewed at their
+> checkpoints. **The full migration-plan.md scope is complete — next session's job is deciding what
+> comes after Phase 5**, not continuing it — see "Current Status" below for what's done. Don't open a
+> `staging → main`-style PR for it yet; wait until the host asks (this branch has never been reviewed
+> as a whole — only phase-by-phase).
 > Migrations run to **053 on `staging`**; **054–058 exist only on the PR #67 branch** (and per
 > [`plans/integrity-guardrails-report.md`](plans/integrity-guardrails-report.md) were already applied
 > directly to PROD, with 058 PROD-only — sandbox has no `tiers`/`profiles` tables to apply it to). The
@@ -58,15 +59,42 @@
 
 ---
 
-## Current Status — Design system Phases 1–4 all done; Phase 5 (page migrations) next (handoff 2026-07-06)
+## Current Status — Design system Phases 1–5 ALL DONE (handoff 2026-07-07) — full migration-plan.md scope complete
 
 **Branch: `claude/design-system-audit`, cut fresh from `staging` (independent of PR #67/#69), pushed
-to origin, no PR opened yet.** All four phases below were presented to the host at their checkpoint
-and approved before proceeding — see [`plans/stw-design-system.md`](plans/stw-design-system.md) for
-the full 4-phase spec (Audit → Tokens → Core components → Enforcement/migration prep). **The spec is
-now complete — the next session's job is Phase 5, executing the migration plan one page at a time**
-(see [`docs/design-system/migration-plan.md`](docs/design-system/migration-plan.md) and Next Steps
-#1 below), still on this same branch — don't cut a new one, don't restart from `staging`.
+to origin, no PR opened yet.** All four spec phases plus the full Phase 5 page-migration pass were
+presented to the host at their checkpoints and approved before proceeding — see
+[`plans/stw-design-system.md`](plans/stw-design-system.md) for the 4-phase spec (Audit → Tokens →
+Core components → Enforcement/migration prep) and
+[`docs/design-system/migration-plan.md`](docs/design-system/migration-plan.md) for the Phase 5 plan.
+**Every page in the plan is migrated: Settings, My Portfolio, GEX Signals, Stock Picks, Macro.**
+`pnpm lint` passes clean with only pre-existing, deliberately out-of-scope entries left in
+`eslint-suppressions.json` — `GexChart.tsx`'s sanctioned canvas-API exception, plus `Layout.tsx` /
+`LoginPage.tsx` / `IbkrBadge.tsx`, none of which were ever in migration-plan.md's 5-page scope (shared
+chrome, auth, and an admin-only badge, not page content). **This branch has never been reviewed as a
+whole** — only phase-by-phase and page-by-page — so next session's job is deciding what happens to it
+(open a PR to `staging`? sweep the 4 leftover files too? something else?), not continuing the
+migration itself. See Next Steps #1 below.
+
+**Macro phase (finished this session, 2026-07-07) — the last of the 5 migration-plan.md pages:**
+14 files, 124 violations. Two real cross-file color duplications surfaced and got proper named
+tokens in `tokens.css` (not file-local workarounds — this lint rule has exactly one sanctioned home
+for any literal color): `--status-elevated` (#f97316 orange, "elevated caution" between amber-warning
+and red-negative — was hardcoded independently in both `RegimeBanner.tsx`'s "Defensive" band and
+`SentimentGauge.tsx`'s "Fear" label/gauge-arc segment) and `--sentiment-greed` (#14b8a6 teal,
+`SentimentGauge.tsx`'s "Greed" band, deliberately distinct from Extreme Greed's `--c5` so the 5-band
+scale doesn't read as a flat red/green gradient). `SentimentGauge.tsx` also had a real in-file
+duplication — the same 5 zone colors were hardcoded once in `zoneFor()` and again, independently, in
+the gauge's own `arc.subArcs` config — fixed by deriving both from one `ZONES` array. Two more
+components were **deliberately not forced onto `KpiCard`/`DataTable`**, matching the same
+information-preserving judgment calls made in Stock Picks: `ModuleScoreStrip.tsx`'s score-colored
+`detail` text (KpiCard's `secondaryValue` always renders muted, which would mute exactly the signal
+the strip exists to surface) and `TrendStructureTable.tsx`'s bucket-grouped rows (DataTable's flat
+row-per-item model can't express a colSpan group-header row interleaved between data rows). Verified
+live via the admin app in both themes; `pnpm -r typecheck`/`test`/`build` all green.
+
+**Everything below this point (Phases 1–4, plus the Stock Picks/other-page notes) is unchanged from
+the 2026-07-06 handoff — kept as the durable record of what was built and why.**
 
 **Phase 1 (audit, read-only, host-approved) — 5 docs in
 [`docs/design-system/audit/`](docs/design-system/audit/):**
@@ -507,16 +535,18 @@ it, shipped it to production, then separately investigated + fixed a live data-i
 
 ## Next Steps
 
-1. **Execute the design system migration plan — Phase 5, on `claude/design-system-audit`.** All 4
-   spec phases (audit → tokens → components → enforcement/migration plan) are done and host-approved
-   — see Current Status above, [`docs/design-system/CONTRIBUTING.md`](docs/design-system/CONTRIBUTING.md)
-   for usage, and [`docs/design-system/migration-plan.md`](docs/design-system/migration-plan.md) for
-   the per-page order and exact violation counts. **Do ONE page per session, checkpoint with the host
-   before starting the next** — same discipline as Phases 1–4, now applied per-migration-phase. Order:
-   Settings → My Portfolio → GEX Signals → Stock Picks (large — budget multiple sessions; fix the
-   P&L-color and modal-centering bugs first as their own sub-pass) → Macro. After migrating a page, run
-   `pnpm lint:prune` and commit the updated `eslint-suppressions.json` alongside the change — that's how
-   the baseline stays accurate. Check out the existing branch, don't cut a new one:
+1. **Design system Phase 5 is now fully done — decide what happens to `claude/design-system-audit`
+   next, don't keep migrating.** All 5 planned pages (Settings, My Portfolio, GEX Signals, Stock
+   Picks, Macro) are migrated and host-checkpointed per page; see Current Status above for the Macro
+   close-out and [`docs/design-system/migration-plan.md`](docs/design-system/migration-plan.md) for
+   the full per-page history. Four files remain in `eslint-suppressions.json` but are deliberately
+   out of scope, not unfinished work: `GexChart.tsx` (sanctioned canvas-API exception),
+   `Layout.tsx`/`LoginPage.tsx`/`IbkrBadge.tsx` (shared chrome/auth/admin-badge, never part of
+   migration-plan.md's 5-page list). **Ask the host before doing either of these:** (a) open the
+   first-ever PR for this branch (`claude/design-system-audit` → `staging`) — it's been reviewed only
+   phase-by-phase and page-by-page so far, never as one whole diff; (b) sweep the 4 leftover files too
+   (small, ~46 violations total) if the host wants full repo coverage before that PR. Check out the
+   existing branch either way, don't cut a new one:
    `git fetch origin && git checkout claude/design-system-audit && git pull --ff-only`.
 
 2. **Get PR #67 and PR #69 reviewed and merged** (in that order — #69 is stacked on #67). Before
