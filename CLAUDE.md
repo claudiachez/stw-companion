@@ -17,11 +17,14 @@
 > from `staging` (independent of PR #67/#69, no stacking), now holds all 4 planned phases of the
 > design-system build (audit → tokens → core components → enforcement/migration plan) **plus all of
 > Phase 5 (the page migrations, not part of the original 4-phase spec) — Settings, My Portfolio, GEX
-> Signals, Stock Picks, and Macro are all done** (handoff 2026-07-07), all host-reviewed at their
-> checkpoints. **The full migration-plan.md scope is complete — next session's job is deciding what
-> comes after Phase 5**, not continuing it — see "Current Status" below for what's done. Don't open a
-> `staging → main`-style PR for it yet; wait until the host asks (this branch has never been reviewed
-> as a whole — only phase-by-phase).
+> Signals, Stock Picks, and Macro are all done, AND (2026-07-07, after the host asked to confirm every
+> page was covered) `Layout.tsx`/`LoginPage.tsx`/`IbkrBadge.tsx`** — the non-gated login/signup screen
+> and the shared header/nav chrome rendered on every gated page in both apps, none of which were ever
+> in migration-plan.md's original 5-page list despite being visible on literally every screen. **Every
+> literal color/font-size in the whole repo is now either migrated or a documented sanctioned exception**
+> (`GexChart.tsx`'s canvas API, `LoginPage.tsx`'s Google-brand-color icon) — `pnpm lint` passes clean
+> with zero unaccounted violations. Don't open a `staging → main`-style PR for it yet; wait until the
+> host asks (this branch has never been reviewed as a whole — only phase-by-phase).
 > Migrations run to **053 on `staging`**; **054–058 exist only on the PR #67 branch** (and per
 > [`plans/integrity-guardrails-report.md`](plans/integrity-guardrails-report.md) were already applied
 > directly to PROD, with 058 PROD-only — sandbox has no `tiers`/`profiles` tables to apply it to). The
@@ -59,7 +62,7 @@
 
 ---
 
-## Current Status — Design system Phases 1–5 ALL DONE (handoff 2026-07-07) — full migration-plan.md scope complete
+## Current Status — Design system Phases 1–5 ALL DONE, whole-repo sweep also done (handoff 2026-07-07)
 
 **Branch: `claude/design-system-audit`, cut fresh from `staging` (independent of PR #67/#69), pushed
 to origin, no PR opened yet.** All four spec phases plus the full Phase 5 page-migration pass were
@@ -67,14 +70,34 @@ presented to the host at their checkpoints and approved before proceeding — se
 [`plans/stw-design-system.md`](plans/stw-design-system.md) for the 4-phase spec (Audit → Tokens →
 Core components → Enforcement/migration prep) and
 [`docs/design-system/migration-plan.md`](docs/design-system/migration-plan.md) for the Phase 5 plan.
-**Every page in the plan is migrated: Settings, My Portfolio, GEX Signals, Stock Picks, Macro.**
-`pnpm lint` passes clean with only pre-existing, deliberately out-of-scope entries left in
-`eslint-suppressions.json` — `GexChart.tsx`'s sanctioned canvas-API exception, plus `Layout.tsx` /
-`LoginPage.tsx` / `IbkrBadge.tsx`, none of which were ever in migration-plan.md's 5-page scope (shared
-chrome, auth, and an admin-only badge, not page content). **This branch has never been reviewed as a
-whole** — only phase-by-phase and page-by-page — so next session's job is deciding what happens to it
-(open a PR to `staging`? sweep the 4 leftover files too? something else?), not continuing the
-migration itself. See Next Steps #1 below.
+**Every page in the original plan is migrated: Settings, My Portfolio, GEX Signals, Stock Picks,
+Macro.** After that, the host asked to confirm coverage was actually complete — gated *and*
+non-gated pages, including login/registration — which surfaced a real gap: `Layout.tsx` (shared
+header/nav chrome on every gated page, both apps), `LoginPage.tsx` (the non-gated login **and**
+signup screen — one combined component, no separate registration page), and `IbkrBadge.tsx` (admin
+header widget) were never in migration-plan.md's 5-page list and had never been touched. **All 3 are
+now migrated too** — see the dedicated paragraph below. `pnpm lint` now passes clean with **zero
+unaccounted violations repo-wide** — the only entries left in `eslint-suppressions.json` are two
+documented, permanent, sanctioned exceptions: `GexChart.tsx`'s canvas-API colors and `LoginPage.tsx`'s
+Google-brand-color icon (see [`CONTRIBUTING.md`](docs/design-system/CONTRIBUTING.md)'s Design Token
+Rules section for why each is exempt). **This branch has never been reviewed as a whole** — only
+phase-by-phase and page-by-page — so next session's job is deciding what happens to it (open its
+first-ever PR to `staging`?), not further migration. See Next Steps #1 below.
+
+**Whole-repo sweep (2026-07-07, same session as Macro) — `Layout.tsx`, `LoginPage.tsx`,
+`IbkrBadge.tsx`:** 28 real violations fixed, 2 new sanctioned exceptions documented. Real bugs found,
+not just literal-swaps: `Layout.tsx`'s `<STWLogo>` mic icon and `LoginPage.tsx`'s login tile both
+hardcoded the dark theme's exact hex for their arrow/background regardless of active theme — fixed
+onto `var(--acc)`/`var(--surface)`, so both now correctly re-color in light theme (verified live —
+confirmed via `preview_inspect`'s computed styles, since screenshots showed a stale cached frame
+during this specific check; the actual DOM/CSS was correct). 4 new theme-invariant tokens added for
+the mic icon's fixed illustration grays (`--logo-mic-stand`/`-body`/`-outline`/`-grille` — brand-mark
+artwork, never theme-adaptive even before this migration, same category as `--action-broker`).
+`Layout.tsx`'s Sign Out red and `IbkrBadge.tsx`'s status dots turned out to be exact-value duplicates
+of existing tokens (`var(--status-negative-text)`, `var(--c3)`/`var(--acc)`/`var(--c1)`), not new
+colors. **New sanctioned exception**: `LoginPage.tsx`'s "Continue with Google" icon keeps Google's 4
+official brand colors as literals (external brand mark — there's no sensible STW token for "Google's
+blue"), documented in CONTRIBUTING.md and permanently suppressed the same way as `GexChart.tsx`.
 
 **Macro phase (finished this session, 2026-07-07) — the last of the 5 migration-plan.md pages:**
 14 files, 124 violations. Two real cross-file color duplications surfaced and got proper named
@@ -535,18 +558,16 @@ it, shipped it to production, then separately investigated + fixed a live data-i
 
 ## Next Steps
 
-1. **Design system Phase 5 is now fully done — decide what happens to `claude/design-system-audit`
-   next, don't keep migrating.** All 5 planned pages (Settings, My Portfolio, GEX Signals, Stock
-   Picks, Macro) are migrated and host-checkpointed per page; see Current Status above for the Macro
-   close-out and [`docs/design-system/migration-plan.md`](docs/design-system/migration-plan.md) for
-   the full per-page history. Four files remain in `eslint-suppressions.json` but are deliberately
-   out of scope, not unfinished work: `GexChart.tsx` (sanctioned canvas-API exception),
-   `Layout.tsx`/`LoginPage.tsx`/`IbkrBadge.tsx` (shared chrome/auth/admin-badge, never part of
-   migration-plan.md's 5-page list). **Ask the host before doing either of these:** (a) open the
-   first-ever PR for this branch (`claude/design-system-audit` → `staging`) — it's been reviewed only
-   phase-by-phase and page-by-page so far, never as one whole diff; (b) sweep the 4 leftover files too
-   (small, ~46 violations total) if the host wants full repo coverage before that PR. Check out the
-   existing branch either way, don't cut a new one:
+1. **Design system migration is now fully done, repo-wide — decide what happens to
+   `claude/design-system-audit` next, don't keep migrating.** All 5 planned pages (Settings, My
+   Portfolio, GEX Signals, Stock Picks, Macro) plus the non-planned shared/non-gated surfaces
+   (`Layout.tsx`, `LoginPage.tsx`, `IbkrBadge.tsx`) are migrated and host-checkpointed; see Current
+   Status above and [`docs/design-system/migration-plan.md`](docs/design-system/migration-plan.md) for
+   the full history. `pnpm lint` passes clean with zero unaccounted violations — only 2 permanent,
+   documented sanctioned exceptions remain in `eslint-suppressions.json` (`GexChart.tsx`'s canvas API,
+   `LoginPage.tsx`'s Google-brand-color icon). **This branch has never been reviewed as one whole
+   diff** — only phase-by-phase and page-by-page. Ask the host before opening its first-ever PR
+   (`claude/design-system-audit` → `staging`). Check out the existing branch, don't cut a new one:
    `git fetch origin && git checkout claude/design-system-audit && git pull --ff-only`.
 
 2. **Get PR #67 and PR #69 reviewed and merged** (in that order — #69 is stacked on #67). Before
