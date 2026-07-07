@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { TIERS, fmtDateTime, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING } from '@stw/shared';
+import { TIERS, fmtDateTime, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, SPACE, regimeGate } from '@stw/shared';
 import { useUserPositions, useIbkrSettings } from './useUserPositions';
 import { useSyncPortfolio } from './useSyncPortfolio';
 import { useHoldings } from '../picks/useHoldings';
+import { useConvictionChanges, type HoldingRef } from '../picks/useConvictionChanges';
 import { ConvictionBadge } from '../picks/components/ConvictionBadge';
 import { LoadingSpinner } from '../../primitives/LoadingSpinner';
 import { TickerLink } from '../../primitives/TickerLink';
@@ -13,6 +14,10 @@ import { AlertStrip } from '../../primitives/AlertStrip';
 import { KpiCard, type KpiStatus } from '../../primitives/KpiCard';
 import { AccordionList } from '../../primitives/AccordionList';
 import { useIsMobile } from '../../hooks/useIsMobile';
+import { useCapabilities } from '../../context/AppCapabilities';
+import { ViolationsSummary } from '../limits/ViolationsSummary';
+import { useLatestRegime } from '../regime/useLatestRegime';
+import { PortfolioPositionDetail, type DetailGroup } from './PortfolioPositionDetail';
 import {
   PortfolioFilterBar,
   DEFAULT_PORTFOLIO_FILTERS,
@@ -247,7 +252,10 @@ function GroupHeader({ group, onSelectTicker, showPnl, isMobile }: {
 
 // ── summary stat cards ────────────────────────────────────────
 
-function PortfolioSummary({ groups, showPnl }: { groups: PortfolioGroup[]; showPnl: boolean }) {
+function PortfolioSummary({ groups, showPnl, regimeAdvisory }: {
+  groups: PortfolioGroup[]; showPnl: boolean;
+  regimeAdvisory: ReturnType<typeof regimeGate> | null;
+}) {
   const t = useMemo(() => {
     let mv = 0, pnl = 0, cost = 0, legs = 0, sharesVal = 0, optVal = 0, optRisk = 0, tailed = 0, low = 0;
     const traderCount: Record<string, number> = {};
@@ -306,6 +314,14 @@ function PortfolioSummary({ groups, showPnl }: { groups: PortfolioGroup[]; showP
             primaryValue={t.equityPct ?? '—'}
             secondaryValue={`: ${t.optionsPct ?? '—'}`}
           />
+          {regimeAdvisory && regimeAdvisory.trend_state !== 'UNKNOWN' && (
+            <div
+              style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[1.5], fontStyle: 'italic' }}
+              title="Advisory — under forward validation. Not a trade signal."
+            >
+              Regime: {regimeAdvisory.trend_state}{regimeAdvisory.trend_state === 'RED' ? " · STW's playbook favors reducing options exposure here" : ''}
+            </div>
+          )}
         </div>
         {showPnl && (
           <div
@@ -352,17 +368,54 @@ export function PortfolioPage() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [showPnl, setShowPnl] = useState(true);
   const [filters, setFilters] = useState<PortfolioFilters>(DEFAULT_PORTFOLIO_FILTERS);
+  const capabilities = useCapabilities();
+
+  // Own-position detail pane (list+detail pattern, mirroring PicksView.tsx) — desktop
+  // resizable split, mobile full-screen swap.
+  const [selected, setSelected] = useState<string | null>(null);
+  const splitRef = useRef<HTMLDivElement>(null);
+  const [listPct, setListPct] = useState(55);
+  const [dragging, setDragging] = useState(false);
 
   const isConnected = !!(settings?.ibkr_flex_token && settings?.ibkr_query_id);
 
-  // ticker → followed-trader pick (conviction + basket). Single trader today; structured for more.
+  // ticker → followed-trader pick (conviction + basket + STW's own weight). Single trader today;
+  // structured for more.
   const pickMap = useMemo(() => {
-    const m = new Map<string, { conviction: number | null; basket: string; traders: string[] }>();
+    const m = new Map<string, { conviction: number | null; basket: string; traders: string[]; stwWeight: number | null }>();
     for (const h of stwHoldings) {
-      m.set(h.ticker, { conviction: h.conviction ?? null, basket: h.basket ?? '', traders: [FOLLOWED_TRADERS[0]] });
+      m.set(h.ticker, { conviction: h.conviction ?? null, basket: h.basket ?? '', traders: [FOLLOWED_TRADERS[0]], stwWeight: h.current_weight ?? null });
     }
     return m;
   }, [stwHoldings]);
+
+  // Declining-conviction alert (value-add, host-approved 2026-07-06): reuses the same
+  // conviction-batch classification as the Overview's Conviction Changes block — a
+  // tailed position whose latest webinar batch marked it down from where it was.
+  // Must intersect against the SUBSCRIBER'S OWN held underlyings (not just pickMap,
+  // which covers STW's entire tracked universe) — otherwise this leaks a declining-
+  // conviction alert for every STW ticker, not just ones the subscriber actually tails.
+  const heldUnderlyings = useMemo(
+    () => new Set(positions.map((p) => cleanUnderlying(p.underlying))),
+    [positions],
+  );
+  const holdingRefs = useMemo<HoldingRef[]>(
+    () => stwHoldings.map((h) => ({ ticker: h.ticker, last_action: h.last_action ?? '', action_date: h.action_date ?? null })),
+    [stwHoldings],
+  );
+  const convictionBatch = useConvictionChanges(holdingRefs);
+  const decliningTailed = useMemo(
+    () => (convictionBatch?.changes ?? []).filter((c) => c.dir === 'down' && pickMap.has(c.ticker) && heldUnderlyings.has(c.ticker)),
+    [convictionBatch, pickMap, heldUnderlyings],
+  );
+
+  // Advisory regime note (value-add) — same STW→IWM proxy + regimeGate() as the admin's
+  // RegimeLight, framed identically as advisory-only, never an instruction.
+  const { data: regimeRow } = useLatestRegime('IWM');
+  const regimeAdvisory = regimeRow ? regimeGate(
+    { close: regimeRow.close, sma200: regimeRow.sma200 },
+    { vixClose: regimeRow.vix_close, vix3mClose: regimeRow.vix3m_close },
+  ) : null;
 
   const allGroups = useMemo<PortfolioGroup[]>(() => {
     const map = new Map<string, UserPosition[]>();
@@ -459,7 +512,11 @@ export function PortfolioPage() {
   function toggleGroup(u: string) {
     setExpanded((prev) => { const n = new Set(prev); n.has(u) ? n.delete(u) : n.add(u); return n; });
   }
-  const onSelectTicker = (t: string) => navigate(`/picks?ticker=${encodeURIComponent(t)}`);
+  // Clicking a ticker on My Portfolio opens the own-position detail pane (host decision,
+  // 2026-07-06) instead of navigating straight to STW's tracked position — that's now an
+  // explicit "View STW's tracked position" link inside the pane (onViewStwPosition below).
+  const onSelectTicker = (t: string) => setSelected(t);
+  const onViewStwPosition = () => { if (selected) navigate(`/picks?ticker=${encodeURIComponent(selected)}`); };
 
   const hasPositions = allGroups.length > 0;
   const grouped = filters.groupByTicker;
@@ -467,8 +524,53 @@ export function PortfolioPage() {
   const totalCount = grouped ? allGroups.length : positions.length;
   const pad = isMobile ? '14px 12px' : '20px 24px';
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+  const selectedGroup = selected ? allGroups.find((g) => g.underlying === selected) ?? null : null;
+  const mobileDetail = isMobile && !!selectedGroup;
+
+  const staleSyncWarning = lastSynced != null && Date.now() - new Date(lastSynced).getTime() > 24 * 3600 * 1000;
+
+  function startResize(e: React.MouseEvent) {
+    e.preventDefault();
+    setDragging(true);
+    document.body.style.userSelect = 'none';
+    const onMove = (ev: MouseEvent) => {
+      const rect = splitRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const pct = ((ev.clientX - rect.left) / rect.width) * 100;
+      setListPct(Math.min(80, Math.max(30, pct)));
+    };
+    const onUp = () => {
+      setDragging(false);
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }
+
+  function detailPane() {
+    if (!selectedGroup) return null;
+    const detailGroup: DetailGroup = {
+      underlying: selectedGroup.underlying, positions: selectedGroup.positions,
+      netPnl: selectedGroup.netPnl, returnPct: selectedGroup.returnPct, marketValue: selectedGroup.marketValue,
+      isTailed: selectedGroup.isTailed, traders: selectedGroup.traders, conviction: selectedGroup.conviction,
+      hasStock: selectedGroup.hasStock, hasOption: selectedGroup.hasOption,
+    };
+    return (
+      <PortfolioPositionDetail
+        group={detailGroup}
+        ownPortfolioPct={portfolioValue > 0 ? (selectedGroup.marketValue / portfolioValue) * 100 : null}
+        stwWeight={pickMap.get(selectedGroup.underlying)?.stwWeight ?? null}
+        showPnl={showPnl}
+        onClose={() => setSelected(null)}
+        onViewStwPosition={onViewStwPosition}
+      />
+    );
+  }
+
+  const listContent = (
+    <>
       {/* Combined bar: filters scroll on the left; synced stamp (right-aligned) + eye + Sync pinned right */}
       <div style={{ display: 'flex', alignItems: 'center', background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', flexShrink: 0 }}>
         <div style={{ flex: 1, minWidth: 0, overflowX: 'auto', WebkitOverflowScrolling: 'touch' as never }}>
@@ -511,7 +613,31 @@ export function PortfolioPage() {
           <InfoCard title="No positions loaded yet." body="Click Sync to fetch your current IBKR positions." />
         ) : (
           <>
-            <div style={{ marginBottom: 18 }}><PortfolioSummary groups={allGroups} showPnl={showPnl} /></div>
+            {staleSyncWarning && (
+              <div style={{ marginBottom: 12, padding: '9px 14px', borderRadius: 6, background: 'var(--status-warning-bg)', border: '1px solid var(--status-warning-border)', color: 'var(--status-warning-text)', fontSize: FONT_SIZE.sm }}>
+                Last synced {fmtDateTime(lastSynced!)} — numbers below may be stale. Click Sync to refresh.
+              </div>
+            )}
+
+            {decliningTailed.length > 0 && (
+              <div style={{ marginBottom: 12, padding: '9px 14px', borderRadius: 6, background: 'var(--status-negative-bg)', border: '1px solid var(--status-negative-border)', color: 'var(--status-negative-text)', fontSize: FONT_SIZE.sm }}>
+                ⚠ {decliningTailed.length} tailed position{decliningTailed.length !== 1 ? 's have' : ' has'} declining STW conviction: {decliningTailed.map((c) => c.ticker).join(', ')}
+              </div>
+            )}
+
+            <div style={{ marginBottom: 18 }}><PortfolioSummary groups={allGroups} showPnl={showPnl} regimeAdvisory={regimeAdvisory} /></div>
+
+            {capabilities.canUseLimits ? (
+              <div style={{ marginBottom: 18 }}><ViolationsSummary /></div>
+            ) : (
+              <div style={{
+                marginBottom: 18, background: 'var(--surface)', border: '1px solid var(--border)',
+                borderRadius: 12, padding: '12px 16px', fontSize: FONT_SIZE.sm, color: 'var(--t3)',
+              }}>
+                <strong style={{ color: 'var(--text)' }}>Risk limits 🔒</strong> — flag concentration and
+                gross-exposure breaches in your own book, requires <strong style={{ color: 'var(--t2)' }}>Premium</strong>.
+              </div>
+            )}
 
             <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', boxShadow: 'var(--shadow)' }}>
               <div style={{ padding: '8px 13px', background: 'var(--s2)', borderBottom: '1px solid var(--bsub)', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -557,6 +683,33 @@ export function PortfolioPage() {
           </>
         )}
       </div>
+    </>
+  );
+
+  if (mobileDetail) {
+    return <div style={{ height: '100%', overflow: 'hidden' }}>{detailPane()}</div>;
+  }
+
+  if (!isMobile && selectedGroup) {
+    return (
+      <div ref={splitRef} style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+        <div style={{ flex: `0 0 ${listPct}%`, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+          {listContent}
+        </div>
+        <div
+          onMouseDown={startResize}
+          style={{ width: 5, flexShrink: 0, cursor: 'col-resize', background: dragging ? 'var(--acc)' : 'var(--border)' }}
+        />
+        <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', borderLeft: '1px solid var(--bsub)' }}>
+          {detailPane()}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {listContent}
     </div>
   );
 }

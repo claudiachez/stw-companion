@@ -88,10 +88,13 @@ export { saveIbkrSettings } from './features/portfolio/api';
 export type { UserPosition, IbkrSettings } from './features/portfolio/api';
 
 // ── Limits engine (Item 2, plans/integrity-guardrails.md) ──────
-// Shared by both apps/admin (operator's own book) and apps/web (each
-// subscriber's own book, Premium-gated) — LimitsPanel is the whole feature.
+// Split 2026-07-06 (host decision): RiskConfigForm = Settings (account setup
+// only); ViolationsSummary = My Portfolio (book-level breach display, lives
+// with the position data it's about). LimitsPanel remains as apps/admin's
+// composite of both, since admin has no separate "My Portfolio" page.
 export { LimitsPanel } from './features/limits/LimitsPanel';
 export { RiskConfigForm } from './features/limits/RiskConfigForm';
+export { ViolationsSummary } from './features/limits/ViolationsSummary';
 export { useRiskConfig, useSectorMap, useViolationAcks, useAcknowledgeViolation, useEnsureRiskConfig, useSaveRiskConfig } from './features/limits/useRiskConfig';
 export type { RiskConfigRow, ViolationAck, AckStatus, ViolationType } from './features/limits/api';
 

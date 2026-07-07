@@ -16,6 +16,8 @@ export interface AppCapabilities {
   showIbkrBadge: boolean;
   /** Whether transaction history + conviction timelines are visible (premium or admin). */
   canViewHistory?: boolean;
+  /** Whether the Limits engine (risk-limits violations + thresholds) is visible (premium or admin). */
+  canUseLimits?: boolean;
   /** Invoked when an editable holding is chosen (admin Edit form). */
   onEditHolding?: (holding: Holding) => void;
   /** Finnhub API key for live prices — injected from each app's env. */
