@@ -19,18 +19,26 @@
 -- value is saved, giving the caller a real denominator for gross exposure and
 -- a real peak for drawdown-from-peak.
 --
--- Both columns are nullable — a user who hasn't entered their equity yet
--- falls back to the old self-referential approximation in the caller, with a
--- UI hint that it's approximate (see LimitsPanel.tsx / ViolationsSummary.tsx).
+-- account_equity defaults to a $100,000 placeholder (host decision,
+-- 2026-07-07) rather than staying null — same "seed a placeholder, flag it,
+-- let the user override" pattern as migration 055's threshold defaults
+-- (is_placeholder=true). This applies to every new row (the DEFAULT below)
+-- and is backfilled onto any row already missing it (the operator's own row,
+-- seeded null-account_equity by this migration's own `add column` before this
+-- edit). The old self-referential-sum fallback in the caller (LimitsPanel.tsx
+-- / ViolationsSummary.tsx) still exists for defensive purposes but should
+-- never actually trigger now that every row gets a real number.
 
 begin;
 
 alter table public.risk_config
-  add column if not exists account_equity numeric,
+  add column if not exists account_equity numeric not null default 100000,
   add column if not exists equity_peak    numeric;
 
+update public.risk_config set account_equity = 100000 where account_equity is null;
+
 comment on column public.risk_config.account_equity is
-  'User-entered account Net Liquidation Value (or equivalent) — the real denominator for gross/position/sector exposure checks. Null until the user first enters it; callers fall back to an approximate self-referential sum until then.';
+  'Account Net Liquidation Value (or equivalent) — the real denominator for gross/position/sector exposure checks. Defaults to a $100,000 placeholder (is_placeholder=true) until the user enters their real figure.';
 comment on column public.risk_config.equity_peak is
   'Trigger-maintained high-water mark of account_equity, used to compute drawdown-from-peak for the ladder. Never decreases — see fn_risk_config_track_equity_peak.';
 

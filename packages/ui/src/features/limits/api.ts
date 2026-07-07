@@ -7,8 +7,8 @@ export interface RiskConfigRow {
   max_gross_pct: number;
   ladder: { drawdownPct: number; targetGrossPct: number }[];
   is_placeholder: boolean;
-  /** User-entered Net Liquidation Value (or equivalent) — null until first entered (migration 059). */
-  account_equity: number | null;
+  /** Account Net Liquidation Value (or equivalent) — DB defaults to a $100,000 placeholder (migration 059), flagged via is_placeholder until the user overrides it. */
+  account_equity: number;
   /** Trigger-maintained high-water mark of account_equity — never decreases (migration 059). */
   equity_peak: number | null;
   updated_at: string;
@@ -38,13 +38,16 @@ export async function fetchRiskConfig(userId: string): Promise<RiskConfigRow | n
   return data as RiskConfigRow | null;
 }
 
-// Same placeholder defaults seeded for the operator in migration 055 — every
-// subscriber gets the same starting point, then edits their own via RiskConfigForm.
+// Same placeholder defaults seeded for the operator in migration 055 (+ account_equity
+// added in 059) — every subscriber gets the same starting point, then edits their own
+// via RiskConfigForm. account_equity also has a DB-level default (migration 059); listed
+// here explicitly too so a new row's shape is fully documented in one place.
 export const DEFAULT_RISK_CONFIG = {
   max_position_pct: 10,
   max_sector_pct: 25,
   max_gross_pct: 100,
   ladder: [{ drawdownPct: -10, targetGrossPct: 70 }, { drawdownPct: -15, targetGrossPct: 50 }],
+  account_equity: 100000,
 };
 
 /** Creates a default risk_config row for a user who doesn't have one yet. No-op if one exists. */
