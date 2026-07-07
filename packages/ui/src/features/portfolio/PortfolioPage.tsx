@@ -13,6 +13,7 @@ import { Button } from '../../primitives/Button';
 import { AlertStrip } from '../../primitives/AlertStrip';
 import { KpiCard, type KpiStatus } from '../../primitives/KpiCard';
 import { AccordionList } from '../../primitives/AccordionList';
+import { SubNav } from '../../primitives/SubNav';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useCapabilities } from '../../context/AppCapabilities';
 import { ViolationsSummary } from '../limits/ViolationsSummary';
@@ -29,6 +30,16 @@ import { cleanUnderlying } from './api';
 // Traders the user follows. Only STW is wired today (the one trader with picks in the DB);
 // the matching + summary are structured so more can be added without reworking the UI.
 const FOLLOWED_TRADERS = ['STW'];
+
+// Secondary-nav tabs (§1) — splits the page's four jobs (health / browse / risk /
+// tailing) so each stops fighting the others for one scroll.
+type PortfolioTab = 'overview' | 'positions' | 'risk' | 'tailing';
+const PORTFOLIO_TABS: { value: PortfolioTab; label: string }[] = [
+  { value: 'overview',  label: 'Overview' },
+  { value: 'positions', label: 'Positions' },
+  { value: 'risk',      label: 'Risk' },
+  { value: 'tailing',   label: 'Tailing' },
+];
 
 // desktop grouped-view column widths — shared by the column header + rows so they line up
 const COL = { ret: 58, pnl: 80, val: 92 };
@@ -356,6 +367,123 @@ function InfoCard({ title, body, action }: { title: string; body: string; action
   );
 }
 
+// ── Tailing tab ───────────────────────────────────────────────
+// Per-followed-trader comparison. §4 (a real link table for multi-trader tailing)
+// is deferred — only STW has picks in the DB today — but this is written over an
+// array of traders + a per-trader row list, so a second source drops in without a
+// rework. `pickMap.traders` and FOLLOWED_TRADERS are the seams.
+
+function DeltaChip({ delta }: { delta: number | null }) {
+  if (delta === null) return <span style={{ color: 'var(--t3)', fontSize: FONT_SIZE.xs }}>—</span>;
+  const flat = Math.abs(delta) <= 0.5;
+  const color = flat ? 'var(--t3)' : 'var(--status-warning-text)';
+  const label = flat ? 'in line' : `${delta > 0 ? '+' : ''}${delta.toFixed(1)}% ${delta > 0 ? 'oversized' : 'undersized'}`;
+  return (
+    <span style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.semibold, color, background: flat ? 'var(--s2)' : 'var(--status-warning-bg)', border: `1px solid ${flat ? 'var(--border)' : 'var(--status-warning-border)'}`, borderRadius: 999, padding: '1px 8px', whiteSpace: 'nowrap' }}>
+      {label}
+    </span>
+  );
+}
+
+function TailingTab({ groups, portfolioValue, pickMap, decliningTailed, onSelectTicker }: {
+  groups: PortfolioGroup[];
+  portfolioValue: number;
+  pickMap: Map<string, { conviction: number | null; basket: string; traders: string[]; stwWeight: number | null }>;
+  decliningTailed: { ticker: string }[];
+  onSelectTicker: (t: string) => void;
+}) {
+  const tailed = groups.filter((g) => g.isTailed);
+  const untailed = groups.filter((g) => !g.isTailed);
+  const card: React.CSSProperties = { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 860 }}>
+      {FOLLOWED_TRADERS.map((trader) => {
+        const rows = tailed
+          .filter((g) => g.traders.includes(trader))
+          .map((g) => {
+            const yourPct = portfolioValue > 0 ? (g.marketValue / portfolioValue) * 100 : 0;
+            const stwWeight = pickMap.get(g.underlying)?.stwWeight ?? null;
+            return { g, yourPct, stwWeight, delta: stwWeight !== null ? yourPct - stwWeight : null };
+          })
+          .sort((a, b) => (b.delta ?? -Infinity) - (a.delta ?? -Infinity));
+        return (
+          <div key={trader} style={card}>
+            <div style={{ padding: '10px 14px', background: 'var(--s2)', borderBottom: '1px solid var(--bsub)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Badge kind="source" trader={trader} />
+              <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>
+                <strong style={{ color: 'var(--text)' }}>{rows.length}</strong> of {groups.length} positions tail {trader}
+              </span>
+            </div>
+            {rows.length === 0 ? (
+              <div style={{ padding: '12px 14px', fontSize: FONT_SIZE.sm, color: 'var(--t3)' }}>No positions currently tail {trader}.</div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: FONT_SIZE.xs }}>
+                  <thead>
+                    <tr>
+                      <th style={th}>Ticker</th>
+                      <th style={thR}>Your wt</th>
+                      <th style={thR}>{trader} wt</th>
+                      <th style={{ ...th, textAlign: 'right' }}>Sizing</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map(({ g, yourPct, stwWeight, delta }) => (
+                      <tr key={g.underlying}>
+                        <td style={td}>
+                          <TickerLink ticker={g.underlying} onSelect={onSelectTicker} />
+                        </td>
+                        <td style={{ ...tdR, color: 'var(--text)', fontWeight: 600 }}>{yourPct.toFixed(1)}%</td>
+                        <td style={{ ...tdR, color: 'var(--t2)' }}>{stwWeight !== null ? `${stwWeight.toFixed(1)}%` : '—'}</td>
+                        <td style={{ ...td, textAlign: 'right' }}><DeltaChip delta={delta} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {decliningTailed.length > 0 && (
+        <div style={{ ...card, borderColor: 'var(--status-negative-border)' }}>
+          <div style={{ padding: '10px 14px', fontSize: FONT_SIZE.sm, color: 'var(--status-negative-text)' }}>
+            ⚠ Divergence — declining STW conviction on {decliningTailed.length} tailed position{decliningTailed.length !== 1 ? 's' : ''}:{' '}
+            {decliningTailed.map((c, i) => (
+              <span key={c.ticker}>
+                {i > 0 && ', '}
+                <TickerLink ticker={c.ticker} onSelect={onSelectTicker} />
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {untailed.length > 0 && (
+        <div style={card}>
+          <div style={{ padding: '10px 14px', background: 'var(--s2)', borderBottom: '1px solid var(--bsub)', fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>
+            <strong style={{ color: 'var(--text)' }}>{untailed.length}</strong> not tailed
+          </div>
+          <div style={{ padding: '12px 14px' }}>
+            <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginBottom: 8 }}>
+              You hold these; no followed trader currently tracks them.
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {untailed.map((g) => (
+                <span key={g.underlying} style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)', background: 'var(--s2)', border: '1px solid var(--border)', borderRadius: 6, padding: '3px 8px' }}>
+                  {g.underlying}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── main page ─────────────────────────────────────────────────
 
 export function PortfolioPage() {
@@ -368,6 +496,7 @@ export function PortfolioPage() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [showPnl, setShowPnl] = useState(true);
   const [filters, setFilters] = useState<PortfolioFilters>(DEFAULT_PORTFOLIO_FILTERS);
+  const [activeTab, setActiveTab] = useState<PortfolioTab>('overview');
   const capabilities = useCapabilities();
 
   // Own-position detail pane (list+detail pattern, mirroring PicksView.tsx) — desktop
@@ -569,147 +698,180 @@ export function PortfolioPage() {
     );
   }
 
-  const listContent = (
-    <>
-      {/* Combined bar: filters scroll on the left; synced stamp (right-aligned) + eye + Sync pinned right */}
-      <div style={{ display: 'flex', alignItems: 'center', background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', flexShrink: 0 }}>
-        <div style={{ flex: 1, minWidth: 0, overflowX: 'auto', WebkitOverflowScrolling: 'touch' as never }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', minWidth: 'max-content' }}>
-            {isConnected && hasPositions && (
-              <PortfolioFilterBar filters={filters} onChange={setFilters} baskets={baskets} filtered={visibleCount} total={totalCount} />
-            )}
-          </div>
-        </div>
-        <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, padding: '0 12px', borderLeft: '1px solid var(--bsub)' }}>
-          {!isMobile && lastSynced && (
-            <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', whiteSpace: 'nowrap' }}>Synced {fmtDateTime(lastSynced)}</span>
-          )}
-          {hasPositions && (
-            <button onClick={() => setShowPnl((v) => !v)} title={showPnl ? 'Hide P&L' : 'Show P&L'}
-              style={{ width: 34, height: 34, borderRadius: 6, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: '1px solid var(--border)', color: showPnl ? 'var(--t2)' : 'var(--t3)', cursor: 'pointer', flexShrink: 0 }}>
-              {showPnl ? (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-              ) : (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-              )}
-            </button>
-          )}
-          <Button variant="primary" onClick={sync} disabled={isSyncing || !isConnected} style={{ flexShrink: 0 }}>
-            {isSyncing ? 'Syncing…' : 'Sync'}
-          </Button>
-        </div>
-      </div>
+  const changeTab = (t: PortfolioTab) => {
+    setActiveTab(t);
+    if (t !== 'positions') setSelected(null); // the detail pane belongs to Positions only
+  };
 
-      {/* Body */}
-      <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)', padding: pad }}>
-        {syncError && <div style={{ marginBottom: 12 }}><AlertStrip severity="negative">{syncError}</AlertStrip></div>}
-
-        {!isConnected ? (
-          <InfoCard title="Connect your IBKR account to see your positions here." body=""
-            action={<Button variant="primary" onClick={() => navigate('/settings')} style={{ marginTop: 12 }}>Go to Settings →</Button>} />
-        ) : posLoading ? (
-          <LoadingSpinner className="mt-16" />
-        ) : !hasPositions ? (
-          <InfoCard title="No positions loaded yet." body="Click Sync to fetch your current IBKR positions." />
+  // Global controls — sync status + P&L visibility + Sync — available on every tab.
+  const globalControls = (
+    <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, padding: '0 12px', borderBottom: '1px solid var(--bsub)' }}>
+      {!isMobile && lastSynced && (
+        <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', whiteSpace: 'nowrap' }}>Synced {fmtDateTime(lastSynced)}</span>
+      )}
+      <button onClick={() => setShowPnl((v) => !v)} title={showPnl ? 'Hide P&L' : 'Show P&L'}
+        style={{ width: 34, height: 34, borderRadius: 6, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: '1px solid var(--border)', color: showPnl ? 'var(--t2)' : 'var(--t3)', cursor: 'pointer', flexShrink: 0 }}>
+        {showPnl ? (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
         ) : (
-          <>
-            {staleSyncWarning && (
-              <div style={{ marginBottom: 12, padding: '9px 14px', borderRadius: 6, background: 'var(--status-warning-bg)', border: '1px solid var(--status-warning-border)', color: 'var(--status-warning-text)', fontSize: FONT_SIZE.sm }}>
-                Last synced {fmtDateTime(lastSynced!)} — numbers below may be stale. Click Sync to refresh.
-              </div>
-            )}
-
-            {decliningTailed.length > 0 && (
-              <div style={{ marginBottom: 12, padding: '9px 14px', borderRadius: 6, background: 'var(--status-negative-bg)', border: '1px solid var(--status-negative-border)', color: 'var(--status-negative-text)', fontSize: FONT_SIZE.sm }}>
-                ⚠ {decliningTailed.length} tailed position{decliningTailed.length !== 1 ? 's have' : ' has'} declining STW conviction: {decliningTailed.map((c) => c.ticker).join(', ')}
-              </div>
-            )}
-
-            <div style={{ marginBottom: 18 }}><PortfolioSummary groups={allGroups} showPnl={showPnl} regimeAdvisory={regimeAdvisory} /></div>
-
-            {capabilities.canUseLimits ? (
-              <div style={{ marginBottom: 18 }}><ViolationsSummary /></div>
-            ) : (
-              <div style={{
-                marginBottom: 18, background: 'var(--surface)', border: '1px solid var(--border)',
-                borderRadius: 12, padding: '12px 16px', fontSize: FONT_SIZE.sm, color: 'var(--t3)',
-              }}>
-                <strong style={{ color: 'var(--text)' }}>Risk limits 🔒</strong> — flag concentration and
-                gross-exposure breaches in your own book, requires <strong style={{ color: 'var(--t2)' }}>Premium</strong>.
-              </div>
-            )}
-
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', boxShadow: 'var(--shadow)' }}>
-              <div style={{ padding: '8px 13px', background: 'var(--s2)', borderBottom: '1px solid var(--bsub)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, textTransform: 'uppercase', letterSpacing: '0.09em', color: 'var(--t2)' }}>📊 Positions</span>
-                <span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginLeft: 'auto' }}>{visibleCount}</span>
-              </div>
-
-              {visibleCount === 0 ? (
-                <p style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', padding: '12px 13px' }}>No positions match your filters.</p>
-              ) : grouped ? (
-                <>
-                  {!isMobile && showPnl && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, textTransform: 'uppercase', letterSpacing: LETTER_SPACING.label, color: 'var(--t3)' }}>
-                      <span style={{ width: 8, flexShrink: 0 }} />
-                      <span style={{ width: 3, flexShrink: 0 }} />
-                      <span style={{ flex: 1 }}>Ticker</span>
-                      <span style={{ width: COL.ret, textAlign: 'right', flexShrink: 0 }}>Return</span>
-                      <span style={{ width: COL.pnl, textAlign: 'right', flexShrink: 0 }}>P&L</span>
-                      <span style={{ width: COL.val, textAlign: 'right', flexShrink: 0 }}>Value</span>
-                    </div>
-                  )}
-                  <AccordionList
-                    items={visibleGroups}
-                    rowKey={(g) => g.underlying}
-                    expandedKeys={expanded}
-                    onToggle={toggleGroup}
-                    accentColor={(g) => (g.conviction !== null ? (TIERS[g.conviction]?.color ?? 'var(--border)') : 'var(--border)')}
-                    renderHeader={(g) => (
-                      <GroupHeader group={g} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} />
-                    )}
-                    renderExpanded={(g) => (
-                      <>
-                        <PositionMetrics group={g} portfolioValue={portfolioValue} showPnl={showPnl} />
-                        {g.positions.map((p) => <LegRow key={p.id} pos={p} showPnl={showPnl} />)}
-                      </>
-                    )}
-                  />
-                </>
-              ) : (
-                <FlatTable rows={visibleLegs} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} />
-              )}
-            </div>
-          </>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
         )}
-      </div>
-    </>
+      </button>
+      <Button variant="primary" onClick={sync} disabled={isSyncing || !isConnected} style={{ flexShrink: 0 }}>
+        {isSyncing ? 'Syncing…' : 'Sync'}
+      </Button>
+    </div>
   );
 
-  if (mobileDetail) {
-    return <div style={{ height: '100%', overflow: 'hidden' }}>{detailPane()}</div>;
-  }
-
-  if (!isMobile && selectedGroup) {
+  // ── States with no tabs: not connected / loading / empty ──
+  if (!isConnected) {
     return (
-      <div ref={splitRef} style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
-        <div style={{ flex: `0 0 ${listPct}%`, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
-          {listContent}
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+        <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)', padding: pad }}>
+          {syncError && <div style={{ marginBottom: 12 }}><AlertStrip severity="negative">{syncError}</AlertStrip></div>}
+          <InfoCard title="Connect your IBKR account to see your positions here." body=""
+            action={<Button variant="primary" onClick={() => navigate('/settings')} style={{ marginTop: 12 }}>Go to Settings →</Button>} />
         </div>
-        <div
-          onMouseDown={startResize}
-          style={{ width: 5, flexShrink: 0, cursor: 'col-resize', background: dragging ? 'var(--acc)' : 'var(--border)' }}
-        />
-        <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', borderLeft: '1px solid var(--bsub)' }}>
-          {detailPane()}
+      </div>
+    );
+  }
+  if (posLoading) {
+    return <div style={{ height: '100%' }}><LoadingSpinner className="mt-16" /></div>;
+  }
+  if (!hasPositions) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+        <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)', padding: pad, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {syncError && <AlertStrip severity="negative">{syncError}</AlertStrip>}
+          <InfoCard title="No positions loaded yet." body="Click Sync to fetch your current IBKR positions."
+            action={<Button variant="primary" onClick={sync} disabled={isSyncing} style={{ marginTop: 12 }}>{isSyncing ? 'Syncing…' : 'Sync'}</Button>} />
         </div>
       </div>
     );
   }
 
+  // Mobile: an open position detail takes over the full screen (sub-nav + toolbar hide).
+  if (mobileDetail) {
+    return <div style={{ height: '100%', overflow: 'hidden' }}>{detailPane()}</div>;
+  }
+
+  // ── Tab bodies ──
+  const overviewBody = (
+    <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)', padding: pad }}>
+      {syncError && <div style={{ marginBottom: 12 }}><AlertStrip severity="negative">{syncError}</AlertStrip></div>}
+      {staleSyncWarning && (
+        <div style={{ marginBottom: 12, padding: '9px 14px', borderRadius: 6, background: 'var(--status-warning-bg)', border: '1px solid var(--status-warning-border)', color: 'var(--status-warning-text)', fontSize: FONT_SIZE.sm }}>
+          Last synced {fmtDateTime(lastSynced!)} — numbers below may be stale. Click Sync to refresh.
+        </div>
+      )}
+      {decliningTailed.length > 0 && (
+        <div style={{ marginBottom: 12, padding: '9px 14px', borderRadius: 6, background: 'var(--status-negative-bg)', border: '1px solid var(--status-negative-border)', color: 'var(--status-negative-text)', fontSize: FONT_SIZE.sm }}>
+          ⚠ {decliningTailed.length} tailed position{decliningTailed.length !== 1 ? 's have' : ' has'} declining STW conviction: {decliningTailed.map((c) => c.ticker).join(', ')}
+        </div>
+      )}
+      <PortfolioSummary groups={allGroups} showPnl={showPnl} regimeAdvisory={regimeAdvisory} />
+    </div>
+  );
+
+  const riskBody = (
+    <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)', padding: pad }}>
+      {capabilities.canUseLimits ? (
+        <ViolationsSummary />
+      ) : (
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '12px 16px', fontSize: FONT_SIZE.sm, color: 'var(--t3)' }}>
+          <strong style={{ color: 'var(--text)' }}>Risk limits 🔒</strong> — flag concentration and
+          gross-exposure breaches in your own book, requires <strong style={{ color: 'var(--t2)' }}>Premium</strong>.
+        </div>
+      )}
+    </div>
+  );
+
+  const tailingBody = (
+    <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)', padding: pad }}>
+      <TailingTab groups={allGroups} portfolioValue={portfolioValue} pickMap={pickMap} decliningTailed={decliningTailed} onSelectTicker={onSelectTicker} />
+    </div>
+  );
+
+  const positionsBody = (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, overflow: 'hidden' }}>
+      {/* Filter toolbar — scoped to Positions only */}
+      <div style={{ display: 'flex', alignItems: 'center', background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', flexShrink: 0, overflowX: 'auto', WebkitOverflowScrolling: 'touch' as never }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', minWidth: 'max-content' }}>
+          <PortfolioFilterBar filters={filters} onChange={setFilters} baskets={baskets} filtered={visibleCount} total={totalCount} />
+        </div>
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)', padding: pad }}>
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', boxShadow: 'var(--shadow)' }}>
+          <div style={{ padding: '8px 13px', background: 'var(--s2)', borderBottom: '1px solid var(--bsub)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, textTransform: 'uppercase', letterSpacing: '0.09em', color: 'var(--t2)' }}>📊 Positions</span>
+            <span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginLeft: 'auto' }}>{visibleCount}</span>
+          </div>
+          {visibleCount === 0 ? (
+            <p style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', padding: '12px 13px' }}>No positions match your filters.</p>
+          ) : grouped ? (
+            <>
+              {!isMobile && showPnl && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, textTransform: 'uppercase', letterSpacing: LETTER_SPACING.label, color: 'var(--t3)' }}>
+                  <span style={{ width: 8, flexShrink: 0 }} />
+                  <span style={{ width: 3, flexShrink: 0 }} />
+                  <span style={{ flex: 1 }}>Ticker</span>
+                  <span style={{ width: COL.ret, textAlign: 'right', flexShrink: 0 }}>Return</span>
+                  <span style={{ width: COL.pnl, textAlign: 'right', flexShrink: 0 }}>P&L</span>
+                  <span style={{ width: COL.val, textAlign: 'right', flexShrink: 0 }}>Value</span>
+                </div>
+              )}
+              <AccordionList
+                items={visibleGroups}
+                rowKey={(g) => g.underlying}
+                expandedKeys={expanded}
+                onToggle={toggleGroup}
+                accentColor={(g) => (g.conviction !== null ? (TIERS[g.conviction]?.color ?? 'var(--border)') : 'var(--border)')}
+                renderHeader={(g) => (
+                  <GroupHeader group={g} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} />
+                )}
+                renderExpanded={(g) => (
+                  <>
+                    <PositionMetrics group={g} portfolioValue={portfolioValue} showPnl={showPnl} />
+                    {g.positions.map((p) => <LegRow key={p.id} pos={p} showPnl={showPnl} />)}
+                  </>
+                )}
+              />
+            </>
+          ) : (
+            <FlatTable rows={visibleLegs} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  // Positions tab: desktop list+detail resizable split when a ticker is open.
+  const positionsPane = (!isMobile && selectedGroup) ? (
+    <div ref={splitRef} style={{ display: 'flex', flex: 1, overflow: 'hidden', minHeight: 0 }}>
+      <div style={{ flex: `0 0 ${listPct}%`, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+        {positionsBody}
+      </div>
+      <div onMouseDown={startResize} style={{ width: 5, flexShrink: 0, cursor: 'col-resize', background: dragging ? 'var(--acc)' : 'var(--border)' }} />
+      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', borderLeft: '1px solid var(--bsub)' }}>
+        {detailPane()}
+      </div>
+    </div>
+  ) : positionsBody;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {listContent}
+      {/* Secondary nav (left) + global controls (right) share one bar */}
+      <div style={{ display: 'flex', alignItems: 'stretch', background: 'var(--surface)', flexShrink: 0 }}>
+        <div style={{ flex: 1, minWidth: 0, overflowX: 'auto' }}>
+          <SubNav items={PORTFOLIO_TABS} active={activeTab} onChange={changeTab} />
+        </div>
+        {globalControls}
+      </div>
+
+      {activeTab === 'overview' ? overviewBody
+        : activeTab === 'risk' ? riskBody
+        : activeTab === 'tailing' ? tailingBody
+        : positionsPane}
     </div>
   );
 }
