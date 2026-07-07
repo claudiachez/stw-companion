@@ -193,6 +193,7 @@ async function run(event: Parameters<Handler>[0]) {
 
   // ── Parse positions ──────────────────────────────────────────
   let positions: NormalisedPosition[];
+  let accountId: string | null = null;
   try {
     const parser = new XMLParser({
       ignoreAttributes: false,
@@ -200,8 +201,12 @@ async function run(event: Parameters<Handler>[0]) {
       isArray: (name) => name === 'OpenPosition',
     });
     const doc = parser.parse(xmlData);
-    const raw: RawPosition[] =
-      doc?.FlexQueryResponse?.FlexStatements?.FlexStatement?.OpenPositions?.OpenPosition ?? [];
+    const statement = doc?.FlexQueryResponse?.FlexStatements?.FlexStatement;
+    // FlexStatement carries the resolved account as an XML attribute — surfaced back to
+    // the client so a save-time verification can echo a concrete "resolved to account
+    // Uxxxxxxx" fact, rather than only a bare position count.
+    accountId = statement?.accountId ? String(statement.accountId) : null;
+    const raw: RawPosition[] = statement?.OpenPositions?.OpenPosition ?? [];
     positions = (Array.isArray(raw) ? raw : [raw])
       .map(normalise)
       .filter((p): p is NormalisedPosition => p !== null);
@@ -212,7 +217,7 @@ async function run(event: Parameters<Handler>[0]) {
   if (positions.length === 0) {
     return {
       statusCode: 200,
-      body: JSON.stringify({ ok: true, count: 0, message: 'No open positions found in the Flex report.' }),
+      body: JSON.stringify({ ok: true, count: 0, accountId, message: 'No open positions found in the Flex report.' }),
     };
   }
 
@@ -228,6 +233,6 @@ async function run(event: Parameters<Handler>[0]) {
   return {
     statusCode: 200,
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ok: true, count: positions.length, lastSyncedAt: syncTime }),
+    body: JSON.stringify({ ok: true, count: positions.length, accountId, lastSyncedAt: syncTime }),
   };
 }
