@@ -181,14 +181,22 @@ export function ViolationsSummary({ showSyncButton = false }: { showSyncButton?:
     multiplier: p.multiplier,
   }));
 
-  const accountEquity = positionInputs.reduce((sum, p) => sum + Math.abs((p.quantity ?? 0) * (p.markPrice ?? 0) * (p.multiplier ?? 1)), 0);
+  // Real account equity, entered by the user in RiskConfigForm (migration 059) — falls
+  // back to the sum of the SAME positions being evaluated only when unset. That
+  // fallback makes gross exposure tautologically ~100% (numerator == denominator), so
+  // it's flagged in the UI below rather than treated as a real reading.
+  const approxEquity = positionInputs.reduce((sum, p) => sum + Math.abs((p.quantity ?? 0) * (p.markPrice ?? 0) * (p.multiplier ?? 1)), 0);
+  const accountEquity = config.account_equity ?? approxEquity;
+  const drawdownPct = config.account_equity != null && config.equity_peak
+    ? ((config.account_equity - config.equity_peak) / config.equity_peak) * 100
+    : null;
 
   const result = evaluateRiskConfig(positionInputs, sectorMap ?? {}, accountEquity, {
     maxPositionPct: config.max_position_pct,
     maxSectorPct: config.max_sector_pct,
     maxGrossPct: config.max_gross_pct,
     ladder: config.ladder,
-  }, null);
+  }, drawdownPct);
 
   const staleness = positions?.length
     ? fmtDateTime(positions.reduce((latest, p) => (p.last_synced_at > latest ? p.last_synced_at : latest), positions[0].last_synced_at))
@@ -243,6 +251,13 @@ export function ViolationsSummary({ showSyncButton = false }: { showSyncButton?:
           )}
 
           <div className="bg-surface border border-border rounded-xl p-5">
+            {config.account_equity == null && (
+              <div className="text-t3 text-xs mb-2">
+                Approximate — enter your account equity in Settings for a real gross-exposure
+                reading (this stand-in sums the same positions being measured, so it always
+                reads ~100%).
+              </div>
+            )}
             <GrossExposureBar
               pct={result.grossViolation.exposurePct}
               limitPct={result.grossViolation.limitPct}
