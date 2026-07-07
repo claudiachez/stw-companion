@@ -8,6 +8,12 @@
     "dev:admin": "pnpm --filter admin dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "lint": "eslint .",
+    "lint:prune": "eslint . --prune-suppressions"
+  },
+  "devDependencies": {
+    "@typescript-eslint/parser": "^8.63.0",
+    "eslint": "^10.6.0"
   }
 }

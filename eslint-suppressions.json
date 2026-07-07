@@ -1,0 +1,223 @@
+{
+  "apps/admin/src/features/ibkr/IbkrBadge.tsx": {
+    "no-restricted-syntax": {
+      "count": 4
+    }
+  },
+  "apps/web/src/features/settings/SettingsPage.tsx": {
+    "no-restricted-syntax": {
+      "count": 17
+    }
+  },
+  "packages/ui/src/components/Layout.tsx": {
+    "no-restricted-syntax": {
+      "count": 6
+    }
+  },
+  "packages/ui/src/features/macro/MacroView.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "packages/ui/src/features/macro/components/CreditLiquidityCard.tsx": {
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "packages/ui/src/features/macro/components/GexPositioningCard.tsx": {
+    "no-restricted-syntax": {
+      "count": 7
+    }
+  },
+  "packages/ui/src/features/macro/components/MacroEventRiskCard.tsx": {
+    "no-restricted-syntax": {
+      "count": 15
+    }
+  },
+  "packages/ui/src/features/macro/components/MacroRecapCard.tsx": {
+    "no-restricted-syntax": {
+      "count": 17
+    }
+  },
+  "packages/ui/src/features/macro/components/ModuleScoreStrip.tsx": {
+    "no-restricted-syntax": {
+      "count": 4
+    }
+  },
+  "packages/ui/src/features/macro/components/RatesDollarCard.tsx": {
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "packages/ui/src/features/macro/components/RegimeBanner.tsx": {
+    "no-restricted-syntax": {
+      "count": 8
+    }
+  },
+  "packages/ui/src/features/macro/components/SectorRotationCard.tsx": {
+    "no-restricted-syntax": {
+      "count": 13
+    }
+  },
+  "packages/ui/src/features/macro/components/SentimentGauge.tsx": {
+    "no-restricted-syntax": {
+      "count": 22
+    }
+  },
+  "packages/ui/src/features/macro/components/TrendStructureTable.tsx": {
+    "no-restricted-syntax": {
+      "count": 15
+    }
+  },
+  "packages/ui/src/features/macro/components/VolatilityStressCard.tsx": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "packages/ui/src/features/macro/components/macroVisuals.tsx": {
+    "no-restricted-syntax": {
+      "count": 11
+    }
+  },
+  "packages/ui/src/features/macro/useMacroTrendHistory.ts": {
+    "react-hooks/exhaustive-deps": {
+      "count": 2
+    }
+  },
+  "packages/ui/src/features/picks/PicksView.tsx": {
+    "no-restricted-syntax": {
+      "count": 3
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "packages/ui/src/features/picks/components/ActionBadge.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "packages/ui/src/features/picks/components/CommentRow.tsx": {
+    "no-restricted-syntax": {
+      "count": 6
+    }
+  },
+  "packages/ui/src/features/picks/components/ConvictionBadge.tsx": {
+    "no-restricted-syntax": {
+      "count": 6
+    }
+  },
+  "packages/ui/src/features/picks/components/ConvictionCommentForm.tsx": {
+    "no-restricted-syntax": {
+      "count": 9
+    }
+  },
+  "packages/ui/src/features/picks/components/ConvictionTimeline.tsx": {
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "packages/ui/src/features/picks/components/FilterBar.tsx": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "packages/ui/src/features/picks/components/HoldingDetail.tsx": {
+    "no-restricted-syntax": {
+      "count": 50
+    }
+  },
+  "packages/ui/src/features/picks/components/HoldingRow.tsx": {
+    "no-restricted-syntax": {
+      "count": 10
+    }
+  },
+  "packages/ui/src/features/picks/components/LegTimeline.tsx": {
+    "no-restricted-syntax": {
+      "count": 38
+    }
+  },
+  "packages/ui/src/features/picks/components/PortfolioDashboard.tsx": {
+    "no-restricted-syntax": {
+      "count": 21
+    }
+  },
+  "packages/ui/src/features/picks/components/PositionEditor.tsx": {
+    "no-restricted-syntax": {
+      "count": 14
+    }
+  },
+  "packages/ui/src/features/picks/components/RegimeBadge.tsx": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "packages/ui/src/features/picks/components/TradeEditForm.tsx": {
+    "no-restricted-syntax": {
+      "count": 13
+    }
+  },
+  "packages/ui/src/features/picks/components/TradesFilterBar.tsx": {
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "packages/ui/src/features/picks/components/TradesTable.tsx": {
+    "no-restricted-syntax": {
+      "count": 7
+    }
+  },
+  "packages/ui/src/features/picks/useTickerRegime.ts": {
+    "react-hooks/exhaustive-deps": {
+      "count": 1
+    }
+  },
+  "packages/ui/src/features/portfolio/PortfolioFilterBar.tsx": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "packages/ui/src/features/portfolio/PortfolioPage.tsx": {
+    "no-restricted-syntax": {
+      "count": 36
+    },
+    "react-hooks/exhaustive-deps": {
+      "count": 2
+    }
+  },
+  "packages/ui/src/features/signals/SignalsView.tsx": {
+    "no-restricted-syntax": {
+      "count": 8
+    }
+  },
+  "packages/ui/src/features/signals/components/BiasChip.tsx": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "packages/ui/src/features/signals/components/DayLog.tsx": {
+    "no-restricted-syntax": {
+      "count": 4
+    }
+  },
+  "packages/ui/src/features/signals/components/GexChart.tsx": {
+    "no-restricted-syntax": {
+      "count": 6
+    }
+  },
+  "packages/ui/src/features/signals/components/GexCharts.tsx": {
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "packages/ui/src/features/signals/components/LevelCard.tsx": {
+    "no-restricted-syntax": {
+      "count": 6
+    }
+  },
+  "packages/ui/src/features/signals/components/SignalsTable.tsx": {
+    "no-restricted-syntax": {
+      "count": 11
+    }
+  }
+}
