@@ -95,6 +95,26 @@
        [data-theme="light"]. */
     --action-broker: #15803d;
 
+    /* status.elevated — an orange sitting between status.warning (--c3, amber) and
+       status.negative (--c1, red): "elevated caution," e.g. RegimeBanner.tsx's
+       "Defensive" regime band and SentimentGauge.tsx's "Fear" label/gauge-arc segment.
+       Found duplicated as a bare #f97316 literal in both files during Macro's Phase 5
+       migration — a real cross-file color duplication, not a one-off. Single value
+       only (no bg/border pair): neither consumer uses a filled/bordered treatment, so
+       this doesn't need the status.* bg/border/text triple's full shape. */
+    --status-elevated: #f97316;
+
+    /* sentiment.greed — the "Greed" band's teal in SentimentGauge.tsx's 5-band fear/greed
+       scale (Extreme Fear/Fear/Neutral/Greed/Extreme Greed), deliberately distinct from
+       Extreme Greed's --c5 green so the scale doesn't read as a flat 2-tone red/green
+       gradient. Single current consumer (SentimentGauge.tsx, used twice in that one file —
+       the zone lookup and the gauge's own subArcs config, previously hardcoded
+       independently in both places). Added here — not as a file-local constant — because
+       this lint rule has exactly one sanctioned home for any literal color in this
+       codebase; there's no other valid way to de-literal a color that isn't already
+       reused elsewhere. */
+    --sentiment-greed: #14b8a6;
+
     /* status.* — ok/near/breach/unevaluated/info, each with bg/border/text, for the
        Phase 3 StatusPill/Badge components. Built from the existing tier-color
        infrastructure (not new raw hex) except neutral/unevaluated, which

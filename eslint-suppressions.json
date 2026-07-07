@@ -14,36 +14,6 @@
       "count": 18
     }
   },
-  "packages/ui/src/features/macro/components/MacroEventRiskCard.tsx": {
-    "no-restricted-syntax": {
-      "count": 15
-    }
-  },
-  "packages/ui/src/features/macro/components/MacroRecapCard.tsx": {
-    "no-restricted-syntax": {
-      "count": 17
-    }
-  },
-  "packages/ui/src/features/macro/components/RegimeBanner.tsx": {
-    "no-restricted-syntax": {
-      "count": 8
-    }
-  },
-  "packages/ui/src/features/macro/components/SectorRotationCard.tsx": {
-    "no-restricted-syntax": {
-      "count": 15
-    }
-  },
-  "packages/ui/src/features/macro/components/SentimentGauge.tsx": {
-    "no-restricted-syntax": {
-      "count": 22
-    }
-  },
-  "packages/ui/src/features/macro/components/TrendStructureTable.tsx": {
-    "no-restricted-syntax": {
-      "count": 16
-    }
-  },
   "packages/ui/src/features/macro/useMacroTrendHistory.ts": {
     "react-hooks/exhaustive-deps": {
       "count": 2
