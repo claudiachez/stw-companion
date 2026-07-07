@@ -1,9 +1,11 @@
-import { bColor, holdingPnlPct, legIsOpen, legMarkReason, fmtLegInstrument, fmtDateTime, TIERS } from '@stw/shared';
+import { bColor, holdingPnlPct, legIsOpen, legMarkReason, fmtLegInstrument, fmtDateTime, FONT_SIZE, FONT_WEIGHT, TIERS } from '@stw/shared';
 import { usePriceCacheStore } from '../../../store/priceCache';
 import { useRecentChanges } from '../useRecentChanges';
 import { useConvictionChanges, type ConvictionChange, type ChangeDir } from '../useConvictionChanges';
 import { TickerLink } from '../../../primitives/TickerLink';
 import { SourceLink } from './SourceLink';
+import { SectionHeader } from '../../../primitives/SectionHeader';
+import { KpiCard, type KpiStatus } from '../../../primitives/KpiCard';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 import { useCapabilities } from '../../../context/AppCapabilities';
 import type { Holding } from '../api';
@@ -13,22 +15,12 @@ interface DashboardProps {
   onSelectTicker?: (ticker: string) => void;
 }
 
-// Section header: an uppercase label with an optional right-aligned "Updated:" stamp. Used by
-// every Overview block so the title (and its date, when present) live OUTSIDE the card and read
-// consistently — same structure for the webinar, changes, unpriced, and stale blocks.
-function SectionHeader({ title, color = 'var(--t3)', updatedAt }: { title: React.ReactNode; color?: string; updatedAt?: Date | null }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
-      <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color }}>
-        {title}
-      </div>
-      {updatedAt && (
-        <div style={{ fontSize: 11, color: 'var(--t3)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-          Updated: <span style={{ color: 'var(--t2)' }}>{fmtDateTime(updatedAt)}</span>
-        </div>
-      )}
-    </div>
-  );
+// "Updated: <date>" — the right-aligned slot every Overview block passes to the shared
+// SectionHeader, so the stamp's own styling (muted date, lighter value) stays identical
+// across the webinar, changes, unpriced, and stale blocks.
+function updatedStamp(d: Date | null) {
+  if (!d) return null;
+  return <>Updated: <span style={{ color: 'var(--t2)' }}>{fmtDateTime(d)}</span></>;
 }
 
 // Render a digest string with any known ticker rendered as a clickable link.
@@ -81,16 +73,16 @@ function ConvictionChangeRow({ c, onSelectTicker }: {
     <div style={{ marginBottom: 5 }}>
       <TickerLink ticker={c.ticker} onSelect={onSelectTicker} />
       {' '}
-      <span style={{ color: m.color, fontWeight: 700 }}>{m.arrow}</span>
+      <span style={{ color: m.color, fontWeight: FONT_WEIGHT.bold }}>{m.arrow}</span>
       {' '}
       <span style={{
         display: 'inline-block', verticalAlign: 'middle',
-        fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+        fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: '0.06em', textTransform: 'uppercase',
         color: m.color, background: m.bg, border: `1px solid ${m.color}33`,
         borderRadius: 4, padding: '1px 5px',
       }}>{m.label}</span>
       {' '}
-      <span style={{ fontWeight: 600 }}>
+      <span style={{ fontWeight: FONT_WEIGHT.semibold }}>
         {fromTier && (
           <>
             <span style={{ color: fromTier.color }}>{fromTier.short}</span>
@@ -197,48 +189,28 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
     return [{ ticker: h.ticker, label: `priced ${fmtDateTime(at)}: ${legs}` }];
   });
 
-  const pnlColor = avgPnl != null ? (avgPnl >= 0 ? 'var(--pnl-gain)' : 'var(--pnl-loss)') : 'var(--t3)';
+  const pnlStatus: KpiStatus = avgPnl == null ? 'neutral' : avgPnl >= 0 ? 'positive' : 'negative';
 
   const tickerSet = new Set(holdings.map((h) => h.ticker.toUpperCase()));
   const changeAt = latestChange?.ran_at ? new Date(latestChange.ran_at) : null;
 
   return (
     <div style={{ height: '100%', overflowY: 'auto', padding: '20px 24px' }}>
-      <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 16 }}>
-        Portfolio Overview
-      </div>
+      <SectionHeader title="Portfolio Overview" />
 
       {/* Stat cards */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 24 }}>
-        {/* Holdings */}
-        <div style={{ flex: 1, padding: '14px 16px', borderRadius: 8, background: 'var(--s2)', border: '1px solid var(--bsub)' }}>
-          <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--text)', lineHeight: 1 }}>{active.length}</div>
-          <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>Active Holdings</div>
-        </div>
-
-        {/* Avg P&L */}
-        <div style={{ flex: 1, padding: '14px 16px', borderRadius: 8, background: 'var(--s2)', border: '1px solid var(--bsub)' }}>
-          <div style={{ fontSize: 28, fontWeight: 700, color: pnlColor, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
-            {avgPnl != null ? `${avgPnl >= 0 ? '+' : ''}${avgPnl.toFixed(1)}%` : '—'}
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>
-            Avg Return{pnlValues.length > 0 ? ` (${pnlValues.length} positions)` : ''}
-          </div>
-        </div>
-
-        {/* Equity : Options weight ratio */}
-        <div style={{ flex: 1, padding: '14px 16px', borderRadius: 8, background: 'var(--s2)', border: '1px solid var(--bsub)' }}>
-          <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', lineHeight: 1 }}>
-            <span style={{ fontSize: 28, fontWeight: 700, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
-              {equityPct ?? '—'}
-            </span>
-            <span style={{ fontSize: 18, color: 'var(--t3)', marginBottom: 1 }}>:</span>
-            <span style={{ fontSize: 28, fontWeight: 700, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>
-              {optionsPct ?? '—'}
-            </span>
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>Equity : Options (by market value)</div>
-        </div>
+        <KpiCard label="Active Holdings" primaryValue={active.length} />
+        <KpiCard
+          label={`Avg Return${pnlValues.length > 0 ? ` (${pnlValues.length} positions)` : ''}`}
+          primaryValue={avgPnl != null ? `${avgPnl >= 0 ? '+' : ''}${avgPnl.toFixed(1)}%` : '—'}
+          status={pnlStatus}
+        />
+        <KpiCard
+          label="Equity : Options (by market value)"
+          primaryValue={equityPct ?? '—'}
+          secondaryValue={`: ${optionsPct ?? '—'}`}
+        />
       </div>
 
       {/* Two-column grid on desktop — sector breakdown beside the activity feed so the
@@ -247,9 +219,7 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
 
       {/* Left column — sector distribution */}
       <div>
-      <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 10 }}>
-        Sector Distribution
-      </div>
+      <SectionHeader title="Sector Distribution" />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
         {sectors.map(([name, w]) => {
           const pct = totalWeight > 0 ? (w / totalWeight) * 100 : 0;
@@ -257,11 +227,11 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
           return (
             <div key={name}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--t2)', minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: FONT_SIZE.sm, color: 'var(--t2)', minWidth: 0 }}>
                   <div style={{ width: 8, height: 8, borderRadius: 2, background: c, flexShrink: 0 }} />
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
                 </div>
-                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)', marginLeft: 8, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+                <span style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)', marginLeft: 8, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
                   {pct.toFixed(0)}%
                 </span>
               </div>
@@ -283,13 +253,13 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
         <div style={{ marginTop: isMobile ? 28 : 0 }}>
           <SectionHeader
             title="Conviction Changes"
-            updatedAt={convBatch.updatedAt ? new Date(convBatch.updatedAt) : null}
+            right={updatedStamp(convBatch.updatedAt ? new Date(convBatch.updatedAt) : null)}
           />
           {/* Same card chrome + type scale as "Latest Portfolio Changes" for consistency. */}
           <div style={{
             padding: '12px 14px', borderRadius: 8,
             background: 'var(--s2)', border: '1px solid var(--acc)',
-            fontSize: 13, color: 'var(--t2)', lineHeight: 1.6,
+            fontSize: FONT_SIZE.base, color: 'var(--t2)', lineHeight: 1.6,
           }}>
             {/* meaningful changes (up / down / new), one line each */}
             {convBatch.changes.filter((c) => c.dir !== 'same').map((c) => (
@@ -313,11 +283,11 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
       {/* Latest portfolio changes (digest) */}
       {latestChange?.digest && (
         <div style={{ marginTop: 28 }}>
-          <SectionHeader title="Latest Portfolio Changes" updatedAt={changeAt} />
+          <SectionHeader title="Latest Portfolio Changes" right={updatedStamp(changeAt)} />
           <div style={{
             padding: '12px 14px', borderRadius: 8,
             background: 'var(--s2)', border: '1px solid var(--acc)',
-            fontSize: 13, color: 'var(--t2)', lineHeight: 1.6, whiteSpace: 'pre-wrap',
+            fontSize: FONT_SIZE.base, color: 'var(--t2)', lineHeight: 1.6, whiteSpace: 'pre-wrap',
           }}>
             {renderDigest(latestChange.digest, tickerSet, onSelectTicker)}
           </div>
@@ -328,7 +298,7 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
           Changes" block above — a separate "Holdings data synced" line read as stale/contradictory
           (it's last-CHANGED, not last-run), so it was removed. */}
       {optionsSynced && (
-        <div style={{ marginTop: latestChange?.digest ? 12 : 24, fontSize: 11, color: 'var(--t3)' }}>
+        <div style={{ marginTop: latestChange?.digest ? 12 : 24, fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>
           Options data synced:{' '}
           <span style={{ color: 'var(--t2)' }}>{fmtDateTime(optionsSynced)}</span>
         </div>
@@ -340,7 +310,7 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
       {unpricedLegs.length > 0 && (
         <div style={{ marginTop: 18 }}>
           <SectionHeader title={`⚠ Unpriced Legs (${unpricedLegs.length})`} color="var(--c3)" />
-          <div style={{ padding: '8px 10px', borderRadius: 6, background: 'var(--s2)', border: '1px solid var(--bsub)', fontSize: 11, color: 'var(--t2)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={{ padding: '8px 10px', borderRadius: 6, background: 'var(--s2)', border: '1px solid var(--bsub)', fontSize: FONT_SIZE.xs, color: 'var(--t2)', display: 'flex', flexDirection: 'column', gap: 4 }}>
             {unpricedLegs.map((u, i) => (
               <div key={i}>
                 <TickerLink ticker={u.ticker} onSelect={onSelectTicker} /> {u.label}
@@ -361,12 +331,12 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
         <div style={{ marginTop: 18 }}>
           <SectionHeader title={`◷ Stale Prices (${stalePrices.length})`} color="var(--c2)" />
           <div style={{ padding: '8px 10px', borderRadius: 6, background: 'var(--s2)', border: '1px solid var(--bsub)' }}>
-          <div style={{ fontSize: 11, color: 'var(--t2)', lineHeight: 1.6 }}>
+          <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', lineHeight: 1.6 }}>
             {stalePrices.map((s, i) => (
               <span key={i}>{i > 0 ? '  ·  ' : ''}<TickerLink ticker={s.ticker} onSelect={onSelectTicker} /> — {s.label}</span>
             ))}
           </div>
-          <div style={{ fontSize: 9, color: 'var(--t3)', marginTop: 4 }}>
+          <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 4 }}>
             {canEdit ? 'Showing prices from an earlier sync — the latest IBKR sync didn\'t refresh these. Re-run the sync.' : 'These option prices are from an earlier session.'}
           </div>
           </div>
