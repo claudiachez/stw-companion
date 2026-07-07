@@ -1,26 +1,39 @@
 # STW Companion — Claude Code Guide
 
 > **⚠️ START HERE — branch.** **`staging` is the active trunk** — all feature work happens here.
-> **`staging` and `main` are in sync as of 2026-07-05** (`staging → main` PR #66 merged — full
-> production promotion of Macro Dashboard v2 + QA fixes + regime badges + admin IBKR trading + this
-> session's TwelveData rate-limit fix). Cut new feature branches from `staging`; it's currently
-> identical to `main`.
-> Migrations run to **053** (`048_macro_daily_snapshots`, `049_macro_weekly_recaps` [legacy],
-> `050_run_log_latest_view` [unrelated — GEX Signals "Checked: …" stamp], `051_macro_daily_recaps`,
-> `052_ibkr_live_trading` [admin IBKR kill switch + `leg_transactions.broker_*` columns],
-> `053_capital_allocation` [admin IBKR order-quantity suggestion defaults]) — all verified applied on
-> both PROD (`usmqbohcjcyszjxxvnqu`) and sandbox (`uolabcgbnrkhzpwuvzlk`) as of 2026-07-05 (applied via
-> the Supabase MCP directly, not the SQL editor — same effect).
+> **`staging` and `main` are in sync as of 2026-07-05** (`staging → main` PR #66 merged). `staging`
+> itself is still exactly that state — **2 commits ahead of `main`** (both trivial CLAUDE.md handoff
+> commits, nothing code-bearing) — so no new promotion is pending.
+> **Two open PRs currently stack on top of `staging`, neither merged yet:**
+> [PR #67](https://github.com/claudiachez/stw-companion/pull/67) (`claude/week1-integrity-guardrails`
+> → `staging`, migrations 054–058, the Limits/regime engine, integrity guardrails — see
+> [`plans/integrity-guardrails-report.md`](plans/integrity-guardrails-report.md)) and
+> [PR #69](https://github.com/claudiachez/stw-companion/pull/69)
+> (`claude/portfolio-limits-redesign` → `claude/week1-integrity-guardrails`, the Settings/My Portfolio
+> redesign — see "Previous handoff" under Current Status below). **Both are untouched pending host
+> review — do not merge either yourself.** If you're picking up either PR's work, branch further from
+> that PR's branch, not from `staging` (staging doesn't have this code yet).
+> **A third branch, `claude/design-system-audit`, is pushed but has no PR open yet** — cut directly
+> from `staging` (independent of PR #67/#69, no stacking), currently holds Phase 1 (audit) + Phase 2
+> (tokens) of the design-system build, both host-approved. **This is the branch to continue from for
+> Phase 3** — see "Current Status" below for what's done and
+> [`plans/stw-design-system.md`](plans/stw-design-system.md) for the full spec. Don't open a
+> `staging → main`-style PR for it yet; wait until more phases land or the host asks.
+> Migrations run to **053 on `staging`**; **054–058 exist only on the PR #67 branch** (and per
+> [`plans/integrity-guardrails-report.md`](plans/integrity-guardrails-report.md) were already applied
+> directly to PROD, with 058 PROD-only — sandbox has no `tiers`/`profiles` tables to apply it to). The
+> design-system branch adds no migrations (frontend/CSS/tokens only).
 > `app_config.ibkr_live_trading_enabled` = **`0` on both PROD and sandbox** (confirmed 2026-07-05 —
 > sandbox was left on `1` from prior UI testing, now turned back off via the Config page).
 > If migrations stop at 021 you are on a stale checkout, re-sync.
-> **First commands every session:**
-> `git fetch origin && git checkout staging && git pull --ff-only`, **then cut a feature branch**
-> before making any change: `git checkout -b claude/<short-feature-name>`. **Never commit directly to
-> `staging`** — work on the branch, push it, open a PR back to `staging` (host merges/approves).
-> `main` is promoted only by an approved staging→main PR (= a production deploy) — this is a standing
-> approval gate, not a one-time exception; ask before opening a staging→main PR even if staging looks
-> ready.
+> **First commands every session:** `git fetch origin && git checkout staging && git pull --ff-only`
+> — but check the branch notes above first: if your task continues PR #67, PR #69, or the
+> design-system work, check out that branch directly instead of cutting fresh from `staging`.
+> Otherwise, **cut a feature branch** before making any change: `git checkout -b
+> claude/<short-feature-name>`. **Never commit directly to `staging`** — work on the branch, push it,
+> open a PR back to `staging` (host merges/approves). `main` is promoted only by an approved
+> staging→main PR (= a production deploy) — this is a standing approval gate, not a one-time
+> exception; ask before opening a staging→main PR even if staging looks ready.
 > (Note: `memory/` lives in local `~/.claude/`, NOT in the repo — never reference it in a prompt meant
 > for a remote session; put anything a future session needs into the repo.)
 
@@ -43,10 +56,141 @@
 
 ---
 
-## Current Status — TwelveData rate-limit bug fixed + shipped to production (handoff 2026-07-05)
+## Current Status — Design system Phase 1 (audit) + Phase 2 (tokens) done, Phase 3 next (handoff 2026-07-06)
 
-**NEXT SESSION = `staging` and `main` are in sync — everything is in production, including this
-session's fix.** This session found the REAL reason the per-ticker regime badge never rendered: it
+**Branch: `claude/design-system-audit`, cut fresh from `staging` (independent of PR #67/#69), pushed
+to origin, no PR opened yet.** Both phases below were presented to the host at their checkpoint and
+approved before proceeding — see [`plans/stw-design-system.md`](plans/stw-design-system.md) for the
+full 4-phase spec (Audit → Tokens → Core components → Enforcement/migration prep). **Next session
+picks up Phase 3 (core components) on this same branch** — don't cut a new branch, don't restart
+from `staging`.
+
+**Phase 1 (audit, read-only, host-approved) — 5 docs in
+[`docs/design-system/audit/`](docs/design-system/audit/):**
+- `00-structure-overview.md` — confirms Tailwind 3 + CSS custom properties (no CSS-in-JS to unwind);
+  found the color-token source of truth (`index.css`) existed as two byte-identical hand-maintained
+  copies across `apps/web`/`apps/admin`; catalogued 3 existing informal partial systems
+  (`packages/ui/src/primitives/`, Macro's `macroVisuals.tsx`, and a `SectionHeader` CLAUDE.md
+  documented as shared but was actually a private function in one file) to extend rather than
+  replace.
+- `01-style-value-inventory.md` — 48 distinct literal hex colors, **348 inline `fontSize` literals
+  across 14 pixel values vs. only 56 uses of Tailwind's own type scale**, ~39 distinct padding
+  combinations with no 4px rhythm, 8 border-radius values.
+- `02-component-duplication-report.md` — walks all 10 spec-named component classes with file paths.
+  Sharpest finds: `ConvictionBadge.tsx` hardcodes its own literal-hex tier-color map that 100%
+  duplicates `TIERS` in `packages/shared/src/constants/tiers.ts` (already one import away);
+  `TradesTable.tsx`/`SignalsTable.tsx` have byte-identical `th` style objects that have already
+  drifted; two competing button-authoring mechanisms (Tailwind classes vs. inline `style` objects) for
+  the identical primary-CTA role, with 5 same-role Save buttons in 5 different sizes.
+- `03-responsive-mobile-conventions.md` — `useIsMobile()`'s `640` breakpoint is consistently used (8
+  call sites, none override it) but was a bare literal, not a named token; the list+detail
+  split/mobile-full-screen-swap pattern CLAUDE.md calls "canonical for any list+detail surface" exists
+  in exactly one place (`PicksView.tsx`), unextracted; modal backdrop color is consistent (5/5) but
+  vertical alignment is a real 2-vs-3 split, and `PositionEditor.tsx` — the file CLAUDE.md cites as
+  the canonical *centered* example — is actually one of the 2 that top-anchor instead.
+- `04-additional-inconsistencies.md` — a deeper adversarial pass. Two real bugs, not just drift:
+  (1) `HoldingRow.tsx`/`HoldingDetail.tsx`/`SignalsTable.tsx` hardcode the **light theme's** exact
+  P&L green/red hex regardless of active theme, so P&L text renders the wrong hue in the app's
+  default dark theme today, not just on a hypothetical toggle; (2) inputs authored via inline `style`
+  (`SettingsPage.tsx`, all three `FilterBar` variants) set `outline: 'none'` with no focus-state
+  replacement at all, unlike Tailwind-class inputs which correctly pair it with `focus:border-acc` — a
+  real keyboard-accessibility regression on `staging` today. Also: no icon library anywhere (90
+  hand-typed Unicode glyphs + 4 files of hand-copied SVG that already share one consistent art style —
+  `lucide-react` would directly consolidate this).
+
+**Phase 2 (tokens, host-approved after an in-browser visual review) —
+[`docs/design-system/tokens.md`](docs/design-system/tokens.md) is the full reference:**
+- **Color**: consolidated the two duplicated `index.css` files into one canonical
+  [`packages/ui/src/styles/tokens.css`](packages/ui/src/styles/tokens.css), imported by both apps
+  (`@import` must precede `@tailwind` in the importing file — CSS silently drops an `@import` that
+  isn't a stylesheet's first rule; caught this exact bug during in-browser verification and fixed it).
+  Added the spec's required semantic roles as pure additions: `status.{positive,warning,negative,
+  info,neutral,unevaluated}` (bg/border/text triples, for Phase 3's `StatusPill`), `--pnl-gain`/
+  `--pnl-loss` (distinct identity from `--acc`/`--c1` even though same value today — this is the named
+  fix target for the P&L color bug above, though the actual 3-file migration onto it is Phase
+  4/follow-up work, not done this session), `--surface-hover`/`--surface-inset`, `--border-strong`,
+  `--text-inverse`. **Fixed a real WCAG AA contrast failure in `--t3`** (muted/tertiary text) in both
+  themes — dark `#525252→#808080` (~2.5:1→~5.0:1), light `#6b916b→#527052` (~3.4:1→~5.2:1) — this is
+  the existing variable every current consumer already reads, so it's a value change, not a new token;
+  visually reviewed side-by-side with the host before approval.
+- **Everything else** (spacing, radius, shadow, motion, breakpoint, z-index, type scale) lives as
+  plain JS in [`packages/shared/src/constants/tokens.ts`](packages/shared/src/constants/tokens.ts) —
+  mirrors Tailwind's own already-shipped default spacing/radius scale rather than inventing a parallel
+  one (components author almost exclusively via inline `style` objects, not Tailwind classes, per the
+  Phase 1 audit). `useIsMobile()` now sources its breakpoint from `BREAKPOINT.mobile` instead of a
+  bare `640` literal. Type scale collapses the 14 observed pixel values into 6 named sizes
+  (`2xs`/`xs`/`sm`/`base`/`lg`/`display`) — reviewed visually with the host, approved as-is.
+  **Deliberately did NOT remap Tailwind's default `xs`/`sm`/`base`/`lg` font-size keys** in either
+  `tailwind.config.ts` — would have silently changed ~51 existing `text-xs`/`text-sm`/`text-lg` call
+  sites by 1-2px; only added the two non-colliding new sizes (`2xs`, `display`).
+- **No component/page file touched.** `pnpm -r typecheck` and `pnpm -r test` (152 tests, `@stw/shared`)
+  both pass unmodified. Verified live via `apps/web`'s login page (no auth needed) in both themes —
+  screenshots + `getComputedStyle` checks confirmed every new/changed CSS variable resolves correctly,
+  no console errors, no failed requests.
+
+**Carried forward for whoever builds Phase 3 (do NOT re-derive — read the audit docs first):**
+- Phase 3's component list gained one addition not in the original spec: **`Modal`** — extract the
+  already-consistent backdrop chrome (`rgba(0,0,0,0.55)`, `zIndex: 1000`) verbatim, which would
+  automatically have caught the `PositionEditor.tsx`/`TradeEditForm.tsx` centering drift; give it
+  `MODAL_WIDTH.sm/md/lg` instead of ad hoc `maxWidth` numbers.
+- `Badge`/`Chip` (spec 3.2) should absorb `ConvictionBadge` importing `TIERS` from `@stw/shared`
+  instead of its own hardcoded map — a real duplication, not just a styling nit.
+- `DataTable`'s header style (spec 3.6) should be lifted verbatim from `TradesTable.tsx`'s `th` object
+  (the more complete of the two already-drifted copies).
+- `DetailPane` (spec 3.7) must bake in the responsive split/mobile-full-screen-swap *behavior*
+  (currently only in `PicksView.tsx`), not just the static visual skeleton — PR #69's
+  `PortfolioPositionDetail.tsx` already had to hand-copy this once with nothing to import.
+- The P&L color bug and the input focus-accessibility gap (both in audit doc 04) are real defects,
+  not cosmetic — the tokens now exist to fix the color one (`--pnl-gain`/`--pnl-loss`); actually
+  migrating the 3 affected files is Phase 4/a follow-up, flagged so it doesn't get lost.
+
+---
+
+## Previous handoff (2026-07-06) — Settings/My Portfolio redesign shipped as PR #69
+
+**This session's actual code work: a host-approved UX proposal, then a full build, for
+Settings/My Portfolio**, landed as [PR #69](https://github.com/claudiachez/stw-companion/pull/69)
+(`claude/portfolio-limits-redesign` → `claude/week1-integrity-guardrails`, i.e. **on top of the still-
+open PR #67**, not on `staging` — see the top banner). Full proposal at
+[`plans/my-portfolio-settings-redesign-proposal.md`](plans/my-portfolio-settings-redesign-proposal.md),
+reviewed and approved by the host before any code was written (standing practice worth repeating for
+similarly-sized UI changes — presenting the proposal first surfaced a real ambiguity, "how exactly do
+Gross Exposure/Sector Concentration render on My Portfolio", that would have been a wrong-guess
+otherwise). What shipped:
+- **Settings now holds only account setup.** IBKR Connection + a pure `RiskConfigForm` (thresholds
+  only, no sync button, no violation display) in a 2-column layout. One Sync button total (on the
+  Connection card).
+- **`LimitsPanel` split**: `RiskConfigForm` (Settings, both apps) stays; a new collapsible
+  `ViolationsSummary` (`packages/ui/src/features/limits/ViolationsSummary.tsx` — gross-exposure
+  progress bar, breach-only concentration rows with a "show all" expander, honest "Unmapped (no
+  sector data yet)" labeling) moved to **My Portfolio**, gated by a new `canUseLimits` capability
+  (wired via a `PortfolioRoute` wrapper in apps/web, same pattern as `PicksRoute`'s `canViewHistory`;
+  admin gets it unconditionally). Admin's Limits tab now composes both pieces via a slimmed
+  `LimitsPanel.tsx`.
+- **Ticker click on My Portfolio opens an own-position detail pane**
+  (`packages/ui/src/features/portfolio/PortfolioPositionDetail.tsx`) instead of navigating to STW's
+  tracked position — tailing status vs. STW with an explicit "View STW's tracked position →" link
+  (the old default-click behavior, now opt-in), a per-ticker risk/regime rollup, Open P&L (real) /
+  Closed P&L ("coming soon" — the subscriber Flex sync still only returns open positions, see Next
+  Steps #7 below, unchanged). Follows `PicksView.tsx`'s list+detail contract: desktop resizable split,
+  mobile full-screen swap.
+- **Four value-adds** on My Portfolio, all reusing data already flowing in (no new pipelines): sizing
+  delta vs. the tailed pick ("You: X% · STW: Y%"), a declining-STW-conviction alert (reuses the
+  existing `useConvictionChanges` batch classifier, filtered to tailed tickers), an advisory
+  regime note under the Equity:Options card (same `regimeGate()`/STW→IWM proxy as the admin's
+  `RegimeLight`, same "advisory, not a trade signal" framing), and a stale-sync banner past 24h.
+- **Verified:** `pnpm -r typecheck` (all 4 workspaces) and `pnpm -r test` (187/187, `@stw/shared` —
+  no logic changed, this was UI-only) both green. `ViolationsSummary`/`RiskConfigForm` verified live
+  in-browser via apps/admin (shares the same components) — collapse/expand, gross-exposure bar, empty
+  states, no console errors, both desktop and 390px mobile.
+- **NOT verified: apps/web itself.** No real subscriber credentials were available in that session's
+  environment, and apps/web points at the production Supabase project, so login wasn't attempted —
+  the My Portfolio detail pane, the split/mobile-swap wiring, and the four value-add banners are
+  typechecked but have never been seen rendering in a real browser. **Do this first if picking up
+  PR #69** — it's the single biggest confidence gap left.
+
+**Previous handoff (2026-07-05) — TwelveData rate-limit bug fixed + shipped to production, unchanged
+since.** This session found the REAL reason the per-ticker regime badge never rendered: it
 was never the "daily quota exhausted" cause diagnosed on 2026-07-03 — that was a real, separate event,
 but the actual structural bug (still present after that quota reset) is that `tdBatchCloses()` bundled
 many symbols into one comma-joined TwelveData call assuming that avoided the free tier's rate limit;
@@ -259,7 +403,7 @@ run DDL locally — apply migrations via the Supabase SQL editor). Prod service 
   `aea1699f-e0b8-4ed4-80b9-4abb5d0a7711`; the underlying skill is `skill_01UY6zPNf9Do8eR4voyUvtm6`. Being
   cleared via Anthropic support / desktop skill-delete. Also smoke-test the routines on their next live runs.
 
-## New this session (2026-07-05, staging → main — committed, pushed, promoted)
+## From the 2026-07-05 session (staging → main — committed, pushed, promoted)
 
 Picked up where 2026-07-03 left off: re-checked the regime badge, found the real bug behind it, fixed
 it, shipped it to production, then separately investigated + fixed a live data-integrity report.
@@ -310,58 +454,72 @@ it, shipped it to production, then separately investigated + fixed a live data-i
 
 ## Next Steps
 
-1. **Visually confirm the regime badge actually renders** now that the rate-limit fix is live. Open a
+1. **Continue the design system build — Phase 3 (core components), on `claude/design-system-audit`.**
+   Phase 1 (audit) and Phase 2 (tokens) are both done and host-approved — see Current Status above
+   and [`plans/stw-design-system.md`](plans/stw-design-system.md) for the full spec. Build the
+   components in the order the spec lists (`StatusPill` first), **plus `Modal`** (added to the list
+   based on a Phase 1 finding — see Current Status's "carried forward" note). Stop for review before
+   Phase 4, same as the first two checkpoints. Check out the existing branch, don't cut a new one:
+   `git fetch origin && git checkout claude/design-system-audit && git pull --ff-only`.
+
+2. **Get PR #67 and PR #69 reviewed and merged** (in that order — #69 is stacked on #67). Before
+   merging either: (a) apps/web browser verification for #69 (see the PR #69 handoff below — never
+   actually confirmed live), (b) PR #67's own deferred items — Item 0's live cron verification and
+   Item 3's regime_daily backfill, both still not run (see
+   [`plans/integrity-guardrails-report.md`](plans/integrity-guardrails-report.md) for exact status).
+   Do not merge either PR yourself without host approval, per standing rule. Once merged, revisit
+   whether the design-system Phase 3/4 components should retroactively cover PR #69's new surfaces
+   (`LimitsPanel`, `ViolationsSummary`, `PortfolioPositionDetail`) — they weren't in scope for the
+   Phase 1 audit since they hadn't merged yet.
+
+3. **Visually confirm the regime badge actually renders** now that the rate-limit fix is live. Open a
    held ticker's detail page (or the Picks list at normal width) and check for the trend-structure
    chip — allow several minutes on a cold load (paced ≤8 symbols/65s) before concluding it's still
    broken. If it's blank even after a full population cycle, that's a new, third bug — don't assume
    it's the same root cause as the last two.
 
-2. **Live-test the admin IBKR order flow against a real IB Gateway** — cannot be done from this
+4. **Live-test the admin IBKR order flow against a real IB Gateway** — cannot be done from this
    environment. In order: (1) `IB_PORT=4002 python3 ibkr_proxy.py` against Gateway in **paper** mode,
    (2) place a real paper order end-to-end from the "Open via IBKR" modal, confirm the fill patches the
    diary row's price correctly, (3) test "Close via IBKR" on an open leg, (4) only after both work
    cleanly, consider port 4001 (live). Flag if `/order_status`'s `reqAllOpenOrders`/`reqCompletedOrders`
    lookup doesn't find a previously-placed order from a new connection.
 
-3. **Phase 4 admin Manage area, Parts B/C — still not built** (Part A, Config, shipped 2026-07-03).
+5. **Phase 4 admin Manage area, Parts B/C — still not built** (Part A, Config, shipped 2026-07-03).
    Spec: [`plans/phase4_admin_manage.md`](plans/phase4_admin_manage.md). **Categories CRUD**
    (delete-guarded — block or reassign-to-Uncategorized on delete) and **Traders** (read-only
    recommended — only 2 seeded, FK'd everywhere, high-risk/low-value to make editable). No migrations
    expected.
 
-4. **Verify `macro_daily_snapshots` (migration 048) is actually populating** — still confirmed **empty
+6. **Verify `macro_daily_snapshots` (migration 048) is actually populating** — still confirmed **empty
    on PROD as of 2026-07-05**, well after the `macro-snapshot.ts` fix (commit `3aa5528`, 2026-07-02)
    shipped. `macro_daily_recaps` (051) IS getting fresh rows, so scheduled functions are firing on this
    site — either the snapshot function needs more scheduled cycles, or it's still failing silently.
    Check Netlify function logs for `macro-snapshot` before spending more time re-diagnosing from the DB
    side alone.
 
-5. **Macro Dashboard — remaining roadmap item** (spec: [`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md)).
+7. **Macro Dashboard — remaining roadmap item** (spec: [`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md)).
    All 11 modules are built and in production. The one item left from the spec:
    - **Portfolio Heatmap** — treemap block on `PortfolioDashboard`, box ∝ `current_weight`,
      Today/Total + By Basket/All toggles. Spec § "Phase 4: Portfolio Heatmap".
 
-6. **Overview/experience enrichment (host-requested, queued).** Stop the click-each-ticker experience:
+8. **Overview/experience enrichment (host-requested, queued).** Stop the click-each-ticker experience:
    - **Transcripts library tab** — a NEW subscriber-facing **episode recap** (host's *trading psychology* +
      that episode's *per-ticker commentary*). **NOT** the local methodology `.md` files (apps never read those).
      Needs a new `webinars` table written by `stw-transcripts` + a new tab.
    - **Global Activity Feed** — one cross-ticker, reverse-chron feed merging Commentary + Transactions across
      all holdings, filterable. No schema (reads `conviction_comments` + `leg_transactions`). Low-cost.
 
-7. **Subscriber closed-position P&L history — explicitly postponed by the host, design already
+9. **Subscriber closed-position P&L history — explicitly postponed by the host, design already
    researched.** The subscriber IBKR Flex query returns *open positions only* and the sync is
    delete-all-then-insert; closed history needs a genuinely different append-only, dedup-on-execution-id
    sync (a second Flex Query template + a new `user_closed_trades` table). Don't build until the host
-   asks again.
+   asks again. **Note:** the My Portfolio detail pane (this session) already surfaces this gap
+   honestly to users as a "Closed position history — coming soon" placeholder rather than hiding it.
 
-8. **Future features (not migration work):** inline 2-line leg editing in the modal (deferred); `$100k`
-   notional + SPY benchmark (the `spy_daily` table from migration 032 already exists; the population
-   cron + benchmark UI are unbuilt).
-
-9. **`plans/integrity-guardrails.md`** — a self-contained build request the host prepared for a NEW
-   session (Week 1: integrity batch + risk guardrails + advisory regime light). Explicitly scoped to
-   NOT integrate with the existing Macro Dashboard scoring — read that file in full before starting;
-   it's meant to be pasted into its own session, not continued from this handoff.
+10. **Future features (not migration work):** inline 2-line leg editing in the modal (deferred); `$100k`
+    notional + SPY benchmark (the `spy_daily` table from migration 032 already exists; the population
+    cron + benchmark UI are unbuilt).
 
 **Sandbox gaps (not blocking, dev-only):** (a) the **`prev_conviction_level` backfill** was never run on
 sandbox, so the Conviction Changes block won't render there until it is (or until a real batch lands); (b) the
@@ -391,9 +549,11 @@ pnpm-workspace.yaml          → packages/*, apps/*
 package.json                 → workspace scripts (dev:web, dev:admin, build, typecheck, test)
 packages/
   shared/  (@stw/shared)     pure framework-agnostic logic: types, tiers, baskets,
-                             format, options, pnl, filters (+ unit tests)
+                             format, options, pnl, filters, design tokens (+ unit tests)
+    src/constants/tokens.ts  spacing/radius/shadow/motion/breakpoint/z-index/type-scale
   ui/      (@stw/ui)         shared React: feature pages/components, data hooks,
                              supabase/query-client factories, AppCapabilities context
+    src/styles/tokens.css   canonical color tokens — both apps' index.css import this
 apps/
   web/                       subscriber shell: router, Layout, auth, AccessGate
     netlify/functions/
@@ -403,6 +563,7 @@ apps/
     ibkr_proxy.py            local IBKR writer (run on your machine, not deployed)
     netlify.toml             (Netlify base dir = apps/admin)
 supabase/migrations/         001..053 — single source of truth for DB schema/RLS
+docs/design-system/          design-system audit reports + tokens reference (see Design System section)
 CLAUDE.md                    this file
 ```
 
@@ -753,10 +914,56 @@ active filter (closed hidden by default). The FilterBar count shows `N of {total
   can't cover one unit, rather than leaving the field empty (which reads as "nothing computed" instead
   of "budget insufficient"). Apply the same instinct anywhere a calculation can legitimately land on
   zero/empty — show the result and why, don't hide it.
+- **Settings pages hold only account setup — never live evaluation/violation display** (host decision,
+  2026-07-06). A Settings form configures thresholds/credentials; it does not also show you how you're
+  doing against them. That belongs on the page the data itself lives on (e.g. Limits violations live
+  on My Portfolio, not Settings, even though the thresholds that drive them are edited in Settings).
+  If a future Settings addition is tempted to add a "preview" of live data next to a config field,
+  don't — split it the same way `RiskConfigForm` (Settings) and `ViolationsSummary` (My Portfolio)
+  were split.
+- **A list page's default ticker-click action should open that page's OWN data about the ticker, not
+  jump to a different page's tracked version of it** (host decision, 2026-07-06, My Portfolio). My
+  Portfolio's ticker click now opens an own-position detail pane instead of navigating to STW's
+  tracked position (`PortfolioPositionDetail.tsx`) — the STW-position view is still reachable, but
+  as an explicit named link inside the pane, not the default click target. Apply the same instinct to
+  any future page that lists a subscriber's own data but is tempted to default-link into STW's data
+  instead.
+- **New code should use the design-token files, not fresh literals** (established 2026-07-06 — see
+  Design System section). Colors from `packages/ui/src/styles/tokens.css`
+  (`var(--status-positive-text)`, `var(--pnl-gain)`, etc.); spacing/radius/type-scale/motion from
+  `packages/shared/src/constants/tokens.ts` (`SPACE`, `RADIUS`, `FONT_SIZE`, `NUMERIC_STYLE`, etc.).
+  Existing pages are NOT migrated onto these yet (that's Phase 4, deliberately not done in the audit/
+  tokens session) — this rule governs new code only, until a migration pass lands.
+- **P&L gain/loss color must read `var(--pnl-gain)`/`var(--pnl-loss)`, never a hardcoded hex.**
+  `HoldingRow.tsx`, `HoldingDetail.tsx`, and `SignalsTable.tsx` currently hardcode the light theme's
+  exact green/red (`#16A34A`/`#DC2626`) regardless of active theme — a real, live bug (P&L text
+  renders the wrong hue in the app's default dark theme today), documented in
+  [`docs/design-system/audit/04-additional-inconsistencies.md`](docs/design-system/audit/04-additional-inconsistencies.md).
+  The correct tokens now exist; migrating those 3 files is still open (flagged, not yet done — see
+  Next Steps).
+- **Never set `outline: 'none'` on a focusable element without a visible replacement.** Tailwind-class
+  inputs in this app correctly pair `focus:outline-none` with `focus:border-acc`; several inline-
+  `style` inputs (`SettingsPage.tsx`, all three `FilterBar` variants) set `outline: 'none'` with
+  nothing replacing it — a real keyboard-accessibility regression, not just a style nit. Any new input
+  styling must follow the remove-and-replace pattern, never remove-only.
 
 ---
 
 ## Design System
+
+> **A formal design-token + component system is in progress** at
+> [`plans/stw-design-system.md`](plans/stw-design-system.md) (see Next Steps #1) — a 4-phase,
+> checkpointed build (audit → tokens → core components → enforcement/migration plan) triggered by
+> real inconsistency found during the 2026-07-06 My Portfolio redesign (3+ badge treatments, two
+> unrelated "primary button" styles, inconsistent numeric alignment). **Phase 1 (audit) and Phase 2
+> (tokens) are done and host-approved** (`claude/design-system-audit` branch, unmerged — see Current
+> Status); Phase 3 (core components) is next. **The color variables below are no longer the sole
+> source of truth** — `packages/ui/src/styles/tokens.css` is now the canonical file both apps import
+> (this table is a quick-reference subset, kept in sync manually); non-color scales live in
+> `packages/shared/src/constants/tokens.ts`. Full reference:
+> [`docs/design-system/tokens.md`](docs/design-system/tokens.md). Still true until Phase 3/4 land:
+> don't invent a second parallel token scheme (e.g. a new Tailwind theme extension) — extend the
+> existing token files instead.
 
 - **Font:** Barlow Condensed (700/800) for the **STW logo** in the header only; system sans-serif (`font-sans`) everywhere else including page headings and login
 - **Logo:** STW mic + green arrow SVG
@@ -774,8 +981,11 @@ active filter (closed hidden by default). The FilterBar count shows `N of {total
 | `--bsub` | `#1f1f1f` | Subtle dividers |
 | `--text` | `#f0f0f0` | Primary text |
 | `--t2` | `#a0a0a0` | Secondary text |
-| `--t3` | `#525252` | Muted text |
+| `--t3` | `#808080` | Muted text (changed from `#525252` 2026-07-06 — the old value failed WCAG AA contrast; see `docs/design-system/tokens.md`) |
 | `--acc` | `#22c55e` | STW green |
+
+New semantic tokens added 2026-07-06 (status pills, P&L, surface/border/text variants) aren't
+duplicated in this table — see `docs/design-system/tokens.md` for the full set.
 
 #### Tier Colors
 | Tier | Color | Meaning |
