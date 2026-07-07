@@ -4,11 +4,6 @@
       "count": 4
     }
   },
-  "apps/web/src/features/settings/SettingsPage.tsx": {
-    "no-restricted-syntax": {
-      "count": 17
-    }
-  },
   "packages/ui/src/components/Layout.tsx": {
     "no-restricted-syntax": {
       "count": 6
