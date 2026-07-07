@@ -24,6 +24,8 @@ export interface PositionInput {
   markPrice: number | null;
   /** Contract multiplier; defaults to 1 for shares. Options should pass 100. */
   multiplier: number | null;
+  /** True for an options leg — drives the separate option-concentration check. */
+  isOption?: boolean;
 }
 
 export interface DrawdownStep {
@@ -37,6 +39,8 @@ export interface RiskConfig {
   maxPositionPct: number;
   maxSectorPct: number;
   maxGrossPct: number;
+  /** Separate, typically-tighter cap on any single underlying's OPTIONS exposure. */
+  maxOptionPositionPct: number;
   ladder: DrawdownStep[];
 }
 
@@ -147,6 +151,25 @@ export function sectorConcentration(
       : toViolation(sector, pct(mv, accountEquity), maxSectorPct));
 }
 
+/**
+ * Per-underlying OPTIONS concentration vs `maxOptionPositionPct` — rolls up only the
+ * option legs (isOption) of each underlying. One row per underlying that holds options;
+ * underlyings with no options don't appear (a share-only position isn't option risk).
+ */
+export function optionPositionConcentration(
+  positions: PositionInput[],
+  accountEquity: number,
+  maxOptionPositionPct: number,
+): ConcentrationViolation[] {
+  const byUnderlying: Record<string, number> = {};
+  for (const p of positions) {
+    if (!p.isOption) continue;
+    byUnderlying[p.underlying] = (byUnderlying[p.underlying] ?? 0) + Math.abs(positionMarketValue(p));
+  }
+  return Object.entries(byUnderlying).map(([underlying, mv]) =>
+    toViolation(underlying, pct(mv, accountEquity), maxOptionPositionPct));
+}
+
 /** Whole-book gross exposure % vs `maxGrossPct` — always exactly one row, scope 'GROSS'. */
 export function grossExposureViolation(
   positions: PositionInput[],
@@ -182,12 +205,14 @@ export function evaluateRiskConfig(
   drawdownPct: number | null,
 ): {
   positionViolations: ConcentrationViolation[];
+  optionViolations: ConcentrationViolation[];
   sectorViolations: ConcentrationViolation[];
   grossViolation: ConcentrationViolation;
   ladderTargetGrossPct: number | null;
 } {
   return {
     positionViolations: positionConcentration(positions, accountEquity, config.maxPositionPct),
+    optionViolations: optionPositionConcentration(positions, accountEquity, config.maxOptionPositionPct),
     sectorViolations: sectorConcentration(positions, sectorMap, accountEquity, config.maxSectorPct),
     grossViolation: grossExposureViolation(positions, accountEquity, config.maxGrossPct),
     ladderTargetGrossPct: drawdownPct === null ? null : drawdownLadderTarget(config.ladder, drawdownPct),

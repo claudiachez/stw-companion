@@ -39,8 +39,9 @@ function ladderWarnings(ladder: DrawdownStep[]): string[] {
 
 /** A single position can't out-concentrate its own sector, and a single sector
  * can't out-concentrate the whole book. */
-function thresholdWarnings(maxPositionPct: number, maxSectorPct: number, maxGrossPct: number): string[] {
+function thresholdWarnings(maxPositionPct: number, maxOptionPositionPct: number, maxSectorPct: number, maxGrossPct: number): string[] {
   const warnings: string[] = [];
+  if (maxOptionPositionPct > maxPositionPct) warnings.push(`Max option position (${maxOptionPositionPct}%) exceeds max position (${maxPositionPct}%) — the options cap is meant to be tighter, not looser, than the overall single-name cap.`);
   if (maxPositionPct > maxSectorPct) warnings.push(`Max position (${maxPositionPct}%) exceeds max sector (${maxSectorPct}%) — a single position can't be more concentrated than its own sector.`);
   if (maxSectorPct > maxGrossPct) warnings.push(`Max sector (${maxSectorPct}%) exceeds max gross (${maxGrossPct}%) — a single sector can't exceed the whole book's limit.`);
   return warnings;
@@ -55,17 +56,18 @@ export function RiskConfigForm({ userId, config }: { userId: string; config: Ris
   const isMobile = useIsMobile();
   const rowLayout: FormRowProps['layout'] = isMobile ? 'stacked' : 'horizontal';
   const [draft, setDraft] = useState<{
-    maxPositionPct?: number; maxSectorPct?: number; maxGrossPct?: number;
+    maxPositionPct?: number; maxOptionPositionPct?: number; maxSectorPct?: number; maxGrossPct?: number;
     accountEquity?: number; ladder?: DrawdownStep[];
   }>({});
 
   const maxPositionPct = draft.maxPositionPct ?? config.max_position_pct;
+  const maxOptionPositionPct = draft.maxOptionPositionPct ?? config.max_option_position_pct;
   const maxSectorPct = draft.maxSectorPct ?? config.max_sector_pct;
   const maxGrossPct = draft.maxGrossPct ?? config.max_gross_pct;
   const accountEquity = draft.accountEquity ?? config.account_equity;
   const ladder = draft.ladder ?? config.ladder;
   const dirty = Object.keys(draft).length > 0;
-  const warnings = [...thresholdWarnings(maxPositionPct, maxSectorPct, maxGrossPct), ...ladderWarnings(ladder)];
+  const warnings = [...thresholdWarnings(maxPositionPct, maxOptionPositionPct, maxSectorPct, maxGrossPct), ...ladderWarnings(ladder)];
 
   function updateRung(i: number, patch: Partial<DrawdownStep>) {
     setDraft((d) => ({ ...d, ladder: ladder.map((r, idx) => (idx === i ? { ...r, ...patch } : r)) }));
@@ -84,6 +86,7 @@ export function RiskConfigForm({ userId, config }: { userId: string; config: Ris
   async function handleSave() {
     await save.mutateAsync({
       max_position_pct: maxPositionPct,
+      max_option_position_pct: maxOptionPositionPct,
       max_sector_pct: maxSectorPct,
       max_gross_pct: maxGrossPct,
       account_equity: accountEquity,
@@ -123,6 +126,12 @@ export function RiskConfigForm({ userId, config }: { userId: string; config: Ris
           <TextInput type="number" min={0} max={100}
             value={maxPositionPct}
             onChange={(e) => setDraft((d) => ({ ...d, maxPositionPct: Number(e.target.value) }))} />
+        </FormRow>
+
+        <FormRow layout={rowLayout} label="Max option position" suffix="%" hint="of book, per underlying — options only (usually tighter)">
+          <TextInput type="number" min={0} max={100}
+            value={maxOptionPositionPct}
+            onChange={(e) => setDraft((d) => ({ ...d, maxOptionPositionPct: Number(e.target.value) }))} />
         </FormRow>
 
         <FormRow layout={rowLayout} label="Max sector" suffix="%" hint="of book, per sector">

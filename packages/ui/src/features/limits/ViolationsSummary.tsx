@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  evaluateRiskConfig, fmtDateTime,
+  evaluateRiskConfig,
   type PositionInput, type ConcentrationViolation, type ViolationSeverity,
 } from '@stw/shared';
 import { useAuthStore } from '../../store/auth';
@@ -39,12 +39,14 @@ const SEVERITY_TEXT_COLOR: Record<ViolationSeverity, string> = {
 };
 
 function ViolationRow({
-  v, ack, onAcknowledge, note: noteBadge,
+  v, ack, onAcknowledge, note: noteBadge, ackable = true,
 }: {
   v: ConcentrationViolation;
   ack: { status: AckStatus; glide_path_note: string | null } | undefined;
   onAcknowledge: (status: AckStatus, note?: string) => void;
   note?: string;
+  /** When false, breaches show the pill but not the acknowledge/glide-path workflow. */
+  ackable?: boolean;
 }) {
   const status = ack?.status ?? 'new';
   const committedGlide = status === 'glide_path' ? (ack?.glide_path_note ?? '') : '';
@@ -80,7 +82,7 @@ function ViolationRow({
       {/* Breaches get the acknowledge + glide-path workflow. Acknowledgment (I've
           seen it) is kept distinct from the glide path (my committed reduction
           plan); once a glide path is set it renders as plain text, not an input. */}
-      {v.severity === 'breach' && (
+      {v.severity === 'breach' && ackable && (
         <div className="flex flex-col gap-2">
           {committedGlide && !editingGlide ? (
             <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -132,8 +134,7 @@ function GrossExposureBar({ v, ladderTargetPct }: { v: ConcentrationViolation; l
   const fill = SEVERITY_TEXT_COLOR[v.severity];
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="flex items-center justify-between text-xs">
-        <span className="text-text font-semibold">Gross exposure</span>
+      <div className="flex items-center justify-end text-xs">
         <span className="font-mono" style={{ color: fill }}>
           {pct.toFixed(1)}% / {limitPct}%
         </span>
@@ -176,16 +177,20 @@ function sectionSummary(violations: ConcentrationViolation[]): string {
 }
 
 function BreachOnlyList({
-  title, violations, ackFor, onAcknowledge, unmappedNote,
+  title, description, violations, ackFor, onAcknowledge, unmappedNote, ackable = true, ackType = 'position',
 }: {
   title: string;
+  description: string;
   violations: ConcentrationViolation[];
-  ackFor: (scope: string, type: ViolationType) => { status: AckStatus; glide_path_note: string | null } | undefined;
-  onAcknowledge: (scope: string, status: AckStatus, note?: string) => void;
+  ackFor?: (scope: string, type: ViolationType) => { status: AckStatus; glide_path_note: string | null } | undefined;
+  onAcknowledge?: (scope: string, status: AckStatus, note?: string) => void;
   unmappedNote?: string;
+  /** Option concentration is display-only (no ack type in the DB) — pass false. */
+  ackable?: boolean;
+  ackType?: ViolationType;
 }) {
   const [showAll, setShowAll] = useState(false);
-  const type: ViolationType = title === 'Position concentration' ? 'position' : 'sector';
+  const type = ackType;
   // Exceptions are the resting view: anything not comfortably OK — breaches,
   // near-limit (the actionable early warning), and unevaluated (missing data).
   const exceptions = violations.filter((v) => v.severity !== 'ok').sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
@@ -195,7 +200,8 @@ function BreachOnlyList({
   return (
     <div className="bg-surface border border-border rounded-xl p-5">
       <div className="text-text font-semibold text-sm">{title}</div>
-      {violations.length > 0 && <div className="text-t3 text-xs mb-2">{sectionSummary(violations)}</div>}
+      <div className="text-t3 text-xs mt-0.5" style={{ lineHeight: 1.5 }}>{description}</div>
+      {violations.length > 0 && <div className="text-t3 text-xs mt-2 mb-2" style={{ color: 'var(--t2)' }}>{sectionSummary(violations)}</div>}
       {violations.length === 0 && <div className="text-t3 text-xs">No positions.</div>}
       {violations.length > 0 && shown.length === 0 && (
         <div className="text-t3 text-xs">All {violations.length} comfortably within limit.</div>
@@ -204,8 +210,9 @@ function BreachOnlyList({
         <ViolationRow
           key={v.scope}
           v={v}
-          ack={ackFor(v.scope, type)}
-          onAcknowledge={(status, note) => onAcknowledge(v.scope, status, note)}
+          ackable={ackable}
+          ack={ackFor?.(v.scope, type)}
+          onAcknowledge={(status, note) => onAcknowledge?.(v.scope, status, note)}
           note={v.severity === 'unevaluated' ? unmappedNote : undefined}
         />
       ))}
@@ -225,7 +232,6 @@ function BreachOnlyList({
 
 export function ViolationsSummary({ showSyncButton = false }: { showSyncButton?: boolean }) {
   const userId = useAuthStore((s) => s.user?.id);
-  const [expanded, setExpanded] = useState(false);
 
   const { data: positions, isLoading: positionsLoading } = useUserPositions();
   const { data: config, isLoading: configLoading } = useRiskConfig(userId);
@@ -243,6 +249,7 @@ export function ViolationsSummary({ showSyncButton = false }: { showSyncButton?:
     quantity: p.quantity,
     markPrice: p.mark_price,
     multiplier: p.multiplier,
+    isOption: p.asset_class === 'OPT',
   }));
 
   // Real account equity from RiskConfigForm (migration 059) — always set (DB defaults
@@ -256,20 +263,17 @@ export function ViolationsSummary({ showSyncButton = false }: { showSyncButton?:
 
   const result = evaluateRiskConfig(positionInputs, sectorMap ?? {}, accountEquity, {
     maxPositionPct: config.max_position_pct,
+    maxOptionPositionPct: config.max_option_position_pct,
     maxSectorPct: config.max_sector_pct,
     maxGrossPct: config.max_gross_pct,
     ladder: config.ladder,
   }, drawdownPct);
 
-  const staleness = positions?.length
-    ? fmtDateTime(positions.reduce((latest, p) => (p.last_synced_at > latest ? p.last_synced_at : latest), positions[0].last_synced_at))
-    : null;
-
   function ackFor(scope: string, type: ViolationType) {
     return acks?.find((a) => a.scope === scope && a.violation_type === type);
   }
 
-  const allViolations = [...result.positionViolations, ...result.sectorViolations, result.grossViolation];
+  const allViolations = [...result.positionViolations, ...result.optionViolations, ...result.sectorViolations, result.grossViolation];
   const totalBreaches = allViolations.filter((v) => v.severity === 'breach').length;
   const totalNear = allViolations.filter((v) => v.severity === 'near').length;
   const summaryLine = `Gross ${result.grossViolation.exposurePct.toFixed(0)}% of ${result.grossViolation.limitPct}%`
@@ -280,70 +284,78 @@ export function ViolationsSummary({ showSyncButton = false }: { showSyncButton?:
   const sectorDataMissing = !sectorMap || Object.keys(sectorMap).length === 0;
 
   return (
-    <div className="bg-surface border border-border rounded-xl overflow-hidden">
-      <button
-        onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center justify-between gap-3 p-4 text-left"
-      >
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-t3 text-xs shrink-0" style={{ transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>▶</span>
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 min-w-0 flex-wrap">
           <span className="text-text font-semibold text-sm shrink-0">Risk limits</span>
-          <span className="text-t3 text-xs truncate" style={{ color: totalBreaches > 0 ? 'var(--status-negative-text)' : totalNear > 0 ? 'var(--status-warning-text)' : 'var(--t3)' }}>{summaryLine}</span>
+          <span className="text-t3 text-xs" style={{ color: totalBreaches > 0 ? 'var(--status-negative-text)' : totalNear > 0 ? 'var(--status-warning-text)' : 'var(--t3)' }}>{summaryLine}</span>
         </div>
         {showSyncButton && (
-          <span
-            onClick={(e) => { e.stopPropagation(); sync(); }}
+          <button
+            onClick={() => sync()}
+            disabled={isSyncing}
             className="shrink-0 px-3 py-1.5 rounded text-xs font-semibold bg-acc text-white cursor-pointer"
             style={{ opacity: isSyncing ? 0.6 : 1 }}
           >
             {isSyncing ? 'Syncing…' : 'Sync & Evaluate'}
-          </span>
+          </button>
         )}
-      </button>
+      </div>
 
-      {expanded && (
-        <div className="px-4 pb-4 flex flex-col gap-4 border-t border-bsub pt-4">
-          <div className="text-t3 text-xs -mt-2">
-            Evaluates YOUR OWN IBKR book (synced via Flex Query) against your thresholds — set in
-            Settings. Nothing here blocks an order; breaches are flagged for you to act on.
-            {staleness && <> Last synced: {staleness}.</>}
-            {lastResult && ` Synced ${lastResult.count} position${lastResult.count !== 1 ? 's' : ''}.`}
-          </div>
-          {syncError && (
-            <div className="text-xs font-medium text-[var(--status-negative-text)] bg-[var(--status-negative-bg)] border border-[var(--status-negative-border)] rounded px-3 py-2">
-              Sync failed: {syncError} — evaluating against last-synced data below.
-            </div>
-          )}
-
-          <div className="bg-surface border border-border rounded-xl p-5">
-            {config.is_placeholder && (
-              <div className="text-t3 text-xs mb-2">
-                Using a default $100,000 account equity — set your real figure in Settings for
-                an accurate reading.
-              </div>
-            )}
-            <GrossExposureBar
-              v={result.grossViolation}
-              ladderTargetPct={result.ladderTargetGrossPct}
-            />
-          </div>
-
-          <BreachOnlyList
-            title="Position concentration"
-            violations={result.positionViolations}
-            ackFor={ackFor}
-            onAcknowledge={(scope, status, note) => acknowledge.mutate({ scope, violationType: 'position', status, glidePathNote: note })}
-          />
-
-          <BreachOnlyList
-            title="Sector concentration"
-            violations={result.sectorViolations}
-            ackFor={ackFor}
-            onAcknowledge={(scope, status, note) => acknowledge.mutate({ scope, violationType: 'sector', status, glidePathNote: note })}
-            unmappedNote={sectorDataMissing ? '(no sector data yet)' : undefined}
-          />
+      <div className="text-t3 text-xs" style={{ marginTop: -8, lineHeight: 1.5 }}>
+        Evaluates YOUR OWN IBKR book (synced via Flex Query) against your thresholds — set in
+        Settings. Nothing here blocks an order; breaches are flagged for you to act on.
+        {lastResult && ` Synced ${lastResult.count} position${lastResult.count !== 1 ? 's' : ''}.`}
+      </div>
+      {syncError && (
+        <div className="text-xs font-medium text-[var(--status-negative-text)] bg-[var(--status-negative-bg)] border border-[var(--status-negative-border)] rounded px-3 py-2">
+          Sync failed: {syncError} — evaluating against last-synced data below.
         </div>
       )}
+
+      <div className="bg-surface border border-border rounded-xl p-5">
+        <div className="text-text font-semibold text-sm">Gross exposure</div>
+        <div className="text-t3 text-xs mt-0.5 mb-3" style={{ lineHeight: 1.5 }}>
+          Total market value of every position vs your account equity. Above 100% means you're
+          using leverage/margin; the drawdown ladder can trim this target as you draw down.
+        </div>
+        {config.is_placeholder && (
+          <div className="text-t3 text-xs mb-2">
+            Using a default $100,000 account equity — set your real figure in Settings for
+            an accurate reading.
+          </div>
+        )}
+        <GrossExposureBar
+          v={result.grossViolation}
+          ladderTargetPct={result.ladderTargetGrossPct}
+        />
+      </div>
+
+      <BreachOnlyList
+        title="Position concentration"
+        description="Each ticker's share of your book vs your single-name cap — limits how much any one position can hurt you."
+        violations={result.positionViolations}
+        ackType="position"
+        ackFor={ackFor}
+        onAcknowledge={(scope, status, note) => acknowledge.mutate({ scope, violationType: 'position', status, glidePathNote: note })}
+      />
+
+      <BreachOnlyList
+        title="Option concentration"
+        description="Each ticker's OPTIONS exposure vs your option cap — options carry more risk per dollar (leverage, time decay), so this cap is usually tighter than the overall position cap. Set it under Settings → thresholds."
+        violations={result.optionViolations}
+        ackable={false}
+      />
+
+      <BreachOnlyList
+        title="Sector concentration"
+        description="Each sector's share of your book vs your sector cap — limits thematic (correlated) risk when several names move together."
+        violations={result.sectorViolations}
+        ackType="sector"
+        ackFor={ackFor}
+        onAcknowledge={(scope, status, note) => acknowledge.mutate({ scope, violationType: 'sector', status, glidePathNote: note })}
+        unmappedNote={sectorDataMissing ? '(no sector data yet)' : undefined}
+      />
     </div>
   );
 }

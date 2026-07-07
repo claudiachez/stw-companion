@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   positionMarketValue, rollupByUnderlying, grossExposure,
-  positionConcentration, sectorConcentration, grossExposureViolation,
+  positionConcentration, optionPositionConcentration, sectorConcentration, grossExposureViolation,
   drawdownLadderTarget, evaluateRiskConfig, classifySeverity, UNMAPPED_SECTOR,
   type PositionInput, type RiskConfig,
 } from './limits';
@@ -15,6 +15,7 @@ const OPERATOR_CONFIG: RiskConfig = {
   maxPositionPct: 10,
   maxSectorPct: 25,
   maxGrossPct: 100,
+  maxOptionPositionPct: 5,
   ladder: OPERATOR_LADDER,
 };
 
@@ -75,6 +76,25 @@ describe('sectorConcentration', () => {
     const violations = sectorConcentration(FIXTURE_BOOK, FIXTURE_SECTORS, FIXTURE_EQUITY, OPERATOR_CONFIG.maxSectorPct);
     const unmapped = violations.find((v) => v.scope === 'Unmapped')!;
     expect(unmapped.exposurePct).toBeCloseTo(30, 5); // SPY, unmapped in FIXTURE_SECTORS
+  });
+});
+
+describe('optionPositionConcentration — separate, tighter options cap', () => {
+  // NVDA: shares $4,000 + one call worth $6,000 (100 mult). Only the option MV counts.
+  const optBook: PositionInput[] = [
+    { underlying: 'NVDA', quantity: 40, markPrice: 100, multiplier: 1 },                          // $4,000 shares
+    { underlying: 'NVDA', quantity: 10, markPrice: 6, multiplier: 100, isOption: true },          // $6,000 option
+    { underlying: 'PLTR', quantity: 200, markPrice: 50, multiplier: 1 },                          // $10,000 shares only
+  ];
+  it('counts only the option legs of an underlying, not its shares', () => {
+    const rows = optionPositionConcentration(optBook, 100_000, 5);
+    const nvda = rows.find((v) => v.scope === 'NVDA')!;
+    expect(nvda.exposurePct).toBeCloseTo(6, 5); // $6,000 / $100k — shares excluded
+    expect(nvda.severity).toBe('breach');       // 6% > 5% option cap
+  });
+  it('omits underlyings that hold no options', () => {
+    const rows = optionPositionConcentration(optBook, 100_000, 5);
+    expect(rows.map((v) => v.scope)).not.toContain('PLTR');
   });
 });
 
@@ -155,7 +175,7 @@ describe('evaluateRiskConfig', () => {
     const operatorResult = evaluateRiskConfig(FIXTURE_BOOK, FIXTURE_SECTORS, FIXTURE_EQUITY, OPERATOR_CONFIG, -12);
 
     const secondUserBook: PositionInput[] = [{ underlying: 'IBM', quantity: 5, markPrice: 100, multiplier: 1 }]; // $500 = 1% of $50k
-    const secondUserConfig: RiskConfig = { maxPositionPct: 20, maxSectorPct: 40, maxGrossPct: 150, ladder: [] };
+    const secondUserConfig: RiskConfig = { maxPositionPct: 20, maxSectorPct: 40, maxGrossPct: 150, maxOptionPositionPct: 10, ladder: [] };
     const secondUserResult = evaluateRiskConfig(secondUserBook, {}, 50_000, secondUserConfig, null);
 
     expect(operatorResult.grossViolation.severity).toBe('breach');
