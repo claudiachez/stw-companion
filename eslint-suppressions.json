@@ -4,9 +4,14 @@
       "count": 4
     }
   },
-  "packages/ui/src/components/Layout.tsx": {
+  "packages/ui/src/auth/LoginPage.tsx": {
     "no-restricted-syntax": {
       "count": 6
+    }
+  },
+  "packages/ui/src/components/Layout.tsx": {
+    "no-restricted-syntax": {
+      "count": 18
     }
   },
   "packages/ui/src/features/macro/MacroView.tsx": {
@@ -51,7 +56,7 @@
   },
   "packages/ui/src/features/macro/components/SectorRotationCard.tsx": {
     "no-restricted-syntax": {
-      "count": 13
+      "count": 15
     }
   },
   "packages/ui/src/features/macro/components/SentimentGauge.tsx": {
@@ -61,7 +66,7 @@
   },
   "packages/ui/src/features/macro/components/TrendStructureTable.tsx": {
     "no-restricted-syntax": {
-      "count": 15
+      "count": 16
     }
   },
   "packages/ui/src/features/macro/components/VolatilityStressCard.tsx": {
@@ -129,7 +134,7 @@
   },
   "packages/ui/src/features/picks/components/LegTimeline.tsx": {
     "no-restricted-syntax": {
-      "count": 38
+      "count": 39
     }
   },
   "packages/ui/src/features/picks/components/PortfolioDashboard.tsx": {
@@ -174,7 +179,7 @@
   },
   "packages/ui/src/features/signals/components/GexChart.tsx": {
     "no-restricted-syntax": {
-      "count": 6
+      "count": 18
     }
   }
 }

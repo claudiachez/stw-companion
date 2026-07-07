@@ -197,7 +197,7 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
     return [{ ticker: h.ticker, label: `priced ${fmtDateTime(at)}: ${legs}` }];
   });
 
-  const pnlColor = avgPnl != null ? (avgPnl >= 0 ? '#22c55e' : '#ef4444') : 'var(--t3)';
+  const pnlColor = avgPnl != null ? (avgPnl >= 0 ? 'var(--pnl-gain)' : 'var(--pnl-loss)') : 'var(--t3)';
 
   const tickerSet = new Set(holdings.map((h) => h.ticker.toUpperCase()));
   const changeAt = latestChange?.ran_at ? new Date(latestChange.ran_at) : null;

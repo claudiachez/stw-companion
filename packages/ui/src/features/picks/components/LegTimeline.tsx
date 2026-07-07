@@ -127,7 +127,7 @@ export function LegTimeline({ ticker, legs = [] }: { ticker: string; legs?: Leg[
           {(['all', 'open', 'closed'] as const).map((f) => (
             <button key={f} onClick={() => setFilter(f)}
               style={{ fontSize: 11, padding: '3px 10px', border: 'none', cursor: 'pointer', textTransform: 'capitalize',
-                background: filter === f ? 'var(--acc)' : 'transparent', color: filter === f ? '#fff' : 'var(--t2)' }}>
+                background: filter === f ? 'var(--acc)' : 'transparent', color: filter === f ? 'var(--text-inverse)' : 'var(--t2)' }}>
               {f}
             </button>
           ))}

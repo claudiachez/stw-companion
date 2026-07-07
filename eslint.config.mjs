@@ -5,9 +5,11 @@
 //
 // This repo's dominant styling convention is inline `style={{ }}` objects (Tailwind
 // classes are secondary — see docs/design-system/audit/00-structure-overview.md), so the
-// rule below matches ANY object property with a hex/rgb string literal value, not just
-// ones inside a `style` JSX attribute — that's also how the Phase 1 audit found violations
-// (e.g. `ConvictionBadge.tsx`'s standalone `LEVELS` color map, not just inline styles).
+// rule below matches ANY hex/rgb string literal, wherever it appears — not just inside a
+// `style` JSX attribute, and not just as a direct object-property value (see the
+// ternary-blind-spot note further down) — that's also how the Phase 1 audit found
+// violations (e.g. `ConvictionBadge.tsx`'s standalone `LEVELS` color map, not just inline
+// styles).
 //
 // A brand-new `${c}15`-style computed alpha string (see Badge.tsx) is a TemplateLiteral,
 // not a Literal — the rule only matches literal string values, so a value legitimately
@@ -24,6 +26,20 @@
 // are generated purely from that file). The second selector below is unanchored specifically
 // to catch this substring case, scoped to the `-[...]` bracket syntax so it can't match an
 // unrelated string that merely contains a hex-looking run of characters.
+//
+// A second, more fundamental blind spot in the FIRST selector: `Property > Literal` only
+// matches a Literal that is the DIRECT child of an object Property (e.g. `{ color: '#fff' }`).
+// A hex literal inside a ternary (`pnl >= 0 ? '#16A34A' : '#DC2626'`) is a child of the
+// ConditionalExpression, which is itself the Property's child — so the Literal is a
+// grandchild of Property, never matched by a direct-child selector. Found 2026-07-07 while
+// fixing HoldingRow.tsx/HoldingDetail.tsx's P&L color bug
+// (docs/design-system/audit/04-additional-inconsistencies.md §2): that exact bug was written
+// as a ternary and had been invisible to this rule since Phase 4 shipped it — fixing it
+// moved zero numbers in eslint-suppressions.json, because the rule never counted it in the
+// first place. `COLOR_LITERAL`'s own selector below was broadened from `Property >
+// Literal[...]` to a bare `Literal[...]` (matches a literal anywhere, not just as a direct
+// property value) to close this for good — ternaries, function-call arguments, array
+// elements, etc. all get caught now.
 import tsParser from '@typescript-eslint/parser';
 
 const COLOR_LITERAL = '^(#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$|rgba?\\()';
@@ -55,7 +71,7 @@ export default [
       'no-restricted-syntax': [
         'error',
         {
-          selector: `Property > Literal[value=/${COLOR_LITERAL}/]`,
+          selector: `Literal[value=/${COLOR_LITERAL}/]`,
           message:
             'Literal color value — use a design token instead (packages/ui/src/styles/tokens.css, or var(--status-*)/var(--pnl-*) for status/P&L). See docs/design-system/CONTRIBUTING.md.',
         },

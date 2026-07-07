@@ -56,7 +56,7 @@ export function TradesFilterBar({ holdings, count, total }: Props) {
               style={{
                 padding: '0 12px', fontSize: 12, border: 'none', cursor: 'pointer',
                 background: openClosed === o.value ? 'var(--acc)' : 'var(--bg)',
-                color: openClosed === o.value ? '#fff' : 'var(--t2)',
+                color: openClosed === o.value ? 'var(--text-inverse)' : 'var(--t2)',
                 fontWeight: openClosed === o.value ? 600 : 400,
               }}
             >

@@ -137,7 +137,7 @@ const thR: React.CSSProperties = { ...th, textAlign: 'right' };
 
 function pnlCell(v: number | null) {
   if (v == null) return { text: '—', color: 'var(--t3)' };
-  return { text: `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`, color: v >= 0 ? 'var(--acc)' : '#ef4444' };
+  return { text: `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`, color: v >= 0 ? 'var(--pnl-gain)' : 'var(--pnl-loss)' };
 }
 const money = (v: number | null) => (v != null ? `$${v.toFixed(2)}` : '—');
 const days = (v: number | null) => (v != null ? `${v}d` : '—');
@@ -176,7 +176,7 @@ export function TradesTable({ holdings, onSelectTicker }: Props) {
   // Closed-trade contribution cell: portfolio impact in weight points (return × sold weight).
   function contribCell(v: number | null) {
     if (v == null) return { text: '—', color: 'var(--t3)' };
-    return { text: `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`, color: v >= 0 ? 'var(--acc)' : '#ef4444' };
+    return { text: `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`, color: v >= 0 ? 'var(--pnl-gain)' : 'var(--pnl-loss)' };
   }
 
   return (
