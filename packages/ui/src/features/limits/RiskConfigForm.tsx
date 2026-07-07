@@ -1,127 +1,190 @@
 import { useState } from 'react';
+import { FONT_SIZE, FONT_WEIGHT, RADIUS, SPACE, type DrawdownStep } from '@stw/shared';
+import { Button } from '../../primitives/Button';
+import { FormRow, type FormRowProps } from '../../primitives/FormRow';
+import { TextInput } from '../../primitives/TextInput';
+import { AlertStrip } from '../../primitives/AlertStrip';
+import { useIsMobile } from '../../hooks/useIsMobile';
 import type { RiskConfigRow } from './api';
 import { useSaveRiskConfig } from './useRiskConfig';
 
 // Single-card, single-Save editable thresholds — same pattern as apps/admin's
 // ConfigPage.tsx (Section + one Save covering every field), just per-user
-// instead of per-app-global. Ladder is fixed at two steps per the spec
-// (plans/integrity-guardrails.md Item 2) — no add/remove UI.
+// instead of per-app-global. The ladder is a dynamic array (host feedback,
+// 2026-07-08 Settings redesign) — the two seeded rungs were never a hard
+// limit, just DEFAULT_RISK_CONFIG's starting shape.
 
-const rowLabel = 'text-t2 text-xs w-32 shrink-0';
-const rowInput = 'bg-s2 border border-border rounded px-2 py-1.5 text-sm text-text w-20 focus:outline-none focus:border-acc';
+const smallInput = { width: 64 };
+
+function rungLabel(i: number): string {
+  return `Rung ${i + 1}`;
+}
+
+/** Ladder rungs should get strictly deeper (more negative) and target strictly
+ * lower-or-equal gross exposure as you go down the list — a glide path that
+ * gets MORE conservative the further underwater you are, never less. */
+function ladderWarnings(ladder: DrawdownStep[]): string[] {
+  const warnings: string[] = [];
+  for (let i = 1; i < ladder.length; i++) {
+    const prev = ladder[i - 1];
+    const cur = ladder[i];
+    if (Math.abs(cur.drawdownPct) <= Math.abs(prev.drawdownPct)) {
+      warnings.push(`${rungLabel(i)}'s drawdown (${Math.abs(cur.drawdownPct)}%) should be deeper than ${rungLabel(i - 1)}'s (${Math.abs(prev.drawdownPct)}%).`);
+    } else if (cur.targetGrossPct > prev.targetGrossPct) {
+      warnings.push(`${rungLabel(i)} targets a higher gross exposure (${cur.targetGrossPct}%) than the shallower ${rungLabel(i - 1)} (${prev.targetGrossPct}%) — deeper drawdowns should target lower exposure.`);
+    }
+  }
+  return warnings;
+}
+
+/** A single position can't out-concentrate its own sector, and a single sector
+ * can't out-concentrate the whole book. */
+function thresholdWarnings(maxPositionPct: number, maxSectorPct: number, maxGrossPct: number): string[] {
+  const warnings: string[] = [];
+  if (maxPositionPct > maxSectorPct) warnings.push(`Max position (${maxPositionPct}%) exceeds max sector (${maxSectorPct}%) — a single position can't be more concentrated than its own sector.`);
+  if (maxSectorPct > maxGrossPct) warnings.push(`Max sector (${maxSectorPct}%) exceeds max gross (${maxGrossPct}%) — a single sector can't exceed the whole book's limit.`);
+  return warnings;
+}
 
 export function RiskConfigForm({ userId, config }: { userId: string; config: RiskConfigRow }) {
   const save = useSaveRiskConfig(userId);
+  // The ladder rows in particular pack 2 inputs + connecting text into one line — FormRow's
+  // fixed-width label column plus that content reliably overflows a ≤390px viewport, and
+  // horizontal's flex-wrap then centers the label mid-way through the wrapped content
+  // instead of above it. Stacked (label above, full-width row below) avoids that entirely.
+  const isMobile = useIsMobile();
+  const rowLayout: FormRowProps['layout'] = isMobile ? 'stacked' : 'horizontal';
   const [draft, setDraft] = useState<{
     maxPositionPct?: number; maxSectorPct?: number; maxGrossPct?: number;
-    ladder0Drawdown?: number; ladder0Target?: number; ladder1Drawdown?: number; ladder1Target?: number;
-    accountEquity?: number;
+    accountEquity?: number; ladder?: DrawdownStep[];
   }>({});
 
-  const step0 = config.ladder[0] ?? { drawdownPct: -10, targetGrossPct: 70 };
-  const step1 = config.ladder[1] ?? { drawdownPct: -15, targetGrossPct: 50 };
+  const maxPositionPct = draft.maxPositionPct ?? config.max_position_pct;
+  const maxSectorPct = draft.maxSectorPct ?? config.max_sector_pct;
+  const maxGrossPct = draft.maxGrossPct ?? config.max_gross_pct;
+  const accountEquity = draft.accountEquity ?? config.account_equity;
+  const ladder = draft.ladder ?? config.ladder;
   const dirty = Object.keys(draft).length > 0;
+  const warnings = [...thresholdWarnings(maxPositionPct, maxSectorPct, maxGrossPct), ...ladderWarnings(ladder)];
+
+  function updateRung(i: number, patch: Partial<DrawdownStep>) {
+    setDraft((d) => ({ ...d, ladder: ladder.map((r, idx) => (idx === i ? { ...r, ...patch } : r)) }));
+  }
+  function addRung() {
+    const last = ladder[ladder.length - 1];
+    const next: DrawdownStep = last
+      ? { drawdownPct: last.drawdownPct - 5, targetGrossPct: Math.max(0, last.targetGrossPct - 10) }
+      : { drawdownPct: -10, targetGrossPct: 70 };
+    setDraft((d) => ({ ...d, ladder: [...ladder, next] }));
+  }
+  function removeRung(i: number) {
+    setDraft((d) => ({ ...d, ladder: ladder.filter((_, idx) => idx !== i) }));
+  }
 
   async function handleSave() {
     await save.mutateAsync({
-      max_position_pct: draft.maxPositionPct ?? config.max_position_pct,
-      max_sector_pct: draft.maxSectorPct ?? config.max_sector_pct,
-      max_gross_pct: draft.maxGrossPct ?? config.max_gross_pct,
-      ladder: [
-        { drawdownPct: draft.ladder0Drawdown ?? step0.drawdownPct, targetGrossPct: draft.ladder0Target ?? step0.targetGrossPct },
-        { drawdownPct: draft.ladder1Drawdown ?? step1.drawdownPct, targetGrossPct: draft.ladder1Target ?? step1.targetGrossPct },
-      ],
-      ...(draft.accountEquity !== undefined ? { account_equity: draft.accountEquity } : {}),
+      max_position_pct: maxPositionPct,
+      max_sector_pct: maxSectorPct,
+      max_gross_pct: maxGrossPct,
+      account_equity: accountEquity,
+      ladder,
     });
     setDraft({});
   }
 
   return (
-    <div className="bg-surface border border-border rounded-xl p-5">
-      <div className="flex items-center justify-between mb-1">
-        <div className="text-text font-semibold text-sm">Your thresholds</div>
-        <button
-          onClick={handleSave}
-          disabled={!dirty || save.isPending}
-          className="shrink-0 ml-4 px-3 py-1.5 rounded text-xs font-semibold bg-acc text-white disabled:opacity-40"
-        >
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: RADIUS.xl, padding: SPACE[4] }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACE[1] }}>
+        <div style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>Your thresholds</div>
+        <Button variant="primary" dirty={dirty} disabled={!dirty || save.isPending} onClick={handleSave} style={{ padding: `${SPACE[1]}px ${SPACE[3]}px`, fontSize: FONT_SIZE.sm }}>
           {save.isPending ? 'Saving…' : 'Save'}
-        </button>
+        </Button>
       </div>
-      <div className="text-t3 text-xs mb-4">
+      <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginBottom: SPACE[3] }}>
         {config.is_placeholder
           ? 'These are starter defaults — set your own before trusting the flags below.'
           : 'Flags only. Nothing here places or blocks a trade.'}
       </div>
-      <div className="flex flex-col divide-y divide-bsub">
-        <div className="flex items-center gap-3 py-3 flex-wrap">
-          <span className={rowLabel}>Account equity</span>
-          <span className="text-t2 text-sm">$</span>
-          <input type="number" min={0}
-            value={draft.accountEquity ?? config.account_equity}
-            placeholder="e.g. 50000"
-            onChange={(e) => setDraft((d) => ({ ...d, accountEquity: e.target.value === '' ? undefined : Number(e.target.value) }))}
-            className={`${rowInput} w-28`} />
-          <span className="text-t3 text-xs">
-            {config.is_placeholder
-              ? `Default placeholder — set your real account equity for accurate limits.`
-              : config.equity_peak && config.equity_peak > config.account_equity
-                ? `Peak: $${config.equity_peak.toLocaleString()} · ${(((config.account_equity - config.equity_peak) / config.equity_peak) * 100).toFixed(1)}% off peak`
-                : 'At peak.'}
-          </span>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE[3] }}>
+        <FormRow layout={rowLayout} label="Account equity" prefix="$" hint={
+          config.is_placeholder
+            ? 'Default placeholder — set your real account equity for accurate limits.'
+            : config.equity_peak && config.equity_peak > accountEquity
+              ? `Peak: $${config.equity_peak.toLocaleString()} · ${(((accountEquity - config.equity_peak) / config.equity_peak) * 100).toFixed(1)}% off peak`
+              : 'At peak.'
+        }>
+          <TextInput type="number" min={0} placeholder="e.g. 50000"
+            value={accountEquity}
+            onChange={(e) => setDraft((d) => ({ ...d, accountEquity: e.target.value === '' ? undefined : Number(e.target.value) }))} />
+        </FormRow>
+
+        <FormRow layout={rowLayout} label="Max position" suffix="%" hint="of book, per underlying">
+          <TextInput type="number" min={0} max={100}
+            value={maxPositionPct}
+            onChange={(e) => setDraft((d) => ({ ...d, maxPositionPct: Number(e.target.value) }))} />
+        </FormRow>
+
+        <FormRow layout={rowLayout} label="Max sector" suffix="%" hint="of book, per sector">
+          <TextInput type="number" min={0} max={100}
+            value={maxSectorPct}
+            onChange={(e) => setDraft((d) => ({ ...d, maxSectorPct: Number(e.target.value) }))} />
+        </FormRow>
+
+        <FormRow layout={rowLayout} label="Max gross" suffix="%" hint="of book, whole book">
+          <TextInput type="number" min={0}
+            value={maxGrossPct}
+            onChange={(e) => setDraft((d) => ({ ...d, maxGrossPct: Number(e.target.value) }))} />
+        </FormRow>
+
+        <div>
+          <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: FONT_WEIGHT.semibold, marginBottom: SPACE[2] }}>
+            Drawdown ladder
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE[2.5] }}>
+            {ladder.map((rung, i) => (
+              <FormRow key={i} layout={rowLayout} label={rungLabel(i)}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[1.5], flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>At</span>
+                  <TextInput type="number" min={0} max={100} style={smallInput}
+                    value={Math.abs(rung.drawdownPct)}
+                    onChange={(e) => updateRung(i, { drawdownPct: -Math.abs(Number(e.target.value)) })} />
+                  <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>% drawdown → target</span>
+                  <TextInput type="number" min={0} max={100} style={smallInput}
+                    value={rung.targetGrossPct}
+                    onChange={(e) => updateRung(i, { targetGrossPct: Number(e.target.value) })} />
+                  <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>% gross</span>
+                  <button
+                    type="button"
+                    onClick={() => removeRung(i)}
+                    aria-label={`Remove ${rungLabel(i)}`}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t3)', fontSize: FONT_SIZE.sm, padding: `0 ${SPACE[1]}px`, marginLeft: 'auto' }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </FormRow>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={addRung}
+            style={{
+              marginTop: SPACE[2], background: 'none', border: '1px dashed var(--border)', borderRadius: RADIUS.md,
+              padding: `${SPACE[1]}px ${SPACE[2.5]}px`, fontSize: FONT_SIZE.sm, color: 'var(--t2)', cursor: 'pointer',
+            }}
+          >
+            + Add rung
+          </button>
         </div>
-        <div className="flex items-center gap-3 py-3">
-          <span className={rowLabel}>Max position</span>
-          <input type="number" min={0} max={100}
-            value={draft.maxPositionPct ?? config.max_position_pct}
-            onChange={(e) => setDraft((d) => ({ ...d, maxPositionPct: Number(e.target.value) }))}
-            className={rowInput} />
-          <span className="text-t2 text-sm">% of book, per underlying</span>
-        </div>
-        <div className="flex items-center gap-3 py-3">
-          <span className={rowLabel}>Max sector</span>
-          <input type="number" min={0} max={100}
-            value={draft.maxSectorPct ?? config.max_sector_pct}
-            onChange={(e) => setDraft((d) => ({ ...d, maxSectorPct: Number(e.target.value) }))}
-            className={rowInput} />
-          <span className="text-t2 text-sm">% of book, per sector</span>
-        </div>
-        <div className="flex items-center gap-3 py-3">
-          <span className={rowLabel}>Max gross</span>
-          <input type="number" min={0}
-            value={draft.maxGrossPct ?? config.max_gross_pct}
-            onChange={(e) => setDraft((d) => ({ ...d, maxGrossPct: Number(e.target.value) }))}
-            className={rowInput} />
-          <span className="text-t2 text-sm">% of book, whole book</span>
-        </div>
-        <div className="flex items-center gap-3 py-3 flex-wrap">
-          <span className={rowLabel}>Drawdown ladder</span>
-          <span className="text-t2 text-sm">At</span>
-          <input type="number" max={0}
-            value={draft.ladder0Drawdown ?? step0.drawdownPct}
-            onChange={(e) => setDraft((d) => ({ ...d, ladder0Drawdown: Number(e.target.value) }))}
-            className={`${rowInput} w-16`} />
-          <span className="text-t2 text-sm">% drawdown, target</span>
-          <input type="number" min={0} max={100}
-            value={draft.ladder0Target ?? step0.targetGrossPct}
-            onChange={(e) => setDraft((d) => ({ ...d, ladder0Target: Number(e.target.value) }))}
-            className={`${rowInput} w-16`} />
-          <span className="text-t2 text-sm">% gross</span>
-        </div>
-        <div className="flex items-center gap-3 py-3 flex-wrap">
-          <span className={rowLabel} />
-          <span className="text-t2 text-sm">At</span>
-          <input type="number" max={0}
-            value={draft.ladder1Drawdown ?? step1.drawdownPct}
-            onChange={(e) => setDraft((d) => ({ ...d, ladder1Drawdown: Number(e.target.value) }))}
-            className={`${rowInput} w-16`} />
-          <span className="text-t2 text-sm">% drawdown, target</span>
-          <input type="number" min={0} max={100}
-            value={draft.ladder1Target ?? step1.targetGrossPct}
-            onChange={(e) => setDraft((d) => ({ ...d, ladder1Target: Number(e.target.value) }))}
-            className={`${rowInput} w-16`} />
-          <span className="text-t2 text-sm">% gross</span>
-        </div>
+
+        {warnings.length > 0 && (
+          <AlertStrip severity="warning">
+            <ul style={{ margin: 0, paddingLeft: SPACE[4], display: 'flex', flexDirection: 'column', gap: SPACE[0.5] }}>
+              {warnings.map((w, i) => <li key={i}>{w}</li>)}
+            </ul>
+          </AlertStrip>
+        )}
       </div>
     </div>
   );

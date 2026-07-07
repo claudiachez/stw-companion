@@ -33,12 +33,16 @@ const suffixStyle: React.CSSProperties = { fontSize: FONT_SIZE.sm, color: 'var(-
 export function FormRow({ label: labelText, children, prefix, suffix, hint, layout = 'stacked', labelWidth = 140 }: FormRowProps) {
   if (layout === 'horizontal') {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2] }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap' }}>
         <span style={{ ...label, width: labelWidth, flexShrink: 0 }}>{labelText}</span>
         <span style={prefixSlot}>{prefix ?? ''}</span>
         <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
         {suffix != null && <span style={suffixStyle}>{suffix}</span>}
-        {hint && <div style={{ flexBasis: '100%', fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: SPACE[0.5] }}>{hint}</div>}
+        {/* flexBasis: '100%' only forces its own line when the container can wrap — without
+            flexWrap above, this hint would instead squeeze onto the same row as the input,
+            starving it down to near-zero width (found live: the input rendered empty/invisible
+            with the hint text overlapping where its value should have shown). */}
+        {hint && <div style={{ flexBasis: '100%', paddingLeft: labelWidth + SPACE[2], fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: SPACE[0.5] }}>{hint}</div>}
       </div>
     );
   }

@@ -1,17 +1,28 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  useIbkrSettings, saveIbkrSettings, useAuthStore, useSyncPortfolio, LoadingSpinner,
+  useIbkrSettings, saveIbkrSettings, useAuthStore, useSyncPortfolio, useUserPositions, LoadingSpinner,
   Button, StatusPill, AlertStrip, FormRow, TextInput,
   RiskConfigForm, useRiskConfig, useEnsureRiskConfig,
 } from '@stw/ui';
-import { FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, RADIUS, SPACE } from '@stw/shared';
+import { FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, RADIUS, SPACE, fmtDateTime } from '@stw/shared';
 import { useTierAccess } from '../../shared/hooks/useTierAccess';
+
+const CONNECT_STEPS = [
+  <>Log in to <b style={{ color: 'var(--t2)' }}>clientportal.ibkr.com</b> or <b style={{ color: 'var(--t2)' }}>account.ibkr.com</b></>,
+  <>Go to <b style={{ color: 'var(--t2)' }}>Reports → Flex Queries</b></>,
+  <>Click <b style={{ color: 'var(--t2)' }}>Create → Activity Flex Query</b></>,
+  <>Under <b style={{ color: 'var(--t2)' }}>Sections</b>, enable <b style={{ color: 'var(--t2)' }}>Open Positions</b> and tick: Symbol, Underlying Symbol, Asset Category, Quantity, Cost Basis Price, Mark Price, Unrealized P&amp;L, Put/Call, Strike, Expiry, Multiplier, Conid</>,
+  <>Save the query — note the <b style={{ color: 'var(--t2)' }}>Query ID</b> shown next to it</>,
+  <>Back on Flex Queries, copy your <b style={{ color: 'var(--t2)' }}>Flex Token</b> (top of page, under "Generate Tokens")</>,
+  <>Paste both below, click <b style={{ color: 'var(--t2)' }}>Save</b></>,
+];
 
 export function SettingsPage() {
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
   const { data: settings, isLoading } = useIbkrSettings();
+  const { data: positions } = useUserPositions();
   const { sync, isSyncing, syncError, lastResult } = useSyncPortfolio();
   const canUseLimits = useTierAccess('limits');
   const { data: riskConfig, isLoading: riskConfigLoading } = useRiskConfig(canUseLimits ? user?.id : undefined);
@@ -24,12 +35,32 @@ export function SettingsPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
+  // Setup is onboarding content a returning, already-connected user rarely needs — collapsed
+  // by default once connected, expanded by default on first-ever setup. Initialized once
+  // `settings` first resolves (its own effect below), not at mount, since isConnected isn't
+  // known yet on the very first render.
+  const [editingConnection, setEditingConnection] = useState(false);
+  const [howToConnectExpanded, setHowToConnectExpanded] = useState(true);
+  const initializedRef = useRef(false);
+
   useEffect(() => {
     if (settings) {
       setToken(settings.ibkr_flex_token ?? '');
       setQueryId(settings.ibkr_query_id ?? '');
+      if (!initializedRef.current) {
+        const connected = !!(settings.ibkr_flex_token && settings.ibkr_query_id);
+        setEditingConnection(!connected);
+        setHowToConnectExpanded(!connected);
+        initializedRef.current = true;
+      }
     }
   }, [settings]);
+
+  // Once we know a sync actually worked (manual, or the save-triggered verification below),
+  // there's no reason to keep the setup form open.
+  useEffect(() => {
+    if (lastResult && !syncError) setEditingConnection(false);
+  }, [lastResult, syncError]);
 
   async function handleSave() {
     if (!user) return;
@@ -44,6 +75,11 @@ export function SettingsPage() {
       await queryClient.invalidateQueries({ queryKey: ['ibkr-settings', user.id] });
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
+      // Verify immediately — a typo'd token/Query ID should fail visibly here, at save
+      // time, not silently later at the next manual Sync.
+      if (token.trim() && queryId.trim()) {
+        await sync();
+      }
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : 'Failed to save');
     } finally {
@@ -54,138 +90,152 @@ export function SettingsPage() {
   if (isLoading) return <LoadingSpinner className="mt-16" />;
 
   const isConnected = !!(settings?.ibkr_flex_token && settings?.ibkr_query_id);
+  const lastSyncedAt = positions?.length
+    ? positions.reduce((latest, p) => (p.last_synced_at > latest ? p.last_synced_at : latest), positions[0].last_synced_at)
+    : null;
 
   return (
     <div style={{ height: '100%', overflowY: 'auto' }}>
-    <div style={{ maxWidth: 1040, margin: '0 auto', padding: `${SPACE[4]}px ${SPACE[4]}px ${SPACE[12]}px` }}>
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACE[4], alignItems: 'flex-start' }}>
+    <div style={{ maxWidth: 640, margin: '0 auto', padding: `${SPACE[4]}px ${SPACE[4]}px ${SPACE[8]}px`, display: 'flex', flexDirection: 'column', gap: SPACE[3] }}>
 
-      {/* IBKR Connection card */}
-      <div style={{
-        flex: '1 1 460px', minWidth: 320,
-        background: 'var(--surface)', border: '1px solid var(--border)',
-        borderRadius: RADIUS.xl, overflow: 'hidden',
-      }}>
-
-        {/* Card header */}
-        <div style={{ padding: `${SPACE[3.5]}px ${SPACE[4]}px`, borderBottom: '1px solid var(--bsub)', display: 'flex', alignItems: 'center', gap: SPACE[2.5] }}>
-          <span style={{ fontWeight: FONT_WEIGHT.semibold, fontSize: FONT_SIZE.base, color: 'var(--text)' }}>
-            IBKR Connection
+      {/* Compact connection status strip — the "done" state once connected. Setup/edit
+          only reappears behind the toggle below, never as permanent prime real estate. */}
+      {isConnected && (
+        <div style={{
+          background: 'var(--status-positive-bg)', border: '1px solid var(--status-positive-border)',
+          borderRadius: RADIUS.lg, padding: `${SPACE[2.5]}px ${SPACE[3.5]}px`,
+          display: 'flex', alignItems: 'center', gap: SPACE[3], flexWrap: 'wrap',
+        }}>
+          <StatusPill variant="ok">Connected</StatusPill>
+          <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)' }}>
+            {lastSyncedAt ? `Last synced: ${fmtDateTime(lastSyncedAt)}` : 'Never synced yet'}
           </span>
-          <StatusPill variant={isConnected ? 'ok' : 'neutral'}>
-            {isConnected ? 'Connected' : 'Not connected'}
-          </StatusPill>
-        </div>
-
-        {/* Setup instructions */}
-        <div style={{ padding: `${SPACE[3.5]}px ${SPACE[4]}px`, borderBottom: '1px solid var(--bsub)' }}>
-          <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginBottom: SPACE[2], textTransform: 'uppercase', letterSpacing: LETTER_SPACING.label, fontWeight: FONT_WEIGHT.semibold }}>
-            How to connect
+          <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], marginLeft: 'auto' }}>
+            <Button variant="secondary" onClick={sync} disabled={isSyncing} style={{ padding: `${SPACE[1]}px ${SPACE[2.5]}px`, fontSize: FONT_SIZE.sm }}>
+              {isSyncing ? 'Syncing…' : 'Sync Portfolio'}
+            </Button>
+            <button
+              type="button"
+              onClick={() => setEditingConnection((v) => !v)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t2)', fontSize: FONT_SIZE.sm, whiteSpace: 'nowrap' }}
+            >
+              {editingConnection ? 'Hide connection ▾' : 'Edit connection ▸'}
+            </button>
           </div>
-          <ol style={{ margin: 0, paddingLeft: SPACE[5], display: 'flex', flexDirection: 'column', gap: SPACE[1.5] }}>
-            {[
-              <>Log in to <b style={{ color: 'var(--t2)' }}>clientportal.ibkr.com</b> or <b style={{ color: 'var(--t2)' }}>account.ibkr.com</b></>,
-              <>Go to <b style={{ color: 'var(--t2)' }}>Reports → Flex Queries</b></>,
-              <>Click <b style={{ color: 'var(--t2)' }}>Create → Activity Flex Query</b></>,
-              <>Under <b style={{ color: 'var(--t2)' }}>Sections</b>, enable <b style={{ color: 'var(--t2)' }}>Open Positions</b> and tick: Symbol, Underlying Symbol, Asset Category, Quantity, Cost Basis Price, Mark Price, Unrealized P&amp;L, Put/Call, Strike, Expiry, Multiplier, Conid</>,
-              <>Save the query — note the <b style={{ color: 'var(--t2)' }}>Query ID</b> shown next to it</>,
-              <>Back on Flex Queries, copy your <b style={{ color: 'var(--t2)' }}>Flex Token</b> (top of page, under "Generate Tokens")</>,
-              <>Paste both below, click <b style={{ color: 'var(--t2)' }}>Save</b>, then <b style={{ color: 'var(--t2)' }}>Sync</b></>,
-            ].map((step, i) => (
-              <li key={i} style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)', lineHeight: 1.6 }}>{step}</li>
-            ))}
-          </ol>
-          <p style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[2.5], marginBottom: 0 }}>
-            Your token is stored server-side and never exposed in the browser.
-          </p>
         </div>
+      )}
 
-        {/* Form fields */}
-        <div style={{ padding: `${SPACE[3.5]}px ${SPACE[4]}px`, display: 'flex', flexDirection: 'column', gap: SPACE[3.5] }}>
+      {syncError && (
+        <AlertStrip severity="negative">
+          {syncError}
+          {syncError.toLowerCase().includes('timed out') && ' Try again in a few seconds.'}
+        </AlertStrip>
+      )}
+      {lastResult && !syncError && (
+        <AlertStrip severity="positive">
+          Verified ✓ — {lastResult.accountId ? `account ${lastResult.accountId} · ` : ''}
+          synced {lastResult.count} position{lastResult.count !== 1 ? 's' : ''}
+        </AlertStrip>
+      )}
 
-          {/* Flex Token */}
-          <FormRow label="Flex Token">
-            <div style={{ position: 'relative' }}>
+      {/* Setup / edit panel — collapsed once connected; always open on first-ever setup. */}
+      {(!isConnected || editingConnection) && (
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: RADIUS.xl, overflow: 'hidden' }}>
+
+          <div style={{ padding: `${SPACE[3.5]}px ${SPACE[4]}px`, borderBottom: '1px solid var(--bsub)', display: 'flex', alignItems: 'center', gap: SPACE[2.5] }}>
+            <span style={{ fontWeight: FONT_WEIGHT.semibold, fontSize: FONT_SIZE.base, color: 'var(--text)' }}>
+              IBKR Connection
+            </span>
+            {!isConnected && <StatusPill variant="neutral">Not connected</StatusPill>}
+          </div>
+
+          {/* How to connect — its own nested collapse, independent of the panel toggle above:
+              expanded by default only for a first-time setup, collapsed the moment you're
+              back here just to rotate a token. */}
+          <div style={{ borderBottom: '1px solid var(--bsub)' }}>
+            <button
+              type="button"
+              onClick={() => setHowToConnectExpanded((v) => !v)}
+              style={{
+                width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer',
+                padding: `${SPACE[3]}px ${SPACE[4]}px`, display: 'flex', alignItems: 'center', gap: SPACE[1.5],
+                fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', textTransform: 'uppercase',
+                letterSpacing: LETTER_SPACING.label, fontWeight: FONT_WEIGHT.semibold,
+              }}
+            >
+              <span style={{ display: 'inline-block', transform: howToConnectExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>▶</span>
+              How to connect
+            </button>
+            {howToConnectExpanded && (
+              <div style={{ padding: `0 ${SPACE[4]}px ${SPACE[3.5]}px` }}>
+                <ol style={{ margin: 0, paddingLeft: SPACE[5], display: 'flex', flexDirection: 'column', gap: SPACE[1.5] }}>
+                  {CONNECT_STEPS.map((step, i) => (
+                    <li key={i} style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)', lineHeight: 1.6 }}>{step}</li>
+                  ))}
+                </ol>
+                <p style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[2.5], marginBottom: 0 }}>
+                  Your token is stored server-side and never exposed in the browser.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Form fields */}
+          <div style={{ padding: `${SPACE[3.5]}px ${SPACE[4]}px`, display: 'flex', flexDirection: 'column', gap: SPACE[3.5] }}>
+
+            <FormRow label="Flex Token">
+              <div style={{ position: 'relative' }}>
+                <TextInput
+                  type={showToken ? 'text' : 'password'}
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                  placeholder="Paste your Flex Token"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="none"
+                  style={{ paddingRight: SPACE[12] + SPACE[2] }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowToken((v) => !v)}
+                  style={{
+                    position: 'absolute', right: SPACE[2.5], top: '50%', transform: 'translateY(-50%)',
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    fontSize: FONT_SIZE.sm, color: 'var(--t3)', padding: SPACE[1],
+                  }}
+                >
+                  {showToken ? 'Hide' : 'Show'}
+                </button>
+              </div>
+            </FormRow>
+
+            <FormRow label="Query ID">
               <TextInput
-                type={showToken ? 'text' : 'password'}
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-                placeholder="Paste your Flex Token"
+                type="text"
+                inputMode="numeric"
+                value={queryId}
+                onChange={(e) => setQueryId(e.target.value)}
+                placeholder="e.g. 123456"
                 autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="none"
-                style={{ paddingRight: SPACE[12] + SPACE[2] }}
               />
-              <button
-                type="button"
-                onClick={() => setShowToken((v) => !v)}
-                style={{
-                  position: 'absolute', right: SPACE[2.5], top: '50%', transform: 'translateY(-50%)',
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  fontSize: FONT_SIZE.sm, color: 'var(--t3)', padding: SPACE[1],
-                }}
-              >
-                {showToken ? 'Hide' : 'Show'}
-              </button>
-            </div>
-          </FormRow>
+            </FormRow>
 
-          {/* Query ID */}
-          <FormRow label="Query ID">
-            <TextInput
-              type="text"
-              inputMode="numeric"
-              value={queryId}
-              onChange={(e) => setQueryId(e.target.value)}
-              placeholder="e.g. 123456"
-              autoComplete="off"
-            />
-          </FormRow>
+            {saveError && <AlertStrip severity="negative">{saveError}</AlertStrip>}
 
-          {saveError && <AlertStrip severity="negative">{saveError}</AlertStrip>}
-
-          {/* Buttons */}
-          <div style={{ display: 'flex', gap: SPACE[2], flexWrap: 'wrap' }}>
             <Button
               variant="primary"
               onClick={handleSave}
               disabled={saving}
-              style={{ flex: 1, minWidth: 100 }}
+              style={{ alignSelf: 'flex-start', minWidth: 120 }}
             >
-              {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save'}
+              {saving ? (token.trim() && queryId.trim() ? 'Saving & verifying…' : 'Saving…') : saved ? 'Saved ✓' : 'Save'}
             </Button>
-
-            {isConnected && (
-              <Button
-                variant="secondary"
-                onClick={sync}
-                disabled={isSyncing}
-                style={{ flex: 1, minWidth: 100 }}
-              >
-                {isSyncing ? 'Syncing…' : 'Sync Portfolio'}
-              </Button>
-            )}
           </div>
-
-          {syncError && (
-            <AlertStrip severity="negative">
-              {syncError}
-              {syncError.toLowerCase().includes('timed out') && ' Try again in a few seconds.'}
-            </AlertStrip>
-          )}
-
-          {lastResult && (
-            <AlertStrip severity="positive">
-              Synced {lastResult.count} position{lastResult.count !== 1 ? 's' : ''}
-            </AlertStrip>
-          )}
         </div>
-      </div>
+      )}
 
-      {/* Your thresholds card — Premium only (plans/integrity-guardrails.md Item 2).
-          Setup only: no sync button, no violation display — that lives on My
-          Portfolio (packages/ui/src/features/portfolio/PortfolioPage.tsx). */}
-      <div style={{ flex: '1 1 380px', minWidth: 280 }}>
+      {/* Your thresholds — Premium only (plans/integrity-guardrails.md Item 2). */}
+      <div>
         {canUseLimits ? (
           riskConfigLoading || !riskConfig ? (
             <LoadingSpinner />
@@ -207,7 +257,6 @@ export function SettingsPage() {
         )}
       </div>
 
-    </div>
     </div>
     </div>
   );
