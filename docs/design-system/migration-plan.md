@@ -21,6 +21,19 @@ no count here. Once either merges, re-run `pnpm lint` — their violations will 
 in a subsequent `eslint-suppressions.json` and should be added to whichever page-group
 they land in below (Settings for `RiskConfigForm`, My Portfolio for the rest).
 
+**Correction (Phase 5, 2026-07-07):** `UsersPage.tsx`, `ConfigPage.tsx`, and
+`ProfilePage.tsx` were absent from this doc entirely — not because they were clean, but
+because the original lint rule only matched a `Literal` whose *entire* value was a hex/rgb
+string, so it never caught one embedded as a substring inside a Tailwind arbitrary-value
+class (`text-[#f59e0b]`). All three had real violations (5/2/5) invisible to
+`eslint-suppressions.json`, including a `STATUS_STYLES` color map duplicated near-verbatim
+across `UsersPage.tsx` and `ProfilePage.tsx`. The lint rule now has a second, unanchored
+selector for this pattern (confirmed via repo-wide grep to be isolated to just these 3
+files — not a systemic gap), and all three are migrated as of this date. Flagging this in
+case another blind spot like it surfaces later: **a zero count in `eslint-suppressions.json`
+means zero *matched* violations, not zero real ones** — worth a spot-check against a page's
+actual styling convention before assuming "not in the plan" means "already clean."
+
 ## Proposed order
 
 CLAUDE.md's existing proposal was: **(1) Settings, (2) My Portfolio, (3) Stock Picks,
