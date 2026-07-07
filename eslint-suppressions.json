@@ -85,56 +85,8 @@
     }
   },
   "packages/ui/src/features/picks/PicksView.tsx": {
-    "no-restricted-syntax": {
-      "count": 3
-    },
     "react-hooks/exhaustive-deps": {
       "count": 1
-    }
-  },
-  "packages/ui/src/features/picks/components/ActionBadge.tsx": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "packages/ui/src/features/picks/components/CommentRow.tsx": {
-    "no-restricted-syntax": {
-      "count": 6
-    }
-  },
-  "packages/ui/src/features/picks/components/ConvictionBadge.tsx": {
-    "no-restricted-syntax": {
-      "count": 6
-    }
-  },
-  "packages/ui/src/features/picks/components/ConvictionCommentForm.tsx": {
-    "no-restricted-syntax": {
-      "count": 9
-    }
-  },
-  "packages/ui/src/features/picks/components/ConvictionTimeline.tsx": {
-    "no-restricted-syntax": {
-      "count": 3
-    }
-  },
-  "packages/ui/src/features/picks/components/FilterBar.tsx": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
-  "packages/ui/src/features/picks/components/RegimeBadge.tsx": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
-  "packages/ui/src/features/picks/components/TradesFilterBar.tsx": {
-    "no-restricted-syntax": {
-      "count": 3
-    }
-  },
-  "packages/ui/src/features/picks/components/TradesTable.tsx": {
-    "no-restricted-syntax": {
-      "count": 7
     }
   },
   "packages/ui/src/features/picks/useTickerRegime.ts": {

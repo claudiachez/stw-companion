@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { TIERS } from '@stw/shared';
+import { TIERS, FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
 import type { ConvictionSource } from '@stw/shared';
 import { insertConvictionComment } from '../api';
 import { useCapabilities } from '../../../context/AppCapabilities';
 import { useAuthStore } from '../../../store/auth';
+import { Button } from '../../../primitives/Button';
 
 const CONVICTIONS = [5, 4, 3, 2, 1, 0] as const;
 const SOURCES: { value: ConvictionSource; label: string }[] = [
@@ -14,12 +15,12 @@ const SOURCES: { value: ConvictionSource; label: string }[] = [
 ];
 
 const labelStyle: React.CSSProperties = {
-  fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase',
+  fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', textTransform: 'uppercase',
   letterSpacing: '0.1em', marginBottom: 3, display: 'block',
 };
 const fieldStyle: React.CSSProperties = {
   width: '100%', background: 'var(--bg)', border: '1px solid var(--border)',
-  borderRadius: 5, padding: '6px 8px', fontSize: 13, color: 'var(--text)',
+  borderRadius: 5, padding: '6px 8px', fontSize: FONT_SIZE.base, color: 'var(--text)',
   boxSizing: 'border-box',
 };
 const cellStyle: React.CSSProperties = { minWidth: 0 };
@@ -74,13 +75,13 @@ export function ConvictionCommentForm({ ticker, currentConviction, onDone }: Pro
       background: 'var(--s2)', border: '1px solid var(--border)',
       borderRadius: 6, padding: '12px 14px', marginTop: 10,
     }}>
-      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--acc)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+      <div style={{ fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold, color: 'var(--acc)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
         {canEdit ? '＋ New Conviction Note' : '＋ Add Personal Note'}
       </div>
 
       {/* Subscriber: show date as text + single note field only */}
       {!canEdit && (
-        <div style={{ fontSize: 11, color: 'var(--t3)', marginBottom: 10 }}>
+        <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginBottom: 10 }}>
           {formatDateDisplay(today)}
         </div>
       )}
@@ -122,29 +123,14 @@ export function ConvictionCommentForm({ ticker, currentConviction, onDone }: Pro
         </div>
       </div>
 
-      {error && <div style={{ fontSize: 11, color: '#ef4444', marginTop: 10 }}>{error}</div>}
+      {error && <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--status-negative-text)', marginTop: 10 }}>{error}</div>}
       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-        <button
-          onClick={save}
-          disabled={saving}
-          style={{
-            padding: '6px 14px', borderRadius: 5, border: 'none', cursor: 'pointer',
-            background: 'var(--acc)', color: '#fff', fontSize: 12, fontWeight: 600,
-            opacity: saving ? 0.6 : 1,
-          }}
-        >
+        <Button variant="primary" onClick={save} disabled={saving}>
           {saving ? 'Saving…' : 'Add Note'}
-        </button>
-        <button
-          onClick={onDone}
-          disabled={saving}
-          style={{
-            padding: '6px 14px', borderRadius: 5, cursor: 'pointer',
-            background: 'none', border: '1px solid var(--border)', color: 'var(--t2)', fontSize: 12,
-          }}
-        >
+        </Button>
+        <Button variant="ghost" onClick={onDone} disabled={saving}>
           Cancel
-        </button>
+        </Button>
       </div>
     </div>
   );
