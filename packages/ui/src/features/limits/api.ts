@@ -7,6 +7,10 @@ export interface RiskConfigRow {
   max_gross_pct: number;
   ladder: { drawdownPct: number; targetGrossPct: number }[];
   is_placeholder: boolean;
+  /** User-entered Net Liquidation Value (or equivalent) — null until first entered (migration 059). */
+  account_equity: number | null;
+  /** Trigger-maintained high-water mark of account_equity — never decreases (migration 059). */
+  equity_peak: number | null;
   updated_at: string;
 }
 
@@ -59,7 +63,7 @@ export async function ensureRiskConfig(userId: string): Promise<RiskConfigRow> {
 
 export async function saveRiskConfig(
   userId: string,
-  patch: Partial<Pick<RiskConfigRow, 'max_position_pct' | 'max_sector_pct' | 'max_gross_pct' | 'ladder'>>,
+  patch: Partial<Pick<RiskConfigRow, 'max_position_pct' | 'max_sector_pct' | 'max_gross_pct' | 'ladder' | 'account_equity'>>,
 ): Promise<void> {
   const { error } = await getSupabase()
     .from('risk_config')

@@ -95,16 +95,22 @@ export function LimitsPanel() {
     multiplier: p.multiplier,
   }));
 
-  // v1: no stored account-equity figure exists yet — sum of gross market value
-  // stands in as the baseline until a real NetLiquidation value is wired in.
-  const accountEquity = positionInputs.reduce((sum, p) => sum + Math.abs((p.quantity ?? 0) * (p.markPrice ?? 0) * (p.multiplier ?? 1)), 0);
+  // Real account equity, entered by the user in RiskConfigForm (migration 059) — falls
+  // back to the sum of the SAME positions being evaluated only when unset. That
+  // fallback makes gross exposure tautologically ~100% (numerator == denominator), so
+  // it's flagged in the UI below rather than treated as a real reading.
+  const approxEquity = positionInputs.reduce((sum, p) => sum + Math.abs((p.quantity ?? 0) * (p.markPrice ?? 0) * (p.multiplier ?? 1)), 0);
+  const accountEquity = config.account_equity ?? approxEquity;
+  const drawdownPct = config.account_equity != null && config.equity_peak
+    ? ((config.account_equity - config.equity_peak) / config.equity_peak) * 100
+    : null;
 
   const result = evaluateRiskConfig(positionInputs, sectorMap ?? {}, accountEquity, {
     maxPositionPct: config.max_position_pct,
     maxSectorPct: config.max_sector_pct,
     maxGrossPct: config.max_gross_pct,
     ladder: config.ladder,
-  }, null);
+  }, drawdownPct);
 
   const staleness = positions?.length
     ? fmtDateTime(positions.reduce((latest, p) => (p.last_synced_at > latest ? p.last_synced_at : latest), positions[0].last_synced_at))
@@ -153,6 +159,12 @@ export function LimitsPanel() {
             {result.grossViolation.exposurePct.toFixed(1)}% / {result.grossViolation.limitPct}%
           </span>
         </div>
+        {config.account_equity == null && (
+          <div className="text-t3 text-xs mb-2">
+            Approximate — enter your account equity above for a real gross-exposure reading (this
+            stand-in sums the same positions being measured, so it always reads ~100%).
+          </div>
+        )}
         {result.ladderTargetGrossPct !== null && (
           <div className="text-xs text-[var(--status-warning-text)] bg-[var(--status-warning-bg)] border border-[var(--status-warning-border)] rounded px-3 py-2">
             Drawdown ladder target: reduce gross to {result.ladderTargetGrossPct}%

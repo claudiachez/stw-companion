@@ -42,12 +42,17 @@ export function PositionEditor({ holding: h, onDone }: Props) {
     try {
       const sb = getSupabase();
       const eq = equityPct.trim() === '' ? null : Math.max(0, Math.min(100, parseFloat(equityPct))) / 100;
+      const isClosing = lastAction === 'Closed' || lastAction === 'Expired';
       const { error: hErr } = await sb.from('holdings').update({
         conviction: Number(conviction), last_action: lastAction, action_date: actionDate || null,
         category_id: categoryId || null,
         equity_pct: eq,
         // initial_weight / current_weight are NOT written here: Initial derives from the diary lots,
         // Current is owned by the routines. Editing legs (the ledger) is the only way to move weight.
+        // Exception: closing/expiring a position via this Status dropdown must zero current_weight
+        // here — a DB trigger (054_integrity_guardrails.sql) hard-fails any Closed/Expired row with
+        // a nonzero weight, and nothing else writes it at the moment this action fires.
+        ...(isClosing ? { current_weight: 0 } : {}),
       }).eq('ticker', h.ticker);
       if (hErr) throw hErr;
       await queryClient.invalidateQueries({ queryKey: ['holdings'] });
