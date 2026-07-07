@@ -5,13 +5,15 @@
       "name": "web",
       "runtimeExecutable": "corepack",
       "runtimeArgs": ["pnpm", "--filter", "web", "dev"],
-      "port": 5173
+      "port": 5173,
+      "autoPort": true
     },
     {
       "name": "admin",
       "runtimeExecutable": "corepack",
       "runtimeArgs": ["pnpm", "--filter", "admin", "dev"],
-      "port": 5174
+      "port": 5174,
+      "autoPort": true
     }
   ]
 }

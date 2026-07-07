@@ -3,6 +3,8 @@ import { getSupabase } from '../../lib/supabase';
 export interface RiskConfigRow {
   user_id: string;
   max_position_pct: number;
+  /** Separate, typically-tighter single-name cap for options exposure (migration 060). */
+  max_option_position_pct: number;
   max_sector_pct: number;
   max_gross_pct: number;
   ladder: { drawdownPct: number; targetGrossPct: number }[];
@@ -44,6 +46,7 @@ export async function fetchRiskConfig(userId: string): Promise<RiskConfigRow | n
 // here explicitly too so a new row's shape is fully documented in one place.
 export const DEFAULT_RISK_CONFIG = {
   max_position_pct: 10,
+  max_option_position_pct: 5,
   max_sector_pct: 25,
   max_gross_pct: 100,
   ladder: [{ drawdownPct: -10, targetGrossPct: 70 }, { drawdownPct: -15, targetGrossPct: 50 }],
@@ -66,7 +69,7 @@ export async function ensureRiskConfig(userId: string): Promise<RiskConfigRow> {
 
 export async function saveRiskConfig(
   userId: string,
-  patch: Partial<Pick<RiskConfigRow, 'max_position_pct' | 'max_sector_pct' | 'max_gross_pct' | 'ladder' | 'account_equity'>>,
+  patch: Partial<Pick<RiskConfigRow, 'max_position_pct' | 'max_option_position_pct' | 'max_sector_pct' | 'max_gross_pct' | 'ladder' | 'account_equity'>>,
 ): Promise<void> {
   const { error } = await getSupabase()
     .from('risk_config')
