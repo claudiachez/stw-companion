@@ -10,7 +10,7 @@ import { PortfolioDashboard } from './components/PortfolioDashboard';
 import { TradesTable } from './components/TradesTable';
 import { LoadingSpinner } from '../../primitives/LoadingSpinner';
 import { EmptyState } from '../../primitives/EmptyState';
-import { TIERS, holdingPnlPct } from '@stw/shared';
+import { TIERS, holdingPnlPct, FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
 import { usePriceCacheStore, type Quote } from '../../store/priceCache';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useCapabilities } from '../../context/AppCapabilities';
@@ -206,7 +206,7 @@ export function PicksView() {
         <div
           key={`hdr-${conv}`}
           style={{
-            padding: '5px 14px 4px', fontSize: 10, fontWeight: 600,
+            padding: '5px 14px 4px', fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.semibold,
             letterSpacing: '0.1em', textTransform: 'uppercase',
             position: 'sticky', top: 0, zIndex: 2,
             borderBottom: `1px solid ${t.border}`,
@@ -215,7 +215,7 @@ export function PicksView() {
           }}
         >
           {t.label}
-          <span style={{ fontSize: 9, opacity: 0.6, fontWeight: 500 }}>{rows.length}</span>
+          <span style={{ fontSize: FONT_SIZE['2xs'], opacity: 0.6, fontWeight: FONT_WEIGHT.medium }}>{rows.length}</span>
         </div>,
         ...rows.map((h) => (
           <HoldingRow
@@ -255,10 +255,13 @@ export function PicksView() {
   const tabBtn = (tab: PicksTab): React.CSSProperties => ({
     flex: isMobile ? 1 : '0 0 auto',
     padding: isMobile ? '10px 0' : '9px 16px',
-    fontSize: 13, background: 'none', border: 'none',
+    fontSize: FONT_SIZE.base, background: 'none', border: 'none',
     borderBottom: '2px solid transparent', cursor: 'pointer',
     marginBottom: -1, transition: 'color 0.15s', whiteSpace: 'nowrap',
-    fontWeight: activeTab === tab ? 600 : 400,
+    // 400 stays a literal — FONT_WEIGHT has no "normal" step (medium/semibold/bold only,
+    // per tokens.ts: "already consistent (600/700 dominate)"), and fontWeight isn't part
+    // of the lint-enforced scope anyway (only color + fontSize are).
+    fontWeight: activeTab === tab ? FONT_WEIGHT.semibold : 400,
     color: activeTab === tab ? 'var(--acc)' : 'var(--t2)',
     borderBottomColor: activeTab === tab ? 'var(--acc)' : 'transparent',
   });

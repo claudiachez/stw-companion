@@ -3,6 +3,8 @@
 // read as one app. Renders inner controls only (no surface wrapper); the page hosts them in one
 // bar with the synced stamp + sync cluster. State is owned by PortfolioPage.
 
+import { FONT_SIZE } from '@stw/shared';
+
 export type PortfolioSort =
   | 'pnl_desc' | 'pnl_asc'
   | 'ret_desc' | 'ret_asc'
@@ -40,11 +42,22 @@ const SORT_OPTIONS: { value: PortfolioSort; label: string }[] = [
   { value: 'za',         label: 'Sort: Z → A' },
 ];
 
+// Border color lives in the class below, never in this inline style object — an inline
+// `style.border` always wins over a stylesheet class regardless of specificity, which
+// would make `ctrlBorderClass`'s `focus:border-acc` silently never take effect (found +
+// fixed in TextInput.tsx the same session — see its header comment for the full story).
 const ctrlStyle: React.CSSProperties = {
-  height: 34, padding: '0 8px', fontSize: 12, borderRadius: 5,
-  border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)',
-  cursor: 'pointer', outline: 'none', flexShrink: 0,
+  height: 34, padding: '0 8px', fontSize: FONT_SIZE.sm, borderRadius: 5,
+  background: 'var(--bg)', color: 'var(--text)',
+  cursor: 'pointer', flexShrink: 0,
 };
+
+// For real keyboard-focus targets (text input, selects) — pairs the removed native
+// outline with a visible border-color change on focus instead of just deleting it.
+const ctrlBorderClass = 'border border-[var(--border)] focus:outline-none focus:border-acc';
+// For the toggle `<label>` chips — same visible border, but the label itself never
+// receives focus (the checkbox inside it does, and keeps its own native focus ring).
+const ctrlBorderClassStatic = 'border border-[var(--border)]';
 
 const toggleStyle = (on: boolean): React.CSSProperties => ({
   ...ctrlStyle, display: 'flex', alignItems: 'center', gap: 6, color: on ? 'var(--text)' : 'var(--t2)',
@@ -69,32 +82,33 @@ export function PortfolioFilterBar({ filters, onChange, baskets, filtered, total
         value={search}
         onChange={(e) => onChange({ ...filters, search: e.target.value })}
         placeholder="Search ticker…"
+        className={ctrlBorderClass}
         style={{ ...ctrlStyle, width: 120, cursor: 'text' }}
       />
 
       {baskets.length > 0 && (
-        <select value={basket} onChange={(e) => onChange({ ...filters, basket: e.target.value })} style={ctrlStyle}>
+        <select value={basket} onChange={(e) => onChange({ ...filters, basket: e.target.value })} className={ctrlBorderClass} style={ctrlStyle}>
           <option value="">All Baskets</option>
           {baskets.map((b) => <option key={b} value={b}>{b}</option>)}
         </select>
       )}
 
-      <select value={type} onChange={(e) => onChange({ ...filters, type: e.target.value as PortfolioType })} style={ctrlStyle}>
+      <select value={type} onChange={(e) => onChange({ ...filters, type: e.target.value as PortfolioType })} className={ctrlBorderClass} style={ctrlStyle}>
         <option value="">All Types</option>
         <option value="stocks">Stocks</option>
         <option value="options">Options</option>
       </select>
 
-      <select value={sort} onChange={(e) => onChange({ ...filters, sort: e.target.value as PortfolioSort })} style={ctrlStyle}>
+      <select value={sort} onChange={(e) => onChange({ ...filters, sort: e.target.value as PortfolioSort })} className={ctrlBorderClass} style={ctrlStyle}>
         {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
 
-      <label style={toggleStyle(tailedOnly)} title="Show only positions that match a followed trader's pick">
+      <label className={ctrlBorderClassStatic} style={toggleStyle(tailedOnly)} title="Show only positions that match a followed trader's pick">
         <input type="checkbox" checked={tailedOnly} onChange={(e) => onChange({ ...filters, tailedOnly: e.target.checked })} style={{ accentColor: 'var(--acc)', cursor: 'pointer' }} />
         Tailed only
       </label>
 
-      <label style={toggleStyle(groupByTicker)} title="Group legs by underlying ticker (off = flat per-leg table)">
+      <label className={ctrlBorderClassStatic} style={toggleStyle(groupByTicker)} title="Group legs by underlying ticker (off = flat per-leg table)">
         <input type="checkbox" checked={groupByTicker} onChange={(e) => onChange({ ...filters, groupByTicker: e.target.checked })} style={{ accentColor: 'var(--acc)', cursor: 'pointer' }} />
         Group by ticker
       </label>
@@ -102,7 +116,7 @@ export function PortfolioFilterBar({ filters, onChange, baskets, filtered, total
       {hasFilter && (
         <button
           onClick={() => onChange({ ...filters, search: '', basket: '', type: '', tailedOnly: false })}
-          style={{ ...ctrlStyle, border: 'none', background: 'none', color: 'var(--t3)', padding: '0 4px' }}
+          style={{ ...ctrlStyle, background: 'none', color: 'var(--t3)', padding: '0 4px' }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--t2)'; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--t3)'; }}
         >
@@ -110,7 +124,7 @@ export function PortfolioFilterBar({ filters, onChange, baskets, filtered, total
         </button>
       )}
 
-      <span style={{ fontSize: 11, color: 'var(--t3)', marginLeft: 4, whiteSpace: 'nowrap' }}>
+      <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginLeft: 4, whiteSpace: 'nowrap' }}>
         {filtered < total ? `${filtered} of ${total}` : `${total} position${total === 1 ? '' : 's'}`}
       </span>
     </>

@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { TIERS, fmtDateTime, regimeGate } from '@stw/shared';
+import { TIERS, fmtDateTime, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, SPACE, regimeGate } from '@stw/shared';
 import { useUserPositions, useIbkrSettings } from './useUserPositions';
 import { useSyncPortfolio } from './useSyncPortfolio';
 import { useHoldings } from '../picks/useHoldings';
@@ -8,6 +8,11 @@ import { useConvictionChanges, type HoldingRef } from '../picks/useConvictionCha
 import { ConvictionBadge } from '../picks/components/ConvictionBadge';
 import { LoadingSpinner } from '../../primitives/LoadingSpinner';
 import { TickerLink } from '../../primitives/TickerLink';
+import { Badge } from '../../primitives/Badge';
+import { Button } from '../../primitives/Button';
+import { AlertStrip } from '../../primitives/AlertStrip';
+import { KpiCard, type KpiStatus } from '../../primitives/KpiCard';
+import { AccordionList } from '../../primitives/AccordionList';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useCapabilities } from '../../context/AppCapabilities';
 import { ViolationsSummary } from '../limits/ViolationsSummary';
@@ -25,14 +30,11 @@ import { cleanUnderlying } from './api';
 // the matching + summary are structured so more can be added without reworking the UI.
 const FOLLOWED_TRADERS = ['STW'];
 
-const POS = '#22c55e';
-const NEG = '#ef4444';
-
 // desktop grouped-view column widths — shared by the column header + rows so they line up
 const COL = { ret: 58, pnl: 80, val: 92 };
 
 // flat-table cell styles — copied from the Trades blotter so the two tables read identically
-const th: React.CSSProperties = { textAlign: 'left', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--t3)', background: 'var(--s2)', padding: '7px 13px', borderBottom: '1px solid var(--bsub)', whiteSpace: 'nowrap' };
+const th: React.CSSProperties = { textAlign: 'left', fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, textTransform: 'uppercase', letterSpacing: LETTER_SPACING.label, color: 'var(--t3)', background: 'var(--s2)', padding: '7px 13px', borderBottom: '1px solid var(--bsub)', whiteSpace: 'nowrap' };
 const thR: React.CSSProperties = { ...th, textAlign: 'right' };
 const td: React.CSSProperties = { padding: '9px 13px', borderBottom: '1px solid var(--bsub)', verticalAlign: 'middle', lineHeight: 1.4, whiteSpace: 'nowrap' };
 const tdR: React.CSSProperties = { ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' };
@@ -59,7 +61,11 @@ function fmtExpiry(exp: string | null): string {
 }
 function pnlColor(pnl: number | null): string {
   if (pnl === null) return 'var(--t2)';
-  return pnl >= 0 ? POS : NEG;
+  return pnl >= 0 ? 'var(--pnl-gain)' : 'var(--pnl-loss)';
+}
+function pnlStatus(pnl: number | null): KpiStatus {
+  if (pnl === null) return 'neutral';
+  return pnl >= 0 ? 'positive' : 'negative';
 }
 
 const posMV = (p: UserPosition) => (p.mark_price ?? 0) * Math.abs(p.quantity ?? 0) * p.multiplier;
@@ -98,11 +104,6 @@ function composition(g: PortfolioGroup): string {
   return 'Shares';
 }
 
-// trader badge shown next to a tailed ticker
-function TraderBadge({ trader }: { trader: string }) {
-  return <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4, color: 'var(--acc)', background: 'var(--c5bg)', border: '1px solid var(--c5b)', flexShrink: 0 }}>{trader}</span>;
-}
-
 // ── flat table (default view) ─────────────────────────────────
 
 interface LegRowData {
@@ -124,9 +125,9 @@ function FlatLegRow({ row, onSelectTicker, showPnl, isMobile }: { row: LegRowDat
           {isTailed
             ? <TickerLink ticker={underlying} onSelect={onSelectTicker} />
             : <span style={{ fontWeight: 600, color: 'var(--text)' }}>{underlying}</span>}
-          {isTailed && traders.map((t) => <TraderBadge key={t} trader={t} />)}
+          {isTailed && traders.map((t) => <Badge key={t} kind="source" trader={t} />)}
         </div>
-        <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 1 }}>{instrumentLabel(p)}</div>
+        <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 1 }}>{instrumentLabel(p)}</div>
       </td>
       {!isMobile && <td style={{ ...td, color: 'var(--t2)' }}>{direction}</td>}
       {!isMobile && showPnl && <td style={{ ...tdR, color: 'var(--t2)' }}>{fmtPrice(p.avg_cost)}</td>}
@@ -141,7 +142,7 @@ function FlatLegRow({ row, onSelectTicker, showPnl, isMobile }: { row: LegRowDat
 function FlatTable({ rows, onSelectTicker, showPnl, isMobile }: { rows: LegRowData[]; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean }) {
   return (
     <div style={{ overflowX: 'auto', paddingBottom: 9 }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: FONT_SIZE.xs }}>
         <thead>
           <tr>
             <th style={th}>Ticker</th>
@@ -173,18 +174,18 @@ function LegRow({ pos, showPnl }: { pos: UserPosition; showPnl: boolean }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px 7px 40px', borderBottom: '1px solid var(--bsub)', background: 'var(--bg)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
         <span style={{
-          fontSize: 9, fontWeight: 600, padding: '1px 5px', borderRadius: 4, flexShrink: 0,
+          fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.semibold, padding: '1px 5px', borderRadius: 4, flexShrink: 0,
           color: isOpt ? 'var(--c4)' : 'var(--t2)', background: isOpt ? 'var(--c4bg)' : 'var(--s2)',
           border: isOpt ? '1px solid var(--c4b)' : '1px solid var(--border)',
         }}>
           {isOpt ? `${qty < 0 ? 'SHORT ' : ''}${pos.put_call === 'C' ? 'CALL' : 'PUT'}` : 'STOCK'}
         </span>
-        <span style={{ fontSize: 12, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+        <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
       </div>
       {showPnl && (
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
-          {pos.unrealized_pnl_pct !== null && <div style={{ fontSize: 12, fontWeight: 600, color: pnlColor(pos.unrealized_pnl_pct), fontVariantNumeric: 'tabular-nums' }}>{fmtPct(pos.unrealized_pnl_pct)}</div>}
-          {pos.unrealized_pnl !== null && <div style={{ fontSize: 10, color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(pos.unrealized_pnl)}</div>}
+          {pos.unrealized_pnl_pct !== null && <div style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: pnlColor(pos.unrealized_pnl_pct), fontVariantNumeric: 'tabular-nums' }}>{fmtPct(pos.unrealized_pnl_pct)}</div>}
+          {pos.unrealized_pnl !== null && <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(pos.unrealized_pnl)}</div>}
         </div>
       )}
     </div>
@@ -200,7 +201,7 @@ function PositionMetrics({ group, portfolioValue, showPnl }: { group: PortfolioG
   const showRisk = group.hasOption && showPnl;
   if (!hasBoth && !showRisk) return null;
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px 16px', padding: '8px 14px 8px 40px', background: 'var(--bg)', borderBottom: '1px solid var(--bsub)', fontSize: 11, color: 'var(--t3)' }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px 16px', padding: '8px 14px 8px 40px', background: 'var(--bg)', borderBottom: '1px solid var(--bsub)', fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>
       {hasBoth && <span>Shares : Options <strong style={{ color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>{sharesPct} : {optionsPct}</strong></span>}
       {showRisk && (
         <span>Options risk <strong style={{ color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(group.optionsRisk)}</strong>
@@ -211,70 +212,45 @@ function PositionMetrics({ group, portfolioValue, showPnl }: { group: PortfolioG
   );
 }
 
-function GroupRow({ group, portfolioValue, isExpanded, onToggle, onSelectTicker, showPnl, isMobile }: {
-  group: PortfolioGroup; portfolioValue: number; isExpanded: boolean; onToggle: () => void;
-  onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean;
+// header content for a group's accordion row (ticker/badges/composition + P&L columns) —
+// the AccordionList call site below supplies this as `renderHeader`.
+function GroupHeader({ group, onSelectTicker, showPnl, isMobile }: {
+  group: PortfolioGroup; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean;
 }) {
   const { underlying, netPnl, returnPct, marketValue, isTailed, traders, conviction } = group;
-  const accent = conviction !== null ? (TIERS[conviction]?.color ?? 'var(--border)') : 'var(--border)';
   return (
     <>
-      <div
-        role="button" tabIndex={0} onClick={onToggle}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}
-        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderBottom: '1px solid var(--bsub)', cursor: 'pointer', background: isExpanded ? 'var(--c5bg)' : 'transparent' }}
-        onMouseEnter={(e) => { if (!isExpanded) (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
-        onMouseLeave={(e) => { if (!isExpanded) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-      >
-        <span style={{ fontSize: 9, color: 'var(--t3)', flexShrink: 0, width: 8, textAlign: 'center', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s', display: 'inline-block' }}>▶</span>
-        <div style={{ width: 3, height: 30, borderRadius: 2, flexShrink: 0, background: accent }} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 1 }}>
-            {isTailed ? (
-              <span onClick={(e) => e.stopPropagation()} style={{ flexShrink: 0 }}>
-                <TickerLink ticker={underlying} onSelect={onSelectTicker} style={{ fontSize: 13, fontWeight: 700 }} />
-              </span>
-            ) : (
-              <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text)', flexShrink: 0 }}>{underlying}</span>
-            )}
-            {isTailed && traders.map((t) => <TraderBadge key={t} trader={t} />)}
-            {conviction !== null && <ConvictionBadge level={conviction} />}
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--t2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{composition(group)}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 1 }}>
+          {isTailed ? (
+            <span onClick={(e) => e.stopPropagation()} style={{ flexShrink: 0 }}>
+              <TickerLink ticker={underlying} onSelect={onSelectTicker} style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.bold }} />
+            </span>
+          ) : (
+            <span style={{ fontWeight: FONT_WEIGHT.bold, fontSize: FONT_SIZE.base, color: 'var(--text)', flexShrink: 0 }}>{underlying}</span>
+          )}
+          {isTailed && traders.map((t) => <Badge key={t} kind="source" trader={t} />)}
+          {conviction !== null && <ConvictionBadge level={conviction} />}
         </div>
-        {showPnl && (isMobile ? (
-          <div style={{ flexShrink: 0, textAlign: 'right' }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: pnlColor(netPnl), fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(netPnl)}</div>
-            {marketValue > 0 && <div style={{ fontSize: 10, color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(marketValue)} mkt</div>}
-          </div>
-        ) : (
-          <>
-            <div style={{ width: COL.ret, textAlign: 'right', flexShrink: 0, fontSize: 12, fontWeight: 600, color: pnlColor(returnPct), fontVariantNumeric: 'tabular-nums' }}>{returnPct !== null ? fmtPct(returnPct) : '—'}</div>
-            <div style={{ width: COL.pnl, textAlign: 'right', flexShrink: 0, fontSize: 13, fontWeight: 600, color: pnlColor(netPnl), fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(netPnl)}</div>
-            <div style={{ width: COL.val, textAlign: 'right', flexShrink: 0, fontSize: 12, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(marketValue)}</div>
-          </>
-        ))}
+        <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{composition(group)}</div>
       </div>
-      {isExpanded && (
+      {showPnl && (isMobile ? (
+        <div style={{ flexShrink: 0, textAlign: 'right' }}>
+          <div style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: pnlColor(netPnl), fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(netPnl)}</div>
+          {marketValue > 0 && <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(marketValue)} mkt</div>}
+        </div>
+      ) : (
         <>
-          <PositionMetrics group={group} portfolioValue={portfolioValue} showPnl={showPnl} />
-          {group.positions.map((p) => <LegRow key={p.id} pos={p} showPnl={showPnl} />)}
+          <div style={{ width: COL.ret, textAlign: 'right', flexShrink: 0, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: pnlColor(returnPct), fontVariantNumeric: 'tabular-nums' }}>{returnPct !== null ? fmtPct(returnPct) : '—'}</div>
+          <div style={{ width: COL.pnl, textAlign: 'right', flexShrink: 0, fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: pnlColor(netPnl), fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(netPnl)}</div>
+          <div style={{ width: COL.val, textAlign: 'right', flexShrink: 0, fontSize: FONT_SIZE.sm, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(marketValue)}</div>
         </>
-      )}
+      ))}
     </>
   );
 }
 
 // ── summary stat cards ────────────────────────────────────────
-
-function StatCard({ label, value, color, title, children }: { label: string; value?: string; color?: string; title?: string; children?: React.ReactNode }) {
-  return (
-    <div title={title} style={{ flex: 1, minWidth: 104, padding: '14px 16px', borderRadius: 8, background: 'var(--s2)', border: '1px solid var(--bsub)' }}>
-      {children ?? <div style={{ fontSize: 26, fontWeight: 700, color: color ?? 'var(--text)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>{value}</div>}
-      <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>{label}</div>
-    </div>
-  );
-}
 
 function PortfolioSummary({ groups, showPnl, regimeAdvisory }: {
   groups: PortfolioGroup[]; showPnl: boolean;
@@ -309,39 +285,59 @@ function PortfolioSummary({ groups, showPnl, regimeAdvisory }: {
     <>
       {/* Order: Legs · Market Value · Return · Equity:Options · Options at risk */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-        <StatCard label={`${t.legs} leg${t.legs === 1 ? '' : 's'}`} value={String(positionCount)} title="Open positions (grouped by underlying)" />
-        {showPnl && <StatCard label="Market Value" value={fmtMoneyCompact(t.mv)} />}
+        <div style={{ flex: 1, minWidth: 104 }} title="Open positions (grouped by underlying)">
+          <KpiCard label={`${t.legs} leg${t.legs === 1 ? '' : 's'}`} primaryValue={positionCount} />
+        </div>
         {showPnl && (
-          <StatCard
-            label={t.retPct !== null ? `${fmtPct(t.retPct)} · unrealized` : 'Unrealized P&L'}
-            value={fmtMoneyCompact(t.pnl)}
-            color={pnlColor(t.pnl)}
-            title="Unrealized P&L on your currently-open positions (IBKR mark vs your average cost) — not a weekly/monthly figure."
-          />
-        )}
-        <StatCard label="Equity : Options (by market value)" title="Share of current market value held as equity vs options — same basis as the Stock Picks Overview.">
-          <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', lineHeight: 1 }}>
-            <span style={{ fontSize: 26, fontWeight: 700, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{t.equityPct ?? '—'}</span>
-            <span style={{ fontSize: 16, color: 'var(--t3)', marginBottom: 1 }}>:</span>
-            <span style={{ fontSize: 26, fontWeight: 700, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>{t.optionsPct ?? '—'}</span>
+          <div style={{ flex: 1, minWidth: 104 }}>
+            <KpiCard label="Market Value" primaryValue={fmtMoneyCompact(t.mv)} />
           </div>
+        )}
+        {showPnl && (
+          <div
+            style={{ flex: 1, minWidth: 104 }}
+            title="Unrealized P&L on your currently-open positions (IBKR mark vs your average cost) — not a weekly/monthly figure."
+          >
+            <KpiCard
+              label={t.retPct !== null ? `${fmtPct(t.retPct)} · unrealized` : 'Unrealized P&L'}
+              primaryValue={fmtMoneyCompact(t.pnl)}
+              status={pnlStatus(t.pnl)}
+            />
+          </div>
+        )}
+        <div
+          style={{ flex: 1, minWidth: 104 }}
+          title="Share of current market value held as equity vs options — same basis as the Stock Picks Overview."
+        >
+          <KpiCard
+            label="Equity : Options (by market value)"
+            primaryValue={t.equityPct ?? '—'}
+            secondaryValue={`: ${t.optionsPct ?? '—'}`}
+          />
           {regimeAdvisory && regimeAdvisory.trend_state !== 'UNKNOWN' && (
-            <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 6, fontStyle: 'italic' }} title="Advisory — under forward validation. Not a trade signal.">
+            <div
+              style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[1.5], fontStyle: 'italic' }}
+              title="Advisory — under forward validation. Not a trade signal."
+            >
               Regime: {regimeAdvisory.trend_state}{regimeAdvisory.trend_state === 'RED' ? " · STW's playbook favors reducing options exposure here" : ''}
             </div>
           )}
-        </StatCard>
+        </div>
         {showPnl && (
-          <StatCard
-            label={t.riskPct !== null ? `${t.riskPct.toFixed(1)}% of book at risk` : 'Options'}
-            value={fmtMoneyCompact(t.optRisk)}
+          <div
+            style={{ flex: 1, minWidth: 104 }}
             title="Option premium currently at risk (cost basis of your option legs) and what % of the book that represents — your max loss if the options expire worthless."
-          />
+          >
+            <KpiCard
+              label={t.riskPct !== null ? `${t.riskPct.toFixed(1)}% of book at risk` : 'Options'}
+              primaryValue={fmtMoneyCompact(t.optRisk)}
+            />
+          </div>
         )}
       </div>
 
       {positionCount > 0 && (
-        <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           <span><strong style={{ color: 'var(--text)' }}>{t.tailed}</strong> of {positionCount} {positionCount === 1 ? 'position' : 'positions'} {t.tailed === 1 ? 'matches' : 'match'} a tailed pick{traderSummary ? ` (${traderSummary})` : ''}</span>
           {t.low > 0 && <span style={{ color: 'var(--c1)' }}>· ⚠ {t.low} with low / declining conviction</span>}
         </div>
@@ -353,8 +349,8 @@ function PortfolioSummary({ groups, showPnl, regimeAdvisory }: {
 function InfoCard({ title, body, action }: { title: string; body: string; action?: React.ReactNode }) {
   return (
     <div style={{ padding: '24px', borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--border)', textAlign: 'center' }}>
-      <div style={{ fontSize: 14, color: 'var(--t2)', marginBottom: action ? 12 : 6 }}>{title}</div>
-      {body && <div style={{ fontSize: 12, color: 'var(--t3)' }}>{body}</div>}
+      <div style={{ fontSize: FONT_SIZE.base, color: 'var(--t2)', marginBottom: action ? 12 : 6 }}>{title}</div>
+      {body && <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)' }}>{body}</div>}
       {action}
     </div>
   );
@@ -396,14 +392,21 @@ export function PortfolioPage() {
   // Declining-conviction alert (value-add, host-approved 2026-07-06): reuses the same
   // conviction-batch classification as the Overview's Conviction Changes block — a
   // tailed position whose latest webinar batch marked it down from where it was.
+  // Must intersect against the SUBSCRIBER'S OWN held underlyings (not just pickMap,
+  // which covers STW's entire tracked universe) — otherwise this leaks a declining-
+  // conviction alert for every STW ticker, not just ones the subscriber actually tails.
+  const heldUnderlyings = useMemo(
+    () => new Set(positions.map((p) => cleanUnderlying(p.underlying))),
+    [positions],
+  );
   const holdingRefs = useMemo<HoldingRef[]>(
     () => stwHoldings.map((h) => ({ ticker: h.ticker, last_action: h.last_action ?? '', action_date: h.action_date ?? null })),
     [stwHoldings],
   );
   const convictionBatch = useConvictionChanges(holdingRefs);
   const decliningTailed = useMemo(
-    () => (convictionBatch?.changes ?? []).filter((c) => c.dir === 'down' && pickMap.has(c.ticker)),
-    [convictionBatch, pickMap],
+    () => (convictionBatch?.changes ?? []).filter((c) => c.dir === 'down' && pickMap.has(c.ticker) && heldUnderlyings.has(c.ticker)),
+    [convictionBatch, pickMap, heldUnderlyings],
   );
 
   // Advisory regime note (value-add) — same STW→IWM proxy + regimeGate() as the admin's
@@ -579,7 +582,7 @@ export function PortfolioPage() {
         </div>
         <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, padding: '0 12px', borderLeft: '1px solid var(--bsub)' }}>
           {!isMobile && lastSynced && (
-            <span style={{ fontSize: 11, color: 'var(--t3)', whiteSpace: 'nowrap' }}>Synced {fmtDateTime(lastSynced)}</span>
+            <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', whiteSpace: 'nowrap' }}>Synced {fmtDateTime(lastSynced)}</span>
           )}
           {hasPositions && (
             <button onClick={() => setShowPnl((v) => !v)} title={showPnl ? 'Hide P&L' : 'Show P&L'}
@@ -591,20 +594,19 @@ export function PortfolioPage() {
               )}
             </button>
           )}
-          <button onClick={sync} disabled={isSyncing || !isConnected}
-            style={{ padding: '7px 16px', borderRadius: 6, fontSize: 12, fontWeight: 600, background: isConnected ? 'var(--acc)' : 'var(--s2)', color: isConnected ? '#fff' : 'var(--t3)', border: 'none', cursor: isConnected ? 'pointer' : 'default', opacity: isSyncing ? 0.6 : 1, transition: 'opacity 0.15s', flexShrink: 0 }}>
+          <Button variant="primary" onClick={sync} disabled={isSyncing || !isConnected} style={{ flexShrink: 0 }}>
             {isSyncing ? 'Syncing…' : 'Sync'}
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Body */}
       <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)', padding: pad }}>
-        {syncError && <div style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 6, background: '#2d0c0c', border: '1px solid var(--c1b)', color: 'var(--c1)', fontSize: 12 }}>{syncError}</div>}
+        {syncError && <div style={{ marginBottom: 12 }}><AlertStrip severity="negative">{syncError}</AlertStrip></div>}
 
         {!isConnected ? (
           <InfoCard title="Connect your IBKR account to see your positions here." body=""
-            action={<button onClick={() => navigate('/settings')} style={{ marginTop: 12, padding: '8px 18px', borderRadius: 6, fontSize: 12, fontWeight: 600, background: 'var(--acc)', color: '#fff', border: 'none', cursor: 'pointer' }}>Go to Settings →</button>} />
+            action={<Button variant="primary" onClick={() => navigate('/settings')} style={{ marginTop: 12 }}>Go to Settings →</Button>} />
         ) : posLoading ? (
           <LoadingSpinner className="mt-16" />
         ) : !hasPositions ? (
@@ -612,13 +614,13 @@ export function PortfolioPage() {
         ) : (
           <>
             {staleSyncWarning && (
-              <div style={{ marginBottom: 12, padding: '9px 14px', borderRadius: 6, background: '#3a2a0c', border: '1px solid #f59e0b55', color: '#f59e0b', fontSize: 12 }}>
+              <div style={{ marginBottom: 12, padding: '9px 14px', borderRadius: 6, background: 'var(--status-warning-bg)', border: '1px solid var(--status-warning-border)', color: 'var(--status-warning-text)', fontSize: FONT_SIZE.sm }}>
                 Last synced {fmtDateTime(lastSynced!)} — numbers below may be stale. Click Sync to refresh.
               </div>
             )}
 
             {decliningTailed.length > 0 && (
-              <div style={{ marginBottom: 12, padding: '9px 14px', borderRadius: 6, background: '#2d0c0c', border: '1px solid var(--c1b)', color: 'var(--c1)', fontSize: 12 }}>
+              <div style={{ marginBottom: 12, padding: '9px 14px', borderRadius: 6, background: 'var(--status-negative-bg)', border: '1px solid var(--status-negative-border)', color: 'var(--status-negative-text)', fontSize: FONT_SIZE.sm }}>
                 ⚠ {decliningTailed.length} tailed position{decliningTailed.length !== 1 ? 's have' : ' has'} declining STW conviction: {decliningTailed.map((c) => c.ticker).join(', ')}
               </div>
             )}
@@ -630,7 +632,7 @@ export function PortfolioPage() {
             ) : (
               <div style={{
                 marginBottom: 18, background: 'var(--surface)', border: '1px solid var(--border)',
-                borderRadius: 12, padding: '12px 16px', fontSize: 12, color: 'var(--t3)',
+                borderRadius: 12, padding: '12px 16px', fontSize: FONT_SIZE.sm, color: 'var(--t3)',
               }}>
                 <strong style={{ color: 'var(--text)' }}>Risk limits 🔒</strong> — flag concentration and
                 gross-exposure breaches in your own book, requires <strong style={{ color: 'var(--t2)' }}>Premium</strong>.
@@ -639,16 +641,16 @@ export function PortfolioPage() {
 
             <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', boxShadow: 'var(--shadow)' }}>
               <div style={{ padding: '8px 13px', background: 'var(--s2)', borderBottom: '1px solid var(--bsub)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.09em', color: 'var(--t2)' }}>📊 Positions</span>
-                <span style={{ fontSize: 10, color: 'var(--t3)', marginLeft: 'auto' }}>{visibleCount}</span>
+                <span style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, textTransform: 'uppercase', letterSpacing: '0.09em', color: 'var(--t2)' }}>📊 Positions</span>
+                <span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginLeft: 'auto' }}>{visibleCount}</span>
               </div>
 
               {visibleCount === 0 ? (
-                <p style={{ fontSize: 11, color: 'var(--t3)', padding: '12px 13px' }}>No positions match your filters.</p>
+                <p style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', padding: '12px 13px' }}>No positions match your filters.</p>
               ) : grouped ? (
                 <>
                   {!isMobile && showPnl && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--t3)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, textTransform: 'uppercase', letterSpacing: LETTER_SPACING.label, color: 'var(--t3)' }}>
                       <span style={{ width: 8, flexShrink: 0 }} />
                       <span style={{ width: 3, flexShrink: 0 }} />
                       <span style={{ flex: 1 }}>Ticker</span>
@@ -657,11 +659,22 @@ export function PortfolioPage() {
                       <span style={{ width: COL.val, textAlign: 'right', flexShrink: 0 }}>Value</span>
                     </div>
                   )}
-                  {visibleGroups.map((g) => (
-                    <GroupRow key={g.underlying} group={g} portfolioValue={portfolioValue}
-                      isExpanded={expanded.has(g.underlying)} onToggle={() => toggleGroup(g.underlying)}
-                      onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} />
-                  ))}
+                  <AccordionList
+                    items={visibleGroups}
+                    rowKey={(g) => g.underlying}
+                    expandedKeys={expanded}
+                    onToggle={toggleGroup}
+                    accentColor={(g) => (g.conviction !== null ? (TIERS[g.conviction]?.color ?? 'var(--border)') : 'var(--border)')}
+                    renderHeader={(g) => (
+                      <GroupHeader group={g} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} />
+                    )}
+                    renderExpanded={(g) => (
+                      <>
+                        <PositionMetrics group={g} portfolioValue={portfolioValue} showPnl={showPnl} />
+                        {g.positions.map((p) => <LegRow key={p.id} pos={p} showPnl={showPnl} />)}
+                      </>
+                    )}
+                  />
                 </>
               ) : (
                 <FlatTable rows={visibleLegs} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} />

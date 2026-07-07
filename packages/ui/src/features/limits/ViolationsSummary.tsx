@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { evaluateRiskConfig, fmtDateTime, type PositionInput, type ConcentrationViolation } from '@stw/shared';
 import { useAuthStore } from '../../store/auth';
 import { LoadingSpinner } from '../../primitives/LoadingSpinner';
+import { StatusPill } from '../../primitives/StatusPill';
 import { useUserPositions } from '../portfolio/useUserPositions';
 import { useSyncPortfolio } from '../portfolio/useSyncPortfolio';
 import { useRiskConfig, useSectorMap, useViolationAcks, useAcknowledgeViolation, useEnsureRiskConfig } from './useRiskConfig';
@@ -17,7 +18,7 @@ import type { ViolationType, AckStatus } from './api';
 // `useUserPositions` query key, so no second sync control is needed there.
 
 function severityColor(severity: 'ok' | 'breach'): string {
-  return severity === 'breach' ? '#ef4444' : 'var(--acc)';
+  return severity === 'breach' ? 'var(--status-negative-text)' : 'var(--acc)';
 }
 
 function ViolationRow({
@@ -41,16 +42,9 @@ function ViolationRow({
           <span className="text-xs font-mono" style={{ color: severityColor(v.severity) }}>
             {v.exposurePct.toFixed(1)}% / {v.limitPct}%
           </span>
-          <span
-            className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded"
-            style={{
-              color: v.severity === 'breach' ? '#ef4444' : 'var(--t3)',
-              background: v.severity === 'breach' ? '#ef444415' : 'var(--s2)',
-              border: `1px solid ${v.severity === 'breach' ? '#ef444433' : 'var(--border)'}`,
-            }}
-          >
+          <StatusPill variant={v.severity === 'breach' ? 'breach' : 'neutral'}>
             {v.severity === 'breach' ? 'Breach' : 'OK'}
-          </span>
+          </StatusPill>
         </div>
       </div>
       {v.severity === 'breach' && (
@@ -99,7 +93,7 @@ function GrossExposureBar({ pct, limitPct, ladderTargetPct }: { pct: number; lim
       <div className="relative h-2.5 rounded-full bg-s2 border border-border overflow-hidden">
         <div
           className="h-full rounded-full"
-          style={{ width: `${fillPct}%`, background: breach ? '#ef4444' : 'var(--acc)' }}
+          style={{ width: `${fillPct}%`, background: breach ? 'var(--status-negative-text)' : 'var(--acc)' }}
         />
         <div
           className="absolute top-0 bottom-0 w-px bg-t3"
@@ -108,7 +102,7 @@ function GrossExposureBar({ pct, limitPct, ladderTargetPct }: { pct: number; lim
         />
       </div>
       {ladderTargetPct !== null && (
-        <div className="text-xs text-[#f59e0b] bg-[#f59e0b15] border border-[#f59e0b33] rounded px-3 py-2 mt-1">
+        <div className="text-xs text-[var(--status-warning-text)] bg-[var(--status-warning-bg)] border border-[var(--status-warning-border)] rounded px-3 py-2 mt-1">
           Drawdown ladder target: reduce gross to {ladderTargetPct}%
         </div>
       )}
@@ -221,7 +215,7 @@ export function ViolationsSummary({ showSyncButton = false }: { showSyncButton?:
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-t3 text-xs shrink-0" style={{ transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>▶</span>
           <span className="text-text font-semibold text-sm shrink-0">Risk limits</span>
-          <span className="text-t3 text-xs truncate" style={{ color: totalBreaches > 0 ? '#ef4444' : 'var(--t3)' }}>{summaryLine}</span>
+          <span className="text-t3 text-xs truncate" style={{ color: totalBreaches > 0 ? 'var(--status-negative-text)' : 'var(--t3)' }}>{summaryLine}</span>
         </div>
         {showSyncButton && (
           <span
@@ -243,7 +237,7 @@ export function ViolationsSummary({ showSyncButton = false }: { showSyncButton?:
             {lastResult && ` Synced ${lastResult.count} position${lastResult.count !== 1 ? 's' : ''}.`}
           </div>
           {syncError && (
-            <div className="text-xs font-medium text-[#ef4444] bg-[#ef444415] border border-[#ef444433] rounded px-3 py-2">
+            <div className="text-xs font-medium text-[var(--status-negative-text)] bg-[var(--status-negative-bg)] border border-[var(--status-negative-border)] rounded px-3 py-2">
               Sync failed: {syncError} — evaluating against last-synced data below.
             </div>
           )}

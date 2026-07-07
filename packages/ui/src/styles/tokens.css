@@ -1,0 +1,215 @@
+/*
+ * STW Companion — color design tokens (single source of truth).
+ *
+ * Consolidates what was, until this file, two byte-identical copies of this
+ * exact variable set hand-maintained separately in apps/web/src/index.css and
+ * apps/admin/src/index.css (see docs/design-system/audit/00-structure-overview.md).
+ * Both apps now `@import` this file instead of redeclaring it — one edit here
+ * reaches both apps automatically.
+ *
+ * Color stays in CSS custom properties, not static JS tokens (see
+ * packages/shared/src/constants/tokens.ts for the non-color scales) because
+ * the app needs runtime dark/light theme switching via [data-theme="light"],
+ * which a static JS value can't do.
+ *
+ * Every variable name that existed before this consolidation is preserved
+ * exactly, with the same values, EXCEPT --t3 in both themes — see the "Fixed
+ * for AA contrast" section below for why, with the exact math. Everything
+ * else in this file is a pure addition; no existing component's rendering
+ * changes from this file alone.
+ */
+
+@layer base {
+  :root {
+    /* ---- Base surfaces / text / border (unchanged from the pre-consolidation values) ---- */
+    --bg:      #0a0a0a;
+    --surface: #111111;
+    --s2:      #1a1a1a;
+    --border:  #2a2a2a;
+    --bsub:    #1f1f1f;
+    --text:    #f0f0f0;
+    --t2:      #a0a0a0;
+
+    /*
+     * --t3 — FIXED for AA contrast (docs/design-system/audit/01-style-value-inventory.md
+     * §Color + audit finding cited directly in plans/stw-design-system.md's Phase 2 spec:
+     * "the current muted-green small-caps headers and light-gray helper text fail").
+     * Old value #525252 on --bg (#0a0a0a): contrast ≈2.5:1 — fails AA (needs 4.5:1 for
+     * normal-weight text this small; 10px bold uppercase labels don't qualify as WCAG
+     * "large text"). New value #808080 on --bg: ≈5.0:1. On --surface (#111111): ≈4.8:1.
+     * Both pass AA. This is a real, visible lightening of every existing muted-text/
+     * section-header consumer — flagged for explicit sign-off at this checkpoint, not
+     * a silent tweak.
+     */
+    --t3:      #808080;
+
+    --c5: #22c55e; --c5bg: #052e16; --c5b: #166534; --c5l: #4ade80;
+    --c4: #3b82f6; --c4bg: #0c1a3b; --c4b: #1e3a8a; --c4l: #60a5fa;
+    --c3: #f59e0b; --c3bg: #2d1a00; --c3b: #78350f; --c3l: #fbbf24;
+    --c2: #6b7280; --c2bg: #111827; --c2b: #374151; --c2l: #9ca3af;
+    --c1: #ef4444; --c1bg: #2d0c0c; --c1b: #7f1d1d; --c1l: #f87171;
+    --c0: #52525b; --c0bg: #0f0f11; --c0b: #27272a; --c0l: #71717a;
+
+    --new:     #22c55e; --new-bg:     #052e16;
+    --closed:  #ef4444; --closed-bg:  #2d0c0c;
+    --upsized: #3b82f6; --upsized-bg: #0c1a3b;
+    --trimmed: #f59e0b; --trimmed-bg: #2d1a00;
+    --hold:    #71717a; --hold-bg:    #1a1a1a;
+
+    --acc: #22c55e;
+    --shadow: 0 1px 3px rgba(0,0,0,0.5);
+
+    /* ---- New in Phase 2: semantic roles required by plans/stw-design-system.md ---- */
+
+    /* surface: page/card covered by --bg/--surface above; hover + inset are new. */
+    --surface-hover: #242424;
+    --surface-inset: var(--bg); /* already the de facto convention — input fields inside a --surface card use --bg (see SettingsPage.tsx's inputStyle) */
+
+    /* border: default covered by --border above; strong is new (a more prominent divider/focus-adjacent border). */
+    --border-strong: #3a3a3a;
+
+    /* text.inverse: white text on a filled colored button — formalizes the ~15 literal
+       `#fff`/`color: '#fff'` occurrences already in consistent use (CLAUDE.md's
+       "white text on green, never black" rule). */
+    --text-inverse: #ffffff;
+
+    /* pnl.gain / pnl.loss — distinct token identity from --acc/--c1 even though the
+       value is shared today, so a future brand-green change can't accidentally also
+       change what "a gain" looks like, and vice versa (spec's explicit ask). This is
+       also the fix for the P&L color bug in
+       docs/design-system/audit/04-additional-inconsistencies.md §2 — HoldingRow.tsx,
+       HoldingDetail.tsx, and SignalsTable.tsx all migrated their hardcoded #16A34A/
+       #DC2626 onto these as part of the design-system Phase 5 page migration (Stock
+       Picks' bug-fix sub-pass; SignalsTable.tsx landed earlier, during GEX Signals). */
+    --pnl-gain: var(--acc);
+    --pnl-loss: var(--c1);
+
+    /* action.broker — the solid dark green for a real-money/broker action (LegTimeline.tsx's
+       "Open via IBKR" / "Close via IBKR" buttons + IbkrOrderModal), per CLAUDE.md's standing
+       rule: deliberately distinct from --acc (ordinary Save) and --c1 (Delete/negative), so a
+       real order can never be mistaken for either at a glance. A literal, not a var() alias,
+       because it's not derived from any existing color — added as a named token during
+       LegTimeline.tsx's Phase 5 migration; previously a local `ibkrGreen` constant duplicated
+       into every consumer instead of a single named source. Theme-invariant (same value in
+       both themes, matching its pre-token behavior) — defined once here, not redefined under
+       [data-theme="light"]. */
+    --action-broker: #15803d;
+
+    /* status.elevated — an orange sitting between status.warning (--c3, amber) and
+       status.negative (--c1, red): "elevated caution," e.g. RegimeBanner.tsx's
+       "Defensive" regime band and SentimentGauge.tsx's "Fear" label/gauge-arc segment.
+       Found duplicated as a bare #f97316 literal in both files during Macro's Phase 5
+       migration — a real cross-file color duplication, not a one-off. Single value
+       only (no bg/border pair): neither consumer uses a filled/bordered treatment, so
+       this doesn't need the status.* bg/border/text triple's full shape. */
+    --status-elevated: #f97316;
+
+    /* sentiment.greed — the "Greed" band's teal in SentimentGauge.tsx's 5-band fear/greed
+       scale (Extreme Fear/Fear/Neutral/Greed/Extreme Greed), deliberately distinct from
+       Extreme Greed's --c5 green so the scale doesn't read as a flat 2-tone red/green
+       gradient. Single current consumer (SentimentGauge.tsx, used twice in that one file —
+       the zone lookup and the gauge's own subArcs config, previously hardcoded
+       independently in both places). Added here — not as a file-local constant — because
+       this lint rule has exactly one sanctioned home for any literal color in this
+       codebase; there's no other valid way to de-literal a color that isn't already
+       reused elsewhere. */
+    --sentiment-greed: #14b8a6;
+
+    /* logo.mic.* — the 4 fixed illustration colors in Layout.tsx's <STWLogo> mic
+       icon (base/stand, capsule fill, capsule outline, grille lines). Found during
+       the design-system's Layout.tsx sweep (2026-07-07) — never migrated in Phase 5
+       because Layout wasn't one of migration-plan.md's 5 pages, even though it's
+       rendered on every page in both apps. Theme-invariant by original design (the
+       mic never re-colored between themes before this migration either) — this is
+       brand-mark artwork, not a themeable UI value, the same category of exception
+       as LoginPage.tsx's Google-brand-color SVG, just without an external-brand
+       justification (it's STW's own mark, just drawn with fixed grays). The logo's
+       green arrow reuses var(--acc) directly (#22c55e, exact match) rather than a
+       new token. */
+    --logo-mic-stand:   #c8c8c8;
+    --logo-mic-body:    #e2e2e2;
+    --logo-mic-outline: #b4b4b4;
+    --logo-mic-grille:  #aaaaaa;
+
+    /* status.* — ok/near/breach/unevaluated/info, each with bg/border/text, for the
+       Phase 3 StatusPill/Badge components. Built from the existing tier-color
+       infrastructure (not new raw hex) except neutral/unevaluated, which
+       deliberately use plain surface tokens instead of a tier color so a status pill
+       is never visually confusable with a conviction-tier badge. */
+    --status-positive-bg:     var(--c5bg); --status-positive-border:     var(--c5b); --status-positive-text:     var(--c5);
+    --status-warning-bg:      var(--c3bg); --status-warning-border:     var(--c3b); --status-warning-text:      var(--c3);
+    --status-negative-bg:     var(--c1bg); --status-negative-border:    var(--c1b); --status-negative-text:     var(--c1);
+    --status-info-bg:         var(--c4bg); --status-info-border:       var(--c4b); --status-info-text:         var(--c4);
+    --status-neutral-bg:      var(--s2);   --status-neutral-border:     var(--border); --status-neutral-text:    var(--t2);
+    --status-unevaluated-bg:  var(--s2);   --status-unevaluated-border: var(--border); --status-unevaluated-text: var(--t3);
+  }
+
+  [data-theme="light"] {
+    --bg:      #f5faf5;
+    --surface: #ffffff;
+    --s2:      #edf6ed;
+    --border:  #cce5cc;
+    --bsub:    #e0f0e0;
+    --text:    #0a0a0a;
+    --t2:      #2d4a2d;
+
+    /*
+     * --t3 — FIXED for AA contrast, same reasoning as the dark theme above. Old value
+     * #6b916b on light --bg (#f5faf5): contrast ≈3.4:1 — fails AA (needs 4.5:1). New
+     * value #527052 (same hue family, darkened): ≈5.2:1 on --bg. Passes AA.
+     */
+    --t3:      #527052;
+
+    --c5: #16a34a; --c5bg: #dcfce7; --c5b: #86efac; --c5l: #15803d;
+    --c4: #2563eb; --c4bg: #dbeafe; --c4b: #93c5fd; --c4l: #1d4ed8;
+    --c3: #d97706; --c3bg: #fef3c7; --c3b: #fcd34d; --c3l: #b45309;
+    --c2: #4b5563; --c2bg: #f3f4f6; --c2b: #d1d5db; --c2l: #6b7280;
+    --c1: #dc2626; --c1bg: #fee2e2; --c1b: #fca5a5; --c1l: #b91c1c;
+    --c0: #52525b; --c0bg: #f4f4f5; --c0b: #d4d4d8; --c0l: #71717a;
+
+    --new:     #15803d; --new-bg:     #dcfce7;
+    --closed:  #dc2626; --closed-bg:  #fee2e2;
+    --upsized: #1d4ed8; --upsized-bg: #dbeafe;
+    --trimmed: #d97706; --trimmed-bg: #fef3c7;
+    --hold:    #4b5563; --hold-bg:    #f3f4f6;
+
+    --acc: #16a34a;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08);
+
+    --surface-hover: #e3f2e3;
+    --surface-inset: var(--bg);
+    --border-strong: #a8d1a8;
+    --text-inverse: #ffffff;
+
+    --pnl-gain: var(--acc);
+    --pnl-loss: var(--c1);
+
+    --status-positive-bg:     var(--c5bg); --status-positive-border:     var(--c5b); --status-positive-text:     var(--c5);
+    --status-warning-bg:      var(--c3bg); --status-warning-border:     var(--c3b); --status-warning-text:      var(--c3);
+    --status-negative-bg:     var(--c1bg); --status-negative-border:    var(--c1b); --status-negative-text:     var(--c1);
+    --status-info-bg:         var(--c4bg); --status-info-border:       var(--c4b); --status-info-text:         var(--c4);
+    --status-neutral-bg:      var(--s2);   --status-neutral-border:     var(--border); --status-neutral-text:    var(--t2);
+    --status-unevaluated-bg:  var(--s2);   --status-unevaluated-border: var(--border); --status-unevaluated-text: var(--t3);
+  }
+
+  html {
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  * { box-sizing: border-box; }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--t3); }
+}
+
+@keyframes ibkr-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}

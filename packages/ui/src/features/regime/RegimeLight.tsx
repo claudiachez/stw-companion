@@ -4,7 +4,7 @@ import { useLatestRegime } from './useLatestRegime';
 
 const STATE_COLOR: Record<'GREEN' | 'RED' | 'UNKNOWN', string> = {
   GREEN: 'var(--acc)',
-  RED: '#ef4444',
+  RED: 'var(--status-negative-text)',
   UNKNOWN: 'var(--t3)',
 };
 
@@ -61,7 +61,7 @@ export function RegimeLight({ instrument = 'IWM' }: { instrument?: string }) {
         {' · '}VIX {row.vix_close?.toFixed(2) ?? '—'} vs VIX3M {row.vix3m_close?.toFixed(2) ?? '—'}
       </div>
 
-      <div className="text-[10px] uppercase tracking-wide font-semibold text-[#f59e0b]">
+      <div className="text-[10px] uppercase tracking-wide font-semibold text-[var(--status-warning-text)]">
         Advisory — under forward validation. Not a trade signal.
       </div>
     </div>

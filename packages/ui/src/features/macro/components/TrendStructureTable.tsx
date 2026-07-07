@@ -1,8 +1,12 @@
 import type { MacroIndicator, TrendBucket } from '@stw/shared';
-import { TREND_BUCKET_META, TREND_BUCKET_ORDER, trendDirectionArrow, trendDirectionPhrase } from '@stw/shared';
+import { TREND_BUCKET_META, TREND_BUCKET_ORDER, trendDirectionArrow, trendDirectionPhrase, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING } from '@stw/shared';
 import { ALL_INDICATORS, EXPERT_TREND_SYMBOLS } from '../useMacroIndicators';
 import type { TrendHistoryEntry } from '../useMacroTrendHistory';
 import { SourceNote } from './macroVisuals';
+
+// Not DataTable: this table's rows are interleaved with full-width bucket-group header
+// rows (colSpan across every column, e.g. "ABOVE 9 · 21 · 200 — MOMENTUM") — a shape
+// DataTable's flat row-per-item model doesn't support. Tokenized in place instead.
 
 interface Props {
   indicators: MacroIndicator[];
@@ -44,10 +48,10 @@ function chgColor(v: number | null): string {
 }
 
 function MaCell({ close, ma }: { close: number | null; ma: number | null }) {
-  if (ma === null) return <td style={{ padding: '6px 8px', color: 'var(--t3)', fontSize: 12 }}>—</td>;
+  if (ma === null) return <td style={{ padding: '6px 8px', color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>—</td>;
   const above = close !== null && close > ma;
   return (
-    <td style={{ padding: '6px 8px', fontSize: 12, color: above ? 'var(--c5)' : 'var(--c1)' }}>
+    <td style={{ padding: '6px 8px', fontSize: FONT_SIZE.sm, color: above ? 'var(--c5)' : 'var(--c1)' }}>
       {fmt(ma)} {above ? '▲' : '▼'}
     </td>
   );
@@ -55,13 +59,13 @@ function MaCell({ close, ma }: { close: number | null; ma: number | null }) {
 
 function TrendBadge({ entry }: { entry: TrendHistoryEntry | undefined }) {
   if (!entry || entry.fiveDayDelta === null) {
-    return <td style={{ padding: '6px 8px', fontSize: 12, color: 'var(--t3)', whiteSpace: 'nowrap' }}>—</td>;
+    return <td style={{ padding: '6px 8px', fontSize: FONT_SIZE.sm, color: 'var(--t3)', whiteSpace: 'nowrap' }}>—</td>;
   }
   const arrow = trendDirectionArrow(entry.direction);
   const color = arrow === '↑' ? 'var(--c5)' : arrow === '↓' ? 'var(--c1)' : 'var(--t2)';
   const delta = entry.fiveDayDelta;
   return (
-    <td style={{ padding: '6px 8px', fontSize: 12, color, whiteSpace: 'nowrap' }}>
+    <td style={{ padding: '6px 8px', fontSize: FONT_SIZE.sm, color, whiteSpace: 'nowrap' }}>
       {arrow} {trendDirectionPhrase(entry.direction)} ({delta >= 0 ? '+' : ''}{Math.round(delta)})
     </td>
   );
@@ -72,15 +76,15 @@ function IndicatorRow({ ind, trendEntry }: { ind: MacroIndicator; trendEntry?: T
   const bucketLabel = ind.bucket ? TREND_BUCKET_META[ind.bucket].label : 'N/A';
   return (
     <tr style={{ borderBottom: '1px solid var(--bsub)' }}>
-      <td style={{ padding: '6px 8px', fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap', color: 'var(--text)' }}>{ind.symbol}</td>
-      <td style={{ padding: '6px 8px', fontSize: 12, color: 'var(--t2)', whiteSpace: 'nowrap' }}>{ind.name}</td>
-      <td style={{ padding: '6px 8px', fontSize: 12, color: 'var(--text)', whiteSpace: 'nowrap' }}>{fmt(ind.close)}</td>
-      <td style={{ padding: '6px 8px', fontSize: 12, color: chgColor(ind.chg), whiteSpace: 'nowrap' }}>{fmtChg(ind.chg)}</td>
-      <td style={{ padding: '6px 8px', fontSize: 12, color: chgColor(ind.chgPct), whiteSpace: 'nowrap' }}>{fmtPct(ind.chgPct)}</td>
+      <td style={{ padding: '6px 8px', fontWeight: FONT_WEIGHT.semibold, fontSize: FONT_SIZE.sm, whiteSpace: 'nowrap', color: 'var(--text)' }}>{ind.symbol}</td>
+      <td style={{ padding: '6px 8px', fontSize: FONT_SIZE.sm, color: 'var(--t2)', whiteSpace: 'nowrap' }}>{ind.name}</td>
+      <td style={{ padding: '6px 8px', fontSize: FONT_SIZE.sm, color: 'var(--text)', whiteSpace: 'nowrap' }}>{fmt(ind.close)}</td>
+      <td style={{ padding: '6px 8px', fontSize: FONT_SIZE.sm, color: chgColor(ind.chg), whiteSpace: 'nowrap' }}>{fmtChg(ind.chg)}</td>
+      <td style={{ padding: '6px 8px', fontSize: FONT_SIZE.sm, color: chgColor(ind.chgPct), whiteSpace: 'nowrap' }}>{fmtPct(ind.chgPct)}</td>
       <MaCell close={ind.close} ma={ind.ma9} />
       <MaCell close={ind.close} ma={ind.ma21} />
       <MaCell close={ind.close} ma={ind.ma200} />
-      <td style={{ padding: '6px 8px', fontSize: 12, fontWeight: 600, color: bucketColor, whiteSpace: 'nowrap' }}>{bucketLabel}</td>
+      <td style={{ padding: '6px 8px', fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: bucketColor, whiteSpace: 'nowrap' }}>{bucketLabel}</td>
       <TrendBadge entry={trendEntry} />
     </tr>
   );
@@ -101,15 +105,15 @@ export function TrendStructureTable({ indicators, visibleSymbols, onToggle, asOf
     <div>
       {/* Optional indicators — click a ticker to add/remove it directly */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 11, color: 'var(--t3)' }}>Small-cap, breadth &amp; intl indicators:</span>
+        <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>Small-cap, breadth &amp; intl indicators:</span>
         {ALL_INDICATORS.filter((i) => EXPERT_SET.has(i.symbol)).map((i) => (
           <button
             key={i.symbol}
             onClick={() => onToggle(i.symbol)}
             style={{
-              fontSize: 11, padding: '2px 8px', borderRadius: 4, border: '1px solid var(--border)',
+              fontSize: FONT_SIZE.xs, padding: '2px 8px', borderRadius: 4, border: '1px solid var(--border)',
               background: visSet.has(i.symbol) ? 'var(--acc)' : 'transparent',
-              color: visSet.has(i.symbol) ? '#fff' : 'var(--t2)', cursor: 'pointer',
+              color: visSet.has(i.symbol) ? 'var(--text-inverse)' : 'var(--t2)', cursor: 'pointer',
             }}
           >
             {i.symbol}
@@ -117,13 +121,15 @@ export function TrendStructureTable({ indicators, visibleSymbols, onToggle, asOf
         ))}
       </div>
 
-      {/* Table — scrolls inside the card on mobile, full table on desktop */}
+      {/* Table — scrolls inside the card on mobile, full table on desktop.
+          Not DataTable: grouped bucket-header rows (colSpan across every column) — see the
+          header-comment note above. */}
       <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: FONT_SIZE.sm }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border)' }}>
               {['Symbol', 'Name', 'Close', 'Chg', 'Chg%', 'vs 9d MA', 'vs 21d MA', 'vs 200d MA', 'Structure', '5D Trend'].map((h) => (
-                <th key={h} style={{ padding: '6px 8px', textAlign: 'left', fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--t3)', whiteSpace: 'nowrap' }}>{h}</th>
+                <th key={h} style={{ padding: '6px 8px', textAlign: 'left', fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.semibold, letterSpacing: LETTER_SPACING.label, textTransform: 'uppercase', color: 'var(--t3)', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -133,7 +139,7 @@ export function TrendStructureTable({ indicators, visibleSymbols, onToggle, asOf
               if (!rows?.length) return null;
               return [
                 <tr key={`b-${bucket}`} style={{ background: 'var(--s2)' }}>
-                  <td colSpan={10} style={{ padding: '5px 8px', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: BUCKET_COLOR[bucket] }}>
+                  <td colSpan={10} style={{ padding: '5px 8px', fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: '0.1em', textTransform: 'uppercase', color: BUCKET_COLOR[bucket] }}>
                     {TREND_BUCKET_META[bucket].groupLabel}
                   </td>
                 </tr>,

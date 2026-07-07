@@ -1,3 +1,4 @@
+import { FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
 import { scoreColor } from './macroVisuals';
 
 export interface ModuleStripItem {
@@ -36,14 +37,18 @@ export function ModuleScoreStrip({ items }: Props) {
               padding: '10px 12px',
             }}
           >
-            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--t3)' }}>
+            <div style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.semibold, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--t3)' }}>
               {it.title}
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 2 }}>
-              <span style={{ fontSize: 22, fontWeight: 700, color }}>{it.score ?? '—'}</span>
-              <span style={{ fontSize: 11, fontWeight: 600, color }}>{it.detail}</span>
+              {/* Not KpiCard: `detail` shares the score's own risk color (scoreColor), while
+                  KpiCard's secondaryValue always renders muted (var(--t2)) — using it here
+                  would mute exactly the signal this strip exists to draw the eye to. */}
+              {/* 22 collapses into `display` (26) per tokens.md's type-scale rule. */}
+              <span style={{ fontSize: FONT_SIZE.display, fontWeight: FONT_WEIGHT.bold, color }}>{it.score ?? '—'}</span>
+              <span style={{ fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold, color }}>{it.detail}</span>
             </div>
-            {delta && <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 1 }}>{delta}</div>}
+            {delta && <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 1 }}>{delta}</div>}
           </div>
         );
       })}

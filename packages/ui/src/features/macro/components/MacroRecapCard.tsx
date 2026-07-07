@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { MacroDailyRecap, RecapSession } from '@stw/shared';
-import { fmtDateTime } from '@stw/shared';
+import { fmtDateTime, FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
+import { TextInput } from '../../../primitives/TextInput';
 
 interface Props {
   recap: MacroDailyRecap | null;
@@ -12,7 +13,7 @@ interface Props {
   onRefresh: (note?: string, session?: RecapSession) => void;
 }
 
-function Paragraphs({ text, size = 14, color = 'var(--text)' }: { text?: string; size?: number; color?: string }) {
+function Paragraphs({ text, size = FONT_SIZE.base, color = 'var(--text)' }: { text?: string; size?: number; color?: string }) {
   if (!text) return null;
   return (
     <>
@@ -25,7 +26,7 @@ function Paragraphs({ text, size = 14, color = 'var(--text)' }: { text?: string;
 
 function SubHeader({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--t3)', marginTop: 4 }}>
+    <div style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--t3)', marginTop: 4 }}>
       {children}
     </div>
   );
@@ -34,8 +35,8 @@ function SubHeader({ children }: { children: React.ReactNode }) {
 function ScenarioRow({ label, text, color }: { label: string; text?: string; color: string }) {
   if (!text) return null;
   return (
-    <div style={{ display: 'flex', gap: 8, fontSize: 13, lineHeight: 1.5 }}>
-      <span style={{ flexShrink: 0, minWidth: 42, fontWeight: 700, color }}>{label}</span>
+    <div style={{ display: 'flex', gap: 8, fontSize: FONT_SIZE.base, lineHeight: 1.5 }}>
+      <span style={{ flexShrink: 0, minWidth: 42, fontWeight: FONT_WEIGHT.bold, color }}>{label}</span>
       <span style={{ color: 'var(--t2)' }}>{text}</span>
     </div>
   );
@@ -61,23 +62,23 @@ export function MacroRecapCard({ recap, recapDate, recapSession, loading, error,
 
   return (
     <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
-      {loading && <div style={{ color: 'var(--t3)', fontSize: 12 }}>Writing today's {sessionLabel(editSession).toLowerCase()} note…</div>}
+      {loading && <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>Writing today's {sessionLabel(editSession).toLowerCase()} note…</div>}
 
-      {error && !loading && <div style={{ color: 'var(--c1)', fontSize: 12 }}>{error}</div>}
+      {error && !loading && <div style={{ color: 'var(--c1)', fontSize: FONT_SIZE.sm }}>{error}</div>}
 
       {recap && !loading && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* Session badge + date */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{
-              fontSize: 10, fontWeight: 700, color: '#fff',
+              fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, color: 'var(--text-inverse)',
               background: recapSession === 'am' ? 'var(--c3)' : 'var(--c4)',
               borderRadius: 4, padding: '2px 7px', textTransform: 'uppercase', letterSpacing: '0.06em',
             }}>
               {sessionLabel(recapSession)}
             </span>
             {recapDate && (
-              <span style={{ fontSize: 11, color: 'var(--t3)' }}>
+              <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>
                 {formatRecapDate(recapDate)}
                 {recap.generatedAt ? ` · Generated: ${fmtDateTime(recap.generatedAt)}` : ''}
               </span>
@@ -85,7 +86,7 @@ export function MacroRecapCard({ recap, recapDate, recapSession, loading, error,
           </div>
 
           {recap.headline && (
-            <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--text)', lineHeight: 1.4 }}>{recap.headline}</p>
+            <p style={{ margin: 0, fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)', lineHeight: 1.4 }}>{recap.headline}</p>
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -95,7 +96,7 @@ export function MacroRecapCard({ recap, recapDate, recapSession, loading, error,
           {recap.bigStory && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: '1px solid var(--bsub)', paddingTop: 12 }}>
               <SubHeader>The Big Story</SubHeader>
-              <Paragraphs text={recap.bigStory} size={13} color="var(--t2)" />
+              <Paragraphs text={recap.bigStory} size={FONT_SIZE.base} color="var(--t2)" />
             </div>
           )}
 
@@ -111,43 +112,46 @@ export function MacroRecapCard({ recap, recapDate, recapSession, loading, error,
           {recap.playbook && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: '1px solid var(--bsub)', paddingTop: 12 }}>
               <SubHeader>{recapSession === 'am' ? "Today's Playbook" : "Next-Day Setup"}</SubHeader>
-              <Paragraphs text={recap.playbook} size={13} color="var(--t2)" />
+              <Paragraphs text={recap.playbook} size={FONT_SIZE.base} color="var(--t2)" />
             </div>
           )}
 
           {recap.watching && (
-            <div style={{ background: 'var(--s2)', borderRadius: 6, padding: '8px 12px', fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
+            <div style={{ background: 'var(--s2)', borderRadius: 6, padding: '8px 12px', fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>
               📍 {recap.watching}
             </div>
           )}
 
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, borderTop: '1px solid var(--bsub)', paddingTop: 12, flexWrap: 'wrap' }}>
             {recap.tradingMode && (
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: 'var(--acc)', borderRadius: 4, padding: '2px 8px' }}>
+              <span style={{ fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold, color: 'var(--text-inverse)', background: 'var(--acc)', borderRadius: 4, padding: '2px 8px' }}>
                 {recap.tradingMode}
               </span>
             )}
             {recap.finalWord && (
-              <span style={{ fontSize: 13, fontStyle: 'italic', color: 'var(--t2)' }}>{recap.finalWord}</span>
+              <span style={{ fontSize: FONT_SIZE.base, fontStyle: 'italic', color: 'var(--t2)' }}>{recap.finalWord}</span>
             )}
           </div>
         </div>
       )}
 
       {!recap && !loading && !error && (
-        <div style={{ color: 'var(--t3)', fontSize: 12 }}>No note yet today — auto-generates at 8am and 4:30pm ET on weekdays.</div>
+        <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>No note yet today — auto-generates at 8am and 4:30pm ET on weekdays.</div>
       )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 10, color: 'var(--t3)' }}>AI-generated from module scores + GEX · auto-updates twice daily</span>
+        <span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>AI-generated from module scores + GEX · auto-updates twice daily</span>
         {canEdit && (
+          // Not Button: a compact inline toolbar control pair (11px, 3px/6-10px padding) —
+          // Button's fixed 14px/SPACE[1.5,4] sizing would look oversized next to this bar,
+          // same reasoning as TradesTable's row-scoped Edit button.
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <select
               value={editSession}
               onChange={(e) => setEditSession(e.target.value as RecapSession)}
               disabled={loading}
               style={{
-                fontSize: 11, padding: '3px 6px', borderRadius: 4, border: '1px solid var(--border)',
+                fontSize: FONT_SIZE.xs, padding: '3px 6px', borderRadius: 4, border: '1px solid var(--border)',
                 background: 'var(--s2)', color: 'var(--t2)', cursor: loading ? 'not-allowed' : 'pointer',
               }}
             >
@@ -158,7 +162,7 @@ export function MacroRecapCard({ recap, recapDate, recapSession, loading, error,
               onClick={() => onRefresh(note, editSession)}
               disabled={loading}
               style={{
-                fontSize: 11, padding: '3px 10px', borderRadius: 4, border: '1px solid var(--border)',
+                fontSize: FONT_SIZE.xs, padding: '3px 10px', borderRadius: 4, border: '1px solid var(--border)',
                 background: 'transparent', color: loading ? 'var(--t3)' : 'var(--t2)',
                 cursor: loading ? 'not-allowed' : 'pointer',
               }}
@@ -170,17 +174,13 @@ export function MacroRecapCard({ recap, recapDate, recapSession, loading, error,
       </div>
 
       {canEdit && (
-        <input
+        <TextInput
           type="text"
           value={note}
           onChange={(e) => setNote(e.target.value)}
           disabled={loading}
           placeholder="Optional: steer the rewrite, e.g. focus more on credit stress"
-          style={{
-            width: '100%', marginTop: 8, fontSize: 12, padding: '6px 10px', borderRadius: 4,
-            border: '1px solid var(--border)', background: 'var(--s2)', color: 'var(--text)',
-            boxSizing: 'border-box',
-          }}
+          style={{ marginTop: 8 }}
         />
       )}
     </div>

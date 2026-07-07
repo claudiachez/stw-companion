@@ -1,5 +1,6 @@
 import type { Holding } from '../api';
 import { useFiltersStore, type SortMode } from '../useFilters';
+import { FONT_SIZE } from '@stw/shared';
 
 const SORT_OPTIONS: { value: SortMode; label: string }[] = [
   { value: 'conviction',  label: 'Sort: Conviction' },
@@ -13,18 +14,22 @@ const SORT_OPTIONS: { value: SortMode; label: string }[] = [
   { value: 'pnl_asc',     label: 'Sort: P&L ↑' },
 ];
 
+// Border color lives in ctrlBorderClass, never inline — an inline style.border always
+// wins over a stylesheet class regardless of specificity, which would make
+// `focus:border-acc` silently never take effect (found + fixed in TextInput.tsx and
+// PortfolioFilterBar.tsx earlier this same session — see TextInput.tsx's header
+// comment for the full story).
 const ctrlStyle: React.CSSProperties = {
   height: 34,
   padding: '0 8px',
-  fontSize: 12,
+  fontSize: FONT_SIZE.sm,
   borderRadius: 5,
-  border: '1px solid var(--border)',
   background: 'var(--bg)',
   color: 'var(--text)',
   cursor: 'pointer',
-  outline: 'none',
   flexShrink: 0,
 };
+const ctrlBorderClass = 'border border-[var(--border)] focus:outline-none focus:border-acc';
 
 interface Props {
   holdings: Holding[];
@@ -56,15 +61,16 @@ export function FilterBar({ holdings, filtered }: Props) {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search ticker…"
+          className={ctrlBorderClass}
           style={{ ...ctrlStyle, width: 120, cursor: 'text' }}
         />
 
-        <select value={basket} onChange={(e) => setBasket(e.target.value)} style={ctrlStyle}>
+        <select value={basket} onChange={(e) => setBasket(e.target.value)} className={ctrlBorderClass} style={ctrlStyle}>
           <option value="">All Baskets</option>
           {baskets.map((b) => <option key={b} value={b}>{b}</option>)}
         </select>
 
-        <select value={tier} onChange={(e) => setTier(e.target.value)} style={ctrlStyle}>
+        <select value={tier} onChange={(e) => setTier(e.target.value)} className={ctrlBorderClass} style={ctrlStyle}>
           <option value="">All Tiers</option>
           <option value="5">Tier 1 — Highest</option>
           <option value="4">Tier 2 — High</option>
@@ -74,7 +80,7 @@ export function FilterBar({ holdings, filtered }: Props) {
           <option value="0">Tier 6 — Legacy</option>
         </select>
 
-        <select value={status} onChange={(e) => setStatus(e.target.value)} style={ctrlStyle}>
+        <select value={status} onChange={(e) => setStatus(e.target.value)} className={ctrlBorderClass} style={ctrlStyle}>
           <option value="">All Status</option>
           <option value="New">New</option>
           <option value="Upsized">Upsized</option>
@@ -82,18 +88,19 @@ export function FilterBar({ holdings, filtered }: Props) {
           <option value="Closed">Closed</option>
         </select>
 
-        <select value={type} onChange={(e) => setType(e.target.value)} style={ctrlStyle}>
+        <select value={type} onChange={(e) => setType(e.target.value)} className={ctrlBorderClass} style={ctrlStyle}>
           <option value="">All Types</option>
           <option value="shares">Shares</option>
           <option value="options">Options</option>
           <option value="mixed">Mixed</option>
         </select>
 
-        <select value={sort} onChange={(e) => setSort(e.target.value as SortMode)} style={ctrlStyle}>
+        <select value={sort} onChange={(e) => setSort(e.target.value as SortMode)} className={ctrlBorderClass} style={ctrlStyle}>
           {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
 
         <label
+          className="border border-[var(--border)]"
           style={{ ...ctrlStyle, display: 'flex', alignItems: 'center', gap: 6, color: hideClosed ? 'var(--t2)' : 'var(--text)' }}
           title="Show closed positions"
         >
@@ -117,7 +124,7 @@ export function FilterBar({ holdings, filtered }: Props) {
           </button>
         )}
 
-        <span style={{ fontSize: 11, color: 'var(--t3)', marginLeft: 4, whiteSpace: 'nowrap' }}>
+        <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginLeft: 4, whiteSpace: 'nowrap' }}>
           {filtered < total ? `${filtered} of ${total}` : `${total} positions`}
         </span>
       </div>

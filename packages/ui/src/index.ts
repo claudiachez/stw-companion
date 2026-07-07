@@ -30,6 +30,40 @@ export { useAppConfig } from './hooks/useAppConfig';
 // ── Primitives ────────────────────────────────────────────────
 export { LoadingSpinner } from './primitives/LoadingSpinner';
 export { EmptyState } from './primitives/EmptyState';
+export type { EmptyStateProps } from './primitives/EmptyState';
+
+// ── Design system (Phase 3 — plans/stw-design-system.md) ───────
+export { StatusPill } from './primitives/StatusPill';
+export type { StatusPillVariant, StatusPillProps } from './primitives/StatusPill';
+export { Badge } from './primitives/Badge';
+export type { BadgeKind, BadgeProps } from './primitives/Badge';
+export { KpiCard } from './primitives/KpiCard';
+export type { KpiCardProps, KpiDeltaDirection, KpiStatus } from './primitives/KpiCard';
+export { SectionHeader } from './primitives/SectionHeader';
+export type { SectionHeaderProps } from './primitives/SectionHeader';
+export { Button } from './primitives/Button';
+export type { ButtonProps, ButtonVariant } from './primitives/Button';
+export { DataTable } from './primitives/DataTable';
+export type { DataTableColumn, DataTableProps } from './primitives/DataTable';
+export { DetailPane, DetailPaneMetricLabel } from './primitives/DetailPane';
+export type { DetailPaneProps, DetailPaneMetric } from './primitives/DetailPane';
+export { ListDetailSplit } from './primitives/ListDetailSplit';
+export type { ListDetailSplitProps } from './primitives/ListDetailSplit';
+export { AccordionList } from './primitives/AccordionList';
+export type { AccordionListProps } from './primitives/AccordionList';
+export { FormRow } from './primitives/FormRow';
+export type { FormRowProps } from './primitives/FormRow';
+export { AlertStrip } from './primitives/AlertStrip';
+export type { AlertSeverity, AlertStripProps } from './primitives/AlertStrip';
+export { SubNav } from './primitives/SubNav';
+export type { SubNavItem, SubNavProps } from './primitives/SubNav';
+export { Modal } from './primitives/Modal';
+export type { ModalProps } from './primitives/Modal';
+export { Icon } from './primitives/Icon';
+export type { IconName, IconProps } from './primitives/Icon';
+export { TextInput } from './primitives/TextInput';
+export type { TextInputProps } from './primitives/TextInput';
+export { DesignSystemGallery } from './primitives/DesignSystemGallery';
 
 // ── Picks ─────────────────────────────────────────────────────
 export { PicksView } from './features/picks/PicksView';

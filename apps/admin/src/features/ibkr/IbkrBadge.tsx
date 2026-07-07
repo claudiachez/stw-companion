@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { fmtDateTime } from '@stw/shared';
+import { fmtDateTime, FONT_SIZE } from '@stw/shared';
 import { useHoldings } from '@stw/ui';
 import { supabase } from '../../lib/supabase';
 
@@ -27,9 +27,9 @@ interface LegResult extends LegSpec {
 
 const DOT: Record<Status, string> = {
   idle: 'var(--t3)',
-  loading: '#f59e0b',
-  ok: '#22c55e',
-  error: '#ef4444',
+  loading: 'var(--c3)',
+  ok: 'var(--acc)',
+  error: 'var(--c1)',
 };
 
 export function IbkrBadge() {
@@ -147,7 +147,7 @@ export function IbkrBadge() {
         height: 36, padding: '0 10px',
         borderRadius: 6, border: '1px solid var(--border)',
         background: 'none', cursor: 'pointer',
-        color: 'var(--t2)', fontSize: 12, whiteSpace: 'nowrap',
+        color: 'var(--t2)', fontSize: FONT_SIZE.sm, whiteSpace: 'nowrap',
         transition: 'background 0.15s, color 0.15s',
       }}
       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}

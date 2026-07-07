@@ -2,6 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import { getSupabase } from '../lib/supabase';
 import { useAuthStore } from '../store/auth';
 import { LoadingSpinner } from '../primitives/LoadingSpinner';
+import { StatusPill, type StatusPillVariant } from '../primitives/StatusPill';
+import { AlertStrip } from '../primitives/AlertStrip';
 import { usePicksTabStore, coercePicksTab, PICKS_TABS, PICKS_TAB_LABELS, type PicksTab } from '../features/picks/usePicksTab';
 
 const TIER_LABELS: Record<string, string> = {
@@ -10,10 +12,13 @@ const TIER_LABELS: Record<string, string> = {
   premium: 'Premium',
 };
 
-const STATUS_STYLES: Record<string, string> = {
-  pending: 'text-[#f59e0b] bg-[#f59e0b15] border-[#f59e0b22]',
-  approved: 'text-[#22c55e] bg-[#22c55e15] border-[#22c55e22]',
-  rejected: 'text-[#ef4444] bg-[#ef444415] border-[#ef444422]',
+// 'pending' reads as `unevaluated`, not a caution/warning variant — an approval decision
+// hasn't happened yet, which is closer to "no verdict yet" than "approaching a breach."
+// Same mapping as apps/admin/src/features/users/UsersPage.tsx's STATUS_VARIANT.
+const STATUS_VARIANT: Record<string, StatusPillVariant> = {
+  pending: 'unevaluated',
+  approved: 'ok',
+  rejected: 'breach',
 };
 
 export function ProfilePage() {
@@ -56,13 +61,9 @@ export function ProfilePage() {
           <div className="bg-s2 rounded-lg p-3">
             <div className="text-t3 text-xs mb-1">Account Status</div>
             {profile ? (
-              <span
-                className={`inline-block px-2 py-0.5 rounded text-xs font-semibold border capitalize ${
-                  STATUS_STYLES[profile.status] ?? STATUS_STYLES['pending']
-                }`}
-              >
+              <StatusPill variant={STATUS_VARIANT[profile.status] ?? STATUS_VARIANT.pending}>
                 {profile.status}
-              </span>
+              </StatusPill>
             ) : (
               <span className="text-t3 text-xs">—</span>
             )}
@@ -76,15 +77,15 @@ export function ProfilePage() {
         </div>
 
         {profile?.status === 'pending' && (
-          <div className="bg-[#f59e0b10] border border-[#f59e0b22] rounded-lg p-3 text-[#f59e0b] text-sm">
+          <AlertStrip severity="warning">
             Your account is pending approval. You'll gain access to content once approved.
-          </div>
+          </AlertStrip>
         )}
 
         {profile?.status === 'rejected' && (
-          <div className="bg-[#ef444410] border border-[#ef444422] rounded-lg p-3 text-[#ef4444] text-sm">
+          <AlertStrip severity="negative">
             Your account request was not approved. Contact support for more information.
-          </div>
+          </AlertStrip>
         )}
       </div>
 

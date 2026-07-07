@@ -1,4 +1,4 @@
-import { gexScore, gexBiasLabel, gexImplication, fmtDateTime } from '@stw/shared';
+import { gexScore, gexBiasLabel, gexImplication, fmtDateTime, FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
 import type { GraddoxData } from '@stw/shared';
 import { SleeveSummary } from './macroVisuals';
 
@@ -14,11 +14,14 @@ function spy(v: number | null | undefined): number | null {
   return v === null || v === undefined ? null : v / 10;
 }
 
+// Not KpiCard: a small dense reference tile (18px value, 8px/12px padding) inside a
+// multi-tile grid, not a page-level hero stat — KpiCard's fixed 26px primaryValue would
+// look oversized here relative to its own compact card chrome.
 function LevelTile({ label, value }: { label: string; value: number | null }) {
   return (
     <div style={{ background: 'var(--s2)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 12px' }}>
-      <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--t3)' }}>{label}</div>
-      <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)', marginTop: 2 }}>
+      <div style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.semibold, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--t3)' }}>{label}</div>
+      <div style={{ fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)', marginTop: 2 }}>
         {value !== null ? value.toFixed(0) : '—'}
       </div>
     </div>
@@ -28,7 +31,7 @@ function LevelTile({ label, value }: { label: string; value: number | null }) {
 function LevelGroup({ name, resistance, gex1, putSupport }: { name: string; resistance: number | null; gex1: number | null; putSupport: number | null }) {
   return (
     <div>
-      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--t2)', margin: '0 0 6px 2px' }}>{name}</div>
+      <div style={{ fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold, color: 'var(--t2)', margin: '0 0 6px 2px' }}>{name}</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 8 }}>
         <LevelTile label="Resistance" value={resistance} />
         <LevelTile label="GEX1 (pivot)" value={gex1} />
@@ -39,8 +42,8 @@ function LevelGroup({ name, resistance, gex1, putSupport }: { name: string; resi
 }
 
 export function GexPositioningCard({ graddox, loading, threeDayDelta }: Props) {
-  if (loading && !graddox) return <div style={{ color: 'var(--t3)', fontSize: 12 }}>Loading positioning…</div>;
-  if (!graddox) return <div style={{ color: 'var(--t3)', fontSize: 12 }}>No GEX signal available.</div>;
+  if (loading && !graddox) return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>Loading positioning…</div>;
+  if (!graddox) return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>No GEX signal available.</div>;
 
   const score = gexScore(graddox.bias);
   const label = gexBiasLabel(graddox.bias);
@@ -68,15 +71,15 @@ export function GexPositioningCard({ graddox, loading, threeDayDelta }: Props) {
       </div>
 
       {/* Trigger + implication */}
-      <div style={{ marginTop: 12, fontSize: 12, color: 'var(--t2)', lineHeight: 1.5 }}>
-        <div><span style={{ color: 'var(--t3)', fontWeight: 600 }}>Trigger:</span> {trigger}</div>
-        <div><span style={{ color: 'var(--t3)', fontWeight: 600 }}>Implication:</span> {gexImplication(graddox.bias)}</div>
+      <div style={{ marginTop: 12, fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.5 }}>
+        <div><span style={{ color: 'var(--t3)', fontWeight: FONT_WEIGHT.semibold }}>Trigger:</span> {trigger}</div>
+        <div><span style={{ color: 'var(--t3)', fontWeight: FONT_WEIGHT.semibold }}>Implication:</span> {gexImplication(graddox.bias)}</div>
         {graddox.bias_note && (
           <div style={{ marginTop: 4, color: 'var(--t3)' }}>{graddox.bias_note}</div>
         )}
       </div>
 
-      <div style={{ marginTop: 10, fontSize: 10, color: 'var(--t3)', lineHeight: 1.4 }}>
+      <div style={{ marginTop: 10, fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', lineHeight: 1.4 }}>
         STW Graddox GEX signal{graddox.last_updated ? ` · updated ${fmtDateTime(graddox.last_updated)}` : ''}
       </div>
     </div>

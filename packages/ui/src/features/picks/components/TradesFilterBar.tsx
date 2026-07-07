@@ -1,5 +1,6 @@
 import type { Holding } from '../api';
 import { useTradesFiltersStore, type TradeOpenClosed, type TradeSort, type TradeType } from '../useTradesFilters';
+import { FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
 
 const SORT_OPTIONS: { value: TradeSort; label: string }[] = [
   { value: 'opened_desc', label: 'Sort: Opened newest' },
@@ -18,12 +19,16 @@ const OPEN_CLOSED: { value: TradeOpenClosed; label: string }[] = [
   { value: 'all',    label: 'All' },
 ];
 
-// Shares the FilterBar control styling so the two tabs read as one app.
+// Shares the FilterBar control styling so the two tabs read as one app. Border color
+// lives in ctrlBorderClass, never inline — see FilterBar.tsx's identical note (an
+// inline style.border always wins over a stylesheet class, which would make
+// `focus:border-acc` silently never take effect).
 const ctrlStyle: React.CSSProperties = {
-  height: 34, padding: '0 8px', fontSize: 12, borderRadius: 5,
-  border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)',
-  cursor: 'pointer', outline: 'none', flexShrink: 0,
+  height: 34, padding: '0 8px', fontSize: FONT_SIZE.sm, borderRadius: 5,
+  background: 'var(--bg)', color: 'var(--text)',
+  cursor: 'pointer', flexShrink: 0,
 };
+const ctrlBorderClass = 'border border-[var(--border)] focus:outline-none focus:border-acc';
 
 interface Props {
   holdings: Holding[];
@@ -54,10 +59,10 @@ export function TradesFilterBar({ holdings, count, total }: Props) {
               key={o.value}
               onClick={() => setOpenClosed(o.value)}
               style={{
-                padding: '0 12px', fontSize: 12, border: 'none', cursor: 'pointer',
+                padding: '0 12px', fontSize: FONT_SIZE.sm, border: 'none', cursor: 'pointer',
                 background: openClosed === o.value ? 'var(--acc)' : 'var(--bg)',
-                color: openClosed === o.value ? '#fff' : 'var(--t2)',
-                fontWeight: openClosed === o.value ? 600 : 400,
+                color: openClosed === o.value ? 'var(--text-inverse)' : 'var(--t2)',
+                fontWeight: openClosed === o.value ? FONT_WEIGHT.semibold : 400,
               }}
             >
               {o.label}
@@ -70,21 +75,22 @@ export function TradesFilterBar({ holdings, count, total }: Props) {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search ticker…"
+          className={ctrlBorderClass}
           style={{ ...ctrlStyle, width: 120, cursor: 'text' }}
         />
 
-        <select value={basket} onChange={(e) => setBasket(e.target.value)} style={ctrlStyle}>
+        <select value={basket} onChange={(e) => setBasket(e.target.value)} className={ctrlBorderClass} style={ctrlStyle}>
           <option value="">All Baskets</option>
           {baskets.map((b) => <option key={b} value={b}>{b}</option>)}
         </select>
 
-        <select value={type} onChange={(e) => setType(e.target.value as TradeType)} style={ctrlStyle}>
+        <select value={type} onChange={(e) => setType(e.target.value as TradeType)} className={ctrlBorderClass} style={ctrlStyle}>
           <option value="">All Types</option>
           <option value="shares">Shares</option>
           <option value="options">Options</option>
         </select>
 
-        <select value={sort} onChange={(e) => setSort(e.target.value as TradeSort)} style={ctrlStyle}>
+        <select value={sort} onChange={(e) => setSort(e.target.value as TradeSort)} className={ctrlBorderClass} style={ctrlStyle}>
           {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
 
@@ -99,7 +105,7 @@ export function TradesFilterBar({ holdings, count, total }: Props) {
           </button>
         )}
 
-        <span style={{ fontSize: 11, color: 'var(--t3)', marginLeft: 4, whiteSpace: 'nowrap' }}>
+        <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginLeft: 4, whiteSpace: 'nowrap' }}>
           {count < total ? `${count} of ${total}` : `${total} trade${total === 1 ? '' : 's'}`}
         </span>
       </div>

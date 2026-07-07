@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import {
   environmentScore, regimeBand, trendSleeveScore, trendSleeveLabel, trendSubScore, gexScore,
-  gexBiasLabel, stressLabel, creditLabel, ratesDollarLabel, regimeDirectionLabel,
+  gexBiasLabel, stressLabel, creditLabel, ratesDollarLabel, regimeDirectionLabel, FONT_SIZE,
 } from '@stw/shared';
 import { useCapabilities } from '../../context/AppCapabilities';
 import {
@@ -194,7 +194,7 @@ export function MacroView() {
         <ModuleHeader title="Trend / Market Structure" help={HELP.trend} />
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
           {indLoading && indicators.length === 0 ? (
-            <div style={{ color: 'var(--t3)', fontSize: 12 }}>Loading market structure…</div>
+            <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>Loading market structure…</div>
           ) : (
             <TrendStructureTable
               indicators={indicators}
