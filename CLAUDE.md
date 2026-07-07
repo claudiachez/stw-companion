@@ -4,7 +4,13 @@
 > **`staging` and `main` are in sync as of 2026-07-05** (`staging → main` PR #66 merged). `staging`
 > itself is still exactly that state — **2 commits ahead of `main`** (both trivial CLAUDE.md handoff
 > commits, nothing code-bearing) — so no new promotion is pending.
-> **Two open PRs currently stack on top of `staging`, neither merged yet:**
+> **The design system is DONE and merged into `staging`** — [PR #70](https://github.com/claudiachez/stw-companion/pull/70)
+> (`claude/design-system-audit` → `staging`, 33 commits, tokens + core components + enforcement +
+> the full Phase 5 page migration across every page, gated and non-gated) merged 2026-07-07. `staging`
+> now carries the whole design-token system live — see the Design System section further down and
+> [`docs/design-system/CONTRIBUTING.md`](docs/design-system/CONTRIBUTING.md) for usage.
+> `claude/design-system-audit` is fully merged and safe to delete (verified via `git cherry`).
+> **Two open PRs still stack on top of `staging`, neither merged yet:**
 > [PR #67](https://github.com/claudiachez/stw-companion/pull/67) (`claude/week1-integrity-guardrails`
 > → `staging`, migrations 054–058, the Limits/regime engine, integrity guardrails — see
 > [`plans/integrity-guardrails-report.md`](plans/integrity-guardrails-report.md)) and
@@ -12,32 +18,25 @@
 > (`claude/portfolio-limits-redesign` → `claude/week1-integrity-guardrails`, the Settings/My Portfolio
 > redesign — see "Previous handoff" under Current Status below). **Both are untouched pending host
 > review — do not merge either yourself.** If you're picking up either PR's work, branch further from
-> that PR's branch, not from `staging` (staging doesn't have this code yet).
-> **A third branch, `claude/design-system-audit`, is pushed but has no PR open yet** — cut directly
-> from `staging` (independent of PR #67/#69, no stacking), now holds all 4 planned phases of the
-> design-system build (audit → tokens → core components → enforcement/migration plan) **plus all of
-> Phase 5 (the page migrations, not part of the original 4-phase spec) — Settings, My Portfolio, GEX
-> Signals, Stock Picks, and Macro are all done, AND (2026-07-07, after the host asked to confirm every
-> page was covered) `Layout.tsx`/`LoginPage.tsx`/`IbkrBadge.tsx`** — the non-gated login/signup screen
-> and the shared header/nav chrome rendered on every gated page in both apps, none of which were ever
-> in migration-plan.md's original 5-page list despite being visible on literally every screen. **Every
-> literal color/font-size in the whole repo is now either migrated or a documented sanctioned exception**
-> (`GexChart.tsx`'s canvas API, `LoginPage.tsx`'s Google-brand-color icon) — `pnpm lint` passes clean
-> with zero unaccounted violations. Don't open a `staging → main`-style PR for it yet; wait until the
-> host asks (this branch has never been reviewed as a whole — only phase-by-phase).
+> that PR's branch, not from `staging` (staging doesn't have this code yet — it predates the design
+> system, so **once you do branch from it, that branch's UI code is NOT yet on tokens/primitives**).
+> **Once PR #67/#69 merge, revisit them for design-token coverage** — `LimitsPanel`,
+> `ViolationsSummary`, `PortfolioPositionDetail`, and any other new Week-1/Limits UI were built outside
+> the design-system audit's scope (they didn't exist yet) and almost certainly still carry literal
+> colors/font-sizes; `pnpm lint` will flag them once you touch those files, since the enforcement rule
+> is repo-wide now. See Next Steps #1.
 > Migrations run to **053 on `staging`**; **054–058 exist only on the PR #67 branch** (and per
 > [`plans/integrity-guardrails-report.md`](plans/integrity-guardrails-report.md) were already applied
-> directly to PROD, with 058 PROD-only — sandbox has no `tiers`/`profiles` tables to apply it to). The
-> design-system branch adds no migrations (frontend/CSS/tokens only).
+> directly to PROD, with 058 PROD-only — sandbox has no `tiers`/`profiles` tables to apply it to).
 > `app_config.ibkr_live_trading_enabled` = **`0` on both PROD and sandbox** (confirmed 2026-07-05 —
 > sandbox was left on `1` from prior UI testing, now turned back off via the Config page).
 > If migrations stop at 021 you are on a stale checkout, re-sync.
 > **First commands every session:** `git fetch origin && git checkout staging && git pull --ff-only`
-> — but check the branch notes above first: if your task continues PR #67, PR #69, or the
-> design-system work, check out that branch directly instead of cutting fresh from `staging`.
-> Otherwise, **cut a feature branch** before making any change: `git checkout -b
-> claude/<short-feature-name>`. **Never commit directly to `staging`** — work on the branch, push it,
-> open a PR back to `staging` (host merges/approves). `main` is promoted only by an approved
+> — but check the branch notes above first: if your task continues PR #67 or PR #69, check out that
+> branch directly instead of cutting fresh from `staging`. Otherwise, **cut a feature branch** before
+> making any change: `git checkout -b claude/<short-feature-name>`. **Never commit directly to
+> `staging`** — work on the branch, push it, open a PR back to `staging` (host merges/approves).
+> `main` is promoted only by an approved
 > staging→main PR (= a production deploy) — this is a standing approval gate, not a one-time
 > exception; ask before opening a staging→main PR even if staging looks ready.
 > (Note: `memory/` lives in local `~/.claude/`, NOT in the repo — never reference it in a prompt meant
@@ -62,11 +61,13 @@
 
 ---
 
-## Current Status — Design system Phases 1–5 ALL DONE, whole-repo sweep also done (handoff 2026-07-07)
+## Current Status — Design system MERGED to staging via PR #70 (handoff 2026-07-07)
 
-**Branch: `claude/design-system-audit`, cut fresh from `staging` (independent of PR #67/#69), pushed
-to origin, no PR opened yet.** All four spec phases plus the full Phase 5 page-migration pass were
-presented to the host at their checkpoints and approved before proceeding — see
+**[PR #70](https://github.com/claudiachez/stw-companion/pull/70) (`claude/design-system-audit` →
+`staging`) merged 2026-07-07 — the design system is live on `staging` now, this is no longer
+in-progress work.** All four spec phases plus the full Phase 5 page-migration pass were presented to
+the host at their checkpoints and approved before proceeding, then reviewed and merged as one whole
+diff (33 commits, no Supabase migrations) — see
 [`plans/stw-design-system.md`](plans/stw-design-system.md) for the 4-phase spec (Audit → Tokens →
 Core components → Enforcement/migration prep) and
 [`docs/design-system/migration-plan.md`](docs/design-system/migration-plan.md) for the Phase 5 plan.
@@ -75,14 +76,15 @@ Macro.** After that, the host asked to confirm coverage was actually complete �
 non-gated pages, including login/registration — which surfaced a real gap: `Layout.tsx` (shared
 header/nav chrome on every gated page, both apps), `LoginPage.tsx` (the non-gated login **and**
 signup screen — one combined component, no separate registration page), and `IbkrBadge.tsx` (admin
-header widget) were never in migration-plan.md's 5-page list and had never been touched. **All 3 are
-now migrated too** — see the dedicated paragraph below. `pnpm lint` now passes clean with **zero
-unaccounted violations repo-wide** — the only entries left in `eslint-suppressions.json` are two
-documented, permanent, sanctioned exceptions: `GexChart.tsx`'s canvas-API colors and `LoginPage.tsx`'s
-Google-brand-color icon (see [`CONTRIBUTING.md`](docs/design-system/CONTRIBUTING.md)'s Design Token
-Rules section for why each is exempt). **This branch has never been reviewed as a whole** — only
-phase-by-phase and page-by-page — so next session's job is deciding what happens to it (open its
-first-ever PR to `staging`?), not further migration. See Next Steps #1 below.
+header widget) were never in migration-plan.md's 5-page list and had never been touched. **All 3 were
+migrated too before the PR merged** — see the dedicated paragraph below. `pnpm lint` passes clean on
+`staging` right now with **zero unaccounted violations repo-wide** — the only entries left in
+`eslint-suppressions.json` are two documented, permanent, sanctioned exceptions: `GexChart.tsx`'s
+canvas-API colors and `LoginPage.tsx`'s Google-brand-color icon (see
+[`CONTRIBUTING.md`](docs/design-system/CONTRIBUTING.md)'s Design Token Rules section for why each is
+exempt). **`claude/design-system-audit` is fully merged and safe to delete.** The one remaining
+open thread is PR #67/#69's UI, which postdates the design-system audit and hasn't been checked
+against it yet — see Next Steps #1.
 
 **Whole-repo sweep (2026-07-07, same session as Macro) — `Layout.tsx`, `LoginPage.tsx`,
 `IbkrBadge.tsx`:** 28 real violations fixed, 2 new sanctioned exceptions documented. Real bugs found,
@@ -573,74 +575,69 @@ it, shipped it to production, then separately investigated + fixed a live data-i
 
 ## Next Steps
 
-1. **Design system migration is now fully done, repo-wide — decide what happens to
-   `claude/design-system-audit` next, don't keep migrating.** All 5 planned pages (Settings, My
-   Portfolio, GEX Signals, Stock Picks, Macro) plus the non-planned shared/non-gated surfaces
-   (`Layout.tsx`, `LoginPage.tsx`, `IbkrBadge.tsx`) are migrated and host-checkpointed; see Current
-   Status above and [`docs/design-system/migration-plan.md`](docs/design-system/migration-plan.md) for
-   the full history. `pnpm lint` passes clean with zero unaccounted violations — only 2 permanent,
-   documented sanctioned exceptions remain in `eslint-suppressions.json` (`GexChart.tsx`'s canvas API,
-   `LoginPage.tsx`'s Google-brand-color icon). **This branch has never been reviewed as one whole
-   diff** — only phase-by-phase and page-by-page. Ask the host before opening its first-ever PR
-   (`claude/design-system-audit` → `staging`). Check out the existing branch, don't cut a new one:
-   `git fetch origin && git checkout claude/design-system-audit && git pull --ff-only`.
-
-2. **Get PR #67 and PR #69 reviewed and merged** (in that order — #69 is stacked on #67). Before
+1. **Get PR #67 and PR #69 reviewed and merged** (in that order — #69 is stacked on #67). Before
    merging either: (a) apps/web browser verification for #69 (see the PR #69 handoff below — never
    actually confirmed live), (b) PR #67's own deferred items — Item 0's live cron verification and
    Item 3's regime_daily backfill, both still not run (see
    [`plans/integrity-guardrails-report.md`](plans/integrity-guardrails-report.md) for exact status).
-   Do not merge either PR yourself without host approval, per standing rule. Once merged, revisit
-   whether the design-system Phase 3/4 components should retroactively cover PR #69's new surfaces
-   (`LimitsPanel`, `ViolationsSummary`, `PortfolioPositionDetail`) — they weren't in scope for the
-   Phase 1 audit since they hadn't merged yet.
+   Do not merge either PR yourself without host approval, per standing rule.
+   **Then, revisit both for design-token coverage — this is the main open item from the design
+   system work, now that PR #70 has merged and the enforcement rule is live on `staging`.**
+   `LimitsPanel`, `ViolationsSummary`, `PortfolioPositionDetail`, and any other new Week-1/Limits UI
+   were built before/during the design-system audit and were never in scope for it (they didn't
+   exist yet, or weren't merged) — they almost certainly still carry literal colors/font-sizes or
+   hand-rolled patterns that now have a `packages/ui/src/primitives/` equivalent. Check with `pnpm
+   lint` once those branches rebase onto post-#70 `staging` (it will immediately flag anything new
+   relative to the baseline); see [`docs/design-system/CONTRIBUTING.md`](docs/design-system/CONTRIBUTING.md)
+   for which primitive/token to reach for, and follow the same pattern as the Layout/LoginPage/
+   IbkrBadge sweep — migrate what's real, document any genuine exception, run `pnpm lint:prune`.
 
-3. **Visually confirm the regime badge actually renders** now that the rate-limit fix is live. Open a
+2. **Visually confirm the regime badge actually renders** now that the rate-limit fix is live. Open a
    held ticker's detail page (or the Picks list at normal width) and check for the trend-structure
    chip — allow several minutes on a cold load (paced ≤8 symbols/65s) before concluding it's still
    broken. If it's blank even after a full population cycle, that's a new, third bug — don't assume
    it's the same root cause as the last two.
 
-4. **Live-test the admin IBKR order flow against a real IB Gateway** — cannot be done from this
+3. **Live-test the admin IBKR order flow against a real IB Gateway** — cannot be done from this
    environment. In order: (1) `IB_PORT=4002 python3 ibkr_proxy.py` against Gateway in **paper** mode,
    (2) place a real paper order end-to-end from the "Open via IBKR" modal, confirm the fill patches the
    diary row's price correctly, (3) test "Close via IBKR" on an open leg, (4) only after both work
    cleanly, consider port 4001 (live). Flag if `/order_status`'s `reqAllOpenOrders`/`reqCompletedOrders`
    lookup doesn't find a previously-placed order from a new connection.
 
-5. **Phase 4 admin Manage area, Parts B/C — still not built** (Part A, Config, shipped 2026-07-03).
+4. **Phase 4 admin Manage area, Parts B/C — still not built** (Part A, Config, shipped 2026-07-03).
    Spec: [`plans/phase4_admin_manage.md`](plans/phase4_admin_manage.md). **Categories CRUD**
    (delete-guarded — block or reassign-to-Uncategorized on delete) and **Traders** (read-only
    recommended — only 2 seeded, FK'd everywhere, high-risk/low-value to make editable). No migrations
    expected.
 
-6. **Verify `macro_daily_snapshots` (migration 048) is actually populating** — still confirmed **empty
+5. **Verify `macro_daily_snapshots` (migration 048) is actually populating** — still confirmed **empty
    on PROD as of 2026-07-05**, well after the `macro-snapshot.ts` fix (commit `3aa5528`, 2026-07-02)
    shipped. `macro_daily_recaps` (051) IS getting fresh rows, so scheduled functions are firing on this
    site — either the snapshot function needs more scheduled cycles, or it's still failing silently.
    Check Netlify function logs for `macro-snapshot` before spending more time re-diagnosing from the DB
    side alone.
 
-7. **Macro Dashboard — remaining roadmap item** (spec: [`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md)).
+6. **Macro Dashboard — remaining roadmap item** (spec: [`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md)).
    All 11 modules are built and in production. The one item left from the spec:
    - **Portfolio Heatmap** — treemap block on `PortfolioDashboard`, box ∝ `current_weight`,
      Today/Total + By Basket/All toggles. Spec § "Phase 4: Portfolio Heatmap".
 
-8. **Overview/experience enrichment (host-requested, queued).** Stop the click-each-ticker experience:
+7. **Overview/experience enrichment (host-requested, queued).** Stop the click-each-ticker experience:
    - **Transcripts library tab** — a NEW subscriber-facing **episode recap** (host's *trading psychology* +
      that episode's *per-ticker commentary*). **NOT** the local methodology `.md` files (apps never read those).
      Needs a new `webinars` table written by `stw-transcripts` + a new tab.
    - **Global Activity Feed** — one cross-ticker, reverse-chron feed merging Commentary + Transactions across
      all holdings, filterable. No schema (reads `conviction_comments` + `leg_transactions`). Low-cost.
 
-9. **Subscriber closed-position P&L history — explicitly postponed by the host, design already
+8. **Subscriber closed-position P&L history — explicitly postponed by the host, design already
    researched.** The subscriber IBKR Flex query returns *open positions only* and the sync is
    delete-all-then-insert; closed history needs a genuinely different append-only, dedup-on-execution-id
    sync (a second Flex Query template + a new `user_closed_trades` table). Don't build until the host
    asks again. **Note:** the My Portfolio detail pane (this session) already surfaces this gap
    honestly to users as a "Closed position history — coming soon" placeholder rather than hiding it.
 
-10. **Future features (not migration work):** inline 2-line leg editing in the modal (deferred); `$100k`
+9. **Future features (not migration work):** inline 2-line leg editing in the modal (deferred); `$100k`
     notional + SPY benchmark (the `spy_daily` table from migration 032 already exists; the population
     cron + benchmark UI are unbuilt).
 
@@ -1067,54 +1064,64 @@ active filter (closed hidden by default). The FilterBar count shows `N of {total
   `packages/shared/src/constants/tokens.ts` (`SPACE`, `RADIUS`, `FONT_SIZE`, `NUMERIC_STYLE`, etc.);
   badges/pills/tables/modals/detail-panes/etc. from `packages/ui/src/primitives/` — see
   [`docs/design-system/CONTRIBUTING.md`](docs/design-system/CONTRIBUTING.md) for which one to reach
-  for. Existing pages are NOT migrated onto these yet — that's Phase 5, in progress per
-  [`docs/design-system/migration-plan.md`](docs/design-system/migration-plan.md) — so this rule
-  governs new code only until a given page's migration lands.
+  for. **Every existing page has been migrated onto these** (Phase 5, completed 2026-07-07 via
+  [PR #70](https://github.com/claudiachez/stw-companion/pull/70)) — the only literals left anywhere
+  in the repo are 2 documented, permanent sanctioned exceptions (`GexChart.tsx`'s canvas API,
+  `LoginPage.tsx`'s Google-brand-color icon). This rule now governs everything, not just new code —
+  a fresh literal anywhere fails `pnpm lint` immediately, with no baseline left to hide behind.
 - **P&L gain/loss color must read `var(--pnl-gain)`/`var(--pnl-loss)`, never a hardcoded hex or
-  `var(--acc)`/`var(--c1)` directly.** `HoldingRow.tsx`, `HoldingDetail.tsx`, and `SignalsTable.tsx`
-  currently hardcode the light theme's exact green/red (`#16A34A`/`#DC2626`) regardless of active
-  theme — a real, live bug (P&L text renders the wrong hue in the app's default dark theme today),
-  documented in
+  `var(--acc)`/`var(--c1)` directly.** This was a real, live bug — `HoldingRow.tsx`, `HoldingDetail.tsx`,
+  and `SignalsTable.tsx` used to hardcode the light theme's exact green/red (`#16A34A`/`#DC2626`)
+  regardless of active theme, documented in
   [`docs/design-system/audit/04-additional-inconsistencies.md`](docs/design-system/audit/04-additional-inconsistencies.md).
-  The correct tokens now exist; migrating those 3 files is the first sub-pass of the Stock Picks phase
-  in [`docs/design-system/migration-plan.md`](docs/design-system/migration-plan.md) (still open — see
-  Next Steps).
-- **Never set `outline: 'none'` on a focusable element without a visible replacement.** Tailwind-class
-  inputs in this app correctly pair `focus:outline-none` with `focus:border-acc`; several inline-
-  `style` inputs (`SettingsPage.tsx`, all three `FilterBar` variants) set `outline: 'none'` with
-  nothing replacing it — a real keyboard-accessibility regression, not just a style nit. **New code:
-  use the `TextInput` primitive** (`packages/ui/src/primitives/TextInput.tsx`), which pairs
-  `focus:outline-none` with a visible focus border by construction — don't hand-roll a new input style.
-  This specific pattern isn't lint-checked (it's not a static AST-detectable literal), so it's on
-  code review, not `pnpm lint`, to catch a regression here.
+  **Fixed** in the Stock Picks phase's bug-fix sub-pass (2026-07-07) — all 3 files now read the
+  correct tokens. Keep reading them that way in any new code.
+- **Never set `outline: 'none'` on a focusable element without a visible replacement.** This was a
+  real keyboard-accessibility regression, not a style nit — `SettingsPage.tsx` and all three
+  `FilterBar` variants (`FilterBar.tsx`, `TradesFilterBar.tsx`, `PortfolioFilterBar.tsx`) used to set
+  `outline: 'none'` inline with nothing replacing it. **Fixed** (2026-07-07):
+  `SettingsPage.tsx` now uses the `TextInput` primitive (`packages/ui/src/primitives/TextInput.tsx`,
+  which pairs `focus:outline-none` with a visible focus border by construction); the 3 `FilterBar`
+  variants each define their own `ctrlBorderClass = 'border border-[var(--border)]
+  focus:outline-none focus:border-acc'` applied via Tailwind `className` (not `TextInput` itself,
+  since these are `<select>`s and compact filter inputs, not the same shape). **New code: use
+  `TextInput`** for any plain text input; if hand-rolling a compact control, replicate the
+  `ctrlBorderClass` pattern — border-COLOR must be set via a Tailwind class, never inline `style`, or
+  the `:focus` variant can never win (inline `style` always beats a stylesheet class regardless of
+  specificity — this exact bug shipped once in `TextInput.tsx` itself and was caught + fixed
+  2026-07-07; see the correctness note in that file). This specific pattern isn't lint-checked (not a
+  static AST-detectable literal), so it's on code review, not `pnpm lint`, to catch a regression.
 
 ---
 
 ## Design System
 
-> **A formal design-token + component system is built** (`claude/design-system-audit` branch, unmerged
-> — see Current Status and Next Steps #1) — all 4 planned phases (audit → tokens → core components →
-> enforcement/migration plan) are done and host-approved, per
-> [`plans/stw-design-system.md`](plans/stw-design-system.md). **New UI code builds from `packages/ui`'s
-> component library and the token files — not fresh literals, not a new one-off component** — this is
-> now a standing rule, not just a phase-in-progress note; see
+> **A formal design-token + component system is built and merged** (via
+> [PR #70](https://github.com/claudiachez/stw-companion/pull/70), 2026-07-07 — see Current Status) —
+> all 4 planned phases (audit → tokens → core components → enforcement/migration plan) **plus the full
+> Phase 5 page-migration pass are done**, per [`plans/stw-design-system.md`](plans/stw-design-system.md)
+> and [`docs/design-system/migration-plan.md`](docs/design-system/migration-plan.md). **New UI code
+> builds from `packages/ui`'s component library and the token files — not fresh literals, not a new
+> one-off component** — a standing rule, enforced by `pnpm lint` (a brand-new literal color/font-size
+> anywhere in `apps/**`/`packages/**` fails immediately); see
 > [`docs/design-system/CONTRIBUTING.md`](docs/design-system/CONTRIBUTING.md) for the full usage guide
 > (which `Badge` kind/`StatusPill` variant to use and why, `Button` variants, numeric-formatting and
-> P&L color rules) and is **enforced by `pnpm lint`** (a brand-new literal color/font-size anywhere in
-> `apps/**`/`packages/**` fails immediately — see CONTRIBUTING.md's Enforcement section). **The color
-> variables below are no longer the sole source of truth** — `packages/ui/src/styles/tokens.css` is the
-> canonical file both apps import (this table is a quick-reference subset, kept in sync manually);
-> non-color scales live in `packages/shared/src/constants/tokens.ts`. Full reference:
-> [`docs/design-system/tokens.md`](docs/design-system/tokens.md). Existing pages are not migrated yet
-> — that's Phase 5, in progress per
-> [`docs/design-system/migration-plan.md`](docs/design-system/migration-plan.md) — so don't be
-> surprised to see plenty of pre-Phase-5 pages still on literal values; don't invent a second parallel
-> token scheme (e.g. a new Tailwind theme extension) or a new one-off component when migrating one —
-> extend the existing token files / `packages/ui/src/primitives/` instead.
+> P&L color rules). **The color variables below are no longer the sole source of truth** —
+> `packages/ui/src/styles/tokens.css` is the canonical file both apps import (this table is a
+> quick-reference subset, kept in sync manually); non-color scales live in
+> `packages/shared/src/constants/tokens.ts`. Full reference:
+> [`docs/design-system/tokens.md`](docs/design-system/tokens.md). **Every existing page is migrated
+> now** — the only literal colors left anywhere in the repo are 2 documented, permanent sanctioned
+> exceptions (`GexChart.tsx`'s canvas API, `LoginPage.tsx`'s Google-brand-color icon). The one gap:
+> any UI in still-unmerged PR #67/#69 postdates this work and hasn't been checked yet (Next Steps
+> #1). Don't invent a second parallel token scheme (e.g. a new Tailwind theme extension) or a new
+> one-off component — extend the existing token files / `packages/ui/src/primitives/` instead.
 
 - **Font:** Barlow Condensed (700/800) for the **STW logo** in the header only; system sans-serif (`font-sans`) everywhere else including page headings and login
 - **Logo:** STW mic + green arrow SVG
-- **Default theme:** Dark. Toggle persists to `localStorage` (`stwTheme`); light
+- **Default theme:** Dark. Toggle persists to `localStorage` under the key **`theme`** (plain string
+  `'dark'`/`'light'` — corrected 2026-07-07; this was previously mis-documented here as `stwTheme`,
+  confirmed wrong by direct testing against `packages/ui/src/store/theme.ts`). Light
   theme applied via `[data-theme="light"]`. Never hardcode colors outside `:root` /
   `[data-theme="light"]` — always use CSS variables.
 
