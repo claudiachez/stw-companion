@@ -58,6 +58,18 @@ function SettingsIcon() {
   );
 }
 
+function PaletteIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="13.5" cy="6.5" r="1.5" />
+      <circle cx="17.5" cy="10.5" r="1.5" />
+      <circle cx="8.5" cy="7.5" r="1.5" />
+      <circle cx="6.5" cy="12.5" r="1.5" />
+      <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" />
+    </svg>
+  );
+}
+
 function MenuIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -112,10 +124,12 @@ interface LayoutProps {
   title?: string;
   /** Show a Settings item in the hamburger menu (web app only). */
   showSettingsLink?: boolean;
+  /** Show a Design System item in the hamburger menu (admin only — internal review gallery). */
+  showDesignSystemLink?: boolean;
 }
 
 // ── Layout ───────────────────────────────────────────────────
-export function Layout({ navItems = DEFAULT_NAV, headerSlot, title = 'STW Companion', showSettingsLink = false }: LayoutProps) {
+export function Layout({ navItems = DEFAULT_NAV, headerSlot, title = 'STW Companion', showSettingsLink = false, showDesignSystemLink = false }: LayoutProps) {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const { theme, toggle } = useThemeStore();
@@ -270,7 +284,7 @@ export function Layout({ navItems = DEFAULT_NAV, headerSlot, title = 'STW Compan
                 {/* Profile */}
                 <button
                   onClick={() => { setMenuOpen(false); navigate('/profile'); }}
-                  style={{ ...menuItemStyle, borderBottom: showSettingsLink ? 'none' : '1px solid var(--bsub)' }}
+                  style={{ ...menuItemStyle, borderBottom: '1px solid var(--bsub)' }}
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
                 >
@@ -288,6 +302,19 @@ export function Layout({ navItems = DEFAULT_NAV, headerSlot, title = 'STW Compan
                   >
                     <span style={{ color: 'var(--t3)' }}><SettingsIcon /></span>
                     <span>Settings</span>
+                  </button>
+                )}
+
+                {/* Design System (admin only — internal review gallery) */}
+                {showDesignSystemLink && (
+                  <button
+                    onClick={() => { setMenuOpen(false); navigate('/design-system'); }}
+                    style={{ ...menuItemStyle, borderBottom: '1px solid var(--bsub)' }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
+                  >
+                    <span style={{ color: 'var(--t3)' }}><PaletteIcon /></span>
+                    <span>Design System</span>
                   </button>
                 )}
 

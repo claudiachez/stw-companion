@@ -26,11 +26,12 @@
   timeout = 60
 
 [functions."macro-snapshot"]
-  # No override existed before (silently falling back to Netlify's short default) —
-  # this function makes ~10 sequential external calls (TwelveData/Finnhub/internal),
-  # more than any sibling scheduled function above, and macro_daily_snapshots sat at
-  # zero rows since migration 048 shipped. See macro-snapshot.ts's header comment.
-  timeout = 60
+  # Fetches ~10 TwelveData daily series, paced in ≤8-symbol chunks ~65s apart to
+  # stay under the free tier's 8-credit/minute cap (an unpaced burst 429'd every
+  # series past the 8th, which is why early snapshot rows had null trend/vol/credit
+  # scores). The single ~65s inter-chunk sleep needs headroom past the old 60s cap.
+  # See macro-snapshot.ts's pacedDailyCloses().
+  timeout = 120
 
 [[redirects]]
   from   = "/*"
