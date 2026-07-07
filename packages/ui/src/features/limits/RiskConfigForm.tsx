@@ -15,6 +15,7 @@ export function RiskConfigForm({ userId, config }: { userId: string; config: Ris
   const [draft, setDraft] = useState<{
     maxPositionPct?: number; maxSectorPct?: number; maxGrossPct?: number;
     ladder0Drawdown?: number; ladder0Target?: number; ladder1Drawdown?: number; ladder1Target?: number;
+    accountEquity?: number;
   }>({});
 
   const step0 = config.ladder[0] ?? { drawdownPct: -10, targetGrossPct: 70 };
@@ -30,6 +31,7 @@ export function RiskConfigForm({ userId, config }: { userId: string; config: Ris
         { drawdownPct: draft.ladder0Drawdown ?? step0.drawdownPct, targetGrossPct: draft.ladder0Target ?? step0.targetGrossPct },
         { drawdownPct: draft.ladder1Drawdown ?? step1.drawdownPct, targetGrossPct: draft.ladder1Target ?? step1.targetGrossPct },
       ],
+      ...(draft.accountEquity !== undefined ? { account_equity: draft.accountEquity } : {}),
     });
     setDraft({});
   }
@@ -52,6 +54,22 @@ export function RiskConfigForm({ userId, config }: { userId: string; config: Ris
           : 'Flags only. Nothing here places or blocks a trade.'}
       </div>
       <div className="flex flex-col divide-y divide-bsub">
+        <div className="flex items-center gap-3 py-3 flex-wrap">
+          <span className={rowLabel}>Account equity</span>
+          <span className="text-t2 text-sm">$</span>
+          <input type="number" min={0}
+            value={draft.accountEquity ?? config.account_equity ?? ''}
+            placeholder="e.g. 50000"
+            onChange={(e) => setDraft((d) => ({ ...d, accountEquity: e.target.value === '' ? undefined : Number(e.target.value) }))}
+            className={`${rowInput} w-28`} />
+          <span className="text-t3 text-xs">
+            {config.account_equity == null
+              ? 'Not set — checks below use an approximate stand-in until you enter this.'
+              : config.equity_peak && config.equity_peak > config.account_equity
+                ? `Peak: $${config.equity_peak.toLocaleString()} · ${(((config.account_equity - config.equity_peak) / config.equity_peak) * 100).toFixed(1)}% off peak`
+                : 'At peak.'}
+          </span>
+        </div>
         <div className="flex items-center gap-3 py-3">
           <span className={rowLabel}>Max position</span>
           <input type="number" min={0} max={100}
