@@ -58,13 +58,13 @@ export function RiskConfigForm({ userId, config }: { userId: string; config: Ris
           <span className={rowLabel}>Account equity</span>
           <span className="text-t2 text-sm">$</span>
           <input type="number" min={0}
-            value={draft.accountEquity ?? config.account_equity ?? ''}
+            value={draft.accountEquity ?? config.account_equity}
             placeholder="e.g. 50000"
             onChange={(e) => setDraft((d) => ({ ...d, accountEquity: e.target.value === '' ? undefined : Number(e.target.value) }))}
             className={`${rowInput} w-28`} />
           <span className="text-t3 text-xs">
-            {config.account_equity == null
-              ? 'Not set — checks below use an approximate stand-in until you enter this.'
+            {config.is_placeholder
+              ? `Default placeholder — set your real account equity for accurate limits.`
               : config.equity_peak && config.equity_peak > config.account_equity
                 ? `Peak: $${config.equity_peak.toLocaleString()} · ${(((config.account_equity - config.equity_peak) / config.equity_peak) * 100).toFixed(1)}% off peak`
                 : 'At peak.'}
