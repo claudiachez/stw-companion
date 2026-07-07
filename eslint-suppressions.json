@@ -167,15 +167,7 @@
       "count": 1
     }
   },
-  "packages/ui/src/features/portfolio/PortfolioFilterBar.tsx": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
   "packages/ui/src/features/portfolio/PortfolioPage.tsx": {
-    "no-restricted-syntax": {
-      "count": 36
-    },
     "react-hooks/exhaustive-deps": {
       "count": 2
     }
