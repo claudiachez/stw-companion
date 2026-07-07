@@ -14,21 +14,6 @@
       "count": 18
     }
   },
-  "packages/ui/src/features/macro/MacroView.tsx": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "packages/ui/src/features/macro/components/CreditLiquidityCard.tsx": {
-    "no-restricted-syntax": {
-      "count": 3
-    }
-  },
-  "packages/ui/src/features/macro/components/GexPositioningCard.tsx": {
-    "no-restricted-syntax": {
-      "count": 7
-    }
-  },
   "packages/ui/src/features/macro/components/MacroEventRiskCard.tsx": {
     "no-restricted-syntax": {
       "count": 15
@@ -37,16 +22,6 @@
   "packages/ui/src/features/macro/components/MacroRecapCard.tsx": {
     "no-restricted-syntax": {
       "count": 17
-    }
-  },
-  "packages/ui/src/features/macro/components/ModuleScoreStrip.tsx": {
-    "no-restricted-syntax": {
-      "count": 4
-    }
-  },
-  "packages/ui/src/features/macro/components/RatesDollarCard.tsx": {
-    "no-restricted-syntax": {
-      "count": 3
     }
   },
   "packages/ui/src/features/macro/components/RegimeBanner.tsx": {
@@ -67,11 +42,6 @@
   "packages/ui/src/features/macro/components/TrendStructureTable.tsx": {
     "no-restricted-syntax": {
       "count": 16
-    }
-  },
-  "packages/ui/src/features/macro/components/VolatilityStressCard.tsx": {
-    "no-restricted-syntax": {
-      "count": 2
     }
   },
   "packages/ui/src/features/macro/useMacroTrendHistory.ts": {

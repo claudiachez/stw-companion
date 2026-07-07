@@ -1,4 +1,4 @@
-import { stressLabel } from '@stw/shared';
+import { stressLabel, FONT_SIZE } from '@stw/shared';
 import type { VolatilityStress } from '../useVolatilityStress';
 import { StatTile, SleeveSummary, TileGrid, SourceNote } from './macroVisuals';
 
@@ -13,8 +13,8 @@ function fmtDelta(v: number | null): string {
 }
 
 export function VolatilityStressCard({ data, loading }: Props) {
-  if (loading && !data) return <div style={{ color: 'var(--t3)', fontSize: 12 }}>Loading volatility…</div>;
-  if (!data) return <div style={{ color: 'var(--t3)', fontSize: 12 }}>Volatility data unavailable.</div>;
+  if (loading && !data) return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>Loading volatility…</div>;
+  if (!data) return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>Volatility data unavailable.</div>;
 
   const { vix, vixPercentile, vixDelta5, vvix, ivPremium, spyHv30, subScores, sleeveScore } = data;
 
