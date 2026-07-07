@@ -88,6 +88,14 @@ function instrumentLabel(p: UserPosition): string {
   return `$${p.strike}${p.put_call} ${fmtExpiry(p.expiry)}`;
 }
 
+// §6.4 — instrument kind, not direction. "Long" was near-zero info in a long-only book;
+// Shares / Call / Put actually distinguishes the legs (a short leg keeps its Short prefix).
+function typeLabel(p: UserPosition): string {
+  if (p.asset_class !== 'OPT') return 'Shares';
+  const kind = p.put_call === 'C' ? 'Call' : p.put_call === 'P' ? 'Put' : 'Option';
+  return (p.quantity ?? 0) < 0 ? `Short ${kind}` : kind;
+}
+
 // ── aggregation (grouped view) ────────────────────────────────
 
 interface PortfolioGroup {
@@ -125,10 +133,9 @@ interface LegRowData {
   conviction: number | null;
 }
 
-function FlatLegRow({ row, onSelectTicker, showPnl, isMobile }: { row: LegRowData; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean }) {
+function FlatLegRow({ row, onSelectTicker, showPnl, isMobile, portfolioValue }: { row: LegRowData; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean; portfolioValue: number }) {
   const { p, underlying, isTailed, traders } = row;
-  const qty = p.quantity ?? 0;
-  const direction = qty < 0 ? 'Short' : 'Long';
+  const weightPct = portfolioValue > 0 ? (posMV(p) / portfolioValue) * 100 : null;
   return (
     <tr>
       <td style={td}>
@@ -140,17 +147,17 @@ function FlatLegRow({ row, onSelectTicker, showPnl, isMobile }: { row: LegRowDat
         </div>
         <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 1 }}>{instrumentLabel(p)}</div>
       </td>
-      {!isMobile && <td style={{ ...td, color: 'var(--t2)' }}>{direction}</td>}
+      {!isMobile && <td style={{ ...td, color: 'var(--t2)' }}>{typeLabel(p)}</td>}
       {!isMobile && showPnl && <td style={{ ...tdR, color: 'var(--t2)' }}>{fmtPrice(p.avg_cost)}</td>}
       {!isMobile && showPnl && <td style={{ ...tdR, color: 'var(--t2)' }}>{fmtPrice(p.mark_price)}</td>}
       {!isMobile && showPnl && <td style={{ ...tdR, color: 'var(--t2)' }}>{fmtMoney(posMV(p))}</td>}
-      {showPnl && <td style={{ ...tdR, color: pnlColor(p.unrealized_pnl_pct), fontWeight: 600 }}>{fmtPct(p.unrealized_pnl_pct)}</td>}
+      <td style={{ ...tdR, color: 'var(--t2)' }}>{weightPct !== null ? `${weightPct.toFixed(1)}%` : '—'}</td>
       {showPnl && <td style={{ ...tdR, color: pnlColor(p.unrealized_pnl), fontWeight: 600 }}>{fmtMoney(p.unrealized_pnl)}</td>}
     </tr>
   );
 }
 
-function FlatTable({ rows, onSelectTicker, showPnl, isMobile }: { rows: LegRowData[]; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean }) {
+function FlatTable({ rows, onSelectTicker, showPnl, isMobile, portfolioValue }: { rows: LegRowData[]; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean; portfolioValue: number }) {
   return (
     <div style={{ overflowX: 'auto', paddingBottom: 9 }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: FONT_SIZE.xs }}>
@@ -161,12 +168,12 @@ function FlatTable({ rows, onSelectTicker, showPnl, isMobile }: { rows: LegRowDa
             {!isMobile && showPnl && <th style={thR}>Avg Cost</th>}
             {!isMobile && showPnl && <th style={thR}>Mark</th>}
             {!isMobile && showPnl && <th style={thR}>Value</th>}
-            {showPnl && <th style={thR}>Return</th>}
+            <th style={thR} title="Position market value as a % of your whole book — the figure the limits engine judges you on">Weight</th>
             {showPnl && <th style={thR}>P&L</th>}
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => <FlatLegRow key={r.p.id} row={r} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} />)}
+          {rows.map((r) => <FlatLegRow key={r.p.id} row={r} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} portfolioValue={portfolioValue} />)}
         </tbody>
       </table>
     </div>
@@ -225,10 +232,11 @@ function PositionMetrics({ group, portfolioValue, showPnl }: { group: PortfolioG
 
 // header content for a group's accordion row (ticker/badges/composition + P&L columns) —
 // the AccordionList call site below supplies this as `renderHeader`.
-function GroupHeader({ group, onSelectTicker, showPnl, isMobile }: {
-  group: PortfolioGroup; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean;
+function GroupHeader({ group, onSelectTicker, showPnl, isMobile, portfolioValue }: {
+  group: PortfolioGroup; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean; portfolioValue: number;
 }) {
-  const { underlying, netPnl, returnPct, marketValue, isTailed, traders, conviction } = group;
+  const { underlying, netPnl, marketValue, isTailed, traders, conviction } = group;
+  const weightPct = portfolioValue > 0 ? (marketValue / portfolioValue) * 100 : null;
   return (
     <>
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -252,7 +260,7 @@ function GroupHeader({ group, onSelectTicker, showPnl, isMobile }: {
         </div>
       ) : (
         <>
-          <div style={{ width: COL.ret, textAlign: 'right', flexShrink: 0, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: pnlColor(returnPct), fontVariantNumeric: 'tabular-nums' }}>{returnPct !== null ? fmtPct(returnPct) : '—'}</div>
+          <div style={{ width: COL.ret, textAlign: 'right', flexShrink: 0, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>{weightPct !== null ? `${weightPct.toFixed(1)}%` : '—'}</div>
           <div style={{ width: COL.pnl, textAlign: 'right', flexShrink: 0, fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: pnlColor(netPnl), fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(netPnl)}</div>
           <div style={{ width: COL.val, textAlign: 'right', flexShrink: 0, fontSize: FONT_SIZE.sm, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(marketValue)}</div>
         </>
@@ -263,9 +271,27 @@ function GroupHeader({ group, onSelectTicker, showPnl, isMobile }: {
 
 // ── summary stat cards ────────────────────────────────────────
 
-function PortfolioSummary({ groups, showPnl, regimeAdvisory }: {
+// §2.3 — a clickable pill for the two Overview alerts, each jumping to the
+// relevant filtered view. Two severities: neutral info vs amber warning.
+function SummaryChip({ severity, onClick, children }: { severity: 'info' | 'warning'; onClick: () => void; children: React.ReactNode }) {
+  const c = severity === 'warning'
+    ? { fg: 'var(--status-warning-text)', bg: 'var(--status-warning-bg)', bd: 'var(--status-warning-border)' }
+    : { fg: 'var(--t2)', bg: 'var(--s2)', bd: 'var(--border)' };
+  return (
+    <button
+      onClick={onClick}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: FONT_SIZE.xs, color: c.fg, background: c.bg, border: `1px solid ${c.bd}`, borderRadius: 999, padding: '4px 12px', cursor: 'pointer' }}
+    >
+      {children}
+      <span style={{ opacity: 0.55 }}>→</span>
+    </button>
+  );
+}
+
+function PortfolioSummary({ groups, showPnl, regimeAdvisory, onOpenTailing }: {
   groups: PortfolioGroup[]; showPnl: boolean;
   regimeAdvisory: ReturnType<typeof regimeGate> | null;
+  onOpenTailing: () => void;
 }) {
   const t = useMemo(() => {
     let mv = 0, pnl = 0, cost = 0, legs = 0, sharesVal = 0, optVal = 0, optRisk = 0, tailed = 0, low = 0;
@@ -294,13 +320,13 @@ function PortfolioSummary({ groups, showPnl, regimeAdvisory }: {
 
   return (
     <>
-      {/* Order: Legs · Market Value · Return · Equity:Options · Options at risk */}
+      {/* Every card reads the same: hero number · qualifier (delta) · uppercase label. */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: 104 }} title="Open positions (grouped by underlying)">
-          <KpiCard label={`${t.legs} leg${t.legs === 1 ? '' : 's'}`} primaryValue={positionCount} />
+        <div style={{ flex: 1, minWidth: 104 }} title="Open positions, grouped by underlying">
+          <KpiCard label="Positions" primaryValue={positionCount} delta={{ value: `${t.legs} leg${t.legs === 1 ? '' : 's'}`, direction: 'flat' }} />
         </div>
         {showPnl && (
-          <div style={{ flex: 1, minWidth: 104 }}>
+          <div style={{ flex: 1, minWidth: 104 }} title="Total market value of your open positions">
             <KpiCard label="Market Value" primaryValue={fmtMoneyCompact(t.mv)} />
           </div>
         )}
@@ -310,9 +336,10 @@ function PortfolioSummary({ groups, showPnl, regimeAdvisory }: {
             title="Unrealized P&L on your currently-open positions (IBKR mark vs your average cost) — not a weekly/monthly figure."
           >
             <KpiCard
-              label={t.retPct !== null ? `${fmtPct(t.retPct)} · unrealized` : 'Unrealized P&L'}
+              label="Unrealized P&L"
               primaryValue={fmtMoneyCompact(t.pnl)}
               status={pnlStatus(t.pnl)}
+              delta={t.retPct !== null ? { value: `${fmtPct(t.retPct)} unrealized`, direction: t.pnl >= 0 ? 'up' : 'down' } : undefined}
             />
           </div>
         )}
@@ -321,9 +348,9 @@ function PortfolioSummary({ groups, showPnl, regimeAdvisory }: {
           title="Share of current market value held as equity vs options — same basis as the Stock Picks Overview."
         >
           <KpiCard
-            label="Equity : Options (by market value)"
-            primaryValue={t.equityPct ?? '—'}
-            secondaryValue={`: ${t.optionsPct ?? '—'}`}
+            label="Equity / Options (mkt value)"
+            primaryValue={t.equityPct !== null ? `${t.equityPct}%` : '—'}
+            secondaryValue={t.optionsPct !== null ? `/ ${t.optionsPct}%` : undefined}
           />
           {regimeAdvisory && regimeAdvisory.trend_state !== 'UNKNOWN' && (
             <div
@@ -337,23 +364,65 @@ function PortfolioSummary({ groups, showPnl, regimeAdvisory }: {
         {showPnl && (
           <div
             style={{ flex: 1, minWidth: 104 }}
-            title="Option premium currently at risk (cost basis of your option legs) and what % of the book that represents — your max loss if the options expire worthless."
+            title="Option premium at risk = the cost basis of your option legs (your max loss if they expire worthless), and what % of the book that represents."
           >
             <KpiCard
-              label={t.riskPct !== null ? `${t.riskPct.toFixed(1)}% of book at risk` : 'Options'}
+              label="Options at risk"
               primaryValue={fmtMoneyCompact(t.optRisk)}
+              delta={t.riskPct !== null ? { value: `${t.riskPct.toFixed(1)}% of book`, direction: 'flat' } : undefined}
             />
           </div>
         )}
       </div>
 
       {positionCount > 0 && (
-        <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          <span><strong style={{ color: 'var(--text)' }}>{t.tailed}</strong> of {positionCount} {positionCount === 1 ? 'position' : 'positions'} {t.tailed === 1 ? 'matches' : 'match'} a tailed pick{traderSummary ? ` (${traderSummary})` : ''}</span>
-          {t.low > 0 && <span style={{ color: 'var(--c1)' }}>· ⚠ {t.low} with low / declining conviction</span>}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+          <SummaryChip severity="info" onClick={onOpenTailing}>
+            <span><strong style={{ color: 'var(--text)' }}>{t.tailed}</strong> of {positionCount} tailed{traderSummary ? ` · ${traderSummary}` : ''}</span>
+          </SummaryChip>
+          {t.low > 0 && (
+            <SummaryChip severity="warning" onClick={onOpenTailing}>
+              <span>⚠ {t.low} with low / declining conviction</span>
+            </SummaryChip>
+          )}
         </div>
       )}
     </>
+  );
+}
+
+// §1 Overview — biggest ± positions by unrealized P&L $ (return % isn't populated
+// in the subscriber Flex feed, so $ is the only reliable mover metric). Click → open
+// that position's detail on the Positions tab.
+function TopMovers({ groups, onOpenPosition }: { groups: PortfolioGroup[]; onOpenPosition: (t: string) => void }) {
+  const withPnl = groups.filter((g) => g.netPnl !== 0);
+  const gainers = [...withPnl].filter((g) => g.netPnl > 0).sort((a, b) => b.netPnl - a.netPnl).slice(0, 3);
+  const losers = [...withPnl].filter((g) => g.netPnl < 0).sort((a, b) => a.netPnl - b.netPnl).slice(0, 3);
+  if (gainers.length === 0 && losers.length === 0) return null;
+
+  const col = (title: string, rows: PortfolioGroup[]) => (
+    <div style={{ flex: 1, minWidth: 200, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+      <div style={{ padding: '8px 13px', background: 'var(--s2)', borderBottom: '1px solid var(--bsub)', fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, textTransform: 'uppercase', letterSpacing: LETTER_SPACING.label, color: 'var(--t3)' }}>{title}</div>
+      {rows.length === 0 ? (
+        <div style={{ padding: '10px 13px', fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>None</div>
+      ) : rows.map((g) => (
+        <button key={g.underlying} onClick={() => onOpenPosition(g.underlying)}
+          style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 13px', borderBottom: '1px solid var(--bsub)', background: 'none', border: 'none', cursor: 'pointer', fontSize: FONT_SIZE.sm }}>
+          <span style={{ fontWeight: FONT_WEIGHT.semibold, color: 'var(--acc)' }}>{g.underlying}</span>
+          <span style={{ color: pnlColor(g.netPnl), fontVariantNumeric: 'tabular-nums', fontWeight: FONT_WEIGHT.semibold }}>{fmtMoney(g.netPnl)}</span>
+        </button>
+      ))}
+    </div>
+  );
+
+  return (
+    <div style={{ marginTop: 18 }}>
+      <div style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, textTransform: 'uppercase', letterSpacing: LETTER_SPACING.label, color: 'var(--t3)', marginBottom: 8 }}>Top movers</div>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        {col('Gainers', gainers)}
+        {col('Losers', losers)}
+      </div>
+    </div>
   );
 }
 
@@ -702,6 +771,8 @@ export function PortfolioPage() {
     setActiveTab(t);
     if (t !== 'positions') setSelected(null); // the detail pane belongs to Positions only
   };
+  // From Overview's top-movers: jump to the position's detail on the Positions tab.
+  const openPosition = (ticker: string) => { setSelected(ticker); setActiveTab('positions'); };
 
   // Global controls — sync status + P&L visibility + Sync — available on every tab.
   const globalControls = (
@@ -769,7 +840,8 @@ export function PortfolioPage() {
           ⚠ {decliningTailed.length} tailed position{decliningTailed.length !== 1 ? 's have' : ' has'} declining STW conviction: {decliningTailed.map((c) => c.ticker).join(', ')}
         </div>
       )}
-      <PortfolioSummary groups={allGroups} showPnl={showPnl} regimeAdvisory={regimeAdvisory} />
+      <PortfolioSummary groups={allGroups} showPnl={showPnl} regimeAdvisory={regimeAdvisory} onOpenTailing={() => changeTab('tailing')} />
+      {showPnl && <TopMovers groups={allGroups} onOpenPosition={openPosition} />}
     </div>
   );
 
@@ -815,7 +887,7 @@ export function PortfolioPage() {
                   <span style={{ width: 8, flexShrink: 0 }} />
                   <span style={{ width: 3, flexShrink: 0 }} />
                   <span style={{ flex: 1 }}>Ticker</span>
-                  <span style={{ width: COL.ret, textAlign: 'right', flexShrink: 0 }}>Return</span>
+                  <span style={{ width: COL.ret, textAlign: 'right', flexShrink: 0 }}>Weight</span>
                   <span style={{ width: COL.pnl, textAlign: 'right', flexShrink: 0 }}>P&L</span>
                   <span style={{ width: COL.val, textAlign: 'right', flexShrink: 0 }}>Value</span>
                 </div>
@@ -827,7 +899,7 @@ export function PortfolioPage() {
                 onToggle={toggleGroup}
                 accentColor={(g) => (g.conviction !== null ? (TIERS[g.conviction]?.color ?? 'var(--border)') : 'var(--border)')}
                 renderHeader={(g) => (
-                  <GroupHeader group={g} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} />
+                  <GroupHeader group={g} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} portfolioValue={portfolioValue} />
                 )}
                 renderExpanded={(g) => (
                   <>
@@ -838,7 +910,7 @@ export function PortfolioPage() {
               />
             </>
           ) : (
-            <FlatTable rows={visibleLegs} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} />
+            <FlatTable rows={visibleLegs} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} portfolioValue={portfolioValue} />
           )}
         </div>
       </div>

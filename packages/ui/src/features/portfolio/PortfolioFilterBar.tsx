@@ -28,7 +28,7 @@ export const DEFAULT_PORTFOLIO_FILTERS: PortfolioFilters = {
   type: '',
   sort: 'pnl_desc',
   tailedOnly: false,
-  groupByTicker: false,
+  groupByTicker: true, // §6.3 — legs of the same underlying (shares + options) stay together by default
 };
 
 const SORT_OPTIONS: { value: PortfolioSort; label: string }[] = [
