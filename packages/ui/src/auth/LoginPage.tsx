@@ -52,8 +52,8 @@ export function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-8">
           <svg width="56" height="56" viewBox="0 0 56 56" fill="none" className="mb-4">
-            <rect width="56" height="56" rx="12" fill="#111111" />
-            <path d="M18 40 L28 18 L38 40" fill="none" stroke="#22c55e" strokeWidth="3.5" strokeLinejoin="round" />
+            <rect width="56" height="56" rx="12" fill="var(--surface)" />
+            <path d="M18 40 L28 18 L38 40" fill="none" stroke="var(--acc)" strokeWidth="3.5" strokeLinejoin="round" />
           </svg>
           <h1 className="font-sans text-2xl font-bold text-text">STW Companion</h1>
           <p className="text-t2 text-sm mt-1">Stock Talk Weekly</p>

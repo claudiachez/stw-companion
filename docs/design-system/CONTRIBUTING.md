@@ -195,6 +195,16 @@ react` almost certainly already has it.
   constraint, not an oversight (same file should still ideally read
   `getComputedStyle(...).getPropertyValue('--acc')` once at chart-init so a theme toggle
   restyles it too, but that's a smaller, separate improvement).
+- A second sanctioned exception, same shape: `LoginPage.tsx`'s "Continue with Google"
+  icon uses Google's 4 official brand colors (`#4285F4`/`#34A853`/`#FBBC05`/`#EA4335`).
+  These are an external brand mark, not an STW design choice — there's no var() for
+  "Google's blue" that would make sense in this app's own token file, and theming them
+  to match STW's palette would misrepresent someone else's logo. Left as literals,
+  permanently suppressed in `eslint-suppressions.json` the same way as `GexChart.tsx`
+  (found + decided during the Layout/LoginPage/IbkrBadge sweep, 2026-07-07 — the STW
+  logo mark elsewhere in the same file/in `Layout.tsx` is NOT exempt and was migrated
+  onto `var(--acc)`/`var(--surface)`/the new `--logo-mic-*` tokens; only the Google
+  icon's own colors are the exception).
 
 ## Enforcement
 

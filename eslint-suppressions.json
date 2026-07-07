@@ -1,17 +1,7 @@
 {
-  "apps/admin/src/features/ibkr/IbkrBadge.tsx": {
-    "no-restricted-syntax": {
-      "count": 4
-    }
-  },
   "packages/ui/src/auth/LoginPage.tsx": {
     "no-restricted-syntax": {
-      "count": 6
-    }
-  },
-  "packages/ui/src/components/Layout.tsx": {
-    "no-restricted-syntax": {
-      "count": 18
+      "count": 4
     }
   },
   "packages/ui/src/features/macro/useMacroTrendHistory.ts": {

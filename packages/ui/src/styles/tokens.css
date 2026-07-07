@@ -115,6 +115,22 @@
        reused elsewhere. */
     --sentiment-greed: #14b8a6;
 
+    /* logo.mic.* — the 4 fixed illustration colors in Layout.tsx's <STWLogo> mic
+       icon (base/stand, capsule fill, capsule outline, grille lines). Found during
+       the design-system's Layout.tsx sweep (2026-07-07) — never migrated in Phase 5
+       because Layout wasn't one of migration-plan.md's 5 pages, even though it's
+       rendered on every page in both apps. Theme-invariant by original design (the
+       mic never re-colored between themes before this migration either) — this is
+       brand-mark artwork, not a themeable UI value, the same category of exception
+       as LoginPage.tsx's Google-brand-color SVG, just without an external-brand
+       justification (it's STW's own mark, just drawn with fixed grays). The logo's
+       green arrow reuses var(--acc) directly (#22c55e, exact match) rather than a
+       new token. */
+    --logo-mic-stand:   #c8c8c8;
+    --logo-mic-body:    #e2e2e2;
+    --logo-mic-outline: #b4b4b4;
+    --logo-mic-grille:  #aaaaaa;
+
     /* status.* — ok/near/breach/unevaluated/info, each with bg/border/text, for the
        Phase 3 StatusPill/Badge components. Built from the existing tier-color
        infrastructure (not new raw hex) except neutral/unevaluated, which

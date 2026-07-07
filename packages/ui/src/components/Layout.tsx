@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
 import { getSupabase } from '../lib/supabase';
 import { useAuthStore } from '../store/auth';
 import { useThemeStore } from '../store/theme';
@@ -72,21 +73,21 @@ function STWLogo() {
   return (
     <svg width="30" height="30" viewBox="0 0 90 90" fill="none" xmlns="http://www.w3.org/2000/svg">
       {/* Green arrow: lower-left to upper-right (behind mic) */}
-      <line x1="8" y1="80" x2="58" y2="18" stroke="#22c55e" strokeWidth="6" strokeLinecap="round"/>
-      <polyline points="53,12 68,10 66,25" stroke="#22c55e" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round"/>
+      <line x1="8" y1="80" x2="58" y2="18" stroke="var(--acc)" strokeWidth="6" strokeLinecap="round"/>
+      <polyline points="53,12 68,10 66,25" stroke="var(--acc)" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round"/>
       {/* Mic base + stand */}
-      <line x1="31" y1="78" x2="55" y2="78" stroke="#c8c8c8" strokeWidth="3.5" strokeLinecap="round"/>
-      <line x1="43" y1="68" x2="43" y2="78" stroke="#c8c8c8" strokeWidth="3" strokeLinecap="round"/>
-      <path d="M27 56 Q27 68 43 68 Q59 68 59 56" stroke="#c8c8c8" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
+      <line x1="31" y1="78" x2="55" y2="78" stroke="var(--logo-mic-stand)" strokeWidth="3.5" strokeLinecap="round"/>
+      <line x1="43" y1="68" x2="43" y2="78" stroke="var(--logo-mic-stand)" strokeWidth="3" strokeLinecap="round"/>
+      <path d="M27 56 Q27 68 43 68 Q59 68 59 56" stroke="var(--logo-mic-stand)" strokeWidth="2.5" fill="none" strokeLinecap="round"/>
       {/* Mic capsule */}
-      <rect x="33" y="16" width="20" height="42" rx="10" fill="#e2e2e2"/>
-      <rect x="33" y="16" width="20" height="42" rx="10" fill="none" stroke="#b4b4b4" strokeWidth="1.5"/>
+      <rect x="33" y="16" width="20" height="42" rx="10" fill="var(--logo-mic-body)"/>
+      <rect x="33" y="16" width="20" height="42" rx="10" fill="none" stroke="var(--logo-mic-outline)" strokeWidth="1.5"/>
       {/* Grille lines */}
-      <line x1="35" y1="26" x2="51" y2="26" stroke="#aaaaaa" strokeWidth="0.9"/>
-      <line x1="35" y1="32" x2="51" y2="32" stroke="#aaaaaa" strokeWidth="0.9"/>
-      <line x1="35" y1="38" x2="51" y2="38" stroke="#aaaaaa" strokeWidth="0.9"/>
-      <line x1="35" y1="44" x2="51" y2="44" stroke="#aaaaaa" strokeWidth="0.9"/>
-      <line x1="35" y1="50" x2="51" y2="50" stroke="#aaaaaa" strokeWidth="0.9"/>
+      <line x1="35" y1="26" x2="51" y2="26" stroke="var(--logo-mic-grille)" strokeWidth="0.9"/>
+      <line x1="35" y1="32" x2="51" y2="32" stroke="var(--logo-mic-grille)" strokeWidth="0.9"/>
+      <line x1="35" y1="38" x2="51" y2="38" stroke="var(--logo-mic-grille)" strokeWidth="0.9"/>
+      <line x1="35" y1="44" x2="51" y2="44" stroke="var(--logo-mic-grille)" strokeWidth="0.9"/>
+      <line x1="35" y1="50" x2="51" y2="50" stroke="var(--logo-mic-grille)" strokeWidth="0.9"/>
     </svg>
   );
 }
@@ -141,7 +142,7 @@ export function Layout({ navItems = DEFAULT_NAV, headerSlot, title = 'STW Compan
     width: '100%', padding: '10px 14px',
     display: 'flex', alignItems: 'center', gap: 10,
     background: 'none', border: 'none', cursor: 'pointer',
-    textAlign: 'left', color: 'var(--t2)', fontSize: 13,
+    textAlign: 'left', color: 'var(--t2)', fontSize: FONT_SIZE.base,
     transition: 'background 0.15s',
   };
 
@@ -159,7 +160,7 @@ export function Layout({ navItems = DEFAULT_NAV, headerSlot, title = 'STW Compan
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1, minWidth: 0 }}>
           <STWLogo />
           <span style={{
-            fontWeight: 700, fontSize: 13, letterSpacing: '0.06em',
+            fontWeight: FONT_WEIGHT.bold, fontSize: FONT_SIZE.base, letterSpacing: '0.06em',
             color: 'var(--text)', textTransform: 'uppercase',
             marginLeft: 6, marginRight: 10, flexShrink: 0,
           }}
@@ -180,8 +181,8 @@ export function Layout({ navItems = DEFAULT_NAV, headerSlot, title = 'STW Compan
                 style={({ isActive }) => ({
                   padding: '4px 10px',
                   borderRadius: 5,
-                  fontSize: 12,
-                  fontWeight: isActive ? 600 : 400,
+                  fontSize: FONT_SIZE.sm,
+                  fontWeight: isActive ? FONT_WEIGHT.semibold : 400,
                   textDecoration: 'none',
                   color: isActive ? 'var(--acc)' : 'var(--t2)',
                   background: isActive ? 'var(--s2)' : 'none',
@@ -247,10 +248,10 @@ export function Layout({ navItems = DEFAULT_NAV, headerSlot, title = 'STW Compan
               }}>
                 {/* User email */}
                 <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--bsub)' }}>
-                  <div style={{ fontSize: 10, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>
+                  <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>
                     Signed in as
                   </div>
-                  <div style={{ fontSize: 12, color: 'var(--t2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {user?.email}
                   </div>
                 </div>
@@ -293,7 +294,7 @@ export function Layout({ navItems = DEFAULT_NAV, headerSlot, title = 'STW Compan
                 {/* Sign out */}
                 <button
                   onClick={signOut}
-                  style={{ ...menuItemStyle, color: '#ef4444' }}
+                  style={{ ...menuItemStyle, color: 'var(--status-negative-text)' }}
                   onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
                 >
