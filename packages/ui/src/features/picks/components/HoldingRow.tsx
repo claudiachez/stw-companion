@@ -1,7 +1,8 @@
 import type { Holding } from '../api';
-import { TIERS, ACTION_VARS, bColor, holdingPnlPct } from '@stw/shared';
+import { TIERS, holdingPnlPct, FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
 import { useQuote } from '../../../hooks/useLivePrice';
 import { RegimeBadge } from './RegimeBadge';
+import { Badge } from '../../../primitives/Badge';
 import type { TickerRegime } from '../useTickerRegime';
 
 function fmtDate(s: string | null): string {
@@ -25,13 +26,11 @@ interface Props {
 export function HoldingRow({ holding: h, isSelected, maxWeight, onClick, isUserHeld, compact = false, regime }: Props) {
   const quote = useQuote(h.ticker);
   const tier = TIERS[h.conviction] ?? TIERS[0];
-  const basketColor = bColor(h.basket);
-  const action = ACTION_VARS[h.last_action];
 
   // Row P&L: weight-weighted across the holding's legs. Shares legs price off the live quote;
   // option legs use their stored IBKR mark.
   const pnlPct = holdingPnlPct(h.legs, quote?.c ?? null);
-  const pnlColor = pnlPct != null ? (pnlPct >= 0 ? '#16A34A' : '#DC2626') : undefined;
+  const pnlColor = pnlPct != null ? (pnlPct >= 0 ? 'var(--pnl-gain)' : 'var(--pnl-loss)') : undefined;
 
   const w = h.current_weight ?? h.initial_weight ?? 0;
   const wPct = maxWeight > 0 ? (w / maxWeight) * 100 : 0;
@@ -49,7 +48,7 @@ export function HoldingRow({ holding: h, isSelected, maxWeight, onClick, isUserH
       onMouseLeave={(e) => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = ''; }}
     >
       {/* Rank */}
-      <span style={{ color: 'var(--t3)', fontSize: 10, minWidth: 16, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+      <span style={{ color: 'var(--t3)', fontSize: FONT_SIZE['2xs'], minWidth: 16, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
         {h.rank}
       </span>
 
@@ -59,28 +58,17 @@ export function HoldingRow({ holding: h, isSelected, maxWeight, onClick, isUserH
       {/* Main content */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 1 }}>
-          <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text)' }}>{h.ticker}</span>
+          <span style={{ fontWeight: FONT_WEIGHT.bold, fontSize: FONT_SIZE.base, color: 'var(--text)' }}>{h.ticker}</span>
           {/* Secondary badges drop out when the list pane is too narrow to fit them (compact). */}
-          {!compact && (
-            <span style={{
-              fontSize: 10, padding: '1px 5px', borderRadius: 4, flexShrink: 0, whiteSpace: 'nowrap',
-              background: basketColor + '18', color: basketColor, border: `1px solid ${basketColor}28`,
-            }}>
-              {h.basket}
-            </span>
-          )}
-          {!compact && action && (
-            <span style={{
-              fontSize: 10, fontWeight: 600, padding: '1px 5px', borderRadius: 4, flexShrink: 0, whiteSpace: 'nowrap',
-              color: action.color, background: action.bg,
-            }}>
-              {h.last_action}
-            </span>
-          )}
-          {/* User holds this ticker */}
+          {!compact && <Badge kind="category" category={h.basket} />}
+          {!compact && <Badge kind="action" action={h.last_action} />}
+          {/* User holds this ticker — not a Badge kind: none of source/category/tier/flag/
+              action represent "this is your own position", even though its colors happen
+              to coincide with kind="source"'s (picking a kind by color, not meaning, is
+              exactly what CONTRIBUTING.md warns against). */}
           {isUserHeld && (
             <span style={{
-              fontSize: 9, fontWeight: 600, padding: '1px 5px', borderRadius: 4,
+              fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.semibold, padding: '1px 5px', borderRadius: 4,
               color: 'var(--acc)', background: 'var(--c5bg)', border: '1px solid var(--c5b)',
             }}>
               Held
@@ -88,7 +76,7 @@ export function HoldingRow({ holding: h, isSelected, maxWeight, onClick, isUserH
           )}
           {!compact && <RegimeBadge regime={regime} compact />}
         </div>
-        <div style={{ fontSize: 11, color: 'var(--t2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {h.name}
         </div>
       </div>
@@ -101,22 +89,24 @@ export function HoldingRow({ holding: h, isSelected, maxWeight, onClick, isUserH
         </div>
 
         {pnlPct != null && (
-          <span style={{ fontSize: 11, fontWeight: 600, color: pnlColor, fontVariantNumeric: 'tabular-nums' }}>
+          <span style={{ fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold, color: pnlColor, fontVariantNumeric: 'tabular-nums' }}>
             {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%
           </span>
         )}
         {quote?.c != null && (
-          <span style={{ fontSize: 10, color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>
+          <span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>
             ${quote.c.toFixed(2)}
           </span>
         )}
-        {/* Weight readout — always shown for CASH (incl. negative = margin/leverage) */}
+        {/* Weight readout — always shown for CASH (incl. negative = margin/leverage). A negative
+            weight here is leverage, not P&L, so it reads var(--status-negative-text), not
+            var(--pnl-loss) — same distinction drawn in HoldingDetail.tsx's own CASH weight card. */}
         {!quote && (h.ticker === 'CASH' || w !== 0) && (
-          <span style={{ fontSize: 10, color: w < 0 ? '#DC2626' : 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>
+          <span style={{ fontSize: FONT_SIZE['2xs'], color: w < 0 ? 'var(--status-negative-text)' : 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>
             {w.toFixed(1)}%
           </span>
         )}
-        <span style={{ fontSize: 9, color: 'var(--t3)' }}>{fmtDate(h.action_date)}</span>
+        <span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>{fmtDate(h.action_date)}</span>
       </div>
     </button>
   );

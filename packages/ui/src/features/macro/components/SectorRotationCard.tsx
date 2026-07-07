@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ResponsiveContainer } from 'recharts';
 import type { SectorRotationRow, TrendBucket } from '@stw/shared';
-import { TREND_BUCKET_META, TREND_BUCKET_ORDER } from '@stw/shared';
+import { TREND_BUCKET_META, TREND_BUCKET_ORDER, FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
 import { SourceNote } from './macroVisuals';
 import type { SectorConstituents } from '../useSectorRotation';
 
@@ -52,21 +52,21 @@ function rowRank(row: SectorRotationRow): number {
 function TickerRow({ label, rows, color }: { label: string; rows?: SectorRotationRow[]; color: string }) {
   return (
     <div style={{ display: 'flex', gap: 6, alignItems: 'baseline', flexWrap: 'wrap' }}>
-      <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--t3)', flexShrink: 0 }}>{label}</span>
+      <span style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.semibold, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--t3)', flexShrink: 0 }}>{label}</span>
       {rows && rows.length > 0 ? (
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
           {rows.map((r) => (
             <span
               key={r.symbol}
               title={`${r.name} · 1M RS ${fmtRs(r.rs1M)}`}
-              style={{ fontSize: 11, fontWeight: 600, padding: '2px 6px', borderRadius: 4, background: 'var(--surface)', border: `1px solid ${color}`, color, whiteSpace: 'nowrap' }}
+              style={{ fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold, padding: '2px 6px', borderRadius: 4, background: 'var(--surface)', border: `1px solid ${color}`, color, whiteSpace: 'nowrap' }}
             >
               {r.symbol}
             </span>
           ))}
         </div>
       ) : (
-        <span style={{ fontSize: 11, color: 'var(--t3)' }}>—</span>
+        <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>—</span>
       )}
     </div>
   );
@@ -84,25 +84,25 @@ function SectorCard({ row, rank, constituents }: { row: SectorRotationRow; rank:
     <div style={{ background: 'var(--s2)', border: '1px solid var(--border)', borderRadius: 8, padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{
-          width: 22, height: 22, borderRadius: '50%', background: 'var(--acc)', color: '#fff',
-          fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          width: 22, height: 22, borderRadius: '50%', background: 'var(--acc)', color: 'var(--text-inverse)',
+          fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
         }}>
           {rank}
         </span>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>
+          <div style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)' }}>
             {row.symbol}
-            <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--t3)', marginLeft: 6 }}>{row.name}</span>
+            <span style={{ fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.medium, color: 'var(--t3)', marginLeft: 6 }}>{row.name}</span>
           </div>
-          <div title={STRUCTURE_TOOLTIP} style={{ fontSize: 11, fontWeight: 600, color: bucketColor, cursor: 'help' }}>{bucketLabel}</div>
+          <div title={STRUCTURE_TOOLTIP} style={{ fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold, color: bucketColor, cursor: 'help' }}>{bucketLabel}</div>
         </div>
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 4 }}>
         {RS_AXES.map(({ key, label }) => (
           <div key={key} style={{ textAlign: 'center', flex: 1 }}>
-            <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase' }}>{label}</div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: rsColor(row[key]) }}>{fmtRs(row[key])}</div>
+            <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', textTransform: 'uppercase' }}>{label}</div>
+            <div style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: rsColor(row[key]) }}>{fmtRs(row[key])}</div>
           </div>
         ))}
       </div>
@@ -111,9 +111,9 @@ function SectorCard({ row, rank, constituents }: { row: SectorRotationRow; rank:
         <ResponsiveContainer width="100%" height="100%">
           <RadarChart data={radarData} outerRadius="75%">
             <PolarGrid stroke="var(--border)" />
-            <PolarAngleAxis dataKey="axis" tick={{ fill: 'var(--t3)', fontSize: 10 }} />
-            <PolarRadiusAxis tick={{ fill: 'var(--t3)', fontSize: 9 }} />
-            <Radar name="RS vs SPY" dataKey="RS" stroke="#22c55e" fill="#22c55e" fillOpacity={0.35} />
+            <PolarAngleAxis dataKey="axis" tick={{ fill: 'var(--t3)', fontSize: FONT_SIZE['2xs'] }} />
+            <PolarRadiusAxis tick={{ fill: 'var(--t3)', fontSize: FONT_SIZE['2xs'] }} />
+            <Radar name="RS vs SPY" dataKey="RS" stroke="var(--acc)" fill="var(--acc)" fillOpacity={0.35} />
           </RadarChart>
         </ResponsiveContainer>
       </div>
@@ -126,7 +126,7 @@ function SectorCard({ row, rank, constituents }: { row: SectorRotationRow; rank:
 
 export function SectorRotationCard({ rows, loading, asOf, constituents, constituentsLoading }: Props) {
   if (loading && rows.length === 0) {
-    return <div style={{ color: 'var(--t3)', fontSize: 12 }}>Loading sector data…</div>;
+    return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>Loading sector data…</div>;
   }
 
   const sorted = [...rows].sort((a, b) => rowRank(b) - rowRank(a));

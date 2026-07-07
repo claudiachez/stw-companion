@@ -6,6 +6,7 @@ import { ConvictionCommentForm } from './ConvictionCommentForm';
 import { CommentRow } from './CommentRow';
 import { useCapabilities } from '../../../context/AppCapabilities';
 import { useAuthStore } from '../../../store/auth';
+import { FONT_SIZE } from '@stw/shared';
 
 interface Props {
   ticker: string;
@@ -34,7 +35,7 @@ export function ConvictionTimeline({ ticker, currentConviction }: Props) {
   }
 
   if (isLoading) {
-    return <div style={{ fontSize: 12, color: 'var(--t3)', padding: '8px 0' }}>Loading…</div>;
+    return <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)', padding: '8px 0' }}>Loading…</div>;
   }
 
   // Hide when nobody can interact and there's nothing to show
@@ -43,7 +44,7 @@ export function ConvictionTimeline({ ticker, currentConviction }: Props) {
   return (
     <div>
       {comments.length === 0 && !showForm && (
-        <div style={{ fontSize: 12, color: 'var(--t3)', padding: '4px 0' }}>No commentary yet.</div>
+        <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)', padding: '4px 0' }}>No commentary yet.</div>
       )}
 
       <div>
@@ -69,7 +70,7 @@ export function ConvictionTimeline({ ticker, currentConviction }: Props) {
           onClick={() => setShowForm(true)}
           style={{
             marginTop: 8, background: 'none', border: '1px dashed var(--border)',
-            borderRadius: 5, color: 'var(--t2)', fontSize: 11, cursor: 'pointer',
+            borderRadius: 5, color: 'var(--t2)', fontSize: FONT_SIZE.xs, cursor: 'pointer',
             padding: '5px 10px', width: '100%',
           }}
         >

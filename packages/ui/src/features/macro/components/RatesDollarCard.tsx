@@ -1,4 +1,4 @@
-import { ratesDollarLabel } from '@stw/shared';
+import { ratesDollarLabel, FONT_SIZE } from '@stw/shared';
 import type { RatesDollar } from '../useRatesDollar';
 import { StatTile, SleeveSummary, TileGrid, SourceNote } from './macroVisuals';
 
@@ -16,8 +16,8 @@ function bp(delta: number | null): string {
 }
 
 export function RatesDollarCard({ data, loading, stressRising }: Props) {
-  if (loading && !data) return <div style={{ color: 'var(--t3)', fontSize: 12 }}>Loading rates…</div>;
-  if (!data) return <div style={{ color: 'var(--t3)', fontSize: 12 }}>Rates data unavailable (needs TwelveData key).</div>;
+  if (loading && !data) return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>Loading rates…</div>;
+  if (!data) return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>Rates data unavailable (needs TwelveData key).</div>;
 
   const { us10y, us10yDelta5, uup, uupAbove9, uupAbove21, subScores, sleeveScore } = data;
   const fallingFast = us10yDelta5 !== null && us10yDelta5 <= -0.10;
@@ -41,7 +41,7 @@ export function RatesDollarCard({ data, loading, stressRising }: Props) {
         />
       </TileGrid>
       {fallingFast && stressRising && (
-        <div style={{ fontSize: 10, color: 'var(--c3)', marginTop: 10 }}>
+        <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--c3)', marginTop: 10 }}>
           ⚠ Yields falling fast while stress rises — flight to safety, not a growth tailwind.
         </div>
       )}

@@ -1,80 +1,8 @@
+/* Design tokens (colors, base rules) — single source of truth, shared with apps/admin.
+   See packages/ui/src/styles/tokens.css and docs/design-system/tokens.md.
+   Must come before @tailwind — CSS drops an @import that isn't the first rule. */
+@import '../../../packages/ui/src/styles/tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@layer base {
-  :root {
-    --bg:      #0a0a0a;
-    --surface: #111111;
-    --s2:      #1a1a1a;
-    --border:  #2a2a2a;
-    --bsub:    #1f1f1f;
-    --text:    #f0f0f0;
-    --t2:      #a0a0a0;
-    --t3:      #525252;
-
-    --c5: #22c55e; --c5bg: #052e16; --c5b: #166534; --c5l: #4ade80;
-    --c4: #3b82f6; --c4bg: #0c1a3b; --c4b: #1e3a8a; --c4l: #60a5fa;
-    --c3: #f59e0b; --c3bg: #2d1a00; --c3b: #78350f; --c3l: #fbbf24;
-    --c2: #6b7280; --c2bg: #111827; --c2b: #374151; --c2l: #9ca3af;
-    --c1: #ef4444; --c1bg: #2d0c0c; --c1b: #7f1d1d; --c1l: #f87171;
-    --c0: #52525b; --c0bg: #0f0f11; --c0b: #27272a; --c0l: #71717a;
-
-    --new:     #22c55e; --new-bg:     #052e16;
-    --closed:  #ef4444; --closed-bg:  #2d0c0c;
-    --upsized: #3b82f6; --upsized-bg: #0c1a3b;
-    --trimmed: #f59e0b; --trimmed-bg: #2d1a00;
-    --hold:    #71717a; --hold-bg:    #1a1a1a;
-
-    --acc: #22c55e;
-    --shadow: 0 1px 3px rgba(0,0,0,0.5);
-  }
-
-  [data-theme="light"] {
-    --bg:      #f5faf5;
-    --surface: #ffffff;
-    --s2:      #edf6ed;
-    --border:  #cce5cc;
-    --bsub:    #e0f0e0;
-    --text:    #0a0a0a;
-    --t2:      #2d4a2d;
-    --t3:      #6b916b;
-
-    --c5: #16a34a; --c5bg: #dcfce7; --c5b: #86efac; --c5l: #15803d;
-    --c4: #2563eb; --c4bg: #dbeafe; --c4b: #93c5fd; --c4l: #1d4ed8;
-    --c3: #d97706; --c3bg: #fef3c7; --c3b: #fcd34d; --c3l: #b45309;
-    --c2: #4b5563; --c2bg: #f3f4f6; --c2b: #d1d5db; --c2l: #6b7280;
-    --c1: #dc2626; --c1bg: #fee2e2; --c1b: #fca5a5; --c1l: #b91c1c;
-    --c0: #52525b; --c0bg: #f4f4f5; --c0b: #d4d4d8; --c0l: #71717a;
-
-    --new:     #15803d; --new-bg:     #dcfce7;
-    --closed:  #dc2626; --closed-bg:  #fee2e2;
-    --upsized: #1d4ed8; --upsized-bg: #dbeafe;
-    --trimmed: #d97706; --trimmed-bg: #fef3c7;
-    --hold:    #4b5563; --hold-bg:    #f3f4f6;
-
-    --acc: #16a34a;
-    --shadow: 0 1px 3px rgba(0,0,0,0.08);
-  }
-
-  html {
-    background: var(--bg);
-    color: var(--text);
-    font-family: system-ui, -apple-system, sans-serif;
-    font-size: 16px;
-    line-height: 1.5;
-    -webkit-font-smoothing: antialiased;
-  }
-
-  * { box-sizing: border-box; }
-
-  ::-webkit-scrollbar { width: 5px; height: 5px; }
-  ::-webkit-scrollbar-track { background: var(--bg); }
-  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: var(--t3); }
-}
-
-@keyframes ibkr-pulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.3; }
-}

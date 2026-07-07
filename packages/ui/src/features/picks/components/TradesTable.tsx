@@ -1,8 +1,9 @@
 import { useState, useMemo } from 'react';
-import { fmtLegInstrument, legIsOpen, legUnrealizedPnlPct, type Direction } from '@stw/shared';
+import { fmtLegInstrument, legIsOpen, legUnrealizedPnlPct, FONT_SIZE, FONT_WEIGHT, type Direction } from '@stw/shared';
 import { TradeEditForm } from './TradeEditForm';
 import { TradesFilterBar } from './TradesFilterBar';
 import { TickerLink } from '../../../primitives/TickerLink';
+import { DataTable, type DataTableColumn } from '../../../primitives/DataTable';
 import { usePriceCacheStore, type Quote } from '../../../store/priceCache';
 import { useCapabilities } from '../../../context/AppCapabilities';
 import { useIsMobile } from '../../../hooks/useIsMobile';
@@ -128,16 +129,9 @@ function applyTradeFilters(rows: TradeRow[], f: TradesFilters): TradeRow[] {
   return out;
 }
 
-const th: React.CSSProperties = {
-  textAlign: 'left', fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
-  letterSpacing: '0.08em', color: 'var(--t3)', background: 'var(--s2)',
-  padding: '7px 13px', borderBottom: '1px solid var(--bsub)', whiteSpace: 'nowrap',
-};
-const thR: React.CSSProperties = { ...th, textAlign: 'right' };
-
 function pnlCell(v: number | null) {
   if (v == null) return { text: '—', color: 'var(--t3)' };
-  return { text: `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`, color: v >= 0 ? 'var(--acc)' : '#ef4444' };
+  return { text: `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`, color: v >= 0 ? 'var(--pnl-gain)' : 'var(--pnl-loss)' };
 }
 const money = (v: number | null) => (v != null ? `$${v.toFixed(2)}` : '—');
 const days = (v: number | null) => (v != null ? `${v}d` : '—');
@@ -167,17 +161,47 @@ export function TradesTable({ holdings, onSelectTicker }: Props) {
   const showOpenCols   = filters.openClosed !== 'closed'; // open or all
   const showClosedCols = filters.openClosed !== 'open';   // closed or all
 
-  const td: React.CSSProperties = {
-    padding: '9px 13px', borderBottom: '1px solid var(--bsub)',
-    verticalAlign: 'middle', lineHeight: 1.4, whiteSpace: 'nowrap',
-  };
-  const tdR: React.CSSProperties = { ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' };
-
   // Closed-trade contribution cell: portfolio impact in weight points (return × sold weight).
   function contribCell(v: number | null) {
     if (v == null) return { text: '—', color: 'var(--t3)' };
-    return { text: `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`, color: v >= 0 ? 'var(--acc)' : '#ef4444' };
+    return { text: `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`, color: v >= 0 ? 'var(--pnl-gain)' : 'var(--pnl-loss)' };
   }
+
+  const columns: DataTableColumn<TradeRow>[] = [
+    { key: 'ticker', header: 'Ticker', render: (t) => <TickerLink ticker={t.holding.ticker} onSelect={onSelectTicker} />, subCaption: (t) => t.instrument },
+    { key: 'opened', header: 'Opened', hideOnMobile: true, render: (t) => <span style={{ color: 'var(--t2)' }}>{fmtTradeDate(t.openDate)}</span> },
+    { key: 'open', header: 'Open', numeric: true, render: (t) => <span style={{ color: 'var(--t2)' }}>{money(t.openPrice)}</span> },
+    { key: 'initWt', header: 'Init Wt', hideOnMobile: true, numeric: true, render: (t) => <span style={{ color: 'var(--t2)' }}>{wt(t.initialWeight)}</span> },
+    ...(showClosedCols ? [
+      { key: 'closed', header: 'Closed', hideOnMobile: true, render: (t: TradeRow) => <span style={{ color: t.isOpen ? 'var(--t3)' : 'var(--t2)' }}>{t.isOpen ? '—' : fmtTradeDate(t.closeDate)}</span> },
+      { key: 'close', header: 'Close', hideOnMobile: true, numeric: true, render: (t: TradeRow) => <span style={{ color: 'var(--t2)' }}>{money(t.closePrice)}</span> },
+    ] : []),
+    { key: 'type', header: 'Type', render: (t) => <span style={{ color: 'var(--t2)', textTransform: 'capitalize' }}>{t.direction}</span> },
+    ...(showOpenCols ? [
+      { key: 'currentPnl', header: 'Current P&L', numeric: true, render: (t: TradeRow) => { const c = pnlCell(t.currentPnl); return <span style={{ color: c.color, fontWeight: FONT_WEIGHT.semibold }}>{c.text}</span>; } },
+    ] : []),
+    ...(showClosedCols ? [
+      { key: 'pnl', header: 'P&L', numeric: true, render: (t: TradeRow) => { const r = t.exercised ? { text: 'Exercised', color: 'var(--t2)' } : pnlCell(t.realizedPnl); return <span style={{ color: r.color, fontWeight: FONT_WEIGHT.semibold }}>{r.text}</span>; } },
+      { key: 'contribution', header: 'Contribution', hideOnMobile: true, numeric: true, render: (t: TradeRow) => { const c = contribCell(t.contribution); return <span style={{ color: c.color, fontWeight: FONT_WEIGHT.semibold }}>{c.text}</span>; } },
+    ] : []),
+    ...(showOpenCols ? [
+      { key: 'daysOpen', header: 'Days Open', hideOnMobile: true, numeric: true, render: (t: TradeRow) => <span style={{ color: 'var(--t3)' }}>{days(t.isOpen ? daysBetween(t.openDate, today) : null)}</span> },
+    ] : []),
+    ...(showClosedCols ? [
+      { key: 'duration', header: 'Duration', hideOnMobile: true, numeric: true, render: (t: TradeRow) => <span style={{ color: 'var(--t3)' }}>{days(t.isOpen ? null : daysBetween(t.openDate, t.closeDate))}</span> },
+    ] : []),
+    ...(canEdit ? [
+      { key: 'edit', header: '', numeric: true, render: (t: TradeRow) => (
+        <button
+          onClick={() => setEditing(t.holding)}
+          title="Edit trade"
+          style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', color: 'var(--t2)', fontSize: FONT_SIZE.xs, padding: '2px 8px' }}
+        >
+          Edit
+        </button>
+      ) },
+    ] : []),
+  ];
 
   return (
     // Column layout: a full-bleed filter bar (matches the Ticker Details FilterBar) above a padded,
@@ -190,76 +214,21 @@ export function TradesTable({ holdings, onSelectTicker }: Props) {
       <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '14px 12px' : '20px 24px' }}>
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', boxShadow: 'var(--shadow)' }}>
         <div style={{ padding: '8px 13px', background: 'var(--s2)', borderBottom: '1px solid var(--bsub)', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.09em', color: 'var(--t2)' }}>📈 Trades</span>
-          {trades.length > 0 && <span style={{ fontSize: 10, color: 'var(--t3)', marginLeft: 'auto' }}>{trades.length}</span>}
+          <span style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, textTransform: 'uppercase', letterSpacing: '0.09em', color: 'var(--t2)' }}>📈 Trades</span>
+          {trades.length > 0 && <span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginLeft: 'auto' }}>{trades.length}</span>}
         </div>
 
-        <div style={{ overflowX: 'auto', paddingBottom: 9 }}>
-          {trades.length === 0 ? (
-            <p style={{ fontSize: 11, color: 'var(--t3)', padding: '12px 13px' }}>
+        <DataTable
+          columns={columns}
+          rows={trades}
+          rowKey={(t) => t.key}
+          isMobile={isMobile}
+          emptyState={
+            <p style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', padding: '12px 13px' }}>
               {allTrades.length === 0 ? 'No trades yet.' : 'No trades match your filters.'}
             </p>
-          ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-              <thead>
-                <tr>
-                  <th style={th}>Ticker</th>
-                  {!isMobile && <th style={th}>Opened</th>}
-                  <th style={thR}>Open</th>
-                  {!isMobile && <th style={thR}>Init Wt</th>}
-                  {!isMobile && showClosedCols && <th style={th}>Closed</th>}
-                  {!isMobile && showClosedCols && <th style={thR}>Close</th>}
-                  <th style={th}>Type</th>
-                  {showOpenCols && <th style={thR}>Current P&amp;L</th>}
-                  {showClosedCols && <th style={thR}>P&amp;L</th>}
-                  {!isMobile && showClosedCols && <th style={thR}>Contribution</th>}
-                  {!isMobile && showOpenCols && <th style={thR}>Days Open</th>}
-                  {!isMobile && showClosedCols && <th style={thR}>Duration</th>}
-                  {canEdit && <th style={thR}></th>}
-                </tr>
-              </thead>
-              <tbody>
-                {trades.map((t) => {
-                  const cur = pnlCell(t.currentPnl);
-                  const real = t.exercised
-                    ? { text: 'Exercised', color: 'var(--t2)' }
-                    : pnlCell(t.realizedPnl);
-                  const contrib = contribCell(t.contribution);
-                  return (
-                    <tr key={t.key}>
-                      <td style={td}>
-                        <TickerLink ticker={t.holding.ticker} onSelect={onSelectTicker} />
-                        <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 1 }}>{t.instrument}</div>
-                      </td>
-                      {!isMobile && <td style={{ ...td, color: 'var(--t2)' }}>{fmtTradeDate(t.openDate)}</td>}
-                      <td style={{ ...tdR, color: 'var(--t2)' }}>{money(t.openPrice)}</td>
-                      {!isMobile && <td style={{ ...tdR, color: 'var(--t2)' }}>{wt(t.initialWeight)}</td>}
-                      {!isMobile && showClosedCols && <td style={{ ...td, color: t.isOpen ? 'var(--t3)' : 'var(--t2)' }}>{t.isOpen ? '—' : fmtTradeDate(t.closeDate)}</td>}
-                      {!isMobile && showClosedCols && <td style={{ ...tdR, color: 'var(--t2)' }}>{money(t.closePrice)}</td>}
-                      <td style={{ ...td, color: 'var(--t2)', textTransform: 'capitalize' }}>{t.direction}</td>
-                      {showOpenCols && <td style={{ ...tdR, color: cur.color, fontWeight: 600 }}>{cur.text}</td>}
-                      {showClosedCols && <td style={{ ...tdR, color: real.color, fontWeight: 600 }}>{real.text}</td>}
-                      {!isMobile && showClosedCols && <td style={{ ...tdR, color: contrib.color, fontWeight: 600 }}>{contrib.text}</td>}
-                      {!isMobile && showOpenCols && <td style={{ ...tdR, color: 'var(--t3)' }}>{days(t.isOpen ? daysBetween(t.openDate, today) : null)}</td>}
-                      {!isMobile && showClosedCols && <td style={{ ...tdR, color: 'var(--t3)' }}>{days(t.isOpen ? null : daysBetween(t.openDate, t.closeDate))}</td>}
-                      {canEdit && (
-                        <td style={tdR}>
-                          <button
-                            onClick={() => setEditing(t.holding)}
-                            title="Edit trade"
-                            style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', color: 'var(--t2)', fontSize: 11, padding: '2px 8px' }}
-                          >
-                            Edit
-                          </button>
-                        </td>
-                      )}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
+          }
+        />
       </div>
       </div>
     </div>

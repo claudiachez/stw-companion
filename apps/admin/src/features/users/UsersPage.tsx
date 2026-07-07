@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { LoadingSpinner, EmptyState } from '@stw/ui';
+import { LoadingSpinner, EmptyState, StatusPill, type StatusPillVariant } from '@stw/ui';
 import { supabase } from '../../lib/supabase';
 
 type Status = 'pending' | 'approved' | 'rejected';
@@ -18,10 +18,12 @@ interface Tier {
   label: string;
 }
 
-const STATUS_STYLES: Record<Status, string> = {
-  pending: 'text-[#f59e0b] bg-[#f59e0b15] border-[#f59e0b33]',
-  approved: 'text-[#22c55e] bg-[#22c55e15] border-[#22c55e33]',
-  rejected: 'text-[#ef4444] bg-[#ef444415] border-[#ef444433]',
+// 'pending' reads as `unevaluated`, not a caution/warning variant — an approval decision
+// hasn't happened yet, which is closer to "no verdict yet" than "approaching a breach."
+const STATUS_VARIANT: Record<Status, StatusPillVariant> = {
+  pending: 'unevaluated',
+  approved: 'ok',
+  rejected: 'breach',
 };
 
 export function UsersPage() {
@@ -84,11 +86,7 @@ export function UsersPage() {
                     <div className="text-t3 text-xs">{p.email ?? p.user_id}</div>
                   </td>
                   <td className="px-4 py-3">
-                    <span
-                      className={`inline-block px-2 py-0.5 rounded text-xs font-semibold border capitalize ${STATUS_STYLES[p.status]}`}
-                    >
-                      {p.status}
-                    </span>
+                    <StatusPill variant={STATUS_VARIANT[p.status]}>{p.status}</StatusPill>
                   </td>
                   <td className="px-4 py-3">
                     <select
@@ -110,7 +108,7 @@ export function UsersPage() {
                       {p.status !== 'approved' && (
                         <button
                           onClick={() => update.mutate({ userId: p.user_id, patch: { status: 'approved' } })}
-                          className="px-2.5 py-1 rounded text-xs font-medium border border-[#22c55e33] text-[#22c55e] hover:bg-[#22c55e15] transition-colors"
+                          className="px-2.5 py-1 rounded text-xs font-medium border border-[var(--status-positive-border)] text-[var(--status-positive-text)] hover:bg-[var(--status-positive-bg)] transition-colors"
                         >
                           Approve
                         </button>
@@ -118,7 +116,7 @@ export function UsersPage() {
                       {p.status !== 'rejected' && (
                         <button
                           onClick={() => update.mutate({ userId: p.user_id, patch: { status: 'rejected' } })}
-                          className="px-2.5 py-1 rounded text-xs font-medium border border-[#ef444433] text-[#ef4444] hover:bg-[#ef444415] transition-colors"
+                          className="px-2.5 py-1 rounded text-xs font-medium border border-[var(--status-negative-border)] text-[var(--status-negative-text)] hover:bg-[var(--status-negative-bg)] transition-colors"
                         >
                           Reject
                         </button>

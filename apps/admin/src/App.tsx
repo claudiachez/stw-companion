@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthGuard, LoginPage, Layout, ProfilePage, PicksView, SignalsView, MacroView, type NavItem } from '@stw/ui';
+import { AuthGuard, LoginPage, Layout, ProfilePage, PicksView, SignalsView, MacroView, DesignSystemGallery, type NavItem } from '@stw/ui';
 import { UsersPage } from './features/users/UsersPage';
 import { ConfigPage } from './features/manage/ConfigPage';
 import { IbkrBadge } from './features/ibkr/IbkrBadge';
@@ -10,6 +10,9 @@ const ADMIN_NAV: NavItem[] = [
   { to: '/macro',   label: 'Macro',       short: 'Macro'   },
   { to: '/users',   label: 'Users',       short: 'Users'   },
   { to: '/config',  label: 'Config',      short: 'Config'  },
+  // Internal design-system review route (plans/stw-design-system.md Phase 3) — not a
+  // subscriber-facing feature; a plain route since neither app has Storybook.
+  { to: '/design-system', label: 'Design System', short: 'Design' },
 ];
 
 export default function App() {
@@ -25,6 +28,7 @@ export default function App() {
             <Route path="/macro"   element={<MacroView />} />
             <Route path="/users"   element={<UsersPage />} />
             <Route path="/config"  element={<ConfigPage />} />
+            <Route path="/design-system" element={<DesignSystemGallery />} />
             <Route path="/profile" element={<ProfilePage />} />
           </Route>
         </Route>

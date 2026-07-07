@@ -1,20 +1,11 @@
-const LEVELS: Record<number, { label: string; color: string }> = {
-  5: { label: 'HIGHEST', color: '#22c55e' },
-  4: { label: 'HIGH', color: '#3b82f6' },
-  3: { label: 'MODERATE', color: '#f59e0b' },
-  2: { label: 'WANING', color: '#6b7280' },
-  1: { label: 'CONCERN', color: '#ef4444' },
-  0: { label: 'LEGACY', color: '#52525b' },
-};
+import { Badge } from '../../../primitives/Badge';
 
+// This used to hardcode its own LEVELS color map — a 100% duplicate of TIERS in
+// @stw/shared (same 6 tiers, same colors, same short labels: HIGHEST/HIGH/MODERATE/
+// WANING/CONCERN/LEGACY), flagged by name in the Phase 1 audit
+// (docs/design-system/audit/02-component-duplication-report.md). Kept as a thin
+// wrapper (not deleted + call sites updated) so every existing `<ConvictionBadge
+// level={n} />` usage keeps working unchanged.
 export function ConvictionBadge({ level }: { level: number }) {
-  const { label, color } = LEVELS[level] ?? LEVELS[0];
-  return (
-    <span
-      className="inline-block px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide"
-      style={{ color, border: `1px solid ${color}22`, background: `${color}15` }}
-    >
-      {label}
-    </span>
-  );
+  return <Badge kind="tier" tier={level} />;
 }

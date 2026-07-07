@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useAppConfig } from '@stw/ui';
+import { useAppConfig, AlertStrip } from '@stw/ui';
 import { supabase } from '../../lib/supabase';
 
 function errMsg(e: unknown): string {
@@ -168,9 +168,7 @@ export function ConfigPage() {
       <div className="max-w-2xl mx-auto flex flex-col gap-4">
         {/* No page title — the active nav tab is context (matches Picks/Signals/Users). */}
         {saveMany.isError && (
-          <div className="text-xs font-medium text-[#ef4444] bg-[#ef444415] border border-[#ef444433] rounded px-3 py-2">
-            Save failed: {errMsg(saveMany.error)}
-          </div>
+          <AlertStrip severity="negative">Save failed: {errMsg(saveMany.error)}</AlertStrip>
         )}
 
         <Section
@@ -252,9 +250,11 @@ export function ConfigPage() {
             </button>
           </div>
           {ibkrLiveTradingEnabled && (
-            <div className="mt-3 text-xs font-medium text-[#f59e0b] bg-[#f59e0b15] border border-[#f59e0b33] rounded px-3 py-2">
-              ⚠ Live — the IBKR buttons are currently visible in Transaction History. Confirm your local
-              proxy is pointed at paper (IB_PORT=4002) before placing any order while testing.
+            <div className="mt-3">
+              <AlertStrip severity="warning">
+                Live — the IBKR buttons are currently visible in Transaction History. Confirm your local
+                proxy is pointed at paper (IB_PORT=4002) before placing any order while testing.
+              </AlertStrip>
             </div>
           )}
         </div>

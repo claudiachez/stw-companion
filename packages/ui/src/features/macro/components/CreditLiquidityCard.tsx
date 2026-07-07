@@ -1,4 +1,4 @@
-import { creditLabel } from '@stw/shared';
+import { creditLabel, FONT_SIZE } from '@stw/shared';
 import type { CreditLiquidity } from '../useCreditLiquidity';
 import { StatTile, SleeveSummary, TileGrid, SourceNote } from './macroVisuals';
 
@@ -8,8 +8,8 @@ interface Props {
 }
 
 export function CreditLiquidityCard({ data, loading }: Props) {
-  if (loading && !data) return <div style={{ color: 'var(--t3)', fontSize: 12 }}>Loading credit…</div>;
-  if (!data) return <div style={{ color: 'var(--t3)', fontSize: 12 }}>Credit data unavailable (needs TwelveData key).</div>;
+  if (loading && !data) return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>Loading credit…</div>;
+  if (!data) return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>Credit data unavailable (needs TwelveData key).</div>;
 
   const { hyg, hyg50, aboveMa50, rising, delta5Pct, sleeveScore } = data;
   const trendWord = aboveMa50 === null ? '—' : `${aboveMa50 ? 'above' : 'below'} 50D${rising ? ' · rising' : ' · falling'}`;
@@ -37,7 +37,7 @@ export function CreditLiquidityCard({ data, loading }: Props) {
           score={delta5Pct === null ? null : delta5Pct >= 0 ? 70 : 30}
         />
       </TileGrid>
-      <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 10 }}>
+      <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 10 }}>
         Credit proxy via HYG — true HY OAS spread coming later.
       </div>
       <SourceNote source="TwelveData daily (HYG)" asOf={data.asOf} />
