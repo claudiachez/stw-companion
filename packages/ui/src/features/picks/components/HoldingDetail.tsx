@@ -76,7 +76,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
   const price       = livePrice;
   const isLive      = livePrice != null;
   const dpStr       = quote?.dp != null ? `${quote.dp >= 0 ? '+' : ''}${quote.dp.toFixed(2)}%` : null;
-  const dpColor     = (quote?.dp ?? 0) >= 0 ? '#16A34A' : '#DC2626';
+  const dpColor     = (quote?.dp ?? 0) >= 0 ? 'var(--pnl-gain)' : 'var(--pnl-loss)';
   const hiloStr     = (quote?.h && quote?.l) ? `H $${quote.h.toFixed(2)} · L $${quote.l.toFixed(2)}` : null;
   // All carry the established fmtDateTime stamp ("Mon D · H:MM AM ET").
   const srcTime     = quote?.t ? fmtDateTime(new Date(quote.t * 1000)) : null;   // Finnhub quote time
@@ -99,7 +99,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
   const closedOptionsPnl   = closedPnlPct(optionLegs);
   const closedSharesContrib  = closedPnlContribution(shareLegs);
   const closedOptionsContrib = closedPnlContribution(optionLegs);
-  const pnlCol = (v: number | null | undefined) => (v != null && v >= 0 ? '#16A34A' : v != null ? '#DC2626' : undefined);
+  const pnlCol = (v: number | null | undefined) => (v != null && v >= 0 ? 'var(--pnl-gain)' : v != null ? 'var(--pnl-loss)' : undefined);
 
   // Newest OPTION leg mark across this holding → the "IBKR · <time>" stamp + stale flag.
   const newestMarkAt = optionLegs.reduce<Date | null>((acc, l) => {
@@ -266,7 +266,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
           {openSharesPnl != null && (
             <div style={{ flex: isMobile ? '1 1 40%' : '0 0 25%' }}>
               <div style={{ fontSize: 9, color: 'var(--t3)', marginBottom: 3 }}>Shares</div>
-              <div style={{ fontSize: 17, fontWeight: 700, color: openSharesPnl >= 0 ? '#16A34A' : '#DC2626', fontVariantNumeric: 'tabular-nums' }}>
+              <div style={{ fontSize: 17, fontWeight: 700, color: openSharesPnl >= 0 ? 'var(--pnl-gain)' : 'var(--pnl-loss)', fontVariantNumeric: 'tabular-nums' }}>
                 {openSharesPnl >= 0 ? '+' : ''}{openSharesPnl.toFixed(1)}%
               </div>
               {openShareLegs[0]?.entry_price != null && (
@@ -277,7 +277,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
           {openOptionsPnl != null && (
             <div style={{ flex: isMobile ? '1 1 40%' : '0 0 25%', ...(openSharesPnl != null && !isMobile ? colBorder : {}) }}>
               <div style={{ fontSize: 9, color: 'var(--t3)', marginBottom: 3 }}>Options</div>
-              <div style={{ fontSize: 17, fontWeight: 700, color: openOptionsPnl >= 0 ? '#16A34A' : '#DC2626', fontVariantNumeric: 'tabular-nums' }}>
+              <div style={{ fontSize: 17, fontWeight: 700, color: openOptionsPnl >= 0 ? 'var(--pnl-gain)' : 'var(--pnl-loss)', fontVariantNumeric: 'tabular-nums' }}>
                 {openOptionsPnl >= 0 ? '+' : ''}{openOptionsPnl.toFixed(1)}%
               </div>
               {validLegs.length > 0 && (
@@ -308,7 +308,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
           const pnl         = legUnrealizedPnlPct(leg, livePrice);
           const mark        = leg.mark_price;
           const entry       = leg.entry_price;
-          const lColor      = pnl != null ? (pnl >= 0 ? '#16A34A' : '#DC2626') : 'var(--t3)';
+          const lColor      = pnl != null ? (pnl >= 0 ? 'var(--pnl-gain)' : 'var(--pnl-loss)') : 'var(--t3)';
           const perContract = mark != null && entry != null ? (mark - entry) * 100 : null;
           const reason      = legMarkReason(leg);
           return (
@@ -355,7 +355,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
             const pnl         = legUnrealizedPnlPct(leg, livePrice);
             const mark        = leg.mark_price;
             const entry       = leg.entry_price;
-            const lColor      = pnl != null ? (pnl >= 0 ? '#16A34A' : '#DC2626') : 'var(--t3)';
+            const lColor      = pnl != null ? (pnl >= 0 ? 'var(--pnl-gain)' : 'var(--pnl-loss)') : 'var(--t3)';
             const perContract = mark != null && entry != null ? (mark - entry) * 100 : null;
             const reason      = legMarkReason(leg); // why this leg has no mark (if so)
             return (
@@ -522,7 +522,9 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
               <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>
                 Portfolio Weight
               </div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: cw < 0 ? '#DC2626' : 'var(--text)', lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
+              {/* A negative CASH weight is leverage, not P&L — var(--status-negative-text), not
+                  var(--pnl-loss). Same distinction drawn in HoldingRow.tsx's weight readout. */}
+              <div style={{ fontSize: 20, fontWeight: 700, color: cw < 0 ? 'var(--status-negative-text)' : 'var(--text)', lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
                 {cw.toFixed(1)}%
               </div>
               <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 4 }}>

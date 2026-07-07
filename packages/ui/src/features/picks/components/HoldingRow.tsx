@@ -31,7 +31,7 @@ export function HoldingRow({ holding: h, isSelected, maxWeight, onClick, isUserH
   // Row P&L: weight-weighted across the holding's legs. Shares legs price off the live quote;
   // option legs use their stored IBKR mark.
   const pnlPct = holdingPnlPct(h.legs, quote?.c ?? null);
-  const pnlColor = pnlPct != null ? (pnlPct >= 0 ? '#16A34A' : '#DC2626') : undefined;
+  const pnlColor = pnlPct != null ? (pnlPct >= 0 ? 'var(--pnl-gain)' : 'var(--pnl-loss)') : undefined;
 
   const w = h.current_weight ?? h.initial_weight ?? 0;
   const wPct = maxWeight > 0 ? (w / maxWeight) * 100 : 0;
@@ -110,9 +110,11 @@ export function HoldingRow({ holding: h, isSelected, maxWeight, onClick, isUserH
             ${quote.c.toFixed(2)}
           </span>
         )}
-        {/* Weight readout — always shown for CASH (incl. negative = margin/leverage) */}
+        {/* Weight readout — always shown for CASH (incl. negative = margin/leverage). A negative
+            weight here is leverage, not P&L, so it reads var(--status-negative-text), not
+            var(--pnl-loss) — same distinction drawn in HoldingDetail.tsx's own CASH weight card. */}
         {!quote && (h.ticker === 'CASH' || w !== 0) && (
-          <span style={{ fontSize: 10, color: w < 0 ? '#DC2626' : 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>
+          <span style={{ fontSize: 10, color: w < 0 ? 'var(--status-negative-text)' : 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>
             {w.toFixed(1)}%
           </span>
         )}

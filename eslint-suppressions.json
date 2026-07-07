@@ -139,7 +139,7 @@
   },
   "packages/ui/src/features/picks/components/PositionEditor.tsx": {
     "no-restricted-syntax": {
-      "count": 14
+      "count": 11
     }
   },
   "packages/ui/src/features/picks/components/RegimeBadge.tsx": {
@@ -149,7 +149,7 @@
   },
   "packages/ui/src/features/picks/components/TradeEditForm.tsx": {
     "no-restricted-syntax": {
-      "count": 13
+      "count": 10
     }
   },
   "packages/ui/src/features/picks/components/TradesFilterBar.tsx": {

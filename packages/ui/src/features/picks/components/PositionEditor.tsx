@@ -5,6 +5,7 @@ import type { Holding } from '../api';
 import { getSupabase } from '../../../lib/supabase';
 import { useCategories } from '../useCategories';
 import { errMsg } from '../../../lib/errMsg';
+import { Modal } from '../../../primitives/Modal';
 
 const CONVICTIONS = [5, 4, 3, 2, 1, 0];
 const ACTIONS = ['New', 'Upsized', 'Trimmed', 'Hold', 'Closed'];
@@ -58,10 +59,7 @@ export function PositionEditor({ holding: h, onDone }: Props) {
   }
 
   return (
-    <div onClick={onDone} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '6vh 16px 16px', overflowY: 'auto' }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 520, background: 'var(--surface)', border: '1px solid var(--acc)', borderRadius: 10, padding: '16px 18px', boxShadow: '0 12px 40px rgba(0,0,0,0.5)' }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--acc)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.08em' }}>✎ Edit {h.ticker}</div>
-
+    <Modal onClose={onDone} width="lg" title={`✎ Edit ${h.ticker}`}>
         {/* Position fields */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <div><label style={label}>Conviction</label>
@@ -100,13 +98,12 @@ export function PositionEditor({ holding: h, onDone }: Props) {
           </div>
         </div>
 
-        {error && <div style={{ fontSize: 11, color: '#ef4444', marginTop: 10 }}>{error}</div>}
+        {error && <div style={{ fontSize: 11, color: 'var(--status-negative-text)', marginTop: 10 }}>{error}</div>}
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
           <button onClick={save} disabled={saving} style={{ padding: '7px 16px', borderRadius: 5, border: 'none', cursor: 'pointer', background: 'var(--acc)', color: '#fff', fontSize: 12, fontWeight: 600, opacity: saving ? 0.6 : 1 }}>{saving ? 'Saving…' : 'Save'}</button>
           <button onClick={onDone} disabled={saving} style={{ padding: '7px 16px', borderRadius: 5, cursor: 'pointer', background: 'none', border: '1px solid var(--border)', color: 'var(--t2)', fontSize: 12 }}>Cancel</button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 

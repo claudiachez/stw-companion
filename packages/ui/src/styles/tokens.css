@@ -77,10 +77,10 @@
        value is shared today, so a future brand-green change can't accidentally also
        change what "a gain" looks like, and vice versa (spec's explicit ask). This is
        also the fix for the P&L color bug in
-       docs/design-system/audit/04-additional-inconsistencies.md §2 — HoldingRow.tsx /
-       HoldingDetail.tsx / SignalsTable.tsx should migrate their hardcoded #16A34A/
-       #DC2626 onto these, in a follow-up change (not this session, per the "no page
-       migration yet" rule), and Phase 4's migration plan should sequence it. */
+       docs/design-system/audit/04-additional-inconsistencies.md §2 — HoldingRow.tsx,
+       HoldingDetail.tsx, and SignalsTable.tsx all migrated their hardcoded #16A34A/
+       #DC2626 onto these as part of the design-system Phase 5 page migration (Stock
+       Picks' bug-fix sub-pass; SignalsTable.tsx landed earlier, during GEX Signals). */
     --pnl-gain: var(--acc);
     --pnl-loss: var(--c1);
 

@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { fmtLegInstrument, humanizeLegEnum } from '@stw/shared';
 import { updateLegWeight } from '../api';
 import type { Holding } from '../api';
+import { Modal } from '../../../primitives/Modal';
 
 interface Props {
   holding: Holding;
@@ -57,26 +58,7 @@ export function TradeEditForm({ holding: h, onDone }: Props) {
   }
 
   return (
-    <div
-      onClick={onDone}
-      style={{
-        position: 'fixed', inset: 0, zIndex: 1000,
-        background: 'rgba(0,0,0,0.55)', display: 'flex',
-        alignItems: 'flex-start', justifyContent: 'center',
-        padding: '8vh 16px 16px', overflowY: 'auto',
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: '100%', maxWidth: 420, background: 'var(--surface)',
-          border: '1px solid var(--acc)', borderRadius: 10, padding: '16px 18px',
-          boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
-        }}
-      >
-        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--acc)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-          ✎ Edit Leg Weights — {h.ticker}
-        </div>
+    <Modal onClose={onDone} width="sm" title={`✎ Edit Leg Weights — ${h.ticker}`}>
         <div style={{ fontSize: 11, color: 'var(--t3)', marginBottom: 14 }}>
           Override the default split. Blank clears it back to the auto-weighting.
         </div>
@@ -110,7 +92,7 @@ export function TradeEditForm({ holding: h, onDone }: Props) {
           </div>
         )}
 
-        {error && <div style={{ fontSize: 11, color: '#ef4444', marginTop: 10 }}>{error}</div>}
+        {error && <div style={{ fontSize: 11, color: 'var(--status-negative-text)', marginTop: 10 }}>{error}</div>}
 
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
           <button
@@ -128,7 +110,6 @@ export function TradeEditForm({ holding: h, onDone }: Props) {
             Cancel
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
