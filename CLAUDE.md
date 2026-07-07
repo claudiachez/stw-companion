@@ -1,26 +1,32 @@
 # STW Companion — Claude Code Guide
 
 > **⚠️ START HERE — branch.** **`staging` is the active trunk** — all feature work happens here.
-> **`staging` and `main` are in sync as of 2026-07-05** (`staging → main` PR #66 merged — full
-> production promotion of Macro Dashboard v2 + QA fixes + regime badges + admin IBKR trading + this
-> session's TwelveData rate-limit fix). Cut new feature branches from `staging`; it's currently
-> identical to `main`.
-> Migrations run to **053** (`048_macro_daily_snapshots`, `049_macro_weekly_recaps` [legacy],
-> `050_run_log_latest_view` [unrelated — GEX Signals "Checked: …" stamp], `051_macro_daily_recaps`,
-> `052_ibkr_live_trading` [admin IBKR kill switch + `leg_transactions.broker_*` columns],
-> `053_capital_allocation` [admin IBKR order-quantity suggestion defaults]) — all verified applied on
-> both PROD (`usmqbohcjcyszjxxvnqu`) and sandbox (`uolabcgbnrkhzpwuvzlk`) as of 2026-07-05 (applied via
-> the Supabase MCP directly, not the SQL editor — same effect).
+> **`staging` and `main` are in sync as of 2026-07-05** (`staging → main` PR #66 merged). `staging`
+> itself is still exactly that state — **2 commits ahead of `main`** (both trivial CLAUDE.md handoff
+> commits, nothing code-bearing) — so no new promotion is pending.
+> **Two open PRs currently stack on top of `staging`, neither merged yet:**
+> [PR #67](https://github.com/claudiachez/stw-companion/pull/67) (`claude/week1-integrity-guardrails`
+> → `staging`, migrations 054–058, the Limits/regime engine, integrity guardrails — see
+> [`plans/integrity-guardrails-report.md`](plans/integrity-guardrails-report.md)) and
+> [PR #69](https://github.com/claudiachez/stw-companion/pull/69)
+> (`claude/portfolio-limits-redesign` → `claude/week1-integrity-guardrails`, this session's
+> Settings/My Portfolio redesign — see "Current Status" below). **Both are untouched pending host
+> review — do not merge either yourself.** If you're picking up either PR's work, branch further from
+> that PR's branch, not from `staging` (staging doesn't have this code yet).
+> Migrations run to **053 on `staging`**; **054–058 exist only on the PR #67 branch** (and per
+> [`plans/integrity-guardrails-report.md`](plans/integrity-guardrails-report.md) were already applied
+> directly to PROD, with 058 PROD-only — sandbox has no `tiers`/`profiles` tables to apply it to).
 > `app_config.ibkr_live_trading_enabled` = **`0` on both PROD and sandbox** (confirmed 2026-07-05 —
 > sandbox was left on `1` from prior UI testing, now turned back off via the Config page).
 > If migrations stop at 021 you are on a stale checkout, re-sync.
-> **First commands every session:**
-> `git fetch origin && git checkout staging && git pull --ff-only`, **then cut a feature branch**
-> before making any change: `git checkout -b claude/<short-feature-name>`. **Never commit directly to
-> `staging`** — work on the branch, push it, open a PR back to `staging` (host merges/approves).
-> `main` is promoted only by an approved staging→main PR (= a production deploy) — this is a standing
-> approval gate, not a one-time exception; ask before opening a staging→main PR even if staging looks
-> ready.
+> **First commands every session:** `git fetch origin && git checkout staging && git pull --ff-only`
+> — but check the two-PR note above first: if your task continues PR #67 or #69's work, check out
+> that PR's branch directly instead of cutting fresh from `staging`. Otherwise, **cut a feature
+> branch** before making any change: `git checkout -b claude/<short-feature-name>`. **Never commit
+> directly to `staging`** — work on the branch, push it, open a PR back to `staging` (host
+> merges/approves). `main` is promoted only by an approved staging→main PR (= a production deploy) —
+> this is a standing approval gate, not a one-time exception; ask before opening a staging→main PR
+> even if staging looks ready.
 > (Note: `memory/` lives in local `~/.claude/`, NOT in the repo — never reference it in a prompt meant
 > for a remote session; put anything a future session needs into the repo.)
 
@@ -43,10 +49,62 @@
 
 ---
 
-## Current Status — TwelveData rate-limit bug fixed + shipped to production (handoff 2026-07-05)
+## Current Status — Settings/My Portfolio redesign shipped as PR #69 (handoff 2026-07-06)
 
-**NEXT SESSION = `staging` and `main` are in sync — everything is in production, including this
-session's fix.** This session found the REAL reason the per-ticker regime badge never rendered: it
+**NEXT SESSION PRIORITY (host-requested, queued before further feature work): build the design
+system foundation.** Read [`plans/stw-design-system.md`](plans/stw-design-system.md) in full — it's
+a self-contained, checkpointed 4-phase spec (Audit → Tokens → Core components → Enforcement/migration
+prep) written for a fresh session. **It is audit-first and explicitly says "STOP for review at each
+checkpoint"** — do not skip ahead to building components before Phase 1's audit is presented and
+approved, and do not migrate any existing page's styling in this pass (Phase 4 only prepares a
+migration plan, it doesn't execute one). This was prompted by real inconsistency this session ran
+into first-hand while building the My Portfolio redesign below (three-plus badge treatments, two
+unrelated "primary button" styles, inconsistent numeric alignment) — treat the symptom inventory in
+that file as confirmed, not hypothetical.
+
+**This session's actual code work: a host-approved UX proposal, then a full build, for
+Settings/My Portfolio**, landed as [PR #69](https://github.com/claudiachez/stw-companion/pull/69)
+(`claude/portfolio-limits-redesign` → `claude/week1-integrity-guardrails`, i.e. **on top of the still-
+open PR #67**, not on `staging` — see the top banner). Full proposal at
+[`plans/my-portfolio-settings-redesign-proposal.md`](plans/my-portfolio-settings-redesign-proposal.md),
+reviewed and approved by the host before any code was written (standing practice worth repeating for
+similarly-sized UI changes — presenting the proposal first surfaced a real ambiguity, "how exactly do
+Gross Exposure/Sector Concentration render on My Portfolio", that would have been a wrong-guess
+otherwise). What shipped:
+- **Settings now holds only account setup.** IBKR Connection + a pure `RiskConfigForm` (thresholds
+  only, no sync button, no violation display) in a 2-column layout. One Sync button total (on the
+  Connection card).
+- **`LimitsPanel` split**: `RiskConfigForm` (Settings, both apps) stays; a new collapsible
+  `ViolationsSummary` (`packages/ui/src/features/limits/ViolationsSummary.tsx` — gross-exposure
+  progress bar, breach-only concentration rows with a "show all" expander, honest "Unmapped (no
+  sector data yet)" labeling) moved to **My Portfolio**, gated by a new `canUseLimits` capability
+  (wired via a `PortfolioRoute` wrapper in apps/web, same pattern as `PicksRoute`'s `canViewHistory`;
+  admin gets it unconditionally). Admin's Limits tab now composes both pieces via a slimmed
+  `LimitsPanel.tsx`.
+- **Ticker click on My Portfolio opens an own-position detail pane**
+  (`packages/ui/src/features/portfolio/PortfolioPositionDetail.tsx`) instead of navigating to STW's
+  tracked position — tailing status vs. STW with an explicit "View STW's tracked position →" link
+  (the old default-click behavior, now opt-in), a per-ticker risk/regime rollup, Open P&L (real) /
+  Closed P&L ("coming soon" — the subscriber Flex sync still only returns open positions, see Next
+  Steps #7 below, unchanged). Follows `PicksView.tsx`'s list+detail contract: desktop resizable split,
+  mobile full-screen swap.
+- **Four value-adds** on My Portfolio, all reusing data already flowing in (no new pipelines): sizing
+  delta vs. the tailed pick ("You: X% · STW: Y%"), a declining-STW-conviction alert (reuses the
+  existing `useConvictionChanges` batch classifier, filtered to tailed tickers), an advisory
+  regime note under the Equity:Options card (same `regimeGate()`/STW→IWM proxy as the admin's
+  `RegimeLight`, same "advisory, not a trade signal" framing), and a stale-sync banner past 24h.
+- **Verified:** `pnpm -r typecheck` (all 4 workspaces) and `pnpm -r test` (187/187, `@stw/shared` —
+  no logic changed, this was UI-only) both green. `ViolationsSummary`/`RiskConfigForm` verified live
+  in-browser via apps/admin (shares the same components) — collapse/expand, gross-exposure bar, empty
+  states, no console errors, both desktop and 390px mobile.
+- **NOT verified: apps/web itself.** No real subscriber credentials were available in that session's
+  environment, and apps/web points at the production Supabase project, so login wasn't attempted —
+  the My Portfolio detail pane, the split/mobile-swap wiring, and the four value-add banners are
+  typechecked but have never been seen rendering in a real browser. **Do this first if picking up
+  PR #69** — it's the single biggest confidence gap left.
+
+**Previous handoff (2026-07-05) — TwelveData rate-limit bug fixed + shipped to production, unchanged
+since.** This session found the REAL reason the per-ticker regime badge never rendered: it
 was never the "daily quota exhausted" cause diagnosed on 2026-07-03 — that was a real, separate event,
 but the actual structural bug (still present after that quota reset) is that `tdBatchCloses()` bundled
 many symbols into one comma-joined TwelveData call assuming that avoided the free tier's rate limit;
@@ -259,7 +317,7 @@ run DDL locally — apply migrations via the Supabase SQL editor). Prod service 
   `aea1699f-e0b8-4ed4-80b9-4abb5d0a7711`; the underlying skill is `skill_01UY6zPNf9Do8eR4voyUvtm6`. Being
   cleared via Anthropic support / desktop skill-delete. Also smoke-test the routines on their next live runs.
 
-## New this session (2026-07-05, staging → main — committed, pushed, promoted)
+## From the 2026-07-05 session (staging → main — committed, pushed, promoted)
 
 Picked up where 2026-07-03 left off: re-checked the regime badge, found the real bug behind it, fixed
 it, shipped it to production, then separately investigated + fixed a live data-integrity report.
@@ -310,58 +368,65 @@ it, shipped it to production, then separately investigated + fixed a live data-i
 
 ## Next Steps
 
-1. **Visually confirm the regime badge actually renders** now that the rate-limit fix is live. Open a
+1. **Build the design system foundation** — see the priority note at the top of Current Status.
+   [`plans/stw-design-system.md`](plans/stw-design-system.md) is the full spec; start at Phase 1
+   (audit) and stop for review before Phase 2.
+
+2. **Get PR #67 and PR #69 reviewed and merged** (in that order — #69 is stacked on #67). Before
+   merging either: (a) apps/web browser verification for #69 (see Current Status — never actually
+   confirmed live), (b) PR #67's own deferred items — Item 0's live cron verification and Item 3's
+   regime_daily backfill, both still not run (see
+   [`plans/integrity-guardrails-report.md`](plans/integrity-guardrails-report.md) for exact status).
+   Do not merge either PR yourself without host approval, per standing rule.
+
+3. **Visually confirm the regime badge actually renders** now that the rate-limit fix is live. Open a
    held ticker's detail page (or the Picks list at normal width) and check for the trend-structure
    chip — allow several minutes on a cold load (paced ≤8 symbols/65s) before concluding it's still
    broken. If it's blank even after a full population cycle, that's a new, third bug — don't assume
    it's the same root cause as the last two.
 
-2. **Live-test the admin IBKR order flow against a real IB Gateway** — cannot be done from this
+4. **Live-test the admin IBKR order flow against a real IB Gateway** — cannot be done from this
    environment. In order: (1) `IB_PORT=4002 python3 ibkr_proxy.py` against Gateway in **paper** mode,
    (2) place a real paper order end-to-end from the "Open via IBKR" modal, confirm the fill patches the
    diary row's price correctly, (3) test "Close via IBKR" on an open leg, (4) only after both work
    cleanly, consider port 4001 (live). Flag if `/order_status`'s `reqAllOpenOrders`/`reqCompletedOrders`
    lookup doesn't find a previously-placed order from a new connection.
 
-3. **Phase 4 admin Manage area, Parts B/C — still not built** (Part A, Config, shipped 2026-07-03).
+5. **Phase 4 admin Manage area, Parts B/C — still not built** (Part A, Config, shipped 2026-07-03).
    Spec: [`plans/phase4_admin_manage.md`](plans/phase4_admin_manage.md). **Categories CRUD**
    (delete-guarded — block or reassign-to-Uncategorized on delete) and **Traders** (read-only
    recommended — only 2 seeded, FK'd everywhere, high-risk/low-value to make editable). No migrations
    expected.
 
-4. **Verify `macro_daily_snapshots` (migration 048) is actually populating** — still confirmed **empty
+6. **Verify `macro_daily_snapshots` (migration 048) is actually populating** — still confirmed **empty
    on PROD as of 2026-07-05**, well after the `macro-snapshot.ts` fix (commit `3aa5528`, 2026-07-02)
    shipped. `macro_daily_recaps` (051) IS getting fresh rows, so scheduled functions are firing on this
    site — either the snapshot function needs more scheduled cycles, or it's still failing silently.
    Check Netlify function logs for `macro-snapshot` before spending more time re-diagnosing from the DB
    side alone.
 
-5. **Macro Dashboard — remaining roadmap item** (spec: [`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md)).
+7. **Macro Dashboard — remaining roadmap item** (spec: [`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md)).
    All 11 modules are built and in production. The one item left from the spec:
    - **Portfolio Heatmap** — treemap block on `PortfolioDashboard`, box ∝ `current_weight`,
      Today/Total + By Basket/All toggles. Spec § "Phase 4: Portfolio Heatmap".
 
-6. **Overview/experience enrichment (host-requested, queued).** Stop the click-each-ticker experience:
+8. **Overview/experience enrichment (host-requested, queued).** Stop the click-each-ticker experience:
    - **Transcripts library tab** — a NEW subscriber-facing **episode recap** (host's *trading psychology* +
      that episode's *per-ticker commentary*). **NOT** the local methodology `.md` files (apps never read those).
      Needs a new `webinars` table written by `stw-transcripts` + a new tab.
    - **Global Activity Feed** — one cross-ticker, reverse-chron feed merging Commentary + Transactions across
      all holdings, filterable. No schema (reads `conviction_comments` + `leg_transactions`). Low-cost.
 
-7. **Subscriber closed-position P&L history — explicitly postponed by the host, design already
+9. **Subscriber closed-position P&L history — explicitly postponed by the host, design already
    researched.** The subscriber IBKR Flex query returns *open positions only* and the sync is
    delete-all-then-insert; closed history needs a genuinely different append-only, dedup-on-execution-id
    sync (a second Flex Query template + a new `user_closed_trades` table). Don't build until the host
-   asks again.
+   asks again. **Note:** the My Portfolio detail pane (this session) already surfaces this gap
+   honestly to users as a "Closed position history — coming soon" placeholder rather than hiding it.
 
-8. **Future features (not migration work):** inline 2-line leg editing in the modal (deferred); `$100k`
-   notional + SPY benchmark (the `spy_daily` table from migration 032 already exists; the population
-   cron + benchmark UI are unbuilt).
-
-9. **`plans/integrity-guardrails.md`** — a self-contained build request the host prepared for a NEW
-   session (Week 1: integrity batch + risk guardrails + advisory regime light). Explicitly scoped to
-   NOT integrate with the existing Macro Dashboard scoring — read that file in full before starting;
-   it's meant to be pasted into its own session, not continued from this handoff.
+10. **Future features (not migration work):** inline 2-line leg editing in the modal (deferred); `$100k`
+    notional + SPY benchmark (the `spy_daily` table from migration 032 already exists; the population
+    cron + benchmark UI are unbuilt).
 
 **Sandbox gaps (not blocking, dev-only):** (a) the **`prev_conviction_level` backfill** was never run on
 sandbox, so the Conviction Changes block won't render there until it is (or until a real batch lands); (b) the
@@ -753,10 +818,33 @@ active filter (closed hidden by default). The FilterBar count shows `N of {total
   can't cover one unit, rather than leaving the field empty (which reads as "nothing computed" instead
   of "budget insufficient"). Apply the same instinct anywhere a calculation can legitimately land on
   zero/empty — show the result and why, don't hide it.
+- **Settings pages hold only account setup — never live evaluation/violation display** (host decision,
+  2026-07-06). A Settings form configures thresholds/credentials; it does not also show you how you're
+  doing against them. That belongs on the page the data itself lives on (e.g. Limits violations live
+  on My Portfolio, not Settings, even though the thresholds that drive them are edited in Settings).
+  If a future Settings addition is tempted to add a "preview" of live data next to a config field,
+  don't — split it the same way `RiskConfigForm` (Settings) and `ViolationsSummary` (My Portfolio)
+  were split.
+- **A list page's default ticker-click action should open that page's OWN data about the ticker, not
+  jump to a different page's tracked version of it** (host decision, 2026-07-06, My Portfolio). My
+  Portfolio's ticker click now opens an own-position detail pane instead of navigating to STW's
+  tracked position (`PortfolioPositionDetail.tsx`) — the STW-position view is still reachable, but
+  as an explicit named link inside the pane, not the default click target. Apply the same instinct to
+  any future page that lists a subscriber's own data but is tempted to default-link into STW's data
+  instead.
 
 ---
 
 ## Design System
+
+> **A formal design-token + component system is queued and spec'd** at
+> [`plans/stw-design-system.md`](plans/stw-design-system.md) (see Next Steps #1) — a 4-phase,
+> checkpointed build (audit → tokens → core components → enforcement/migration plan) triggered by
+> real inconsistency found during the 2026-07-06 My Portfolio redesign (3+ badge treatments, two
+> unrelated "primary button" styles, inconsistent numeric alignment). Until that lands, the raw CSS
+> variables below remain the only source of truth — don't invent a second parallel token scheme
+> (e.g. a new Tailwind theme extension) in the meantime; extend this table instead, the same way
+> every page has so far.
 
 - **Font:** Barlow Condensed (700/800) for the **STW logo** in the header only; system sans-serif (`font-sans`) everywhere else including page headings and login
 - **Logo:** STW mic + green arrow SVG
