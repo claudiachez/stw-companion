@@ -1,32 +1,24 @@
 # STW Companion — Claude Code Guide
 
 > **⚠️ START HERE — branch.** **`staging` is the active trunk** — all feature work happens here.
-> **`staging` and `main` are in sync as of 2026-07-05** (`staging → main` PR #66 merged). `staging`
-> itself is still exactly that state — **2 commits ahead of `main`** (both trivial CLAUDE.md handoff
-> commits, nothing code-bearing) — so no new promotion is pending.
-> **Two open PRs currently stack on top of `staging`, neither merged yet:**
-> [PR #67](https://github.com/claudiachez/stw-companion/pull/67) (`claude/week1-integrity-guardrails`
-> → `staging`, migrations 054–058, the Limits/regime engine, integrity guardrails — see
-> [`plans/integrity-guardrails-report.md`](plans/integrity-guardrails-report.md)) and
-> [PR #69](https://github.com/claudiachez/stw-companion/pull/69)
-> (`claude/portfolio-limits-redesign` → `claude/week1-integrity-guardrails`, this session's
-> Settings/My Portfolio redesign — see "Current Status" below). **Both are untouched pending host
-> review — do not merge either yourself.** If you're picking up either PR's work, branch further from
-> that PR's branch, not from `staging` (staging doesn't have this code yet).
-> Migrations run to **053 on `staging`**; **054–058 exist only on the PR #67 branch** (and per
-> [`plans/integrity-guardrails-report.md`](plans/integrity-guardrails-report.md) were already applied
-> directly to PROD, with 058 PROD-only — sandbox has no `tiers`/`profiles` tables to apply it to).
-> `app_config.ibkr_live_trading_enabled` = **`0` on both PROD and sandbox** (confirmed 2026-07-05 —
-> sandbox was left on `1` from prior UI testing, now turned back off via the Config page).
-> If migrations stop at 021 you are on a stale checkout, re-sync.
-> **First commands every session:** `git fetch origin && git checkout staging && git pull --ff-only`
-> — but check the two-PR note above first: if your task continues PR #67 or #69's work, check out
-> that PR's branch directly instead of cutting fresh from `staging`. Otherwise, **cut a feature
-> branch** before making any change: `git checkout -b claude/<short-feature-name>`. **Never commit
-> directly to `staging`** — work on the branch, push it, open a PR back to `staging` (host
-> merges/approves). `main` is promoted only by an approved staging→main PR (= a production deploy) —
-> this is a standing approval gate, not a one-time exception; ask before opening a staging→main PR
-> even if staging looks ready.
+> **`staging` is 58 commits ahead of `main` as of 2026-07-08** (last promotion was PR #66 on
+> 2026-07-05) — none of this file's "Current Status" work below is on production yet. A
+> `staging → main` PR is a separate, approval-gated production deploy; **do not open one without
+> explicit host approval**, even if staging looks ready.
+> **No open PRs stacking on `staging` right now** — PR #67, #69, and #72 (the three from this
+> session and the prior one) all merged cleanly on 2026-07-08. If you're starting fresh work, cut a
+> normal feature branch from `staging` (see below); there's no PR stack to branch from.
+> Migrations run to **059 on `staging`**, applied on **both PROD and sandbox** (058 is PROD-only —
+> sandbox has no `tiers`/`profiles` tables to apply it to; this is a known, permanent gap, not
+> pending work).
+> `app_config.ibkr_live_trading_enabled` = **`0` on both PROD and sandbox** (last confirmed 2026-07-05).
+> If migrations stop well short of 059 you are on a stale checkout, re-sync.
+> **First commands every session:** `git fetch origin && git checkout staging && git pull --ff-only`.
+> Sanity check: `supabase/migrations/` should go up to `059_risk_config_account_equity.sql`, and
+> `docs/design-system/CONTRIBUTING.md` should exist — if either is missing, you're on a stale
+> checkout. Then **cut a feature branch** before making any change:
+> `git checkout -b claude/<short-feature-name>`. **Never commit directly to `staging`** — work on
+> the branch, push it, open a PR back to `staging` (host merges/approves).
 > (Note: `memory/` lives in local `~/.claude/`, NOT in the repo — never reference it in a prompt meant
 > for a remote session; put anything a future session needs into the repo.)
 
@@ -49,23 +41,78 @@
 
 ---
 
-## Current Status — Settings/My Portfolio redesign shipped as PR #69 (handoff 2026-07-06)
+## Current Status — PR #67/#69/#72 merged to staging, Settings redesigned (handoff 2026-07-08)
 
-**NEXT SESSION PRIORITY (host-requested, queued before further feature work): build the design
-system foundation.** Read [`plans/stw-design-system.md`](plans/stw-design-system.md) in full — it's
-a self-contained, checkpointed 4-phase spec (Audit → Tokens → Core components → Enforcement/migration
-prep) written for a fresh session. **It is audit-first and explicitly says "STOP for review at each
-checkpoint"** — do not skip ahead to building components before Phase 1's audit is presented and
-approved, and do not migrate any existing page's styling in this pass (Phase 4 only prepares a
-migration plan, it doesn't execute one). This was prompted by real inconsistency this session ran
-into first-hand while building the My Portfolio redesign below (three-plus badge treatments, two
-unrelated "primary button" styles, inconsistent numeric alignment) — treat the symptom inventory in
-that file as confirmed, not hypothetical.
+**This session (2026-07-08): reviewed PR #67 + #69 for merge-readiness, fixed 3 real bugs found in
+review, then did a host-requested Settings-page redesign — all now on `staging`.**
 
-**This session's actual code work: a host-approved UX proposal, then a full build, for
+1. **Resolved both PRs' merge conflicts against `staging`** (they'd drifted behind the design-system
+   migration and each other) and got them clean: [PR #67](https://github.com/claudiachez/stw-companion/pull/67),
+   [PR #69](https://github.com/claudiachez/stw-companion/pull/69) — both merged, plus a new
+   [PR #72](https://github.com/claudiachez/stw-companion/pull/72) for the Settings redesign below.
+   PR #68 (a stale pre-merge CLAUDE.md handoff note) was closed as superseded rather than merged.
+2. **Design-token audit on every file the PRs introduced** that predated the design-system rollout —
+   `LimitsPanel.tsx`, `ViolationsSummary.tsx`, `PortfolioPositionDetail.tsx`, `RegimeLight.tsx`,
+   `PortfolioPage.tsx`'s new regime-advisory code — all literal colors/font-sizes swapped onto
+   tokens, `pnpm lint` clean.
+3. **Found and fixed a real bug during review**: My Portfolio's declining-STW-conviction banner
+   filtered against STW's entire tracked universe instead of the subscriber's own held tickers —
+   fixed to intersect against the subscriber's actual IBKR positions
+   (`packages/ui/src/features/portfolio/PortfolioPage.tsx`).
+4. **Found and fixed 3 more real bugs via a full host code review** of PR #67's limits engine:
+   - **Closing a position via the admin UI would hard-fail.** Migration 054's
+     `trg_holdings_closed_weight_zero` trigger (already live on PROD) raises if `last_action` is
+     `Closed`/`Expired` while `current_weight ≠ 0`, but `PositionEditor.tsx` never zeroed
+     `current_weight` when the admin set that status. Fixed: it now does, when closing.
+   - **Gross exposure was tautologically ~100%.** `LimitsPanel.tsx`/`ViolationsSummary.tsx` derived
+     `accountEquity` as the sum of the *same* positions being evaluated, so
+     `grossExposureViolation`'s numerator == denominator always. Fixed by adding a real
+     `risk_config.account_equity` figure (migration 059) — see "Decisions locked — risk limits
+     engine" below.
+   - **The drawdown ladder was permanently dead** — `drawdownPct` was hardcoded `null` with nothing
+     to derive it from. Fixed via `risk_config.equity_peak`, a trigger-maintained high-water mark
+     (also migration 059) — `drawdownPct = (account_equity − equity_peak) / equity_peak`.
+   - Migration 059 applied to **both PROD and sandbox**, verified: every `risk_config` row now has
+     `account_equity = 100000` (a placeholder default, `is_placeholder=true` until overridden) and
+     `equity_peak = 100000`. Trigger behavior verified live on sandbox (raising equity → peak rises;
+     lowering it back → peak correctly holds, producing a real drawdown reading).
+5. **Settings page redesign** (host-requested UI pass, `apps/web`'s `/settings`) — see "UI
+   consistency" and "Decisions locked" below for the durable rules this established:
+   - IBKR Connection collapses to a compact "Connected" status strip once credentials are saved;
+     the walkthrough + token/query fields move behind an "Edit connection ▸" toggle, with "How to
+     connect" as its own further-nested collapse.
+   - Drawdown ladder is now a **dynamic array** (Add/Remove rung), each rendered as one aligned row.
+   - Sync Portfolio moved next to the Connected badge with a real "Last synced" readout (sourced
+     from `user_positions.last_synced_at`, not a client-only timestamp).
+   - Saving IBKR credentials now immediately triggers a verification sync — a typo'd token/Query ID
+     fails visibly at save time. `ibkr-flex.ts` now echoes back the resolved IBKR account ID.
+   - Inline validation warnings (ladder monotonicity; position ≤ sector ≤ gross) — flags only, never
+     blocks Save.
+   - **Fixed a real bug in the shared `FormRow` primitive** (`packages/ui/src/primitives/FormRow.tsx`)
+     found live while building this: its `'horizontal'` layout's `hint` never actually wrapped onto
+     its own line (missing `flexWrap`), so pairing a hint with a horizontal input silently squeezed
+     the input to near-zero width. Also fixed: `RiskConfigForm` now switches every row to `'stacked'`
+     on mobile (`useIsMobile`) — `'horizontal'`'s fixed label column plus a ladder row's two inputs
+     reliably overflowed ≤390px and centered the row label mid-way through the wrapped content.
+   - **Verified live** via `apps/admin`'s Limits tab (shares `RiskConfigForm`, sandbox-authenticated):
+     dynamic ladder, both validation warnings firing together, dirty-state Save styling, dark + light
+     theme contrast, 375px mobile. **NOT verified live**: `SettingsPage.tsx`'s own connection-strip/
+     collapse/save-verify flow — `apps/web` needs real subscriber Supabase auth this environment
+     doesn't have (same pre-existing gap as PR #69's own unverified state, below). Do this first if
+     anything in that flow looks off.
+   - `pnpm typecheck` / `pnpm lint` / `pnpm test` / `pnpm build` all green throughout.
+
+**Design system status (context, not this session's work): fully rolled out, not queued.** The
+"Design System" section further down in this file still described a raw-CSS-variable table as the
+"queued" plan — that was stale; the full token + primitive system (`packages/ui/src/primitives/`,
+`packages/ui/src/styles/tokens.css`, `packages/shared/src/constants/tokens.ts`, an eslint rule with
+zero baseline) shipped repo-wide before this session started. See `docs/design-system/CONTRIBUTING.md`
+for the actual current source of truth.
+
+**Previous session's actual code work: a host-approved UX proposal, then a full build, for
 Settings/My Portfolio**, landed as [PR #69](https://github.com/claudiachez/stw-companion/pull/69)
-(`claude/portfolio-limits-redesign` → `claude/week1-integrity-guardrails`, i.e. **on top of the still-
-open PR #67**, not on `staging` — see the top banner). Full proposal at
+(at the time, stacked on the still-open PR #67 — both have since merged to `staging`, see Current
+Status above). Full proposal at
 [`plans/my-portfolio-settings-redesign-proposal.md`](plans/my-portfolio-settings-redesign-proposal.md),
 reviewed and approved by the host before any code was written (standing practice worth repeating for
 similarly-sized UI changes — presenting the proposal first surfaced a real ambiguity, "how exactly do
@@ -100,8 +147,11 @@ otherwise). What shipped:
 - **NOT verified: apps/web itself.** No real subscriber credentials were available in that session's
   environment, and apps/web points at the production Supabase project, so login wasn't attempted —
   the My Portfolio detail pane, the split/mobile-swap wiring, and the four value-add banners are
-  typechecked but have never been seen rendering in a real browser. **Do this first if picking up
-  PR #69** — it's the single biggest confidence gap left.
+  typechecked but have never been seen rendering in a real browser. **This is still the single
+  biggest confidence gap on `apps/web`** as of 2026-07-08 — carried forward through two more
+  sessions' worth of changes to this same app without ever being resolved, since none of them had
+  real subscriber credentials either. Whoever has access to a real subscriber login should do this
+  first.
 
 **Previous handoff (2026-07-05) — TwelveData rate-limit bug fixed + shipped to production, unchanged
 since.** This session found the REAL reason the per-ticker regime badge never rendered: it
@@ -280,6 +330,22 @@ counts to the `legs`/`leg_transactions` schema). A confirmed broker fill is the 
 patch a diary row's price after the fact — the requested/limit price never is, same rule as every other
 close in this ledger.
 
+**Decisions locked — risk limits engine (host 2026-07-08):** `risk_config.account_equity` defaults
+to a **$100,000 placeholder** for every new row (migration 059's `DEFAULT`, not left `null`) —
+same "seed a placeholder, flag it via `is_placeholder`, let the user override" pattern already used
+for the threshold defaults (migration 055), not a special case. `equity_peak` is a
+**trigger-maintained high-water mark** (`fn_risk_config_track_equity_peak`) that only ever
+increases — this is a genuinely derived value (same "scoreboard is a pure trigger-derived
+projection" pattern as `legs`/`leg_transactions`), **not** the "fail loud, never silently coalesce"
+pattern migration 054 uses for the closed-weight invariant; don't conflate the two triggers'
+philosophies. The drawdown ladder is validated but **never blocking** — inline warnings
+(monotonicity; position ≤ sector ≤ gross) render but Save stays enabled, matching this engine's
+standing "flags only, nothing here places or blocks a trade" framing everywhere else. **Any UI
+that shows a `risk_config`-derived percentage (gross exposure, position/sector concentration) must
+use `config.account_equity` as the denominator, never re-derive it from the same positions being
+evaluated** — that was the exact tautology bug found and fixed this session (gross exposure read
+~100% unconditionally because the numerator and denominator were the same sum).
+
 **New plan docs (`plans/`):** `legs_event_sourcing_redesign.md` (spec) · `import_open_positions.sql`
 (clean open-position import) · `post_import_holdings_fix.sql` (Next Step #2 seed) ·
 `revert_legacy_category.sql` (drops the bad Legacy category) · `040_sandbox_verify.sql` (trigger test) ·
@@ -368,16 +434,16 @@ it, shipped it to production, then separately investigated + fixed a live data-i
 
 ## Next Steps
 
-1. **Build the design system foundation** — see the priority note at the top of Current Status.
-   [`plans/stw-design-system.md`](plans/stw-design-system.md) is the full spec; start at Phase 1
-   (audit) and stop for review before Phase 2.
+1. **Visually verify `apps/web` live, for real, with real subscriber credentials.** This has now
+   carried across three sessions unresolved (see Current Status) — Settings, My Portfolio's detail
+   pane, and the split/mobile-swap wiring are all typechecked and lint-clean but have never once been
+   seen rendering in a real browser, because no session so far has had real subscriber Supabase auth.
+   If you have real credentials this session, this is the highest-value thing to spend them on.
 
-2. **Get PR #67 and PR #69 reviewed and merged** (in that order — #69 is stacked on #67). Before
-   merging either: (a) apps/web browser verification for #69 (see Current Status — never actually
-   confirmed live), (b) PR #67's own deferred items — Item 0's live cron verification and Item 3's
-   regime_daily backfill, both still not run (see
+2. **PR #67's own deferred items — still not run, independent of the merge:** Item 0's live cron
+   verification and Item 3's `regime_daily` backfill (see
    [`plans/integrity-guardrails-report.md`](plans/integrity-guardrails-report.md) for exact status).
-   Do not merge either PR yourself without host approval, per standing rule.
+   Merging the PR didn't resolve these; they're still open work.
 
 3. **Visually confirm the regime badge actually renders** now that the rate-limit fix is live. Open a
    held ticker's detail page (or the Picks list at normal width) and check for the trend-structure
@@ -467,7 +533,7 @@ apps/
   admin/                     admin shell: no paywall, Edit + Users + Config + IBKR (pricer + order placement)
     ibkr_proxy.py            local IBKR writer (run on your machine, not deployed)
     netlify.toml             (Netlify base dir = apps/admin)
-supabase/migrations/         001..053 — single source of truth for DB schema/RLS
+supabase/migrations/         001..059 — single source of truth for DB schema/RLS
 CLAUDE.md                    this file
 ```
 
@@ -475,11 +541,15 @@ CLAUDE.md                    this file
 - `@stw/ui` takes everything via **props/context** — no app-specific imports, no env,
   no routes. The Supabase client + `VITE_*` env are created in each app and injected.
 - Admin/subscriber differences flow through **one `AppCapabilities` context**
-  (`isAdmin`, `canEdit`, `onEditHolding`, `showIbkrBadge`, `onExecuteIbkrOrder`) — never scatter
+  (`isAdmin`, `canEdit`, `showIbkrBadge`, `canViewHistory`, `canUseLimits`, `onEditHolding`,
+  `onExecuteIbkrOrder`, plus the injected `finnhubKey`/`twelveDataKey`) — never scatter
   `isAdmin` checks deep in shared components. `onExecuteIbkrOrder` is the one capability that reaches
   outside the app entirely (the local IBKR proxy) — it's wired only in `apps/admin/src/main.tsx`;
   `apps/web` never sets it, which is what actually keeps real order placement out of the subscriber app
-  (not just a UI-level gate).
+  (not just a UI-level gate). Note: `apps/web`'s own `SettingsPage.tsx` computes its `canUseLimits`
+  locally via `useTierAccess('limits')` rather than reading it off this context — an existing (pre-
+  2026-07-08) inconsistency with how `PortfolioPage.tsx` reads `capabilities.canUseLimits`, not
+  something this session introduced; worth reconciling if you're back in this area.
 - `@stw/shared` is the only home for derived-number logic (P&L, weights, sector %, date formatting).
   Don't re-implement it in an app. (End state: move the math into Supabase views/RPC.)
 
@@ -549,7 +619,7 @@ OAuth on web does a full-page redirect).
 ## Database (Supabase)
 
 - Project: `usmqbohcjcyszjxxvnqu.supabase.co`; client created per-app and injected into `@stw/ui`.
-- `supabase/migrations/` is the single source of truth (through **053**).
+- `supabase/migrations/` is the single source of truth (through **059**).
   **Claude authors migrations; you apply them** via the Supabase SQL editor / `supabase db push`.
 - **Local DB backups → gitignored `backups/`** (never committed — may carry PII), named
   `<date>_<purpose>.json` (e.g. `*_pre-coldrop.json`). Take a fresh logical snapshot of the
@@ -832,48 +902,55 @@ active filter (closed hidden by default). The FilterBar count shows `N of {total
   as an explicit named link inside the pane, not the default click target. Apply the same instinct to
   any future page that lists a subscriber's own data but is tempted to default-link into STW's data
   instead.
+- **Onboarding/setup content collapses once its job is done — never permanent prime real estate**
+  (host decision, 2026-07-08, Settings redesign). The IBKR "How to connect" 7-step walkthrough used
+  to render unconditionally even for an already-connected returning user; it's now collapsed behind
+  an "Edit connection ▸" toggle (default-collapsed once connected, default-expanded on first-ever
+  setup). Apply the same instinct to any future setup/walkthrough content: default-collapse it the
+  moment the thing it's walking the user through is already done.
+- **A value that's conceptually always one sign should never make the user type that sign.** The
+  drawdown-ladder inputs used to require typing a negative number (`-10`); they now show "At 10%
+  drawdown" (a positive magnitude) and flip the sign internally on read/write. Apply this to any
+  future numeric input where the sign is a fixed property of the concept, not a real choice the user
+  is making — typing the sign invites a flipped-logic error for no benefit.
+- **A hardcoded-length list backed by a JSONB/array column is almost never actually fixed-length** —
+  it's just however many rows the first version happened to seed. The risk-limits drawdown ladder
+  was hardcoded to exactly 2 rungs in the UI (`RiskConfigForm.tsx`) even though the underlying
+  `risk_config.ladder` column was always a JSONB array and the pure scorer
+  (`packages/shared/src/utils/limits.ts`'s `drawdownLadderTarget`) already iterated it generically —
+  the 2-step limit was a UI artifact, not a real constraint. It's now a dynamic array (Add/Remove
+  rung). Before hardcoding a "fixed" count for any array-backed config, check whether the schema and
+  pure logic already support N — if so, don't under-build the UI to match an arbitrary seed value.
 
 ---
 
 ## Design System
 
-> **A formal design-token + component system is queued and spec'd** at
-> [`plans/stw-design-system.md`](plans/stw-design-system.md) (see Next Steps #1) — a 4-phase,
-> checkpointed build (audit → tokens → core components → enforcement/migration plan) triggered by
-> real inconsistency found during the 2026-07-06 My Portfolio redesign (3+ badge treatments, two
-> unrelated "primary button" styles, inconsistent numeric alignment). Until that lands, the raw CSS
-> variables below remain the only source of truth — don't invent a second parallel token scheme
-> (e.g. a new Tailwind theme extension) in the meantime; extend this table instead, the same way
-> every page has so far.
+**Fully rolled out repo-wide, not queued** — the note that used to live here calling this "queued
+and spec'd" was stale; the build described in
+[`plans/stw-design-system.md`](plans/stw-design-system.md) (4 phases: audit → tokens → core
+components → enforcement) shipped completely before the 2026-07-08 session, including an eslint
+rule (`no-restricted-syntax` for literal colors/raw font-sizes) with **zero baseline exceptions
+left**. **Read [`docs/design-system/CONTRIBUTING.md`](docs/design-system/CONTRIBUTING.md) first** —
+it's the actual current source of truth for which token or `packages/ui/src/primitives/` component
+to reach for, not this section. Don't invent a second parallel token scheme (e.g. a new Tailwind
+theme extension) — extend `packages/ui/src/styles/tokens.css` / `packages/shared/src/constants/tokens.ts`
+instead, the same way every page since has.
 
 - **Font:** Barlow Condensed (700/800) for the **STW logo** in the header only; system sans-serif (`font-sans`) everywhere else including page headings and login
 - **Logo:** STW mic + green arrow SVG
 - **Default theme:** Dark. Toggle persists to `localStorage` (`stwTheme`); light
   theme applied via `[data-theme="light"]`. Never hardcode colors outside `:root` /
-  `[data-theme="light"]` — always use CSS variables.
-
-#### Color Variables (`:root`)
-| Variable | Value | Usage |
-|---|---|---|
-| `--bg` | `#0a0a0a` | Page background |
-| `--surface` | `#111111` | Cards, header |
-| `--s2` | `#1a1a1a` | Secondary surfaces |
-| `--border` | `#2a2a2a` | Borders |
-| `--bsub` | `#1f1f1f` | Subtle dividers |
-| `--text` | `#f0f0f0` | Primary text |
-| `--t2` | `#a0a0a0` | Secondary text |
-| `--t3` | `#525252` | Muted text |
-| `--acc` | `#22c55e` | STW green |
-
-#### Tier Colors
-| Tier | Color | Meaning |
-|---|---|---|
-| `--c5` | `#22c55e` | Highest conviction |
-| `--c4` | `#3b82f6` | High conviction |
-| `--c3` | `#f59e0b` | Moderate |
-| `--c2` | `#6b7280` | Waning interest |
-| `--c1` | `#ef4444` | Concern |
-| `--c0` | `#52525b` | Legacy |
+  `[data-theme="light"]` — always use CSS variables, defined once in `packages/ui/src/styles/tokens.css`.
+- **`--t3` (muted text) was fixed for AA contrast** during the design-system Phase 2 pass — old dark-theme
+  value `#525252` (~2.5:1 on `--bg`, fails AA) is now `#808080` (~5:1); old light-theme value similarly
+  darkened. If you see `--t3: #525252` anywhere, that's a stale/reverted copy, not the current token.
+- **Core primitives** (`packages/ui/src/primitives/`): `Button` (4 variants incl. a `dirty` prop for
+  unsaved-changes highlighting), `FormRow` (`'stacked'`/`'horizontal'` layout, label/input/suffix/hint
+  grid — combine `layout="horizontal"` with `hint` freely, a real wrapping bug there was found and
+  fixed 2026-07-08), `TextInput`, `AlertStrip` (info/positive/warning/negative), `StatusPill`,
+  `Badge`, `KpiCard`, `Modal`, `AccordionList`, `DetailPane`/`ListDetailSplit`, `SectionHeader`,
+  `DataTable`. Reach for one of these before writing a new inline-styled control.
 
 ---
 
