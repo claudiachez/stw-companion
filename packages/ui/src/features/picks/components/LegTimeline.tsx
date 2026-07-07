@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  fmtOptionExpiry, suggestOrderQuantity, type Leg, type LegInstrument, type OptionRight, type Direction,
+  fmtOptionExpiry, suggestOrderQuantity, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING,
+  type Leg, type LegInstrument, type OptionRight, type Direction,
 } from '@stw/shared';
 import { useLegTransactions } from '../useHoldingHistory';
 import { useCapabilities } from '../../../context/AppCapabilities';
@@ -9,6 +10,7 @@ import { useIsMobile } from '../../../hooks/useIsMobile';
 import { useAppConfig } from '../../../hooks/useAppConfig';
 import { useQuote } from '../../../hooks/useLivePrice';
 import { errMsg } from '../../../lib/errMsg';
+import { Modal } from '../../../primitives/Modal';
 import type { IbkrOrderSpec, IbkrOrderResult } from '../ibkrOrder';
 import {
   insertLegReturningId, insertLegTransaction, updateLegTransaction, updateLeg, deleteLegTransaction,
@@ -54,14 +56,15 @@ function fmtDay(s: string): string {
 const pct = (n: number | null) => (n == null ? '—' : `${n}%`);
 const usd = (n: number | null) => (n == null ? '—' : `$${n}`);
 
-const th: React.CSSProperties = { fontSize: 9, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: 'left', padding: '4px 8px', whiteSpace: 'nowrap' };
-const td: React.CSSProperties = { fontSize: 11, color: 'var(--t2)', padding: '6px 8px', verticalAlign: 'top' };
-const iconBtn: React.CSSProperties = { background: 'none', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', fontSize: 11, padding: '2px 6px', color: 'var(--t2)' };
+const th: React.CSSProperties = { fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: 'left', padding: '4px 8px', whiteSpace: 'nowrap' };
+const td: React.CSSProperties = { fontSize: FONT_SIZE.xs, color: 'var(--t2)', padding: '6px 8px', verticalAlign: 'top' };
+const iconBtn: React.CSSProperties = { background: 'none', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', fontSize: FONT_SIZE.xs, padding: '2px 6px', color: 'var(--t2)' };
 // Solid dark-green accent for the real-order flow (Open/Close via IBKR + its modal) —
 // deliberately a different shade from --acc (the bright green used for ordinary Save
-// buttons), so a real broker order never reads as just another save.
-const ibkrGreen = '#15803d';
-const ibkrBtn: React.CSSProperties = { background: ibkrGreen, border: `1px solid ${ibkrGreen}`, borderRadius: 4, cursor: 'pointer', fontSize: 11, padding: '3px 8px', color: '#fff', fontWeight: 600 };
+// buttons), so a real broker order never reads as just another save. Named token (not
+// a local constant) since CLAUDE.md's own standing rule treats this as a durable,
+// reusable design decision, not a one-off — see tokens.css's --action-broker comment.
+const ibkrBtn: React.CSSProperties = { background: 'var(--action-broker)', border: '1px solid var(--action-broker)', borderRadius: 4, cursor: 'pointer', fontSize: FONT_SIZE.xs, padding: '3px 8px', color: 'var(--text-inverse)', fontWeight: FONT_WEIGHT.semibold };
 
 export function LegTimeline({ ticker, legs = [] }: { ticker: string; legs?: Leg[] }) {
   const { canEdit, onExecuteIbkrOrder } = useCapabilities();
@@ -98,7 +101,7 @@ export function LegTimeline({ ticker, legs = [] }: { ticker: string; legs?: Leg[
     return m;
   }, [sorted]);
 
-  if (isLoading) return <div style={{ fontSize: 12, color: 'var(--t3)', padding: '8px 0' }}>Loading…</div>;
+  if (isLoading) return <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)', padding: '8px 0' }}>Loading…</div>;
 
   const addForm = adding && (
     <EventForm ticker={ticker} legs={legs} onDone={() => setAdding(false)} />
@@ -113,7 +116,7 @@ export function LegTimeline({ ticker, legs = [] }: { ticker: string; legs?: Leg[
   if (events.length === 0 && !adding) {
     return (
       <div>
-        <div style={{ fontSize: 12, color: 'var(--t3)', padding: '4px 0' }}>No activity yet.</div>
+        <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)', padding: '4px 0' }}>No activity yet.</div>
         {canEdit && <AddButton onClick={() => setAdding(true)} />}
       </div>
     );
@@ -126,7 +129,7 @@ export function LegTimeline({ ticker, legs = [] }: { ticker: string; legs?: Leg[
         <div style={{ display: 'flex', gap: 0, border: '1px solid var(--border)', borderRadius: 5, overflow: 'hidden' }}>
           {(['all', 'open', 'closed'] as const).map((f) => (
             <button key={f} onClick={() => setFilter(f)}
-              style={{ fontSize: 11, padding: '3px 10px', border: 'none', cursor: 'pointer', textTransform: 'capitalize',
+              style={{ fontSize: FONT_SIZE.xs, padding: '3px 10px', border: 'none', cursor: 'pointer', textTransform: 'capitalize',
                 background: filter === f ? 'var(--acc)' : 'transparent', color: filter === f ? 'var(--text-inverse)' : 'var(--t2)' }}>
               {f}
             </button>
@@ -171,7 +174,7 @@ export function LegTimeline({ ticker, legs = [] }: { ticker: string; legs?: Leg[
 
 function AddButton({ onClick, inline = false }: { onClick: () => void; inline?: boolean }) {
   return (
-    <button onClick={onClick} style={{ marginBottom: inline ? 0 : 10, padding: '5px 12px', borderRadius: 5, border: '1px dashed var(--border)', cursor: 'pointer', background: 'none', color: 'var(--acc)', fontSize: 12, fontWeight: 600 }}>
+    <button onClick={onClick} style={{ marginBottom: inline ? 0 : 10, padding: '5px 12px', borderRadius: 5, border: '1px dashed var(--border)', cursor: 'pointer', background: 'none', color: 'var(--acc)', fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold }}>
       ＋ Add event
     </button>
   );
@@ -251,7 +254,7 @@ function DesktopRow({ ev, canEdit, dim, onlyEvent, onEdit, ticker, ibkrReady, on
       <tr style={{ borderBottom: '1px solid var(--bsub)', opacity: rowOpacity }}>
         <td style={td}>{fmtDay(ev.executed_at)}</td>
         {/* Open-leg events read bold + green; closed-leg rows go plain gray like the rest of the row. */}
-        <td style={{ ...td, ...(dim ? {} : { fontWeight: 700, color: 'var(--acc)' }) }}>{label}</td>
+        <td style={{ ...td, ...(dim ? {} : { fontWeight: FONT_WEIGHT.bold, color: 'var(--acc)' }) }}>{label}</td>
         <td style={{ ...td, color: dim ? 'var(--t2)' : 'var(--text)' }}>{detailLabel(ev)}</td>
         <td style={td}>{usd(ev.price)}{ev.broker_order_id && <span title={`Real IBKR fill (order ${ev.broker_order_id})`} style={{ marginLeft: 4 }}>🔗</span>}</td>
         <td style={td}>{pct(ev.weight)}</td>
@@ -259,7 +262,7 @@ function DesktopRow({ ev, canEdit, dim, onlyEvent, onEdit, ticker, ibkrReady, on
         {canEdit && (
           <td style={{ ...td, whiteSpace: 'nowrap' }}>
             <button style={iconBtn} title="Edit" onClick={onEdit}>✎</button>{' '}
-            <button style={{ ...iconBtn, color: '#ef4444' }} title="Delete" onClick={() => confirmDelete(del, ev.id, onlyEvent)}>✕</button>{' '}
+            <button style={{ ...iconBtn, color: 'var(--status-negative-text)' }} title="Delete" onClick={() => confirmDelete(del, ev.id, onlyEvent)}>✕</button>{' '}
             {canExecuteOpen && <button style={ibkrBtn} title="Place the real IBKR order for this event" onClick={() => setPopover('open')}>Open via IBKR</button>}{' '}
             {canExecuteClose && <button style={ibkrBtn} title="Close this leg with a real IBKR order" onClick={() => setPopover('close')}>Close via IBKR</button>}
           </td>
@@ -290,19 +293,19 @@ function MobileCard({ ev, canEdit, dim, onlyEvent, onEdit, ticker, ibkrReady, on
   return (
     <div style={{ background: 'var(--s2)', border: '1px solid var(--bsub)', borderRadius: 6, padding: 10, opacity: dim ? 0.5 : 1 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-        <span style={{ fontSize: 12, ...(dim ? { color: 'var(--t2)' } : { fontWeight: 700, color: 'var(--acc)' }) }}>{label}</span>
-        <span style={{ fontSize: 11, color: 'var(--t3)' }}>{fmtDay(ev.executed_at)}</span>
+        <span style={{ fontSize: FONT_SIZE.sm, ...(dim ? { color: 'var(--t2)' } : { fontWeight: FONT_WEIGHT.bold, color: 'var(--acc)' }) }}>{label}</span>
+        <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>{fmtDay(ev.executed_at)}</span>
       </div>
-      <div style={{ fontSize: 12, color: 'var(--text)', marginTop: 2 }}>
+      <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--text)', marginTop: 2 }}>
         {detailLabel(ev)}
         <span style={{ color: 'var(--t3)' }}> · {usd(ev.price)} · {pct(ev.weight)}</span>
         {ev.broker_order_id && <span title={`Real IBKR fill (order ${ev.broker_order_id})`} style={{ marginLeft: 4 }}>🔗</span>}
       </div>
-      {ev.notes && <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 4 }}>{ev.notes}</div>}
+      {ev.notes && <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', marginTop: 4 }}>{ev.notes}</div>}
       {canEdit && (
         <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
           <button style={iconBtn} onClick={onEdit}>✎ Edit</button>
-          <button style={{ ...iconBtn, color: '#ef4444' }} onClick={() => confirmDelete(del, ev.id, onlyEvent)}>✕ Delete</button>
+          <button style={{ ...iconBtn, color: 'var(--status-negative-text)' }} onClick={() => confirmDelete(del, ev.id, onlyEvent)}>✕ Delete</button>
           {canExecuteOpen && <button style={ibkrBtn} onClick={() => setPopover('open')}>Open via IBKR</button>}
           {canExecuteClose && <button style={ibkrBtn} onClick={() => setPopover('close')}>Close via IBKR</button>}
         </div>
@@ -355,9 +358,9 @@ function IbkrOrderModal({
 
   if (!leg) {
     return (
-      <div onClick={onCancel} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ background: 'var(--surface)', border: '1px solid #ef4444', borderRadius: 10, padding: 16, color: '#ef4444', fontSize: 12 }}>No leg found for this event.</div>
-      </div>
+      <Modal onClose={onCancel} width="sm" accentColor="var(--status-negative-border)">
+        <div style={{ color: 'var(--status-negative-text)', fontSize: FONT_SIZE.sm }}>No leg found for this event.</div>
+      </Modal>
     );
   }
   const safeLeg = leg; // narrowed capture — `leg` itself doesn't narrow across the submit() closure
@@ -429,18 +432,19 @@ function IbkrOrderModal({
   }
 
   return (
-    <div onClick={onCancel} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 420, background: 'var(--surface)', border: `1px solid ${ibkrGreen}`, borderRadius: 10, padding: '16px 18px', boxShadow: '0 12px 40px rgba(0,0,0,0.5)' }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: ibkrGreen, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-          {mode === 'open' ? 'Open' : 'Close'} via IBKR — {side} {ticker} {contractLabel}
-        </div>
-        <div style={{ fontSize: 10, color: 'var(--t3)', marginBottom: 10 }}>
+    <Modal
+      onClose={onCancel}
+      width="sm"
+      accentColor="var(--action-broker)"
+      title={`${mode === 'open' ? 'Open' : 'Close'} via IBKR — ${side} ${ticker} ${contractLabel}`}
+    >
+        <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginBottom: 10 }}>
           Legs track weight (% of portfolio) only — quantity is suggested from your Config capital
           defaults, adjust freely before placing.
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           <div>
-            <label style={lbl}>Quantity {isSuggested && <span style={{ color: ibkrGreen, textTransform: 'none' }}>(suggested)</span>}</label>
+            <label style={lbl}>Quantity {isSuggested && <span style={{ color: 'var(--action-broker)', textTransform: 'none' }}>(suggested)</span>}</label>
             <input style={fld} type="number" step="1" value={quantity} onChange={(e) => setQuantityOverride(e.target.value)} />
           </div>
           <div><label style={lbl}>Order Type</label>
@@ -453,26 +457,25 @@ function IbkrOrderModal({
           )}
         </div>
         {budgetShortfall && unitCostForCalc != null && (
-          <div style={{ fontSize: 10, color: '#f59e0b', marginTop: 6 }}>
+          <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--status-warning-text)', marginTop: 6 }}>
             Your budget (${(totalCapital * deployPct).toLocaleString()}) doesn't cover 1 {isOption ? 'contract' : 'share'}
             {' '}(~${unitCostForCalc.toLocaleString()}) — raise the deploy % in Config or enter a quantity manually.
           </div>
         )}
         {liveTotalCost != null && parsedQty > 0 && (
-          <div style={{ fontSize: 11, color: 'var(--t2)', marginTop: 8 }}>
-            Total capital: <span style={{ color: 'var(--text)', fontWeight: 600 }}>${liveTotalCost.toLocaleString()}</span>
+          <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', marginTop: 8 }}>
+            Total capital: <span style={{ color: 'var(--text)', fontWeight: FONT_WEIGHT.semibold }}>${liveTotalCost.toLocaleString()}</span>
             {totalCapital > 0 && ` (${((liveTotalCost / totalCapital) * 100).toFixed(1)}% of $${totalCapital.toLocaleString()})`}
           </div>
         )}
-        {error && <div style={{ fontSize: 11, color: '#ef4444', marginTop: 8 }}>{error}</div>}
+        {error && <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--status-negative-text)', marginTop: 8 }}>{error}</div>}
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-          <button onClick={submit} disabled={submitting} style={{ padding: '6px 14px', borderRadius: 5, border: 'none', cursor: 'pointer', background: ibkrGreen, color: '#fff', fontSize: 12, fontWeight: 600, opacity: submitting ? 0.6 : 1 }}>
+          <button onClick={submit} disabled={submitting} style={{ padding: '6px 14px', borderRadius: 5, border: 'none', cursor: 'pointer', background: 'var(--action-broker)', color: 'var(--text-inverse)', fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, opacity: submitting ? 0.6 : 1 }}>
             {submitting ? 'Placing…' : `Place ${side} order`}
           </button>
-          <button onClick={onCancel} disabled={submitting} style={{ padding: '6px 14px', borderRadius: 5, cursor: 'pointer', background: 'none', border: '1px solid var(--border)', color: 'var(--t2)', fontSize: 12 }}>Cancel</button>
+          <button onClick={onCancel} disabled={submitting} style={{ padding: '6px 14px', borderRadius: 5, cursor: 'pointer', background: 'none', border: '1px solid var(--border)', color: 'var(--t2)', fontSize: FONT_SIZE.sm }}>Cancel</button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -484,8 +487,8 @@ function confirmDelete(del: (id: string) => Promise<void>, id: string, onlyEvent
 }
 
 // ── Add / edit form ───────────────────────────────────────────────────────────────────────────
-const fld: React.CSSProperties = { width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 5, padding: '6px 8px', fontSize: 12, color: 'var(--text)', boxSizing: 'border-box' };
-const lbl: React.CSSProperties = { fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2, display: 'block' };
+const fld: React.CSSProperties = { width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 5, padding: '6px 8px', fontSize: FONT_SIZE.sm, color: 'var(--text)', boxSizing: 'border-box' };
+const lbl: React.CSSProperties = { fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: LETTER_SPACING.label, marginBottom: 2, display: 'block' };
 
 const NEW_LEG = '__new__';
 
@@ -564,10 +567,7 @@ function EventForm({ ticker, legs, event, onDone }: { ticker: string; legs: Leg[
   }
 
   return (
-    <div onClick={onDone} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, overflowY: 'auto' }}>
-    <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 480, background: 'var(--surface)', border: '1px solid var(--acc)', borderRadius: 10, padding: '16px 18px', boxShadow: '0 12px 40px rgba(0,0,0,0.5)' }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--acc)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{editing ? 'Edit event' : 'Add event'}</div>
-
+    <Modal onClose={onDone} width="md" title={editing ? 'Edit event' : 'Add event'}>
       {!editing && (
         <div style={{ marginBottom: 8 }}>
           <label style={lbl}>Leg</label>
@@ -622,13 +622,12 @@ function EventForm({ ticker, legs, event, onDone }: { ticker: string; legs: Leg[
       <div style={{ marginTop: 8 }}><label style={lbl}>Notes</label>
         <textarea style={{ ...fld, minHeight: 48, resize: 'vertical' }} value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
 
-      {error && <div style={{ fontSize: 11, color: '#ef4444', marginTop: 8 }}>{error}</div>}
+      {error && <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--status-negative-text)', marginTop: 8 }}>{error}</div>}
       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-        <button onClick={save} disabled={saving} style={{ padding: '6px 14px', borderRadius: 5, border: 'none', cursor: 'pointer', background: 'var(--acc)', color: '#fff', fontSize: 12, fontWeight: 600, opacity: saving ? 0.6 : 1 }}>{saving ? 'Saving…' : 'Save'}</button>
-        <button onClick={onDone} disabled={saving} style={{ padding: '6px 14px', borderRadius: 5, cursor: 'pointer', background: 'none', border: '1px solid var(--border)', color: 'var(--t2)', fontSize: 12 }}>Cancel</button>
+        <button onClick={save} disabled={saving} style={{ padding: '6px 14px', borderRadius: 5, border: 'none', cursor: 'pointer', background: 'var(--acc)', color: 'var(--text-inverse)', fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, opacity: saving ? 0.6 : 1 }}>{saving ? 'Saving…' : 'Save'}</button>
+        <button onClick={onDone} disabled={saving} style={{ padding: '6px 14px', borderRadius: 5, cursor: 'pointer', background: 'none', border: '1px solid var(--border)', color: 'var(--t2)', fontSize: FONT_SIZE.sm }}>Cancel</button>
       </div>
-    </div>
-    </div>
+    </Modal>
   );
 }
 

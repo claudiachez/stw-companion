@@ -127,11 +127,6 @@
       "count": 10
     }
   },
-  "packages/ui/src/features/picks/components/LegTimeline.tsx": {
-    "no-restricted-syntax": {
-      "count": 39
-    }
-  },
   "packages/ui/src/features/picks/components/PortfolioDashboard.tsx": {
     "no-restricted-syntax": {
       "count": 21

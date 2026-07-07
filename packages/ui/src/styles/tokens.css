@@ -84,6 +84,17 @@
     --pnl-gain: var(--acc);
     --pnl-loss: var(--c1);
 
+    /* action.broker — the solid dark green for a real-money/broker action (LegTimeline.tsx's
+       "Open via IBKR" / "Close via IBKR" buttons + IbkrOrderModal), per CLAUDE.md's standing
+       rule: deliberately distinct from --acc (ordinary Save) and --c1 (Delete/negative), so a
+       real order can never be mistaken for either at a glance. A literal, not a var() alias,
+       because it's not derived from any existing color — added as a named token during
+       LegTimeline.tsx's Phase 5 migration; previously a local `ibkrGreen` constant duplicated
+       into every consumer instead of a single named source. Theme-invariant (same value in
+       both themes, matching its pre-token behavior) — defined once here, not redefined under
+       [data-theme="light"]. */
+    --action-broker: #15803d;
+
     /* status.* — ok/near/breach/unevaluated/info, each with bg/border/text, for the
        Phase 3 StatusPill/Badge components. Built from the existing tier-color
        infrastructure (not new raw hex) except neutral/unevaluated, which
