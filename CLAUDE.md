@@ -1,7 +1,9 @@
 # STW Companion — Claude Code Guide
 
 > **⚠️ START HERE — branch.** **`staging` is the active trunk** — all feature work happens here.
-> **`staging` is 58 commits ahead of `main` as of 2026-07-08** (last promotion was PR #66 on
+> **`staging` is ~59 commits ahead of `main` as of 2026-07-08** (check `git log --oneline
+> origin/main..origin/staging | wc -l` for the exact count — it'll have grown by the time you read
+> this) (last promotion was PR #66 on
 > 2026-07-05) — none of this file's "Current Status" work below is on production yet. A
 > `staging → main` PR is a separate, approval-gated production deploy; **do not open one without
 > explicit host approval**, even if staging looks ready.
