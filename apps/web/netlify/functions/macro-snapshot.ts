@@ -29,6 +29,19 @@
  * Event risk is fetched from the already-deployed macro-events function
  * (internal HTTP call via process.env.URL) rather than duplicating its
  * MarketWatch scrape here.
+ *
+ * Instrumentation (2026-07-05 fix, plans/integrity-guardrails.md Item 0): every
+ * invocation writes a `run_log` row (run_type='macro-snapshot', ok/error status,
+ * rows written, error detail) — a scheduled job going silent for days with no
+ * queryable trail is exactly what happened before this fix (macro_daily_snapshots
+ * sat at zero rows since migration 048 shipped). `netlify.toml` now also declares
+ * an explicit `timeout` for this function (it previously had none, silently
+ * falling back to Netlify's short default — implausible for ~10 sequential
+ * external API round trips; every sibling scheduled function in this repo,
+ * ibkr-flex/macro-recap-am/macro-recap-pm, has an explicit override). SPY and RSP
+ * closes are fetched once and reused (previously fetched twice each) to shave two
+ * TwelveData credits per run. `engine_version` (migration 054) is stamped on every
+ * row so a stored score is attributable to the scorer code that produced it.
  */
 import type { Handler } from '@netlify/functions';
 import { schedule } from '@netlify/functions';
@@ -110,6 +123,22 @@ async function sbUpsert(url: string, key: string, table: string, row: Record<str
   return null;
 }
 
+async function sbInsert(url: string, key: string, table: string, row: Record<string, unknown>): Promise<void> {
+  try {
+    await fetch(`${url.replace(/\/$/, '')}/rest/v1/${table}`, {
+      method: 'POST',
+      headers: {
+        apikey: key, Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify(row),
+    });
+  } catch { /* run_log is best-effort — never let a logging failure mask the real result */ }
+}
+
+const ENGINE_VERSION = 'macro-snapshot-1.1.0';
+
 const handlerImpl: Handler = async () => {
   const finnhubKey = (process.env.VITE_FINNHUB_KEY ?? process.env.FINNHUB_KEY ?? '').trim();
   const twelveDataKey = (process.env.VITE_TWELVEDATA_KEY ?? process.env.TWELVEDATA_KEY ?? '').trim();
@@ -123,11 +152,18 @@ const handlerImpl: Handler = async () => {
     return { statusCode: 500, body: JSON.stringify({ error: 'Missing TWELVEDATA_KEY' }) };
   }
 
+  const runLogBase = { run_type: 'macro-snapshot' };
+
+  try {
   // ── Module 4: Trend / Market Structure ──────────────────────────────
+  // SPY/RSP closes are fetched once here and reused below (Module 9) instead of
+  // re-fetched — halves the redundant TwelveData credit spend from the prior version.
+  const closesBySymbol: Record<string, number[]> = {};
   const indicatorScores: Record<string, number | null> = {};
   const buckets: Record<string, ReturnType<typeof trendBucket>> = {};
   for (const symbol of TREND_SYMBOLS) {
     const closes = await tdDailyCloses(symbol, twelveDataKey);
+    closesBySymbol[symbol] = closes;
     const close = closes[closes.length - 1] ?? null;
     const ma9 = sma(closes, 9);
     const ma21 = sma(closes, 21);
@@ -139,7 +175,7 @@ const handlerImpl: Handler = async () => {
   const trendScore = trendSleeveScore([buckets.SPY, buckets.QQQ]);
 
   // ── Module 5: Volatility / Stress ────────────────────────────────────
-  const spyCloses = await tdDailyCloses('SPY', twelveDataKey);
+  const spyCloses = closesBySymbol.SPY;
   let vix = finnhubKey ? await finnhubQuote('^VIX', finnhubKey) : null;
   const vixCloses = await tdDailyCloses('VIX', twelveDataKey);
   if (vix === null && vixCloses.length) vix = vixCloses[vixCloses.length - 1];
@@ -212,7 +248,7 @@ const handlerImpl: Handler = async () => {
   }
 
   let breadth: number | null = null;
-  const rspCloses = await tdDailyCloses('RSP', twelveDataKey);
+  const rspCloses = closesBySymbol.RSP;
   const L = Math.min(rspCloses.length, spyCloses.length);
   if (L >= 51) {
     const ratios = rspCloses.slice(-L).map((r, i) => r / spyCloses.slice(-L)[i]);
@@ -254,13 +290,31 @@ const handlerImpl: Handler = async () => {
     module_scores: moduleScores,
     indicator_scores: indicatorScores,
     event_risk: { overlay: eventRiskRead.overlay, riskLevel: eventRiskRead.riskLevel, source: eventRiskResp.source },
+    engine_version: ENGINE_VERSION,
   }, 'snapshot_date');
 
   if (upsertError) {
+    await sbInsert(supabaseUrl, serviceKey, 'run_log', {
+      ...runLogBase, status: 'error', messages_processed: 0,
+      summary: `upsert failed for ${snapshotDate}: ${upsertError}`,
+    });
     return { statusCode: 500, body: JSON.stringify({ error: upsertError }) };
   }
 
+  await sbInsert(supabaseUrl, serviceKey, 'run_log', {
+    ...runLogBase, status: 'ok', messages_processed: 1,
+    summary: `wrote snapshot for ${snapshotDate} (engine ${ENGINE_VERSION})`,
+  });
+
   return { statusCode: 200, body: JSON.stringify({ snapshotDate, moduleScores }) };
+  } catch (e) {
+    const detail = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+    await sbInsert(supabaseUrl, serviceKey, 'run_log', {
+      ...runLogBase, status: 'error', messages_processed: 0,
+      summary: `threw before upsert: ${detail}`.slice(0, 500),
+    });
+    return { statusCode: 500, body: JSON.stringify({ error: detail }) };
+  }
 };
 
 export const handler = schedule('30 21 * * 1-5', handlerImpl);

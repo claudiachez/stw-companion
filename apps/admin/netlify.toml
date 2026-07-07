@@ -16,6 +16,12 @@
 [functions]
   directory = "netlify/functions"
 
+[functions."regime-daily"]
+  # Backfill mode (?backfill=1&days=N) does N days x 3 instruments of rolling-window
+  # math on up to ~5000-bar series — give it real headroom, matching this repo's other
+  # heavier scheduled functions (apps/web/netlify.toml's macro-recap-am/pm at 60s).
+  timeout = 60
+
 [[redirects]]
   from   = "/*"
   to     = "/index.html"

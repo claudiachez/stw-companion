@@ -2,15 +2,17 @@ import { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   useIbkrSettings, saveIbkrSettings, useAuthStore, useSyncPortfolio, LoadingSpinner,
-  Button, StatusPill, AlertStrip, FormRow, TextInput,
+  Button, StatusPill, AlertStrip, FormRow, TextInput, LimitsPanel,
 } from '@stw/ui';
 import { FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, RADIUS, SPACE } from '@stw/shared';
+import { useTierAccess } from '../../shared/hooks/useTierAccess';
 
 export function SettingsPage() {
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
   const { data: settings, isLoading } = useIbkrSettings();
   const { sync, isSyncing, syncError, lastResult } = useSyncPortfolio();
+  const canUseLimits = useTierAccess('limits');
 
   const [token, setToken] = useState('');
   const [queryId, setQueryId] = useState('');
@@ -173,6 +175,25 @@ export function SettingsPage() {
             </AlertStrip>
           )}
         </div>
+      </div>
+
+      {/* Limits engine card — Premium only (plans/integrity-guardrails.md Item 2) */}
+      <div style={{ marginTop: SPACE[4] }}>
+        {canUseLimits ? (
+          <LimitsPanel />
+        ) : (
+          <div style={{
+            background: 'var(--surface)', border: '1px solid var(--border)',
+            borderRadius: RADIUS.xl, padding: SPACE[4], display: 'flex', flexDirection: 'column', gap: SPACE[1.5],
+          }}>
+            <span style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>Limits engine 🔒</span>
+            <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)' }}>
+              Flag concentration and gross-exposure breaches in your own IBKR book — requires a
+              <strong style={{ color: 'var(--t2)' }}> Premium</strong> subscription. Contact your STW
+              administrator to upgrade.
+            </span>
+          </div>
+        )}
       </div>
     </div>
     </div>
