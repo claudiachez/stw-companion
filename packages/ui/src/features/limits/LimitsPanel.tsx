@@ -3,6 +3,7 @@ import { evaluateRiskConfig, fmtDateTime, type PositionInput, type Concentration
 import { useAuthStore } from '../../store/auth';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { LoadingSpinner } from '../../primitives/LoadingSpinner';
+import { StatusPill } from '../../primitives/StatusPill';
 import { useUserPositions } from '../portfolio/useUserPositions';
 import { useSyncPortfolio } from '../portfolio/useSyncPortfolio';
 import { useRiskConfig, useSectorMap, useViolationAcks, useAcknowledgeViolation, useEnsureRiskConfig } from './useRiskConfig';
@@ -17,7 +18,7 @@ import type { ViolationType, AckStatus } from './api';
 // rows via RLS. Flags only — nothing here places or blocks an order.
 
 function severityColor(severity: 'ok' | 'breach'): string {
-  return severity === 'breach' ? '#ef4444' : 'var(--acc)';
+  return severity === 'breach' ? 'var(--status-negative-text)' : 'var(--acc)';
 }
 
 function ViolationRow({
@@ -37,16 +38,9 @@ function ViolationRow({
           <span className="text-xs font-mono" style={{ color: severityColor(v.severity) }}>
             {v.exposurePct.toFixed(1)}% / {v.limitPct}%
           </span>
-          <span
-            className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded"
-            style={{
-              color: v.severity === 'breach' ? '#ef4444' : 'var(--t3)',
-              background: v.severity === 'breach' ? '#ef444415' : 'var(--s2)',
-              border: `1px solid ${v.severity === 'breach' ? '#ef444433' : 'var(--border)'}`,
-            }}
-          >
+          <StatusPill variant={v.severity === 'breach' ? 'breach' : 'neutral'}>
             {v.severity === 'breach' ? 'Breach' : 'OK'}
-          </span>
+          </StatusPill>
         </div>
       </div>
       {v.severity === 'breach' && (
@@ -144,7 +138,7 @@ export function LimitsPanel() {
           {lastResult && ` · Synced ${lastResult.count} position${lastResult.count !== 1 ? 's' : ''}`}
         </div>
         {syncError && (
-          <div className="mt-2 text-xs font-medium text-[#ef4444] bg-[#ef444415] border border-[#ef444433] rounded px-3 py-2">
+          <div className="mt-2 text-xs font-medium text-[var(--status-negative-text)] bg-[var(--status-negative-bg)] border border-[var(--status-negative-border)] rounded px-3 py-2">
             Sync failed: {syncError} — evaluating against last-synced data below.
           </div>
         )}
@@ -160,7 +154,7 @@ export function LimitsPanel() {
           </span>
         </div>
         {result.ladderTargetGrossPct !== null && (
-          <div className="text-xs text-[#f59e0b] bg-[#f59e0b15] border border-[#f59e0b33] rounded px-3 py-2">
+          <div className="text-xs text-[var(--status-warning-text)] bg-[var(--status-warning-bg)] border border-[var(--status-warning-border)] rounded px-3 py-2">
             Drawdown ladder target: reduce gross to {result.ladderTargetGrossPct}%
           </div>
         )}

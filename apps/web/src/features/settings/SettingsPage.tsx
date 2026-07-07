@@ -1,20 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useIbkrSettings, saveIbkrSettings, useAuthStore, useSyncPortfolio, LoadingSpinner, LimitsPanel } from '@stw/ui';
+import {
+  useIbkrSettings, saveIbkrSettings, useAuthStore, useSyncPortfolio, LoadingSpinner,
+  Button, StatusPill, AlertStrip, FormRow, TextInput, LimitsPanel,
+} from '@stw/ui';
+import { FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, RADIUS, SPACE } from '@stw/shared';
 import { useTierAccess } from '../../shared/hooks/useTierAccess';
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  background: 'var(--bg)',
-  border: '1px solid var(--border)',
-  borderRadius: 5,
-  padding: '10px 12px',
-  // 16px prevents iOS auto-zoom on focus
-  fontSize: 16,
-  color: 'var(--text)',
-  outline: 'none',
-  boxSizing: 'border-box',
-};
 
 export function SettingsPage() {
   const user = useAuthStore((s) => s.user);
@@ -63,35 +54,30 @@ export function SettingsPage() {
 
   return (
     <div style={{ height: '100%', overflowY: 'auto' }}>
-    <div style={{ maxWidth: 560, margin: '0 auto', padding: '16px 16px 48px' }}>
+    <div style={{ maxWidth: 560, margin: '0 auto', padding: `${SPACE[4]}px ${SPACE[4]}px ${SPACE[12]}px` }}>
 
       {/* IBKR Connection card */}
       <div style={{
         background: 'var(--surface)', border: '1px solid var(--border)',
-        borderRadius: 12, overflow: 'hidden',
+        borderRadius: RADIUS.xl, overflow: 'hidden',
       }}>
 
         {/* Card header */}
-        <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--bsub)', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text)' }}>
+        <div style={{ padding: `${SPACE[3.5]}px ${SPACE[4]}px`, borderBottom: '1px solid var(--bsub)', display: 'flex', alignItems: 'center', gap: SPACE[2.5] }}>
+          <span style={{ fontWeight: FONT_WEIGHT.semibold, fontSize: FONT_SIZE.base, color: 'var(--text)' }}>
             IBKR Connection
           </span>
-          <span style={{
-            fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 4,
-            background: isConnected ? 'var(--c5bg)' : 'var(--s2)',
-            color: isConnected ? 'var(--acc)' : 'var(--t3)',
-            border: `1px solid ${isConnected ? 'var(--c5b)' : 'var(--border)'}`,
-          }}>
+          <StatusPill variant={isConnected ? 'ok' : 'neutral'}>
             {isConnected ? 'Connected' : 'Not connected'}
-          </span>
+          </StatusPill>
         </div>
 
         {/* Setup instructions */}
-        <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--bsub)' }}>
-          <div style={{ fontSize: 11, color: 'var(--t3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>
+        <div style={{ padding: `${SPACE[3.5]}px ${SPACE[4]}px`, borderBottom: '1px solid var(--bsub)' }}>
+          <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginBottom: SPACE[2], textTransform: 'uppercase', letterSpacing: LETTER_SPACING.label, fontWeight: FONT_WEIGHT.semibold }}>
             How to connect
           </div>
-          <ol style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <ol style={{ margin: 0, paddingLeft: SPACE[5], display: 'flex', flexDirection: 'column', gap: SPACE[1.5] }}>
             {[
               <>Log in to <b style={{ color: 'var(--t2)' }}>clientportal.ibkr.com</b> or <b style={{ color: 'var(--t2)' }}>account.ibkr.com</b></>,
               <>Go to <b style={{ color: 'var(--t2)' }}>Reports → Flex Queries</b></>,
@@ -101,24 +87,21 @@ export function SettingsPage() {
               <>Back on Flex Queries, copy your <b style={{ color: 'var(--t2)' }}>Flex Token</b> (top of page, under "Generate Tokens")</>,
               <>Paste both below, click <b style={{ color: 'var(--t2)' }}>Save</b>, then <b style={{ color: 'var(--t2)' }}>Sync</b></>,
             ].map((step, i) => (
-              <li key={i} style={{ fontSize: 12, color: 'var(--t3)', lineHeight: 1.6 }}>{step}</li>
+              <li key={i} style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)', lineHeight: 1.6 }}>{step}</li>
             ))}
           </ol>
-          <p style={{ fontSize: 11, color: 'var(--t3)', marginTop: 10, marginBottom: 0 }}>
+          <p style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[2.5], marginBottom: 0 }}>
             Your token is stored server-side and never exposed in the browser.
           </p>
         </div>
 
         {/* Form fields */}
-        <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ padding: `${SPACE[3.5]}px ${SPACE[4]}px`, display: 'flex', flexDirection: 'column', gap: SPACE[3.5] }}>
 
           {/* Flex Token */}
-          <div>
-            <label style={{ display: 'block', fontSize: 11, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, marginBottom: 6 }}>
-              Flex Token
-            </label>
+          <FormRow label="Flex Token">
             <div style={{ position: 'relative' }}>
-              <input
+              <TextInput
                 type={showToken ? 'text' : 'password'}
                 value={token}
                 onChange={(e) => setToken(e.target.value)}
@@ -126,102 +109,85 @@ export function SettingsPage() {
                 autoComplete="off"
                 autoCorrect="off"
                 autoCapitalize="none"
-                style={{ ...inputStyle, paddingRight: 56 }}
+                style={{ paddingRight: SPACE[12] + SPACE[2] }}
               />
               <button
                 type="button"
                 onClick={() => setShowToken((v) => !v)}
                 style={{
-                  position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                  position: 'absolute', right: SPACE[2.5], top: '50%', transform: 'translateY(-50%)',
                   background: 'none', border: 'none', cursor: 'pointer',
-                  fontSize: 12, color: 'var(--t3)', padding: '4px',
+                  fontSize: FONT_SIZE.sm, color: 'var(--t3)', padding: SPACE[1],
                 }}
               >
                 {showToken ? 'Hide' : 'Show'}
               </button>
             </div>
-          </div>
+          </FormRow>
 
           {/* Query ID */}
-          <div>
-            <label style={{ display: 'block', fontSize: 11, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, marginBottom: 6 }}>
-              Query ID
-            </label>
-            <input
+          <FormRow label="Query ID">
+            <TextInput
               type="text"
               inputMode="numeric"
               value={queryId}
               onChange={(e) => setQueryId(e.target.value)}
               placeholder="e.g. 123456"
               autoComplete="off"
-              style={inputStyle}
             />
-          </div>
+          </FormRow>
 
-          {saveError && (
-            <div style={{ padding: '8px 12px', borderRadius: 6, background: '#2d0c0c', border: '1px solid var(--c1b)', color: 'var(--c1)', fontSize: 12 }}>
-              {saveError}
-            </div>
-          )}
+          {saveError && <AlertStrip severity="negative">{saveError}</AlertStrip>}
 
           {/* Buttons */}
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button
+          <div style={{ display: 'flex', gap: SPACE[2], flexWrap: 'wrap' }}>
+            <Button
+              variant="primary"
               onClick={handleSave}
               disabled={saving}
-              style={{
-                flex: 1, minWidth: 100,
-                padding: '10px 16px', borderRadius: 6, fontSize: 14, fontWeight: 600,
-                background: 'var(--acc)', color: '#fff', border: 'none',
-                cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.6 : 1,
-              }}
+              style={{ flex: 1, minWidth: 100 }}
             >
               {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save'}
-            </button>
+            </Button>
 
             {isConnected && (
-              <button
+              <Button
+                variant="secondary"
                 onClick={sync}
                 disabled={isSyncing}
-                style={{
-                  flex: 1, minWidth: 100,
-                  padding: '10px 16px', borderRadius: 6, fontSize: 14, fontWeight: 600,
-                  background: 'var(--s2)', color: 'var(--text)',
-                  border: '1px solid var(--border)',
-                  cursor: isSyncing ? 'default' : 'pointer', opacity: isSyncing ? 0.6 : 1,
-                }}
+                style={{ flex: 1, minWidth: 100 }}
               >
                 {isSyncing ? 'Syncing…' : 'Sync Portfolio'}
-              </button>
+              </Button>
             )}
           </div>
 
           {syncError && (
-            <div style={{ padding: '8px 12px', borderRadius: 6, background: '#2d0c0c', border: '1px solid var(--c1b)', color: 'var(--c1)', fontSize: 12 }}>
+            <AlertStrip severity="negative">
               {syncError}
               {syncError.toLowerCase().includes('timed out') && ' Try again in a few seconds.'}
-            </div>
+            </AlertStrip>
           )}
 
           {lastResult && (
-            <div style={{ fontSize: 12, color: 'var(--acc)' }}>
-              ✓ Synced {lastResult.count} position{lastResult.count !== 1 ? 's' : ''}
-            </div>
+            <AlertStrip severity="positive">
+              Synced {lastResult.count} position{lastResult.count !== 1 ? 's' : ''}
+            </AlertStrip>
           )}
         </div>
       </div>
 
       {/* Limits engine card — Premium only (plans/integrity-guardrails.md Item 2) */}
-      <div style={{ marginTop: 16 }}>
+      <div style={{ marginTop: SPACE[4] }}>
         {canUseLimits ? (
           <LimitsPanel />
         ) : (
           <div style={{
             background: 'var(--surface)', border: '1px solid var(--border)',
-            borderRadius: 12, padding: '16px', display: 'flex', flexDirection: 'column', gap: 6,
+            borderRadius: RADIUS.xl, padding: SPACE[4], display: 'flex', flexDirection: 'column', gap: SPACE[1.5],
           }}>
-            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>Limits engine 🔒</span>
-            <span style={{ fontSize: 12, color: 'var(--t3)' }}>
+            <span style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>Limits engine 🔒</span>
+            <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)' }}>
               Flag concentration and gross-exposure breaches in your own IBKR book — requires a
               <strong style={{ color: 'var(--t2)' }}> Premium</strong> subscription. Contact your STW
               administrator to upgrade.

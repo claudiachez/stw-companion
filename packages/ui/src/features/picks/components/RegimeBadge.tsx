@@ -1,5 +1,5 @@
 import type { TrendBucket, SectorStanding } from '@stw/shared';
-import { TREND_BUCKET_META } from '@stw/shared';
+import { TREND_BUCKET_META, FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
 import type { TickerRegime } from '../useTickerRegime';
 
 // Bucket → CSS color token (kept in the UI; the shared layer stays framework-agnostic —
@@ -33,7 +33,7 @@ export function RegimeBadge({ regime, compact = false }: { regime: TickerRegime 
         <span
           title="This ticker's own 9/21/200 EMA trend structure"
           style={{
-            fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4,
+            fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.semibold, padding: '2px 6px', borderRadius: 4,
             color: BUCKET_COLOR[regime.bucket], background: BUCKET_COLOR[regime.bucket] + '18',
             border: `1px solid ${BUCKET_COLOR[regime.bucket]}28`, whiteSpace: 'nowrap',
           }}
@@ -45,7 +45,7 @@ export function RegimeBadge({ regime, compact = false }: { regime: TickerRegime 
         <span
           title={regime.sectorName ? `${regime.sectorName} sector rotation standing` : 'Sector rotation standing'}
           style={{
-            fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4,
+            fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.semibold, padding: '2px 6px', borderRadius: 4,
             color: STANDING_META[regime.standing].color, background: STANDING_META[regime.standing].color + '18',
             border: `1px solid ${STANDING_META[regime.standing].color}28`, whiteSpace: 'nowrap',
           }}

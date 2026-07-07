@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
 import { GexChart, type Timeframe } from './GexChart';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 import { useCapabilities } from '../../../context/AppCapabilities';
@@ -13,7 +14,7 @@ const tfBtn = (on: boolean): React.CSSProperties => ({
   border: `1px solid ${on ? 'var(--acc)' : 'var(--border)'}`,
   background: on ? 'var(--c5bg)' : 'transparent',
   color: on ? 'var(--acc)' : 'var(--t2)',
-  fontSize: 10, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
+  fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.semibold, fontFamily: 'inherit', cursor: 'pointer',
 });
 
 interface Props {
@@ -29,7 +30,7 @@ export function GexCharts({ spyLevels, qqqLevels }: Props) {
   return (
     <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', boxShadow: 'var(--shadow)', flexShrink: 0 }}>
       <div style={{ padding: '8px 13px', background: 'var(--s2)', borderBottom: '1px solid var(--bsub)', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.09em', color: 'var(--t2)' }}>📈 SPY &amp; QQQ</span>
+        <span style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, textTransform: 'uppercase', letterSpacing: '0.09em', color: 'var(--t2)' }}>📈 SPY &amp; QQQ</span>
         <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', marginLeft: 'auto' }}>
           {TFS.map((t) => (
             <button key={t} style={tfBtn(tf === t)} onClick={() => setTf(t)}>{t}</button>
@@ -54,7 +55,7 @@ function ChartLabel({ text }: { text: string }) {
   return (
     <span style={{
       position: 'absolute', top: 6, left: 8, zIndex: 10,
-      fontSize: 11, fontWeight: 700, color: 'var(--t2)',
+      fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold, color: 'var(--t2)',
       background: 'var(--bg)', padding: '1px 5px', borderRadius: 3, pointerEvents: 'none',
     }}>
       {text}
