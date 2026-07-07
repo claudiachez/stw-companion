@@ -122,11 +122,6 @@
       "count": 2
     }
   },
-  "packages/ui/src/features/picks/components/HoldingDetail.tsx": {
-    "no-restricted-syntax": {
-      "count": 50
-    }
-  },
   "packages/ui/src/features/picks/components/HoldingRow.tsx": {
     "no-restricted-syntax": {
       "count": 10

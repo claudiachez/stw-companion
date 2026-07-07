@@ -17,6 +17,16 @@ export interface DetailPaneProps {
   badges?: React.ReactNode;
   /** Up to 3 columns, divided by a vertical rule (HoldingDetail's price/P&L/weight cols). */
   metrics?: DetailPaneMetric[];
+  /** Pass the caller's own useIsMobile() result to stack metrics full-width, one per row,
+   * instead of the fixed 3-equal-columns row — same isMobile-boolean-prop convention every
+   * other responsive component in this codebase uses (e.g. AccordionList's consumers,
+   * FlatTable/GroupRow), rather than a CSS breakpoint mechanism nothing else here uses.
+   * Added during HoldingDetail.tsx's Phase 5 migration — its first real integration against
+   * genuinely dense metric content: 3 columns of price/P&L/weight text unconditionally
+   * side-by-side is illegible at ≤390px (the "design for mobile" ground rule); the original
+   * component had only been checked against the gallery's short demo values, never real
+   * dense content. */
+  isMobile?: boolean;
   onClose?: () => void;
   /** Stacked section cards below the metric block. */
   children?: React.ReactNode;
@@ -24,7 +34,7 @@ export interface DetailPaneProps {
 
 const colBorder: React.CSSProperties = { borderLeft: '1px solid var(--border)', paddingLeft: SPACE[3] };
 
-export function DetailPane({ title, subtitle, badges, metrics, onClose, children }: DetailPaneProps) {
+export function DetailPane({ title, subtitle, badges, metrics, isMobile, onClose, children }: DetailPaneProps) {
   return (
     <div style={{ height: '100%', overflowY: 'auto', padding: `${SPACE[4]}px ${SPACE[5]}px` }}>
       {/* Header row */}
@@ -53,11 +63,12 @@ export function DetailPane({ title, subtitle, badges, metrics, onClose, children
         )}
       </div>
 
-      {/* 3-col metric block */}
+      {/* 3-col metric block — stacks full-width on mobile (isMobile) since 3 columns of
+          dense text side-by-side doesn't fit a narrow screen legibly. */}
       {metrics && metrics.length > 0 && (
-        <div style={{ display: 'flex', gap: SPACE[3], marginBottom: SPACE[4], ...NUMERIC_STYLE }}>
+        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: SPACE[3], marginBottom: SPACE[4], ...NUMERIC_STYLE }}>
           {metrics.map((m, i) => (
-            <div key={m.key} style={{ flex: 1, minWidth: 0, ...(i > 0 ? colBorder : {}) }}>{m.content}</div>
+            <div key={m.key} style={{ flex: 1, minWidth: 0, ...(i > 0 && !isMobile ? colBorder : {}) }}>{m.content}</div>
           ))}
         </div>
       )}
