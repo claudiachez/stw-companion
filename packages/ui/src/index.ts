@@ -49,6 +49,8 @@ export { DetailPane, DetailPaneMetricLabel } from './primitives/DetailPane';
 export type { DetailPaneProps, DetailPaneMetric } from './primitives/DetailPane';
 export { ListDetailSplit } from './primitives/ListDetailSplit';
 export type { ListDetailSplitProps } from './primitives/ListDetailSplit';
+export { AccordionList } from './primitives/AccordionList';
+export type { AccordionListProps } from './primitives/AccordionList';
 export { FormRow } from './primitives/FormRow';
 export type { FormRowProps } from './primitives/FormRow';
 export { AlertStrip } from './primitives/AlertStrip';

@@ -8,6 +8,7 @@ import { Button } from './Button';
 import { DataTable, type DataTableColumn } from './DataTable';
 import { DetailPane, DetailPaneMetricLabel } from './DetailPane';
 import { ListDetailSplit } from './ListDetailSplit';
+import { AccordionList } from './AccordionList';
 import { FormRow } from './FormRow';
 import { EmptyState } from './EmptyState';
 import { AlertStrip } from './AlertStrip';
@@ -34,10 +35,17 @@ const DEMO_COLUMNS: DataTableColumn<DemoRow>[] = [
   { key: 'pnl', header: 'P&L', numeric: true, render: (r) => `${r.pnl >= 0 ? '+' : ''}${r.pnl.toFixed(1)}%` },
 ];
 
+interface DemoGroup { key: string; ticker: string; pnl: number; accent: string; legs: string[]; }
+const DEMO_GROUPS: DemoGroup[] = [
+  { key: 'ADEA', ticker: 'ADEA', pnl: 34.2, accent: 'var(--c5)', legs: ["$12.5C Jan '27 — +34.2%"] },
+  { key: 'CXDO', ticker: 'CXDO', pnl: -6.1, accent: 'var(--c3)', legs: ['Shares — -6.1%'] },
+];
+
 export function DesignSystemGallery() {
   const [tab, setTab] = useState<'a' | 'b' | 'c'>('a');
   const [modalOpen, setModalOpen] = useState(false);
   const [splitSelected, setSplitSelected] = useState(false);
+  const [accordionExpanded, setAccordionExpanded] = useState<Set<string>>(new Set());
 
   return (
     <div style={{ height: '100%', overflowY: 'auto', padding: `${SPACE[5]}px ${SPACE[6]}px`, maxWidth: 900 }}>
@@ -110,6 +118,38 @@ export function DesignSystemGallery() {
       <div style={H2}>DataTable</div>
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
         <DataTable columns={DEMO_COLUMNS} rows={DEMO_ROWS} rowKey={(r) => r.key} />
+      </div>
+
+      <div style={H2}>AccordionList</div>
+      <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)', marginBottom: SPACE[2] }}>
+        Click a row to expand — the "group by ticker" pattern from My Portfolio, extracted so
+        it can be reused by the Stock Picks Trades tab's own planned group-by-ticker view.
+      </div>
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+        <AccordionList
+          items={DEMO_GROUPS}
+          rowKey={(g) => g.key}
+          expandedKeys={accordionExpanded}
+          onToggle={(key) => setAccordionExpanded((prev) => {
+            const next = new Set(prev);
+            next.has(key) ? next.delete(key) : next.add(key);
+            return next;
+          })}
+          accentColor={(g) => g.accent}
+          renderHeader={(g) => (
+            <>
+              <span style={{ flex: 1, fontWeight: FONT_WEIGHT.bold, fontSize: FONT_SIZE.base, color: 'var(--text)' }}>{g.ticker}</span>
+              <span style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: g.pnl >= 0 ? 'var(--pnl-gain)' : 'var(--pnl-loss)' }}>
+                {g.pnl >= 0 ? '+' : ''}{g.pnl.toFixed(1)}%
+              </span>
+            </>
+          )}
+          renderExpanded={(g) => (
+            <div style={{ padding: `${SPACE[2]}px ${SPACE[3.5]}px ${SPACE[2]}px 40px`, background: 'var(--bg)', borderBottom: '1px solid var(--bsub)', fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>
+              {g.legs.map((leg) => <div key={leg}>{leg}</div>)}
+            </div>
+          )}
+        />
       </div>
 
       <div style={H2}>FormRow + TextInput</div>

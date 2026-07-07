@@ -11,6 +11,7 @@ import { Badge } from '../../primitives/Badge';
 import { Button } from '../../primitives/Button';
 import { AlertStrip } from '../../primitives/AlertStrip';
 import { KpiCard, type KpiStatus } from '../../primitives/KpiCard';
+import { AccordionList } from '../../primitives/AccordionList';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import {
   PortfolioFilterBar,
@@ -206,56 +207,40 @@ function PositionMetrics({ group, portfolioValue, showPnl }: { group: PortfolioG
   );
 }
 
-function GroupRow({ group, portfolioValue, isExpanded, onToggle, onSelectTicker, showPnl, isMobile }: {
-  group: PortfolioGroup; portfolioValue: number; isExpanded: boolean; onToggle: () => void;
-  onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean;
+// header content for a group's accordion row (ticker/badges/composition + P&L columns) —
+// the AccordionList call site below supplies this as `renderHeader`.
+function GroupHeader({ group, onSelectTicker, showPnl, isMobile }: {
+  group: PortfolioGroup; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean;
 }) {
   const { underlying, netPnl, returnPct, marketValue, isTailed, traders, conviction } = group;
-  const accent = conviction !== null ? (TIERS[conviction]?.color ?? 'var(--border)') : 'var(--border)';
   return (
     <>
-      <div
-        role="button" tabIndex={0} onClick={onToggle}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}
-        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderBottom: '1px solid var(--bsub)', cursor: 'pointer', background: isExpanded ? 'var(--c5bg)' : 'transparent' }}
-        onMouseEnter={(e) => { if (!isExpanded) (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
-        onMouseLeave={(e) => { if (!isExpanded) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
-      >
-        <span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', flexShrink: 0, width: 8, textAlign: 'center', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s', display: 'inline-block' }}>▶</span>
-        <div style={{ width: 3, height: 30, borderRadius: 2, flexShrink: 0, background: accent }} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 1 }}>
-            {isTailed ? (
-              <span onClick={(e) => e.stopPropagation()} style={{ flexShrink: 0 }}>
-                <TickerLink ticker={underlying} onSelect={onSelectTicker} style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.bold }} />
-              </span>
-            ) : (
-              <span style={{ fontWeight: FONT_WEIGHT.bold, fontSize: FONT_SIZE.base, color: 'var(--text)', flexShrink: 0 }}>{underlying}</span>
-            )}
-            {isTailed && traders.map((t) => <Badge key={t} kind="source" trader={t} />)}
-            {conviction !== null && <ConvictionBadge level={conviction} />}
-          </div>
-          <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{composition(group)}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 1 }}>
+          {isTailed ? (
+            <span onClick={(e) => e.stopPropagation()} style={{ flexShrink: 0 }}>
+              <TickerLink ticker={underlying} onSelect={onSelectTicker} style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.bold }} />
+            </span>
+          ) : (
+            <span style={{ fontWeight: FONT_WEIGHT.bold, fontSize: FONT_SIZE.base, color: 'var(--text)', flexShrink: 0 }}>{underlying}</span>
+          )}
+          {isTailed && traders.map((t) => <Badge key={t} kind="source" trader={t} />)}
+          {conviction !== null && <ConvictionBadge level={conviction} />}
         </div>
-        {showPnl && (isMobile ? (
-          <div style={{ flexShrink: 0, textAlign: 'right' }}>
-            <div style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: pnlColor(netPnl), fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(netPnl)}</div>
-            {marketValue > 0 && <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(marketValue)} mkt</div>}
-          </div>
-        ) : (
-          <>
-            <div style={{ width: COL.ret, textAlign: 'right', flexShrink: 0, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: pnlColor(returnPct), fontVariantNumeric: 'tabular-nums' }}>{returnPct !== null ? fmtPct(returnPct) : '—'}</div>
-            <div style={{ width: COL.pnl, textAlign: 'right', flexShrink: 0, fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: pnlColor(netPnl), fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(netPnl)}</div>
-            <div style={{ width: COL.val, textAlign: 'right', flexShrink: 0, fontSize: FONT_SIZE.sm, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(marketValue)}</div>
-          </>
-        ))}
+        <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{composition(group)}</div>
       </div>
-      {isExpanded && (
+      {showPnl && (isMobile ? (
+        <div style={{ flexShrink: 0, textAlign: 'right' }}>
+          <div style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: pnlColor(netPnl), fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(netPnl)}</div>
+          {marketValue > 0 && <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(marketValue)} mkt</div>}
+        </div>
+      ) : (
         <>
-          <PositionMetrics group={group} portfolioValue={portfolioValue} showPnl={showPnl} />
-          {group.positions.map((p) => <LegRow key={p.id} pos={p} showPnl={showPnl} />)}
+          <div style={{ width: COL.ret, textAlign: 'right', flexShrink: 0, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: pnlColor(returnPct), fontVariantNumeric: 'tabular-nums' }}>{returnPct !== null ? fmtPct(returnPct) : '—'}</div>
+          <div style={{ width: COL.pnl, textAlign: 'right', flexShrink: 0, fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: pnlColor(netPnl), fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(netPnl)}</div>
+          <div style={{ width: COL.val, textAlign: 'right', flexShrink: 0, fontSize: FONT_SIZE.sm, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(marketValue)}</div>
         </>
-      )}
+      ))}
     </>
   );
 }
@@ -548,11 +533,22 @@ export function PortfolioPage() {
                       <span style={{ width: COL.val, textAlign: 'right', flexShrink: 0 }}>Value</span>
                     </div>
                   )}
-                  {visibleGroups.map((g) => (
-                    <GroupRow key={g.underlying} group={g} portfolioValue={portfolioValue}
-                      isExpanded={expanded.has(g.underlying)} onToggle={() => toggleGroup(g.underlying)}
-                      onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} />
-                  ))}
+                  <AccordionList
+                    items={visibleGroups}
+                    rowKey={(g) => g.underlying}
+                    expandedKeys={expanded}
+                    onToggle={toggleGroup}
+                    accentColor={(g) => (g.conviction !== null ? (TIERS[g.conviction]?.color ?? 'var(--border)') : 'var(--border)')}
+                    renderHeader={(g) => (
+                      <GroupHeader group={g} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} />
+                    )}
+                    renderExpanded={(g) => (
+                      <>
+                        <PositionMetrics group={g} portfolioValue={portfolioValue} showPnl={showPnl} />
+                        {g.positions.map((p) => <LegRow key={p.id} pos={p} showPnl={showPnl} />)}
+                      </>
+                    )}
+                  />
                 </>
               ) : (
                 <FlatTable rows={visibleLegs} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} />
