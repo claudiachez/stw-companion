@@ -41,7 +41,21 @@
 // property value) to close this for good — ternaries, function-call arguments, array
 // elements, etc. all get caught now.
 import tsParser from '@typescript-eslint/parser';
+import reactHooks from 'eslint-plugin-react-hooks';
 
+// react-hooks — unrelated to the design-token rules above, added 2026-07-07 for a
+// different reason: 6 call sites (useMacroTrendHistory.ts, PicksView.tsx,
+// useTickerRegime.ts, PortfolioPage.tsx) carried `// eslint-disable-next-line
+// react-hooks/exhaustive-deps` comments referencing a rule that was never actually
+// installed in this repo — a leftover from some earlier setup (this repo had zero lint
+// tooling before Phase 4). ESLint flags a disable-comment for an unregistered rule as an
+// error ("Definition for rule ... was not found"), so those 6 lines failed `pnpm lint`
+// for a reason that had nothing to do with colors/font-sizes. Deliberately NOT using the
+// plugin's `recommended`/`recommended-latest` presets — v7 bundles a dozen new React-
+// Compiler-era rules (`purity`, `immutability`, `set-state-in-render`, `gating`, etc.)
+// that this repo has never been audited against; adopting them wholesale here would be
+// exactly the "general lint overhaul" this file's own header comment says it isn't. Only
+// the two classic, narrowly-scoped rules those 6 disable-comments actually reference.
 const COLOR_LITERAL = '^(#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$|rgba?\\()';
 const TAILWIND_BRACKET_COLOR_LITERAL = '-\\[(#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})|rgba?\\()';
 
@@ -85,6 +99,17 @@ export default [
           message: 'Raw numeric fontSize — use FONT_SIZE from @stw/shared instead. See docs/design-system/CONTRIBUTING.md.',
         },
       ],
+    },
+  },
+  {
+    files: ['apps/**/*.{ts,tsx}', 'packages/**/*.{ts,tsx}'],
+    plugins: { 'react-hooks': reactHooks },
+    rules: {
+      'react-hooks/rules-of-hooks': 'error',
+      // 'warn', matching the plugin's own upstream default — an incomplete dependency
+      // array is sometimes a deliberate, considered choice (as it is at the 6 call sites
+      // this was added for), not always a bug, so it shouldn't fail `pnpm lint`.
+      'react-hooks/exhaustive-deps': 'warn',
     },
   },
 ];

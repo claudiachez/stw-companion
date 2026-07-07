@@ -4,26 +4,6 @@
       "count": 4
     }
   },
-  "packages/ui/src/features/macro/useMacroTrendHistory.ts": {
-    "react-hooks/exhaustive-deps": {
-      "count": 2
-    }
-  },
-  "packages/ui/src/features/picks/PicksView.tsx": {
-    "react-hooks/exhaustive-deps": {
-      "count": 1
-    }
-  },
-  "packages/ui/src/features/picks/useTickerRegime.ts": {
-    "react-hooks/exhaustive-deps": {
-      "count": 1
-    }
-  },
-  "packages/ui/src/features/portfolio/PortfolioPage.tsx": {
-    "react-hooks/exhaustive-deps": {
-      "count": 2
-    }
-  },
   "packages/ui/src/features/signals/components/GexChart.tsx": {
     "no-restricted-syntax": {
       "count": 18
