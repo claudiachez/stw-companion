@@ -754,6 +754,8 @@ export function PortfolioPage() {
       netPnl: selectedGroup.netPnl, returnPct: selectedGroup.returnPct, marketValue: selectedGroup.marketValue,
       isTailed: selectedGroup.isTailed, traders: selectedGroup.traders, conviction: selectedGroup.conviction,
       hasStock: selectedGroup.hasStock, hasOption: selectedGroup.hasOption,
+      companyName: stwHoldings.find((h) => h.ticker === selectedGroup.underlying)?.name ?? null,
+      basket: selectedGroup.basket || null,
     };
     return (
       <PortfolioPositionDetail
