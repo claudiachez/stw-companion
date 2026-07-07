@@ -14,6 +14,20 @@ import { FONT_SIZE, RADIUS, SPACE } from '@stw/shared';
 // dominant authoring convention), focus behavior via Tailwind's `:focus`
 // pseudo-class utilities (which a plain `style` object cannot express).
 //
+// CORRECTNESS NOTE (found + fixed 2026-07-07, design-system Phase 5): the border
+// COLOR must be set via Tailwind classes, never inline, or the focus variant can
+// never take effect — inline `style` always wins over a stylesheet class rule
+// regardless of specificity (unless the class uses `!important`, which Tailwind
+// doesn't by default). An earlier version of this component set `border: '1px
+// solid var(--border)'` inline AND relied on a `focus:border-acc` class to
+// override it on focus — the class rule was silently dead code; the border never
+// actually changed on focus, so the "visible focus replacement" this component
+// exists to provide was never really there. Verified live: before this fix,
+// `getComputedStyle(el).borderColor` was IDENTICAL focused vs unfocused. Only
+// border-WIDTH lives in the `border` base class now (Tailwind's preflight sets
+// `border-style: solid` globally); border-COLOR is 100% class-driven so the
+// `:focus` variant has something real to win against.
+//
 // Pair with FormRow for label/input/suffix layout — FormRow stays a layout-only
 // wrapper (unchanged), this owns the actual control.
 export interface TextInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
@@ -26,15 +40,16 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(function T
   { invalid, className, style, ...rest },
   ref,
 ) {
-  const focusClass = invalid ? 'focus:border-[var(--status-negative-border)]' : 'focus:border-acc';
+  const borderClass = invalid
+    ? 'border-[var(--status-negative-border)] focus:border-[var(--status-negative-border)]'
+    : 'border-[var(--border)] focus:border-acc';
   return (
     <input
       ref={ref}
-      className={`focus:outline-none ${focusClass} ${className ?? ''}`}
+      className={`border focus:outline-none ${borderClass} ${className ?? ''}`}
       style={{
         width: '100%',
         background: 'var(--surface-inset)',
-        border: `1px solid ${invalid ? 'var(--status-negative-border)' : 'var(--border)'}`,
         borderRadius: RADIUS.md,
         padding: `${SPACE[1.5]}px ${SPACE[2]}px`,
         // FONT_SIZE.input (16), not .base (14) — below 16px, mobile Safari zooms the
