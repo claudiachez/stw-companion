@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useIbkrSettings, saveIbkrSettings, useAuthStore, useSyncPortfolio, LoadingSpinner, LimitsPanel } from '@stw/ui';
+import {
+  useIbkrSettings, saveIbkrSettings, useAuthStore, useSyncPortfolio, LoadingSpinner,
+  RiskConfigForm, useRiskConfig, useEnsureRiskConfig,
+} from '@stw/ui';
 import { useTierAccess } from '../../shared/hooks/useTierAccess';
 
 const inputStyle: React.CSSProperties = {
@@ -22,6 +25,8 @@ export function SettingsPage() {
   const { data: settings, isLoading } = useIbkrSettings();
   const { sync, isSyncing, syncError, lastResult } = useSyncPortfolio();
   const canUseLimits = useTierAccess('limits');
+  const { data: riskConfig, isLoading: riskConfigLoading } = useRiskConfig(canUseLimits ? user?.id : undefined);
+  useEnsureRiskConfig(canUseLimits ? user?.id : undefined, riskConfig, riskConfigLoading);
 
   const [token, setToken] = useState('');
   const [queryId, setQueryId] = useState('');
@@ -63,10 +68,12 @@ export function SettingsPage() {
 
   return (
     <div style={{ height: '100%', overflowY: 'auto' }}>
-    <div style={{ maxWidth: 560, margin: '0 auto', padding: '16px 16px 48px' }}>
+    <div style={{ maxWidth: 1040, margin: '0 auto', padding: '16px 16px 48px' }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'flex-start' }}>
 
       {/* IBKR Connection card */}
       <div style={{
+        flex: '1 1 460px', minWidth: 320,
         background: 'var(--surface)', border: '1px solid var(--border)',
         borderRadius: 12, overflow: 'hidden',
       }}>
@@ -211,10 +218,16 @@ export function SettingsPage() {
         </div>
       </div>
 
-      {/* Limits engine card — Premium only (plans/integrity-guardrails.md Item 2) */}
-      <div style={{ marginTop: 16 }}>
+      {/* Your thresholds card — Premium only (plans/integrity-guardrails.md Item 2).
+          Setup only: no sync button, no violation display — that lives on My
+          Portfolio (packages/ui/src/features/portfolio/PortfolioPage.tsx). */}
+      <div style={{ flex: '1 1 380px', minWidth: 280 }}>
         {canUseLimits ? (
-          <LimitsPanel />
+          riskConfigLoading || !riskConfig ? (
+            <LoadingSpinner />
+          ) : (
+            <RiskConfigForm userId={user!.id} config={riskConfig} />
+          )
         ) : (
           <div style={{
             background: 'var(--surface)', border: '1px solid var(--border)',
@@ -229,6 +242,8 @@ export function SettingsPage() {
           </div>
         )}
       </div>
+
+    </div>
     </div>
     </div>
   );
