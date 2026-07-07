@@ -1,8 +1,11 @@
 import { useState } from 'react';
-import { evaluateRiskConfig, fmtDateTime, type PositionInput, type ConcentrationViolation } from '@stw/shared';
+import {
+  evaluateRiskConfig, fmtDateTime,
+  type PositionInput, type ConcentrationViolation, type ViolationSeverity,
+} from '@stw/shared';
 import { useAuthStore } from '../../store/auth';
 import { LoadingSpinner } from '../../primitives/LoadingSpinner';
-import { StatusPill } from '../../primitives/StatusPill';
+import { StatusPill, type StatusPillVariant } from '../../primitives/StatusPill';
 import { useUserPositions } from '../portfolio/useUserPositions';
 import { useSyncPortfolio } from '../portfolio/useSyncPortfolio';
 import { useRiskConfig, useSectorMap, useViolationAcks, useAcknowledgeViolation, useEnsureRiskConfig } from './useRiskConfig';
@@ -17,9 +20,23 @@ import type { ViolationType, AckStatus } from './api';
 // — on My Portfolio, the page's own Sync button already invalidates the same
 // `useUserPositions` query key, so no second sync control is needed there.
 
-function severityColor(severity: 'ok' | 'breach'): string {
-  return severity === 'breach' ? 'var(--status-negative-text)' : 'var(--acc)';
-}
+// Four severity tiers (see @stw/shared limits.ts): a NEAR (≥80% of limit) amber
+// tier is the actionable early warning — a breach is already too late; and an
+// UNEVALUATED gray tier is missing data (unmapped sector), never a breach, so it
+// can't become a permanent red flag the operator learns to ignore.
+const SEVERITY_PILL: Record<ViolationSeverity, { variant: StatusPillVariant; label: string }> = {
+  ok: { variant: 'ok', label: 'OK' },
+  near: { variant: 'near', label: 'Near' },
+  breach: { variant: 'breach', label: 'Breach' },
+  unevaluated: { variant: 'unevaluated', label: 'Unevaluated' },
+};
+
+const SEVERITY_TEXT_COLOR: Record<ViolationSeverity, string> = {
+  ok: 'var(--acc)',
+  near: 'var(--status-warning-text)',
+  breach: 'var(--status-negative-text)',
+  unevaluated: 'var(--t3)',
+};
 
 function ViolationRow({
   v, ack, onAcknowledge, note: noteBadge,
@@ -29,8 +46,13 @@ function ViolationRow({
   onAcknowledge: (status: AckStatus, note?: string) => void;
   note?: string;
 }) {
-  const [note, setNote] = useState(ack?.glide_path_note ?? '');
   const status = ack?.status ?? 'new';
+  const committedGlide = status === 'glide_path' ? (ack?.glide_path_note ?? '') : '';
+  const [editingGlide, setEditingGlide] = useState(false);
+  const [note, setNote] = useState(ack?.glide_path_note ?? '');
+  const pill = SEVERITY_PILL[v.severity];
+  const unevaluated = v.severity === 'unevaluated';
+
   return (
     <div className="flex flex-col gap-2 py-3 border-b border-bsub last:border-0">
       <div className="flex items-center justify-between gap-3">
@@ -39,62 +61,85 @@ function ViolationRow({
           {noteBadge && <span className="text-t3 text-xs font-normal ml-1.5">{noteBadge}</span>}
         </span>
         <div className="flex items-center gap-2">
-          <span className="text-xs font-mono" style={{ color: severityColor(v.severity) }}>
-            {v.exposurePct.toFixed(1)}% / {v.limitPct}%
-          </span>
-          <StatusPill variant={v.severity === 'breach' ? 'breach' : 'neutral'}>
-            {v.severity === 'breach' ? 'Breach' : 'OK'}
-          </StatusPill>
+          {!unevaluated && (
+            <span className="text-xs font-mono" style={{ color: SEVERITY_TEXT_COLOR[v.severity] }}>
+              {v.exposurePct.toFixed(1)}% / {v.limitPct}%
+            </span>
+          )}
+          <StatusPill variant={pill.variant}>{pill.label}</StatusPill>
         </div>
       </div>
+
+      {/* Missing-data row: explain, don't offer a false acknowledge/glide action. */}
+      {unevaluated && (
+        <div className="text-t3 text-xs">
+          No sector mapping yet — this position can’t be evaluated. Map its sector to include it.
+        </div>
+      )}
+
+      {/* Breaches get the acknowledge + glide-path workflow. Acknowledgment (I've
+          seen it) is kept distinct from the glide path (my committed reduction
+          plan); once a glide path is set it renders as plain text, not an input. */}
       {v.severity === 'breach' && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[10px] text-t3 uppercase tracking-wide">Status: {status}</span>
-          {status === 'new' && (
-            <button
-              onClick={() => onAcknowledge('acknowledged')}
-              className="text-xs px-2 py-1 rounded bg-s2 border border-border text-text"
-            >
-              Acknowledge
-            </button>
-          )}
-          <input
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="Glide path — e.g. no adds; reduce to 10% by 2026-08-01"
-            className="flex-1 min-w-[220px] bg-s2 border border-border rounded px-2 py-1 text-xs text-text"
-          />
-          <button
-            onClick={() => onAcknowledge('glide_path', note)}
-            disabled={!note.trim()}
-            className="text-xs px-2 py-1 rounded bg-acc text-white disabled:opacity-40"
-          >
-            Set glide path
-          </button>
+        <div className="flex flex-col gap-2">
+          {committedGlide && !editingGlide ? (
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="text-[10px] text-t3 uppercase tracking-wide">Glide path</span>
+              <span className="text-t2 flex-1 min-w-[180px]">{committedGlide}</span>
+              <button onClick={() => setEditingGlide(true)} className="text-t3 hover:text-t2">Edit</button>
+            </div>
+          ) : editingGlide || status !== 'glide_path' ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {status === 'new' && (
+                <button
+                  onClick={() => onAcknowledge('acknowledged')}
+                  className="text-xs px-2 py-1 rounded bg-s2 border border-border text-text"
+                >
+                  Acknowledge
+                </button>
+              )}
+              {status === 'acknowledged' && (
+                <span className="text-[10px] text-t3 uppercase tracking-wide">Acknowledged</span>
+              )}
+              <input
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Glide path — e.g. no adds; reduce to 10% by 2026-08-01"
+                className="flex-1 min-w-[220px] bg-s2 border border-border rounded px-2 py-1 text-xs text-text"
+              />
+              <button
+                onClick={() => { onAcknowledge('glide_path', note); setEditingGlide(false); }}
+                disabled={!note.trim()}
+                className="text-xs px-2 py-1 rounded bg-acc text-white disabled:opacity-40"
+              >
+                Set glide path
+              </button>
+            </div>
+          ) : null}
         </div>
       )}
     </div>
   );
 }
 
-function GrossExposureBar({ pct, limitPct, ladderTargetPct }: { pct: number; limitPct: number; ladderTargetPct: number | null }) {
+function GrossExposureBar({ v, ladderTargetPct }: { v: ConcentrationViolation; ladderTargetPct: number | null }) {
+  const { exposurePct: pct, limitPct } = v;
   const scaleMax = Math.max(limitPct, pct, 100) * 1.05;
   const fillPct = Math.min(100, (pct / scaleMax) * 100);
   const limitMarkerPct = Math.min(100, (limitPct / scaleMax) * 100);
-  const breach = pct > limitPct;
+  // At-limit (100%/100%) is `near` → amber, never green: a full bar you're trained
+  // to see as "fine" defeats the point.
+  const fill = SEVERITY_TEXT_COLOR[v.severity];
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between text-xs">
         <span className="text-text font-semibold">Gross exposure</span>
-        <span className="font-mono" style={{ color: severityColor(breach ? 'breach' : 'ok') }}>
+        <span className="font-mono" style={{ color: fill }}>
           {pct.toFixed(1)}% / {limitPct}%
         </span>
       </div>
       <div className="relative h-2.5 rounded-full bg-s2 border border-border overflow-hidden">
-        <div
-          className="h-full rounded-full"
-          style={{ width: `${fillPct}%`, background: breach ? 'var(--status-negative-text)' : 'var(--acc)' }}
-        />
+        <div className="h-full rounded-full" style={{ width: `${fillPct}%`, background: fill }} />
         <div
           className="absolute top-0 bottom-0 w-px bg-t3"
           style={{ left: `${limitMarkerPct}%` }}
@@ -110,6 +155,26 @@ function GrossExposureBar({ pct, limitPct, ladderTargetPct }: { pct: number; lim
   );
 }
 
+const SEVERITY_RANK: Record<ViolationSeverity, number> = { breach: 0, near: 1, unevaluated: 2, ok: 3 };
+
+/** One-line roll-up: "18/20 within limit · 1 breach · 1 near · max HOOD 8.5%/10%". */
+function sectionSummary(violations: ConcentrationViolation[]): string {
+  const evaluated = violations.filter((v) => v.severity !== 'unevaluated');
+  const breaches = evaluated.filter((v) => v.severity === 'breach').length;
+  const near = evaluated.filter((v) => v.severity === 'near').length;
+  const withinLimit = evaluated.length - breaches;
+  const unevaluated = violations.length - evaluated.length;
+
+  const parts = [`${withinLimit}/${evaluated.length} within limit`];
+  if (breaches) parts.push(`${breaches} breach${breaches === 1 ? '' : 'es'}`);
+  if (near) parts.push(`${near} near`);
+  if (unevaluated) parts.push(`${unevaluated} unevaluated`);
+
+  const top = [...evaluated].sort((a, b) => (b.exposurePct / (b.limitPct || 1)) - (a.exposurePct / (a.limitPct || 1)))[0];
+  if (top) parts.push(`max ${top.scope} ${top.exposurePct.toFixed(1)}%/${top.limitPct}%`);
+  return parts.join(' · ');
+}
+
 function BreachOnlyList({
   title, violations, ackFor, onAcknowledge, unmappedNote,
 }: {
@@ -121,20 +186,19 @@ function BreachOnlyList({
 }) {
   const [showAll, setShowAll] = useState(false);
   const type: ViolationType = title === 'Position concentration' ? 'position' : 'sector';
-  const breaches = violations.filter((v) => v.severity === 'breach');
-  // "Unmapped" is always surfaced even when not breaching — it represents
-  // sector data that doesn't exist yet, not a clean bill of health.
-  const unmapped = violations.find((v) => v.scope === 'Unmapped' && v.severity !== 'breach');
-  const alwaysShown = unmapped ? [unmapped] : [];
-  const shown = showAll ? violations : [...breaches, ...alwaysShown.filter((v) => !breaches.includes(v))];
+  // Exceptions are the resting view: anything not comfortably OK — breaches,
+  // near-limit (the actionable early warning), and unevaluated (missing data).
+  const exceptions = violations.filter((v) => v.severity !== 'ok').sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
+  const shown = showAll ? [...violations].sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]) : exceptions;
   const hiddenCount = violations.length - shown.length;
 
   return (
     <div className="bg-surface border border-border rounded-xl p-5">
-      <div className="text-text font-semibold text-sm mb-2">{title}</div>
+      <div className="text-text font-semibold text-sm">{title}</div>
+      {violations.length > 0 && <div className="text-t3 text-xs mb-2">{sectionSummary(violations)}</div>}
       {violations.length === 0 && <div className="text-t3 text-xs">No positions.</div>}
       {violations.length > 0 && shown.length === 0 && (
-        <div className="text-t3 text-xs">No breaches — all {violations.length} within limit.</div>
+        <div className="text-t3 text-xs">All {violations.length} comfortably within limit.</div>
       )}
       {shown.map((v) => (
         <ViolationRow
@@ -142,17 +206,17 @@ function BreachOnlyList({
           v={v}
           ack={ackFor(v.scope, type)}
           onAcknowledge={(status, note) => onAcknowledge(v.scope, status, note)}
-          note={v.scope === 'Unmapped' ? unmappedNote : undefined}
+          note={v.severity === 'unevaluated' ? unmappedNote : undefined}
         />
       ))}
       {hiddenCount > 0 && (
         <button onClick={() => setShowAll(true)} className="text-xs text-t3 hover:text-t2 mt-2">
-          {hiddenCount} more within limit — show all
+          Show all {violations.length}
         </button>
       )}
-      {showAll && breaches.length < violations.length && (
+      {showAll && exceptions.length < violations.length && (
         <button onClick={() => setShowAll(false)} className="text-xs text-t3 hover:text-t2 mt-2">
-          Show breaches only
+          Show exceptions only
         </button>
       )}
     </div>
@@ -205,11 +269,13 @@ export function ViolationsSummary({ showSyncButton = false }: { showSyncButton?:
     return acks?.find((a) => a.scope === scope && a.violation_type === type);
   }
 
-  const positionBreaches = result.positionViolations.filter((v) => v.severity === 'breach').length;
-  const sectorBreaches = result.sectorViolations.filter((v) => v.severity === 'breach').length;
-  const totalBreaches = positionBreaches + sectorBreaches + (result.grossViolation.severity === 'breach' ? 1 : 0);
-  const summaryLine = `Gross ${result.grossViolation.exposurePct.toFixed(0)}% of ${result.grossViolation.limitPct}%` +
-    (totalBreaches === 0 ? ' · no breaches' : ` · ${totalBreaches} breach${totalBreaches === 1 ? '' : 'es'}`);
+  const allViolations = [...result.positionViolations, ...result.sectorViolations, result.grossViolation];
+  const totalBreaches = allViolations.filter((v) => v.severity === 'breach').length;
+  const totalNear = allViolations.filter((v) => v.severity === 'near').length;
+  const summaryLine = `Gross ${result.grossViolation.exposurePct.toFixed(0)}% of ${result.grossViolation.limitPct}%`
+    + (totalBreaches ? ` · ${totalBreaches} breach${totalBreaches === 1 ? '' : 'es'}` : '')
+    + (totalNear ? ` · ${totalNear} near` : '')
+    + (totalBreaches === 0 && totalNear === 0 ? ' · all within limit' : '');
 
   const sectorDataMissing = !sectorMap || Object.keys(sectorMap).length === 0;
 
@@ -222,7 +288,7 @@ export function ViolationsSummary({ showSyncButton = false }: { showSyncButton?:
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-t3 text-xs shrink-0" style={{ transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>▶</span>
           <span className="text-text font-semibold text-sm shrink-0">Risk limits</span>
-          <span className="text-t3 text-xs truncate" style={{ color: totalBreaches > 0 ? 'var(--status-negative-text)' : 'var(--t3)' }}>{summaryLine}</span>
+          <span className="text-t3 text-xs truncate" style={{ color: totalBreaches > 0 ? 'var(--status-negative-text)' : totalNear > 0 ? 'var(--status-warning-text)' : 'var(--t3)' }}>{summaryLine}</span>
         </div>
         {showSyncButton && (
           <span
@@ -257,8 +323,7 @@ export function ViolationsSummary({ showSyncButton = false }: { showSyncButton?:
               </div>
             )}
             <GrossExposureBar
-              pct={result.grossViolation.exposurePct}
-              limitPct={result.grossViolation.limitPct}
+              v={result.grossViolation}
               ladderTargetPct={result.ladderTargetGrossPct}
             />
           </div>

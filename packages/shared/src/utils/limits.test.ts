@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   positionMarketValue, rollupByUnderlying, grossExposure,
   positionConcentration, sectorConcentration, grossExposureViolation,
-  drawdownLadderTarget, evaluateRiskConfig,
+  drawdownLadderTarget, evaluateRiskConfig, classifySeverity, UNMAPPED_SECTOR,
   type PositionInput, type RiskConfig,
 } from './limits';
 
@@ -84,6 +84,55 @@ describe('grossExposureViolation', () => {
     expect(v.exposurePct).toBeCloseTo(112, 5);
     expect(v.severity).toBe('breach');
     expect(v.scope).toBe('GROSS');
+  });
+  it('at exactly 100% of a 100% gross limit reads NEAR, never OK (amber, not green)', () => {
+    const atLimit: PositionInput[] = [{ underlying: 'ALL', quantity: 1, markPrice: 100_000, multiplier: 1 }];
+    const v = grossExposureViolation(atLimit, FIXTURE_EQUITY, 100);
+    expect(v.exposurePct).toBeCloseTo(100, 5);
+    expect(v.severity).toBe('near');
+  });
+});
+
+describe('classifySeverity — ok / near (≥80%, incl. at-limit) / breach', () => {
+  it('comfortably under the limit → ok', () => {
+    expect(classifySeverity(7, 10)).toBe('ok');   // 70% consumed
+    expect(classifySeverity(0.6, 10)).toBe('ok');
+  });
+  it('≥80% of the limit → near (the actionable early-warning tier)', () => {
+    expect(classifySeverity(8, 10)).toBe('near');   // exactly 80%
+    expect(classifySeverity(8.5, 10)).toBe('near'); // HOOD at 8.5%/10%
+    expect(classifySeverity(10, 10)).toBe('near');  // at-limit is amber, not breach
+  });
+  it('over the limit → breach', () => {
+    expect(classifySeverity(10.1, 10)).toBe('breach');
+  });
+  it('a zero limit never crashes: zero exposure is ok, any positive exposure breaches it', () => {
+    expect(classifySeverity(0, 0)).toBe('ok');
+    expect(classifySeverity(5, 0)).toBe('breach'); // 5% exceeds a 0% cap; never a div-by-zero "near"
+  });
+});
+
+describe('positionConcentration — NEAR tier', () => {
+  it('flags a position at 85% of its cap as near (breaches are already too late)', () => {
+    const book: PositionInput[] = [{ underlying: 'HOOD', quantity: 85, markPrice: 100, multiplier: 1 }]; // $8,500 = 8.5%
+    const v = positionConcentration(book, FIXTURE_EQUITY, 10)[0];
+    expect(v.exposurePct).toBeCloseTo(8.5, 5);
+    expect(v.severity).toBe('near');
+  });
+});
+
+describe('sectorConcentration — Unmapped is UNEVALUATED, never a breach', () => {
+  it('marks the Unmapped bucket unevaluated even when it exceeds the limit', () => {
+    const violations = sectorConcentration(FIXTURE_BOOK, FIXTURE_SECTORS, FIXTURE_EQUITY, OPERATOR_CONFIG.maxSectorPct);
+    const unmapped = violations.find((v) => v.scope === UNMAPPED_SECTOR)!;
+    expect(unmapped.exposurePct).toBeCloseTo(30, 5); // 30% — would be a breach if evaluated
+    expect(unmapped.severity).toBe('unevaluated');   // but it's missing data, not a violation
+  });
+  it('excludes unmapped from any breach count (real sector breaches still count)', () => {
+    const violations = sectorConcentration(FIXTURE_BOOK, FIXTURE_SECTORS, FIXTURE_EQUITY, OPERATOR_CONFIG.maxSectorPct);
+    const breachScopes = violations.filter((v) => v.severity === 'breach').map((v) => v.scope);
+    expect(breachScopes).toEqual(['Tech', 'Energy']); // both over 25%; SPY (30%, unmapped) is NOT here
+    expect(breachScopes).not.toContain(UNMAPPED_SECTOR);
   });
 });
 
