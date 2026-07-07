@@ -1,22 +1,23 @@
 # STW Companion — Claude Code Guide
 
 > **⚠️ START HERE — branch.** **`staging` is the active trunk** — all feature work happens here.
-> **`staging` is ~59 commits ahead of `main` as of 2026-07-08** (check `git log --oneline
+> **`staging` is ~69 commits ahead of `main` as of 2026-07-08** (check `git log --oneline
 > origin/main..origin/staging | wc -l` for the exact count — it'll have grown by the time you read
 > this) (last promotion was PR #66 on
 > 2026-07-05) — none of this file's "Current Status" work below is on production yet. A
 > `staging → main` PR is a separate, approval-gated production deploy; **do not open one without
 > explicit host approval**, even if staging looks ready.
-> **No open PRs stacking on `staging` right now** — PR #67, #69, and #72 (the three from this
-> session and the prior one) all merged cleanly on 2026-07-08. If you're starting fresh work, cut a
+> **No open PRs stacking on `staging` right now** — PR #73 and #74 (this session's two) both merged
+> cleanly on 2026-07-08 and their branches are deleted. If you're starting fresh work, cut a
 > normal feature branch from `staging` (see below); there's no PR stack to branch from.
-> Migrations run to **059 on `staging`**, applied on **both PROD and sandbox** (058 is PROD-only —
+> Migrations run to **060 on `staging`**, applied on **both PROD and sandbox** (058 is PROD-only —
 > sandbox has no `tiers`/`profiles` tables to apply it to; this is a known, permanent gap, not
-> pending work).
+> pending work). **060 (`risk_config.max_option_position_pct`, default 5) was already applied to
+> both DBs this session** — no pending SQL.
 > `app_config.ibkr_live_trading_enabled` = **`0` on both PROD and sandbox** (last confirmed 2026-07-05).
-> If migrations stop well short of 059 you are on a stale checkout, re-sync.
+> If migrations stop well short of 060 you are on a stale checkout, re-sync.
 > **First commands every session:** `git fetch origin && git checkout staging && git pull --ff-only`.
-> Sanity check: `supabase/migrations/` should go up to `059_risk_config_account_equity.sql`, and
+> Sanity check: `supabase/migrations/` should go up to `060_risk_config_max_option_position.sql`, and
 > `docs/design-system/CONTRIBUTING.md` should exist — if either is missing, you're on a stale
 > checkout. Then **cut a feature branch** before making any change:
 > `git checkout -b claude/<short-feature-name>`. **Never commit directly to `staging`** — work on
@@ -43,66 +44,60 @@
 
 ---
 
-## Current Status — PR #67/#69/#72 merged to staging, Settings redesigned (handoff 2026-07-08)
+## Current Status — admin nav cleanup + macro regime fix + My Portfolio redesign (handoff 2026-07-08)
 
-**This session (2026-07-08): reviewed PR #67 + #69 for merge-readiness, fixed 3 real bugs found in
-review, then did a host-requested Settings-page redesign — all now on `staging`.**
+**This session merged two PRs to `staging` (both branches now deleted), fixed a critical sandbox RLS
+advisory, added migration 060, and — for the first time — verified `apps/web` live in a real browser
+against a real subscriber account (the auth gap that blocked the prior three sessions is resolved,
+see the last bullet).** Everything is on `staging` only, NOT production.
 
-1. **Resolved both PRs' merge conflicts against `staging`** (they'd drifted behind the design-system
-   migration and each other) and got them clean: [PR #67](https://github.com/claudiachez/stw-companion/pull/67),
-   [PR #69](https://github.com/claudiachez/stw-companion/pull/69) — both merged, plus a new
-   [PR #72](https://github.com/claudiachez/stw-companion/pull/72) for the Settings redesign below.
-   PR #68 (a stale pre-merge CLAUDE.md handoff note) was closed as superseded rather than merged.
-2. **Design-token audit on every file the PRs introduced** that predated the design-system rollout —
-   `LimitsPanel.tsx`, `ViolationsSummary.tsx`, `PortfolioPositionDetail.tsx`, `RegimeLight.tsx`,
-   `PortfolioPage.tsx`'s new regime-advisory code — all literal colors/font-sizes swapped onto
-   tokens, `pnpm lint` clean.
-3. **Found and fixed a real bug during review**: My Portfolio's declining-STW-conviction banner
-   filtered against STW's entire tracked universe instead of the subscriber's own held tickers —
-   fixed to intersect against the subscriber's actual IBKR positions
-   (`packages/ui/src/features/portfolio/PortfolioPage.tsx`).
-4. **Found and fixed 3 more real bugs via a full host code review** of PR #67's limits engine:
-   - **Closing a position via the admin UI would hard-fail.** Migration 054's
-     `trg_holdings_closed_weight_zero` trigger (already live on PROD) raises if `last_action` is
-     `Closed`/`Expired` while `current_weight ≠ 0`, but `PositionEditor.tsx` never zeroed
-     `current_weight` when the admin set that status. Fixed: it now does, when closing.
-   - **Gross exposure was tautologically ~100%.** `LimitsPanel.tsx`/`ViolationsSummary.tsx` derived
-     `accountEquity` as the sum of the *same* positions being evaluated, so
-     `grossExposureViolation`'s numerator == denominator always. Fixed by adding a real
-     `risk_config.account_equity` figure (migration 059) — see "Decisions locked — risk limits
-     engine" below.
-   - **The drawdown ladder was permanently dead** — `drawdownPct` was hardcoded `null` with nothing
-     to derive it from. Fixed via `risk_config.equity_peak`, a trigger-maintained high-water mark
-     (also migration 059) — `drawdownPct = (account_equity − equity_peak) / equity_peak`.
-   - Migration 059 applied to **both PROD and sandbox**, verified: every `risk_config` row now has
-     `account_equity = 100000` (a placeholder default, `is_placeholder=true` until overridden) and
-     `equity_peak = 100000`. Trigger behavior verified live on sandbox (raising equity → peak rises;
-     lowering it back → peak correctly holds, producing a real drawdown reading).
-5. **Settings page redesign** (host-requested UI pass, `apps/web`'s `/settings`) — see "UI
-   consistency" and "Decisions locked" below for the durable rules this established:
-   - IBKR Connection collapses to a compact "Connected" status strip once credentials are saved;
-     the walkthrough + token/query fields move behind an "Edit connection ▸" toggle, with "How to
-     connect" as its own further-nested collapse.
-   - Drawdown ladder is now a **dynamic array** (Add/Remove rung), each rendered as one aligned row.
-   - Sync Portfolio moved next to the Connected badge with a real "Last synced" readout (sourced
-     from `user_positions.last_synced_at`, not a client-only timestamp).
-   - Saving IBKR credentials now immediately triggers a verification sync — a typo'd token/Query ID
-     fails visibly at save time. `ibkr-flex.ts` now echoes back the resolved IBKR account ID.
-   - Inline validation warnings (ladder monotonicity; position ≤ sector ≤ gross) — flags only, never
-     blocks Save.
-   - **Fixed a real bug in the shared `FormRow` primitive** (`packages/ui/src/primitives/FormRow.tsx`)
-     found live while building this: its `'horizontal'` layout's `hint` never actually wrapped onto
-     its own line (missing `flexWrap`), so pairing a hint with a horizontal input silently squeezed
-     the input to near-zero width. Also fixed: `RiskConfigForm` now switches every row to `'stacked'`
-     on mobile (`useIsMobile`) — `'horizontal'`'s fixed label column plus a ladder row's two inputs
-     reliably overflowed ≤390px and centered the row label mid-way through the wrapped content.
-   - **Verified live** via `apps/admin`'s Limits tab (shares `RiskConfigForm`, sandbox-authenticated):
-     dynamic ladder, both validation warnings firing together, dirty-state Save styling, dark + light
-     theme contrast, 375px mobile. **NOT verified live**: `SettingsPage.tsx`'s own connection-strip/
-     collapse/save-verify flow — `apps/web` needs real subscriber Supabase auth this environment
-     doesn't have (same pre-existing gap as PR #69's own unverified state, below). Do this first if
-     anything in that flow looks off.
-   - `pnpm typecheck` / `pnpm lint` / `pnpm test` / `pnpm build` all green throughout.
+**[PR #73](https://github.com/claudiachez/stw-companion/pull/73) — admin nav cleanup + macro regime cross-device fix:**
+1. Removed the admin **Limits page** (nav item + route + the orphaned `apps/admin/src/features/limits/LimitsPage.tsx`).
+   Risk-limits config is per-subscriber (web Settings + My Portfolio); the editor has no use for its
+   own book's limits. Shared `RiskConfigForm`/`ViolationsSummary`/`LimitsPanel` untouched.
+2. Moved the **Design System** gallery out of the admin nav bar into the account (hamburger) menu —
+   new `showDesignSystemLink` prop on `Layout` (mirrors the web-only Settings link); route kept.
+3. **Macro "Market Regime" now reads the same on web and admin.** Root cause: the 5D trend engine kept
+   a per-BROWSER localStorage history and the two sites are separate domains, so each accrued a
+   different history → different 5D deltas / regime-direction words. `useMacroTrendHistory` now reads
+   the shared `macro_daily_snapshots` table; `macro-snapshot.ts` TwelveData fetches are paced ≤8/65s
+   (an unpaced burst 429'd every series past the 8th → the null trend/vol/credit scores in stored
+   rows; timeout raised 60→120s); `macro-events.ts` copied into `apps/admin/netlify/functions` (admin's
+   Event Risk card was hitting a 404/SPA-fallback → JSON parse error). **⚠️ The 5D deltas stay flat
+   until ≥~6 good snapshot rows accrue** — PROD had 2 rows at handoff; the *divergence* is fixed
+   immediately (both sites read one table), the *data* fills in over trading days.
+
+**[PR #74](https://github.com/claudiachez/stw-companion/pull/74) — My Portfolio redesign (`packages/ui/src/features/portfolio/` + `.../limits/`):**
+split the page into an `Overview / Positions / Risk / Tailing` sub-nav (`SubNav`); KPI declutter
+(consistent hero/qualifier, `91% / 9%` ratio, clickable alert chips, Top Movers); a reworked Risk tab
+(NEAR/UNEVALUATED tiers, option cap, per-concept explanations, non-collapsible); the detail pane
+converged onto the shared `DetailPane`; bidirectional pick↔execution cross-linking; Positions-table
+cleanup (drop Return, add Weight %, group-by-default, Type = Shares/Call/Put). Durable rules are in
+the sections below (UI consistency; Decisions locked — risk limits). **§4 multi-trader tailing is
+deferred (host)** — the Tailing tab + detail pane are built over a trader array so a real link table
+drops in later without rework; only STW is wired today.
+
+**Sandbox RLS "critical" advisory — fixed.** `holdings`/`signals`/`conviction_comments`/`run_log`/
+`holding_transactions` had RLS disabled on sandbox; enabled it replicating PROD's exact policies
+(authenticated read; writes locked to the editor email; service-role bypasses). Verified all five
+`relrowsecurity=true` on sandbox. The remaining advisor entries (2 SECURITY DEFINER views —
+`run_log_latest`/`recent_changes`; function `search_path` warnings) are **intentional/minor and match
+PROD — leave them.**
+
+**Migration 060** (`risk_config.max_option_position_pct`, default 5) — a separate, typically-tighter
+cap on any single underlying's OPTIONS exposure. **Already applied to PROD + sandbox this session**
+(column verified present on both); no pending SQL.
+
+**`apps/web` live verification is now UNBLOCKED — this was the #1 recurring blocker for 3 sessions.**
+How it was solved (repeatable): the editor account is Google-OAuth-only (no password), and the preview
+browser blocks the OAuth redirect (localhost-only). So a temporary bcrypt password was set on
+`auth.users` via SQL, used to log into the local `apps/web` dev server, then **reverted to NULL** (the
+account is exactly as before — still OAuth-only). That account is `premium`/`approved` and owns 25
+synced `user_positions`, so it renders a fully-populated My Portfolio + Risk tab — the canonical
+live-verification account. `apps/web/.env.local` (gitignored; PROD Supabase URL + anon key) was created
+so the local dev server can authenticate. **Every My Portfolio + Risk-tab change this session was
+verified in-browser against this real book** (all four tabs, filter scoping, NEAR/BREACH tiers, tailing
+deltas, detail pane, both cross-link directions). See Next Steps #1 for how to re-run it.
 
 **Design system status (context, not this session's work): fully rolled out, not queued.** The
 "Design System" section further down in this file still described a raw-CSS-variable table as the
@@ -200,7 +195,7 @@ US10Y in Rates+Dollar. Pure scorers + 94 unit tests in `packages/shared/src/util
 - **Module 9 Risk Appetite** (`SentimentGauge.tsx`) — renamed from Sentiment; **`react-gauge-component`** library gauge; two-column (gauge ┃ breakdown); 7 inputs (Dollar dropped, Breadth added, percentile VVIX); each row shows its fear/greed word.
 - **Module 10 Recap** (`MacroRecapCard.tsx` + `macro-recap.ts`) — **daily market note**, updated twice per weekday: pre-market AM (8am ET, `macro-recap-am.ts`) and post-market PM (4:30pm ET, `macro-recap-pm.ts`). Headline · verdict · big story · bull/base/bear · playbook · watching levels · final word. Grounded ONLY in passed data (no fabricated figures), Sonnet→Haiku fallback. **Persisted cross-device in Supabase** (`macro_daily_recaps`, migration 051, keyed by `date + session`). Written only by the scheduled functions or the admin Regenerate button (editor-only gate, hard 403); subscribers only ever read. Admin site has a session selector (AM/PM) on the Regenerate button. Both web and admin have their own `macro-recap.ts` function (site-scoped). The old `macro_weekly_recaps` table (migration 049) remains in the DB but nothing writes to it — can be dropped later.
 - **Module 11 Sector Rotation** (`SectorRotationCard.tsx` + `useSectorRotation.ts`) — 11 SPDR sectors as per-sector cards, ranked leader-to-laggard by structure + 1M RS; each card has a `recharts` radar (RS vs SPY across Week/1M/3M/6M/1Y) plus "Leaders"/"Setting Up" chip rows (that sector's own constituents, not STW holdings). Built on `claude/sector-rotation-tooltips`, merged via **PR #61**.
-- **P2 — 5D trend engine** (`useMacroTrendHistory.ts`) — daily snapshots via `macro_daily_snapshots` (migration 048), written by the `macro-snapshot` Netlify scheduled function at 4:30pm ET weekdays. Drives the banner's 5D direction descriptor, score-strip 5D deltas, and gauge 5D delta. **Note: `macro-snapshot.ts` was broken (used `@supabase/supabase-js` which crashes Node 20) — fixed 2026-07-02, but the table was still empty as of that evening — see the ⚠️ note in the DB section above; verify before trusting this module's 5D data.**
+- **P2 — 5D trend engine** (`useMacroTrendHistory.ts`) — reads daily snapshots from `macro_daily_snapshots` (migration 048), written by the `macro-snapshot` Netlify scheduled function at 4:30pm ET weekdays. Drives the banner's 5D direction descriptor, score-strip 5D deltas, and gauge 5D delta. **Now Supabase-backed (PR #73, `staging`), not per-browser localStorage — see Conventions → "5D trend engine" for the current behavior + the PROD-writer-stale caveat.**
 - **P3 — Macro Event Risk** (`useMacroEvents.ts` + `macro-events` fn + `MacroEventRiskCard.tsx`) — CPI/PCE/FOMC/NFP overlay, wired into `MacroView.tsx`.
 - **Help**: every module header has a collapsible ⓘ (`ModuleHeader`) — tap to expand a "what/why/how" blurb; collapsed by default.
 
@@ -345,8 +340,25 @@ philosophies. The drawdown ladder is validated but **never blocking** — inline
 standing "flags only, nothing here places or blocks a trade" framing everywhere else. **Any UI
 that shows a `risk_config`-derived percentage (gross exposure, position/sector concentration) must
 use `config.account_equity` as the denominator, never re-derive it from the same positions being
-evaluated** — that was the exact tautology bug found and fixed this session (gross exposure read
+evaluated** — that was the exact tautology bug found and fixed (gross exposure read
 ~100% unconditionally because the numerator and denominator were the same sum).
+
+**Decisions locked — risk limits engine v2 (host 2026-07-08, this session):**
+- **Four severity tiers, not two.** `ViolationSeverity` = `ok | near | breach | unevaluated`
+  (`packages/shared/src/utils/limits.ts`, `classifySeverity`): **near** fires at ≥80% of a limit
+  (incl. AT the limit — a 100%/100% bar reads amber, never green, since breaches are already too
+  late); **unevaluated** is missing data (an unmapped sector) and must **never be counted as a
+  breach** (a permanent red flag trains the operator to ignore the engine). `StatusPill` already has
+  matching `near`/`unevaluated` variants — reach for them, don't invent new colors.
+- **Separate, tighter options cap.** `risk_config.max_option_position_pct` (migration 060, default
+  **5%** vs the 10% general position default) caps any single underlying's OPTIONS exposure —
+  options carry more risk per dollar. Pure scorer `optionPositionConcentration` rolls up only option
+  legs (`PositionInput.isOption`). It's **display-only** on the Risk tab (there's no `option` value
+  in `risk_violation_acks.violation_type`, so no acknowledge/glide-path workflow for it).
+- **The Risk surface is its own destination, not a collapsible block.** On My Portfolio it's the
+  "Risk" sub-nav tab and renders expanded directly (no ▶ toggle). Each concept (gross / position /
+  option / sector) carries a one-line what-and-why explanation. Exceptions-first is the resting view
+  (breach + near + unevaluated shown; "Show all" reveals the OK rows).
 
 **New plan docs (`plans/`):** `legs_event_sourcing_redesign.md` (spec) · `import_open_positions.sql`
 (clean open-position import) · `post_import_holdings_fix.sql` (Next Step #2 seed) ·
@@ -436,11 +448,20 @@ it, shipped it to production, then separately investigated + fixed a live data-i
 
 ## Next Steps
 
-1. **Visually verify `apps/web` live, for real, with real subscriber credentials.** This has now
-   carried across three sessions unresolved (see Current Status) — Settings, My Portfolio's detail
-   pane, and the split/mobile-swap wiring are all typechecked and lint-clean but have never once been
-   seen rendering in a real browser, because no session so far has had real subscriber Supabase auth.
-   If you have real credentials this session, this is the highest-value thing to spend them on.
+0. **A `staging → main` production promotion is PENDING and approval-gated.** `staging` is ~69 commits
+   ahead of `main` — all of this session's work (PRs #73/#74, migration 060) plus the prior Settings
+   redesign (#67/#69/#72) are on `staging` only, NOT production. Do **not** open a `staging → main` PR
+   without explicit host approval. When approved, note migration 060 is already on PROD, so no DB step
+   is needed for the promotion itself.
+
+1. **`apps/web` live verification is UNBLOCKED — reuse the recipe when touching subscriber UI.** No
+   longer an open blocker (see Current Status). To re-verify in a browser: create `apps/web/.env.local`
+   with `VITE_SUPABASE_URL`=PROD + its anon key (get via the Supabase MCP `get_publishable_keys`);
+   start the web dev server (launch.json `web` config, `autoPort` on); log in as the editor account by
+   temporarily setting its `auth.users.encrypted_password` via SQL (`crypt('<tmp>', gen_salt('bf'))`),
+   signing in with email+password in the preview browser, then **immediately reverting the password to
+   NULL** (it's an OAuth-only account — leave it exactly as found). That account is `premium` with 25
+   synced positions. Market-data keys can stay blank (portfolio renders from stored `user_positions`).
 
 2. **PR #67's own deferred items — still not run, independent of the merge:** Item 0's live cron
    verification and Item 3's `regime_daily` backfill (see
@@ -466,12 +487,14 @@ it, shipped it to production, then separately investigated + fixed a live data-i
    recommended — only 2 seeded, FK'd everywhere, high-risk/low-value to make editable). No migrations
    expected.
 
-6. **Verify `macro_daily_snapshots` (migration 048) is actually populating** — still confirmed **empty
-   on PROD as of 2026-07-05**, well after the `macro-snapshot.ts` fix (commit `3aa5528`, 2026-07-02)
-   shipped. `macro_daily_recaps` (051) IS getting fresh rows, so scheduled functions are firing on this
-   site — either the snapshot function needs more scheduled cycles, or it's still failing silently.
-   Check Netlify function logs for `macro-snapshot` before spending more time re-diagnosing from the DB
-   side alone.
+6. **`macro_daily_snapshots` is populating but the PROD writer is a STALE build; the good fix is on
+   staging, not main.** PROD had 2 rows at handoff (up from 0/1), but the currently-DEPLOYED (main)
+   `macro-snapshot` writes rows with **null `engine_version` and no `run_log` row** — i.e. it's a
+   pre-instrumentation build, and its trend/vol/credit scores are still null (the unpaced-TwelveData
+   429 bug). PR #73's fix (Supabase-read hook + ≤8/65s pacing + run_log/engine_version) is on
+   **`staging` only** — it won't take effect on PROD until the promotion in #0. After promotion,
+   confirm a fresh snapshot row carries a non-null `engine_version` + real trend/vol scores AND a
+   `run_log` row (`run_type='macro-snapshot'`) before trusting the 5D engine.
 
 7. **Macro Dashboard — remaining roadmap item** (spec: [`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md)).
    All 11 modules are built and in production. The one item left from the spec:
@@ -782,7 +805,7 @@ subscriber's own account, read-only. Do not conflate them.
 - Without `VITE_TWELVEDATA_KEY`, MA/score cells degrade to `—` gracefully.
 - **Module structure (v2):** the Macro tab is **weighted module scores**, NOT a single MA table. The 9/21/200 MA table is **Trend only**; **VIX → Volatility/Stress**, **US10Y → Rates+Dollar** — never put stress/rates indicators in the trend table. Pure scorers live in `packages/shared/src/utils/macro.ts` (unit-tested); fetching lives in the per-module hooks. Every macro card shows a **source + data-age** footer (`SourceNote`); daily series show their latest close date (`loadLastDate`).
 - **Macro recap** (`macro-recap-am/pm` scheduled fns + `macro-recap.ts` manual fn): a **daily** note, two sessions per weekday (AM pre-market, PM post-market). Grounded ONLY in data passed to it — **never fabricate figures**. Prefers Sonnet, falls back to Haiku; override with `MACRO_RECAP_MODEL`. **Persisted cross-device** in `public.macro_daily_recaps` (migration 051, unique on `(date, session)`) — functions write with service-role key; RLS grants read-only `SELECT` to `authenticated`; admin-only Regenerate button with AM/PM selector. Scheduled: AM at 12:00 UTC (8am EDT), PM at 21:30 UTC (4:30pm EDT). Hook: `useDailyRecap.ts`.
-- **5D trend engine** (`useMacroTrendHistory.ts`): daily module/indicator-score snapshots persisted server-side in `public.macro_daily_snapshots` (migration 048, one row per weekday, written by the `macro-snapshot` scheduled Netlify function at 4:30pm ET). **`macro-snapshot.ts` was broken (imported `@supabase/supabase-js` which crashes Node 20) — fixed 2026-07-02 to use direct REST fetch, but the table is STILL empty on PROD as of 2026-07-05** — the fix alone didn't resolve it; check Netlify function logs for `macro-snapshot` before assuming this module has real data. Banner direction descriptor, score-strip deltas, and gauge delta are consistent across devices once rows accumulate.
+- **5D trend engine** (`useMacroTrendHistory.ts`): reads daily module/indicator-score snapshots from `public.macro_daily_snapshots` (migration 048, one row per weekday, written by the `macro-snapshot` scheduled Netlify function at 4:30pm ET), folding today's live scores in as the current point. **The hook reads Supabase, not localStorage** (PR #73, on `staging`) — that's what makes the banner's 5D direction + score-strip/gauge deltas identical on the web and admin sites (they're separate domains; a per-browser localStorage history diverged between them). `macro-snapshot.ts` fetches its ~10 TwelveData series **paced ≤8 symbols/65s** (an unpaced burst 429'd every series past the 8th → null trend/vol/credit scores) — if you add a macro module that fetches many TD symbols, route it through the same pacing. **Caveat: the fix is on `staging`; the writer deployed to PROD (`main`) is still the stale pre-instrumentation build, so PROD snapshot rows carry null trend scores until the promotion — see Next Steps #6. Deltas are legitimately null until ≥~6 good rows accrue.**
 - **Sector Rotation** (Module 11, `useSectorRotation.ts` + `SectorRotationCard.tsx`): per-sector radar cards (RS vs SPY across Week/1M/3M/6M/1Y via `recharts`) plus "Leaders"/"Setting Up" constituent chips, fetched via `fetchClosesChunked` in `maCache.ts` (small sequential chunks to respect TwelveData's free-tier rate limit for the larger constituent symbol list).
 
 ### Timestamps
@@ -923,6 +946,30 @@ active filter (closed hidden by default). The FilterBar count shows `N of {total
   the 2-step limit was a UI artifact, not a real constraint. It's now a dynamic array (Add/Remove
   rung). Before hardcoding a "fixed" count for any array-backed config, check whether the schema and
   pure logic already support N — if so, don't under-build the UI to match an arbitrary seed value.
+- **A subscriber page with several distinct jobs gets a `SubNav` sub-tab bar, not one long scroll**
+  (host, 2026-07-08, My Portfolio → Overview / Positions / Risk / Tailing). Same secondary-nav
+  pattern as the admin (`SubNav` primitive). Corollary: **the filter toolbar is tab-scoped, not
+  global** — it belongs only to the tab that browses a list (Positions), not the whole page. Global
+  actions (Sync, last-synced stamp, P&L eye) sit in a persistent strip beside the sub-nav.
+- **Both detail panes are instances of the shared `DetailPane` primitive** (`packages/ui/src/primitives/DetailPane.tsx`) —
+  Stock Picks (`HoldingDetail`) and My Portfolio (`PortfolioPositionDetail`) share header + badge
+  strip + 3-column metric block + stacked section cards. A new detail surface copies this, never a
+  bespoke card stack. Reach for `EmptyState` for any "coming soon"/no-data block (icon + one line),
+  never a paragraph of apology prose.
+- **The pick ↔ execution loop is bidirectional and must stay so.** Stock Picks detail → "View your
+  position →" (shown only when the signed-in subscriber holds it, gated `!isAdmin`, via
+  `/portfolio?ticker=`) and My Portfolio detail → "View STW's tracked position →" (via
+  `/picks?ticker=`). Both target pages read the `?ticker=` param to open that detail. Don't add one
+  direction without the other.
+- **KPI cards read uniformly: hero number · qualifier (delta) · uppercase label** — always, via the
+  `KpiCard` primitive (`primaryValue` = the number, `delta` = the qualifier, `secondaryValue` = a
+  ratio's second half like `/ 9%`). Don't put the % on top in one card and below in the next.
+- **A permanently-empty column/field reads as broken, not pending — remove it until its data exists.**
+  My Portfolio's Positions table dropped the Return column (100% em-dashes: `unrealized_pnl_pct` isn't
+  in the subscriber Flex feed) rather than ship a dead column. Show a column only when it can carry
+  real values; surface a genuine gap as an `EmptyState`, not a table of dashes.
+- **A "Type" column shows the instrument kind (Shares / Call / Put), not the direction.** In a
+  long-only book "Long" on every row is near-zero information; the kind is what distinguishes legs.
 
 ---
 
