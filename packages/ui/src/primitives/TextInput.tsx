@@ -37,7 +37,9 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(function T
         border: `1px solid ${invalid ? 'var(--status-negative-border)' : 'var(--border)'}`,
         borderRadius: RADIUS.md,
         padding: `${SPACE[1.5]}px ${SPACE[2]}px`,
-        fontSize: FONT_SIZE.base,
+        // FONT_SIZE.input (16), not .base (14) — below 16px, mobile Safari zooms the
+        // viewport on focus. See tokens.ts's comment on `input` for the full rationale.
+        fontSize: FONT_SIZE.input,
         color: 'var(--text)',
         boxSizing: 'border-box',
         ...style,

@@ -61,9 +61,16 @@ export const FONT_SIZE = {
   '2xs': 10,  // badges, uppercase section/module labels, table headers — collapses 9 & 10
   xs: 11,     // dense secondary text (table rows, sub-lines)
   sm: 12,     // dense primary text — the single most common size found (107 occurrences)
-  base: 14,   // emphasis, buttons, form inputs/labels — collapses 13 & 14
+  base: 14,   // emphasis, buttons, form labels — collapses 13 & 14
   lg: 18,     // section/page sub-headings — collapses 16, 17 & 18
   display: 26, // KPI hero numbers — collapses 20, 22, 26 & 28
+  // Deliberately NOT `base` (14): mobile Safari zooms the viewport on focus for any
+  // <input> whose computed font-size is under 16px. This is the one type-scale entry
+  // that's a browser-behavior floor, not a visual-rhythm choice — TextInput.tsx is its
+  // only consumer. Added 2026-07-07 (design-system Phase 5, Settings migration) after
+  // the pre-migration SettingsPage.tsx already carried this exact fix as a bare literal
+  // (`fontSize: 16, // 16px prevents iOS auto-zoom on focus`).
+  input: 16,
 } as const;
 
 // fontWeight was already consistent in the audit (600/700 dominate) — just naming it.

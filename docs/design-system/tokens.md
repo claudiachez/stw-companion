@@ -131,6 +131,7 @@ pointing at these same three CSS vars.
 | `FONT_SIZE.base` | 14px | collapses inline `13`/`14` (emphasis, buttons, form labels) |
 | `FONT_SIZE.lg` | 18px | collapses inline `16`/`17`/`18` (section/page sub-headings) |
 | `FONT_SIZE.display` | 26px | collapses inline `20`/`22`/`26`/`28` (KPI hero numbers) — the widest single bucket; if a specific KPI's 20px/28px really needs to read as visually distinct from another's 26px, flag it in Phase 4 rather than assuming this bucket is exactly right |
+| `FONT_SIZE.input` | 16px | added Phase 5 (Settings migration) — `<input>` only, sourced from the pre-migration `SettingsPage.tsx`'s own literal `fontSize: 16` comment: mobile Safari zooms the viewport on focus for any input under 16px. Not a visual-rhythm bucket like the rest of the scale — a browser-behavior floor. `TextInput.tsx` is the only consumer; never use it for non-input text. |
 | `FONT_WEIGHT.medium/semibold/bold` | 500/600/700 | already consistent (600/700 dominate) — just named |
 | `LETTER_SPACING.label` | `0.08em` | collapses 8 distinct inline values, all serving the same uppercase-label intent |
 | `NUMERIC_STYLE` | `{ fontVariantNumeric: 'tabular-nums' }` | already in wide, consistent use (dozens of call sites) — this just gives it one importable name instead of retyping the object literal each time |
