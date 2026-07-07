@@ -74,11 +74,6 @@
       "count": 2
     }
   },
-  "packages/ui/src/features/macro/components/macroVisuals.tsx": {
-    "no-restricted-syntax": {
-      "count": 11
-    }
-  },
   "packages/ui/src/features/macro/useMacroTrendHistory.ts": {
     "react-hooks/exhaustive-deps": {
       "count": 2
