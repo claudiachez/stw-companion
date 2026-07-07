@@ -172,39 +172,9 @@
       "count": 2
     }
   },
-  "packages/ui/src/features/signals/SignalsView.tsx": {
-    "no-restricted-syntax": {
-      "count": 8
-    }
-  },
-  "packages/ui/src/features/signals/components/BiasChip.tsx": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
-  "packages/ui/src/features/signals/components/DayLog.tsx": {
-    "no-restricted-syntax": {
-      "count": 4
-    }
-  },
   "packages/ui/src/features/signals/components/GexChart.tsx": {
     "no-restricted-syntax": {
       "count": 6
-    }
-  },
-  "packages/ui/src/features/signals/components/GexCharts.tsx": {
-    "no-restricted-syntax": {
-      "count": 3
-    }
-  },
-  "packages/ui/src/features/signals/components/LevelCard.tsx": {
-    "no-restricted-syntax": {
-      "count": 6
-    }
-  },
-  "packages/ui/src/features/signals/components/SignalsTable.tsx": {
-    "no-restricted-syntax": {
-      "count": 11
     }
   }
 }

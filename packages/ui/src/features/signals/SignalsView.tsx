@@ -6,7 +6,7 @@ import { GexCharts } from './components/GexCharts';
 import { DayLog } from './components/DayLog';
 import { LoadingSpinner } from '../../primitives/LoadingSpinner';
 import { EmptyState } from '../../primitives/EmptyState';
-import { fmtDateTime } from '@stw/shared';
+import { fmtDateTime, FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import type { LevelSet } from './api';
 
@@ -58,27 +58,27 @@ export function SignalsView() {
       <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', padding: '9px 20px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         {isStale ? (
           <>
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--c3)' }}>No new report</span>
-            <span style={{ fontSize: 12, color: 'var(--t2)' }}>Last GEX read:</span>
+            <span style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold, color: 'var(--c3)' }}>No new report</span>
+            <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>Last GEX read:</span>
             <BiasChip bias={gx.bias} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>{shortDate}</span>
-            {gx.status_note && <span style={{ fontSize: 11, color: 'var(--t2)' }}>· {gx.status_note}</span>}
+            <span style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>{shortDate}</span>
+            {gx.status_note && <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)' }}>· {gx.status_note}</span>}
           </>
         ) : (
           <>
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>{dateStr}</span>
+            <span style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>{dateStr}</span>
             <BiasChip bias={gx.bias} />
-            {gx.bias_note && <span style={{ fontSize: 11, color: 'var(--t2)' }}>{gx.bias_note}</span>}
+            {gx.bias_note && <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)' }}>{gx.bias_note}</span>}
           </>
         )}
         {isStale ? (
-          <span style={{ marginLeft: isMobile ? 0 : 'auto', fontSize: 11, color: 'var(--t3)', whiteSpace: 'nowrap', width: isMobile ? '100%' : undefined }}>
+          <span style={{ marginLeft: isMobile ? 0 : 'auto', fontSize: FONT_SIZE.xs, color: 'var(--t3)', whiteSpace: 'nowrap', width: isMobile ? '100%' : undefined }}>
             {lastMorningRun
               ? <>Checked: <span style={{ color: 'var(--t2)' }}>{fmtDateTime(lastMorningRun)}</span> · Last report: {updStr}</>
               : `Last report: ${updStr}`}
           </span>
         ) : (
-          <span style={{ marginLeft: isMobile ? 0 : 'auto', fontSize: 11, color: 'var(--t3)', whiteSpace: 'nowrap', width: isMobile ? '100%' : undefined }}>
+          <span style={{ marginLeft: isMobile ? 0 : 'auto', fontSize: FONT_SIZE.xs, color: 'var(--t3)', whiteSpace: 'nowrap', width: isMobile ? '100%' : undefined }}>
             Updated: {updStr}
           </span>
         )}
