@@ -99,6 +99,21 @@ colors. **New sanctioned exception**: `LoginPage.tsx`'s "Continue with Google" i
 official brand colors as literals (external brand mark — there's no sensible STW token for "Google's
 blue"), documented in CONTRIBUTING.md and permanently suppressed the same way as `GexChart.tsx`.
 
+**Unrelated lint fix, same sweep — `eslint-plugin-react-hooks` wired up for real.** The whole-repo scan
+above also surfaced 4 files (`useMacroTrendHistory.ts`, `PicksView.tsx`, `useTickerRegime.ts`,
+`PortfolioPage.tsx`) failing `pnpm lint` for a reason that had nothing to do with design tokens: each
+carried a `// eslint-disable-next-line react-hooks/exhaustive-deps` comment referencing a rule that
+was never actually installed anywhere in this repo (pre-dating even `eslint.config.mjs` itself).
+Installed `eslint-plugin-react-hooks@7.1.1` and wired up only the two classic rules those comments
+reference — `rules-of-hooks` (error) and `exhaustive-deps` (warn, matching upstream's own default) —
+deliberately **not** the plugin's v7 `recommended`/`recommended-latest` presets, which bundle a dozen
+new React-Compiler-era rules (`purity`, `immutability`, `set-state-in-render`, `gating`, etc.) this
+codebase has never been audited against. `rules-of-hooks` found zero real violations (good sign).
+`exhaustive-deps` is warn-level (doesn't fail `pnpm lint`) and surfaced 5 more pre-existing files with
+genuinely incomplete dependency arrays (`useMacroIndicators.ts`, `useMacroPrefs.ts`,
+`useWeeklyRecap.ts`, `GexChart.tsx`, `usePreferencesSync.ts`) — left alone for now; fixing a dependency
+array can change when an effect re-runs, so each needs individual review, not a mechanical sweep.
+
 **Macro phase (finished this session, 2026-07-07) — the last of the 5 migration-plan.md pages:**
 14 files, 124 violations. Two real cross-file color duplications surfaced and got proper named
 tokens in `tokens.css` (not file-local workarounds — this lint rule has exactly one sanctioned home
