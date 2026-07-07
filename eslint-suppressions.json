@@ -122,24 +122,9 @@
       "count": 2
     }
   },
-  "packages/ui/src/features/picks/components/HoldingRow.tsx": {
-    "no-restricted-syntax": {
-      "count": 10
-    }
-  },
-  "packages/ui/src/features/picks/components/PositionEditor.tsx": {
-    "no-restricted-syntax": {
-      "count": 11
-    }
-  },
   "packages/ui/src/features/picks/components/RegimeBadge.tsx": {
     "no-restricted-syntax": {
       "count": 2
-    }
-  },
-  "packages/ui/src/features/picks/components/TradeEditForm.tsx": {
-    "no-restricted-syntax": {
-      "count": 10
     }
   },
   "packages/ui/src/features/picks/components/TradesFilterBar.tsx": {

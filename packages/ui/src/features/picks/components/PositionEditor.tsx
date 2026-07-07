@@ -1,17 +1,18 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { TIERS, displayInitialWeight, fmtLegInstrument, legIsOpen, type Leg } from '@stw/shared';
+import { TIERS, displayInitialWeight, fmtLegInstrument, legIsOpen, FONT_SIZE, FONT_WEIGHT, type Leg } from '@stw/shared';
 import type { Holding } from '../api';
 import { getSupabase } from '../../../lib/supabase';
 import { useCategories } from '../useCategories';
 import { errMsg } from '../../../lib/errMsg';
 import { Modal } from '../../../primitives/Modal';
+import { Button } from '../../../primitives/Button';
 
 const CONVICTIONS = [5, 4, 3, 2, 1, 0];
 const ACTIONS = ['New', 'Upsized', 'Trimmed', 'Hold', 'Closed'];
 
-const label: React.CSSProperties = { fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3, display: 'block' };
-const field: React.CSSProperties = { width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 5, padding: '6px 8px', fontSize: 13, color: 'var(--text)', boxSizing: 'border-box' };
+const label: React.CSSProperties = { fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3, display: 'block' };
+const field: React.CSSProperties = { width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 5, padding: '6px 8px', fontSize: FONT_SIZE.base, color: 'var(--text)', boxSizing: 'border-box' };
 
 interface Props { holding: Holding; onDone: () => void; }
 
@@ -77,7 +78,7 @@ export function PositionEditor({ holding: h, onDone }: Props) {
           <div><label style={label}>Equity % of split</label>
             <input style={field} type="number" step="1" min="0" max="100" value={equityPct} placeholder="default" onChange={(e) => setEquityPct(e.target.value)} /></div>
         </div>
-        <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 6 }}>
+        <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 6 }}>
           Initial = the sum of the open legs’ lots (from the diary). Current = the live weight the routines
           restate weekly. Both auto-derive — move weight by editing legs in Transaction History.
           Equity % sets this position’s equity:options split (e.g. 30 → 30:70); blank uses the Config default (90:10).
@@ -85,23 +86,23 @@ export function PositionEditor({ holding: h, onDone }: Props) {
 
         {/* Open legs — read-only reference; edit via Transaction History */}
         <div style={{ marginTop: 14, borderTop: '1px dashed var(--border)', paddingTop: 12 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--t3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Open legs</div>
+          <div style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, color: 'var(--t3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Open legs</div>
           {openLegs.length === 0 ? (
-            <div style={{ fontSize: 12, color: 'var(--t3)' }}>No open legs.</div>
+            <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)' }}>No open legs.</div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {openLegs.map((l) => <OpenLegRow key={l.id} leg={l} />)}
             </div>
           )}
-          <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 8 }}>
+          <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 8 }}>
             Add, edit, trim or close legs in <strong>Transaction History</strong> below — legs derive from those events.
           </div>
         </div>
 
-        {error && <div style={{ fontSize: 11, color: 'var(--status-negative-text)', marginTop: 10 }}>{error}</div>}
+        {error && <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--status-negative-text)', marginTop: 10 }}>{error}</div>}
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-          <button onClick={save} disabled={saving} style={{ padding: '7px 16px', borderRadius: 5, border: 'none', cursor: 'pointer', background: 'var(--acc)', color: '#fff', fontSize: 12, fontWeight: 600, opacity: saving ? 0.6 : 1 }}>{saving ? 'Saving…' : 'Save'}</button>
-          <button onClick={onDone} disabled={saving} style={{ padding: '7px 16px', borderRadius: 5, cursor: 'pointer', background: 'none', border: '1px solid var(--border)', color: 'var(--t2)', fontSize: 12 }}>Cancel</button>
+          <Button variant="primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
+          <Button variant="ghost" onClick={onDone} disabled={saving}>Cancel</Button>
         </div>
     </Modal>
   );
@@ -116,8 +117,8 @@ function fmtOpenDate(s: string | null): string {
 
 function OpenLegRow({ leg }: { leg: Leg }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, background: 'var(--s2)', border: '1px solid var(--bsub)', borderRadius: 6, padding: '6px 10px', fontSize: 12 }}>
-      <span style={{ color: 'var(--text)', fontWeight: 600 }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, background: 'var(--s2)', border: '1px solid var(--bsub)', borderRadius: 6, padding: '6px 10px', fontSize: FONT_SIZE.sm }}>
+      <span style={{ color: 'var(--text)', fontWeight: FONT_WEIGHT.semibold }}>
         {leg.instrument_type === 'SHARES' ? 'Shares' : fmtLegInstrument(leg)}
         {leg.opened_at && <span style={{ color: 'var(--t3)', fontWeight: 400, marginLeft: 6 }}>· opened {fmtOpenDate(leg.opened_at)}</span>}
       </span>
