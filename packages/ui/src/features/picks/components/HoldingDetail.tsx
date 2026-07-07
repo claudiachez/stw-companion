@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { Holding } from '../api';
 import {
   TIERS, fmtDateTime, FONT_SIZE, FONT_WEIGHT, SPACE,
@@ -15,6 +16,8 @@ import { SourceLink } from './SourceLink';
 import { RegimeBadge } from './RegimeBadge';
 import { Badge } from '../../../primitives/Badge';
 import { DetailPane, DetailPaneMetricLabel } from '../../../primitives/DetailPane';
+import { useUserPositions } from '../../portfolio/useUserPositions';
+import { cleanUnderlying } from '../../portfolio/api';
 import type { TickerRegime } from '../useTickerRegime';
 
 function PriceEmptyState({ fetchStatus }: { fetchStatus: string }) {
@@ -64,6 +67,13 @@ interface Props {
 export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = false, latestOptionsSync = null, regime }: Props) {
   const { canEdit, canViewHistory, isAdmin } = useCapabilities();
   const showHistory = canViewHistory || isAdmin;
+
+  // §5.5 reverse cross-link: on the subscriber web app, if you actually hold this ticker,
+  // offer a jump to your own position — the other half of the pick ↔ execution loop.
+  // Gated on !isAdmin so it never shows in the admin app (which has no /portfolio route).
+  const navigate = useNavigate();
+  const { data: ownPositions = [] } = useUserPositions();
+  const holdsOwn = !isAdmin && h.ticker !== 'CASH' && ownPositions.some((p) => cleanUnderlying(p.underlying) === h.ticker);
   const [editing, setEditing] = useState(false);
 
   const quote       = useQuote(h.ticker);
@@ -474,6 +484,15 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
           { key: 'weight', content: renderWeightContent() },
         ] : undefined}
       >
+        {holdsOwn && (
+          <button
+            onClick={() => navigate(`/portfolio?ticker=${encodeURIComponent(h.ticker)}`)}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--acc)', background: 'none', border: '1px solid var(--c5b)', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', marginBottom: 12 }}
+          >
+            View your position →
+          </button>
+        )}
+
         {/* CASH: show portfolio weight (can be negative = margin / leverage) */}
         {h.ticker === 'CASH' && (() => {
           const cw = h.current_weight ?? h.initial_weight ?? 0;

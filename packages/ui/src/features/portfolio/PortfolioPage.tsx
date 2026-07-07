@@ -1,5 +1,5 @@
-import { useState, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { TIERS, fmtDateTime, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, SPACE, regimeGate } from '@stw/shared';
 import { useUserPositions, useIbkrSettings } from './useUserPositions';
 import { useSyncPortfolio } from './useSyncPortfolio';
@@ -648,6 +648,20 @@ export function PortfolioPage() {
   }, [positions, pickMap]);
 
   const portfolioValue = useMemo(() => allGroups.reduce((s, g) => s + g.marketValue, 0), [allGroups]);
+
+  // §5.5 reverse cross-link: Stock Picks → "View your position" lands here with
+  // ?ticker=; open that position's detail on the Positions tab, then clear the param.
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const t = searchParams.get('ticker');
+    if (!t || allGroups.length === 0) return;
+    const upper = t.toUpperCase();
+    if (allGroups.some((g) => g.underlying === upper)) {
+      setSelected(upper);
+      setActiveTab('positions');
+    }
+    setSearchParams({}, { replace: true });
+  }, [searchParams, allGroups, setSearchParams]);
   const baskets = useMemo(
     () => [...new Set(allGroups.filter((g) => g.isTailed && g.basket).map((g) => g.basket))].sort(),
     [allGroups],
