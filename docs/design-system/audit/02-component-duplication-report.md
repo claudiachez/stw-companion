@@ -132,15 +132,72 @@ this file's `inputStyle`).
 
 ## 8. Button
 
-Primary/secondary button divergence is smaller on `staging` than the spec's
-"two unrelated primary styles" suggests it will be once PR #69 is included:
-today, `background: 'var(--acc)'` (white text) is the consistent primary
-treatment (8 call sites), and `var(--s2)` + border is the consistent
-secondary (e.g. `SettingsPage.tsx`'s Sync button). The "pale ambiguous
-green Save" symptom was not found in current `staging` code — flag this as
-likely introduced on the PR #67/#69 branches (their `RiskConfigForm`/
-`LimitsPanel` additions) and worth a direct comparison once those merge,
-rather than assuming it needs a fix on `staging`-only code today.
+**Revised after a deeper pass** (the first pass only checked `cursor:
+'pointer'` proximity and missed both the authoring-mechanism split and the
+real size/shape divergence below — flagging so this correction is visible,
+not silently swapped in).
+
+25 files render a `<button>`. The color rule from CLAUDE.md ("white text on
+green, never black") **is being followed with zero violations found** — every
+primary button uses `color: '#fff'`/`text-white` on a green fill. But two
+other things are genuinely inconsistent:
+
+### Two different authoring mechanisms for the same "primary CTA" role
+
+Every button in the app is inline-`style`-object-based **except** two files,
+which use Tailwind utility classes instead:
+
+| File | Button | Mechanism |
+|---|---|---|
+| `packages/ui/src/auth/LoginPage.tsx` | "Sign In" / "Create Account" | `className="bg-acc text-white font-semibold rounded-lg px-4 py-2.5 text-sm ..."` |
+| `apps/admin/src/features/manage/ConfigPage.tsx` | per-card "Save" | `className="... rounded text-xs font-semibold bg-acc text-white ..."` |
+| *(everywhere else — `SettingsPage`, `PositionEditor`, `TradeEditForm`, `ConvictionCommentForm`, `LegTimeline`, ...)* | "Save"/"Sync"/"Add Note"/etc. | `style={{ background: 'var(--acc)', color: '#fff', ... }}` |
+
+Two components fully bypass the inline-style convention the rest of the app
+uses, which means a future Tailwind theme edit and a future CSS-var edit
+won't both reach every primary button — they're two independent surfaces
+that happen to render the same color today.
+
+### No shared size/shape recipe — 5 "primary CTA" buttons, 5 different sizes
+
+| File | Padding | Radius | Font size |
+|---|---|---|---|
+| `SettingsPage.tsx` "Save" | `10px 16px` | 6 | 14 |
+| `LoginPage.tsx` "Sign In" | `px-4 py-2.5` (16px/10px) | `rounded-lg` (8) | `text-sm` (14) |
+| `ConfigPage.tsx` per-card "Save" | `px-3 py-1.5` (12px/6px) | `rounded` (4) | `text-xs` (12) |
+| `ConvictionCommentForm.tsx` "Add Note" | `6px 14px` | 5 | 12 |
+| `TradeEditForm.tsx` "Save" | `7px 16px` | 5 | 12 |
+
+Every one of these is functionally "the primary Save/submit action of this
+form" — none is a hypothetical PR #69 problem, all five exist on `staging`
+today. `fontWeight` agrees (600 everywhere) but padding, radius, and font
+size are each a different number in 4-5 different combinations. This is the
+real shape of the "two unrelated primary button styles" symptom: not a
+solid-vs-pale-green color problem (not found in-scope), but a
+same-role/five-different-sizes problem, compounded by the Tailwind-vs-
+inline-style mechanism split above.
+
+### One button styled as its opposite semantic weight
+
+`MacroRecapCard.tsx`'s "Regenerate" button — the primary (only) action in
+its toolbar row — is styled as a low-emphasis ghost button
+(`background: 'transparent'`, muted `var(--t2)` text, thin border), which is
+the correct *look* for a secondary/tertiary action but not for what is, in
+that row, the one thing a user can click to do something. Worth deciding in
+Phase 3 whether this is a deliberate "quiet by design" choice (recaps
+regenerate automatically twice daily; manual regen is an edge case) or a
+genuine miscategorization once `Button`'s primary/secondary/ghost variants
+exist to compare it against.
+
+### Secondary / destructive
+
+Secondary buttons are consistent where checked: `var(--s2)` fill + border
+(e.g. `SettingsPage.tsx`'s "Sync Portfolio", `ConvictionCommentForm.tsx`'s
+"Cancel" uses `background: 'none'` + border instead — a third secondary
+variant, transparent vs. filled `--s2`, both reading as "secondary" but not
+the same recipe). Destructive/real-money buttons (Delete = `#ef4444`, IBKR
+order actions = solid `#15803d`) match CLAUDE.md's documented rule
+everywhere checked — no drift found on that axis.
 
 ## 9. Empty state
 
@@ -167,10 +224,22 @@ Highest-leverage consolidations, in order of (evidence strength × reuse
 payoff):
 1. **Badge/Chip taxonomy** — 6 implementations, including one component
    (`ConvictionBadge`) duplicating data that already exists as tokens.
-2. **DataTable header** — proven copy-paste drift between 2 tables already.
-3. **DetailPane skeleton** — 2 existing instances + a 3rd (PR #69) about to
+2. **Button** — revised upward after a deeper pass: two competing authoring
+   mechanisms (Tailwind classes vs. inline `style` objects) for the identical
+   "primary CTA" role, plus 5 same-role Save/submit buttons in 5 different
+   size/shape combinations, plus one action (`MacroRecapCard`'s Regenerate)
+   styled as the wrong semantic weight. Also see the Modal chrome finding in
+   [03-responsive-mobile-conventions.md](03-responsive-mobile-conventions.md)
+   — CTA buttons *inside* modals (Save/Cancel pairs in `PositionEditor.tsx`,
+   `TradeEditForm.tsx`, `LegTimeline.tsx`) are part of the same size drift.
+3. **DataTable header** — proven copy-paste drift between 2 tables already.
+4. **DetailPane skeleton** — 2 existing instances + a 3rd (PR #69) about to
    be built by hand without one; highest cost-of-delay of any item here.
-4. **SectionHeader** — 2 near-identical implementations, one of them
+5. **SectionHeader** — 2 near-identical implementations, one of them
    documented in CLAUDE.md as if already shared.
-5. **KpiCard, AlertStrip, FormRow, Button, EmptyState** — smaller/cheaper,
-   mostly additive rather than reconciling active drift.
+6. **Modal** — not in the spec's original numbered component list; add it.
+   Backdrop color is consistent (5/5) but vertical alignment is a real 2-vs-3
+   split, and the file CLAUDE.md cites as "canonical" is on the losing side
+   of that split. See doc #03 for the full breakdown.
+7. **KpiCard, AlertStrip, FormRow, EmptyState** — smaller/cheaper, mostly
+   additive rather than reconciling active drift.
