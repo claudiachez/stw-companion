@@ -4,24 +4,9 @@
       "count": 4
     }
   },
-  "apps/admin/src/features/manage/ConfigPage.tsx": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
-  "apps/admin/src/features/users/UsersPage.tsx": {
-    "no-restricted-syntax": {
-      "count": 5
-    }
-  },
   "packages/ui/src/components/Layout.tsx": {
     "no-restricted-syntax": {
       "count": 6
-    }
-  },
-  "packages/ui/src/components/ProfilePage.tsx": {
-    "no-restricted-syntax": {
-      "count": 5
     }
   },
   "packages/ui/src/features/macro/MacroView.tsx": {
