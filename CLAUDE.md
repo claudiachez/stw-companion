@@ -14,11 +14,13 @@
 > review — do not merge either yourself.** If you're picking up either PR's work, branch further from
 > that PR's branch, not from `staging` (staging doesn't have this code yet).
 > **A third branch, `claude/design-system-audit`, is pushed but has no PR open yet** — cut directly
-> from `staging` (independent of PR #67/#69, no stacking), currently holds Phase 1 (audit) + Phase 2
-> (tokens) of the design-system build, both host-approved. **This is the branch to continue from for
-> Phase 3** — see "Current Status" below for what's done and
-> [`plans/stw-design-system.md`](plans/stw-design-system.md) for the full spec. Don't open a
-> `staging → main`-style PR for it yet; wait until more phases land or the host asks.
+> from `staging` (independent of PR #67/#69, no stacking), now holds all 4 planned phases of the
+> design-system build (audit → tokens → core components → enforcement/migration plan), all
+> host-reviewed at their checkpoints. **This is the branch to continue from for the actual page
+> migrations (Phase 5, not part of the original 4-phase spec)** — see "Current Status" below for what's
+> done and [`docs/design-system/migration-plan.md`](docs/design-system/migration-plan.md) for the
+> per-page order/effort. Don't open a `staging → main`-style PR for it yet; wait until migrations land
+> or the host asks.
 > Migrations run to **053 on `staging`**; **054–058 exist only on the PR #67 branch** (and per
 > [`plans/integrity-guardrails-report.md`](plans/integrity-guardrails-report.md) were already applied
 > directly to PROD, with 058 PROD-only — sandbox has no `tiers`/`profiles` tables to apply it to). The
@@ -56,14 +58,15 @@
 
 ---
 
-## Current Status — Design system Phase 1 (audit) + Phase 2 (tokens) done, Phase 3 next (handoff 2026-07-06)
+## Current Status — Design system Phases 1–4 all done; Phase 5 (page migrations) next (handoff 2026-07-06)
 
 **Branch: `claude/design-system-audit`, cut fresh from `staging` (independent of PR #67/#69), pushed
-to origin, no PR opened yet.** Both phases below were presented to the host at their checkpoint and
-approved before proceeding — see [`plans/stw-design-system.md`](plans/stw-design-system.md) for the
-full 4-phase spec (Audit → Tokens → Core components → Enforcement/migration prep). **Next session
-picks up Phase 3 (core components) on this same branch** — don't cut a new branch, don't restart
-from `staging`.
+to origin, no PR opened yet.** All four phases below were presented to the host at their checkpoint
+and approved before proceeding — see [`plans/stw-design-system.md`](plans/stw-design-system.md) for
+the full 4-phase spec (Audit → Tokens → Core components → Enforcement/migration prep). **The spec is
+now complete — the next session's job is Phase 5, executing the migration plan one page at a time**
+(see [`docs/design-system/migration-plan.md`](docs/design-system/migration-plan.md) and Next Steps
+#1 below), still on this same branch — don't cut a new one, don't restart from `staging`.
 
 **Phase 1 (audit, read-only, host-approved) — 5 docs in
 [`docs/design-system/audit/`](docs/design-system/audit/):**
@@ -128,21 +131,71 @@ from `staging`.
   screenshots + `getComputedStyle` checks confirmed every new/changed CSS variable resolves correctly,
   no console errors, no failed requests.
 
-**Carried forward for whoever builds Phase 3 (do NOT re-derive — read the audit docs first):**
-- Phase 3's component list gained one addition not in the original spec: **`Modal`** — extract the
-  already-consistent backdrop chrome (`rgba(0,0,0,0.55)`, `zIndex: 1000`) verbatim, which would
-  automatically have caught the `PositionEditor.tsx`/`TradeEditForm.tsx` centering drift; give it
-  `MODAL_WIDTH.sm/md/lg` instead of ad hoc `maxWidth` numbers.
-- `Badge`/`Chip` (spec 3.2) should absorb `ConvictionBadge` importing `TIERS` from `@stw/shared`
-  instead of its own hardcoded map — a real duplication, not just a styling nit.
-- `DataTable`'s header style (spec 3.6) should be lifted verbatim from `TradesTable.tsx`'s `th` object
-  (the more complete of the two already-drifted copies).
-- `DetailPane` (spec 3.7) must bake in the responsive split/mobile-full-screen-swap *behavior*
-  (currently only in `PicksView.tsx`), not just the static visual skeleton — PR #69's
-  `PortfolioPositionDetail.tsx` already had to hand-copy this once with nothing to import.
-- The P&L color bug and the input focus-accessibility gap (both in audit doc 04) are real defects,
-  not cosmetic — the tokens now exist to fix the color one (`--pnl-gain`/`--pnl-loss`); actually
-  migrating the 3 affected files is Phase 4/a follow-up, flagged so it doesn't get lost.
+**Phase 3 (core components, host-approved via the `/design-system` gallery route) — 13 components in
+[`packages/ui/src/primitives/`](packages/ui/src/primitives/), all exported from `@stw/ui`:**
+- The 9 spec-listed components (`StatusPill`, `Badge`, `KpiCard`, `SectionHeader`, `Button`,
+  `DataTable`, `DetailPane`, `FormRow`, `EmptyState` extended in place, `AlertStrip`, `SubNav`) **plus
+  `Modal`** (the Phase 1 addendum) **plus two more added on a second pass against the audit, after the
+  host explicitly asked "is there anything Phase 1/2 found that isn't in the plan":**
+  `ListDetailSplit` (the responsive split/mobile-swap *behavior*, extracted from `PicksView.tsx` — the
+  audit's own instruction was that `DetailPane` "must bake in" this behavior, not just the static
+  skeleton, so it ships as a paired component) and `Icon` (a scoped `lucide-react` wrapper — the audit
+  recommended it directly, and the first pass's own `StatusPill`/`AlertStrip` had fallen back into the
+  Unicode-glyph pattern the audit warned against, so they were retrofitted onto `Icon` too), plus
+  `TextInput` (the actual accessible input control `FormRow` needed but didn't own — the audit's
+  focus-accessibility finding named "`FormRow`/`Button`/**input primitives**" explicitly, and the first
+  pass had only built the layout wrapper). `Badge` also gained a 5th kind (`action`, for
+  `ActionBadge.tsx`'s New/Upsized/Trimmed/Closed pills, reading `ACTION_VARS`) and `StatusPill` gained
+  a `neutral` variant (tokens.md already defined `status.neutral`; the first pass only exposed 5 of 6
+  roles) — both were scope gaps in the initial 11-component build, caught on the same re-check pass.
+- Every component consumes tokens only (verified: zero literal color/size values in
+  `packages/ui/src/primitives/`); every business-concept prop is an enum/union (`BadgeKind`,
+  `ButtonVariant`, `StatusPillVariant`, `AlertSeverity`, etc.) — no `color="..."` escape hatch anywhere.
+- Visual review lives at `/design-system` in the admin app (nav item + route in `apps/admin/src/App.tsx`,
+  component at `packages/ui/src/primitives/DesignSystemGallery.tsx`) — checked in both themes and at
+  390px mobile, no console errors. `pnpm -r typecheck`, `pnpm -r test` (152 tests), and `pnpm build`
+  (both apps) all pass. **No existing page/component file was touched or migrated** — per the hard rule.
+
+**Phase 4 (enforcement + migration plan, host-approved) — full reference:
+[`docs/design-system/CONTRIBUTING.md`](docs/design-system/CONTRIBUTING.md) (usage guide + semantics +
+numeric-formatting/P&L rules) and
+[`docs/design-system/migration-plan.md`](docs/design-system/migration-plan.md) (per-page order):**
+- **Lint enforcement is real, not just documented** — this repo had zero lint tooling before this
+  session. `eslint.config.mjs` (repo root, new `eslint`/`@typescript-eslint/parser` devDependencies)
+  blocks literal hex/rgb colors and raw numeric `fontSize`s anywhere in `apps/**`/`packages/**`,
+  exactly what the spec asked for (not a general lint overhaul). Run via `pnpm lint`.
+  **`eslint-suppressions.json`** (repo root, committed) is a baseline snapshot of the **419
+  pre-existing violations across 43 files** that existed the moment the rule shipped — `pnpm lint`
+  only fails on violations outside that baseline, so it's clean today despite the real debt, but a
+  brand-new literal anywhere fails immediately. `pnpm lint:prune` shrinks a file's baseline entry after
+  it's migrated (and, deliberately, plain `pnpm lint` fails if you fix something and forget to prune —
+  that's the tool nudging you, not a false alarm; see CONTRIBUTING.md's Enforcement section for why).
+  Three files are permanently exempted, not "pending migration" — `constants/tiers.ts`,
+  `constants/baskets.ts`, `constants/tokens.ts` — they're the actual token-source files for their color
+  domains, so their own definitions are supposed to be literals.
+- **The migration-order proposal replaced estimate with measurement**: every count in
+  `migration-plan.md` comes directly from `eslint-suppressions.json`, not the Phase 1 audit's
+  illustrative grep samples. This surfaced a real correction to the standing plan — CLAUDE.md had
+  called My Portfolio "the biggest offender" and Stock Picks "closest to target," but the measured
+  data shows **Stock Picks is actually the single largest migration surface by far** (190 violations
+  across 17 files — `HoldingDetail.tsx` + `LegTimeline.tsx` alone are 88), and Macro (123) also
+  dwarfs My Portfolio (40) and GEX Signals (39, only 33 of which is real debt — `GexChart.tsx`'s 6 are
+  a sanctioned canvas-API exception). Settings-first and My-Portfolio-second are still correct, but for
+  the reasons CLAUDE.md actually gave (smallest surface to prove the pattern; a pending redesign lands
+  there anyway) — not raw count. Recommended order is now: **Settings → My Portfolio → GEX Signals
+  (small, quick win) → Stock Picks (large but core, budget multiple sessions, fix the P&L-color and
+  modal-centering bugs as an early sub-pass) → Macro (large but lowest urgency — newest code, least
+  internally inconsistent already)**. Full per-file breakdown and the specific structural work each
+  page needs (which files become `DetailPane`/`Modal`/`Badge` instances, not just literal-swaps) is in
+  `migration-plan.md`.
+- `docs/design-system/CONTRIBUTING.md` is the durable usage guide — which `Badge` `kind`/`StatusPill`
+  variant to reach for and why, `Button` variant semantics, the numeric-formatting rules the spec asked
+  for (tabular-nums, `formatPct`'s sign-display convention, a documented-but-not-yet-built `$46.2K`
+  currency-abbreviation rule — no consumer needs it yet, so it's specified but not implemented), and
+  the P&L color rule (`var(--pnl-gain)`/`var(--pnl-loss)`, never `var(--acc)`/`var(--c1)` directly, and
+  never a literal — except `GexChart.tsx`'s sanctioned canvas exception).
+- **No existing page/component file was touched.** `pnpm -r typecheck`, `pnpm -r test`, and `pnpm
+  build` all pass; `pnpm lint` passes clean against the new baseline.
 
 ---
 
@@ -454,12 +507,16 @@ it, shipped it to production, then separately investigated + fixed a live data-i
 
 ## Next Steps
 
-1. **Continue the design system build — Phase 3 (core components), on `claude/design-system-audit`.**
-   Phase 1 (audit) and Phase 2 (tokens) are both done and host-approved — see Current Status above
-   and [`plans/stw-design-system.md`](plans/stw-design-system.md) for the full spec. Build the
-   components in the order the spec lists (`StatusPill` first), **plus `Modal`** (added to the list
-   based on a Phase 1 finding — see Current Status's "carried forward" note). Stop for review before
-   Phase 4, same as the first two checkpoints. Check out the existing branch, don't cut a new one:
+1. **Execute the design system migration plan — Phase 5, on `claude/design-system-audit`.** All 4
+   spec phases (audit → tokens → components → enforcement/migration plan) are done and host-approved
+   — see Current Status above, [`docs/design-system/CONTRIBUTING.md`](docs/design-system/CONTRIBUTING.md)
+   for usage, and [`docs/design-system/migration-plan.md`](docs/design-system/migration-plan.md) for
+   the per-page order and exact violation counts. **Do ONE page per session, checkpoint with the host
+   before starting the next** — same discipline as Phases 1–4, now applied per-migration-phase. Order:
+   Settings → My Portfolio → GEX Signals → Stock Picks (large — budget multiple sessions; fix the
+   P&L-color and modal-centering bugs first as their own sub-pass) → Macro. After migrating a page, run
+   `pnpm lint:prune` and commit the updated `eslint-suppressions.json` alongside the change — that's how
+   the baseline stays accurate. Check out the existing branch, don't cut a new one:
    `git fetch origin && git checkout claude/design-system-audit && git pull --ff-only`.
 
 2. **Get PR #67 and PR #69 reviewed and merged** (in that order — #69 is stacked on #67). Before
@@ -546,14 +603,19 @@ Each deploys to its own Netlify site from the **same branch** (base dir differs)
 
 ```
 pnpm-workspace.yaml          → packages/*, apps/*
-package.json                 → workspace scripts (dev:web, dev:admin, build, typecheck, test)
+package.json                 → workspace scripts (dev:web, dev:admin, build, typecheck, test, lint)
+eslint.config.mjs            → design-token lint enforcement (Phase 4 — see Design System section)
+eslint-suppressions.json     → pre-Phase-5 violation baseline (committed; shrinks as pages migrate)
 packages/
   shared/  (@stw/shared)     pure framework-agnostic logic: types, tiers, baskets,
                              format, options, pnl, filters, design tokens (+ unit tests)
     src/constants/tokens.ts  spacing/radius/shadow/motion/breakpoint/z-index/type-scale
   ui/      (@stw/ui)         shared React: feature pages/components, data hooks,
                              supabase/query-client factories, AppCapabilities context
-    src/styles/tokens.css   canonical color tokens — both apps' index.css import this
+    src/styles/tokens.css    canonical color tokens — both apps' index.css import this
+    src/primitives/          design-system component library (StatusPill, Badge, KpiCard,
+                             SectionHeader, Button, DataTable, DetailPane, ListDetailSplit,
+                             FormRow, TextInput, EmptyState, AlertStrip, SubNav, Modal, Icon)
 apps/
   web/                       subscriber shell: router, Layout, auth, AccessGate
     netlify/functions/
@@ -562,8 +624,9 @@ apps/
   admin/                     admin shell: no paywall, Edit + Users + Config + IBKR (pricer + order placement)
     ibkr_proxy.py            local IBKR writer (run on your machine, not deployed)
     netlify.toml             (Netlify base dir = apps/admin)
+    /design-system route     visual review gallery for the component library (admin-only, not linked from apps/web)
 supabase/migrations/         001..053 — single source of truth for DB schema/RLS
-docs/design-system/          design-system audit reports + tokens reference (see Design System section)
+docs/design-system/          audit reports, tokens.md, CONTRIBUTING.md, migration-plan.md (see Design System section)
 CLAUDE.md                    this file
 ```
 
@@ -613,6 +676,8 @@ pnpm dev:admin          # admin app (Vite)
 pnpm build              # pnpm -r build across packages + apps
 pnpm typecheck          # pnpm -r typecheck
 pnpm test               # unit tests (@stw/shared)
+pnpm lint               # design-token enforcement (eslint.config.mjs) — fails on new violations only
+pnpm lint:prune         # run after migrating a file off literal colors/font-sizes; commit the result
 ```
 
 Env: each app needs `VITE_FINNHUB_KEY` (live prices) and the Supabase URL + anon
@@ -928,42 +993,58 @@ active filter (closed hidden by default). The FilterBar count shows `N of {total
   as an explicit named link inside the pane, not the default click target. Apply the same instinct to
   any future page that lists a subscriber's own data but is tempted to default-link into STW's data
   instead.
-- **New code should use the design-token files, not fresh literals** (established 2026-07-06 — see
-  Design System section). Colors from `packages/ui/src/styles/tokens.css`
+- **New code should use the design-token files and `packages/ui/src/primitives/` components, not
+  fresh literals or a new one-off component** (established 2026-07-06, see Design System section —
+  now **lint-enforced**, not just a convention: `pnpm lint` fails on a new literal color/px font-size
+  anywhere in `apps/**`/`packages/**`). Colors from `packages/ui/src/styles/tokens.css`
   (`var(--status-positive-text)`, `var(--pnl-gain)`, etc.); spacing/radius/type-scale/motion from
-  `packages/shared/src/constants/tokens.ts` (`SPACE`, `RADIUS`, `FONT_SIZE`, `NUMERIC_STYLE`, etc.).
-  Existing pages are NOT migrated onto these yet (that's Phase 4, deliberately not done in the audit/
-  tokens session) — this rule governs new code only, until a migration pass lands.
-- **P&L gain/loss color must read `var(--pnl-gain)`/`var(--pnl-loss)`, never a hardcoded hex.**
-  `HoldingRow.tsx`, `HoldingDetail.tsx`, and `SignalsTable.tsx` currently hardcode the light theme's
-  exact green/red (`#16A34A`/`#DC2626`) regardless of active theme — a real, live bug (P&L text
-  renders the wrong hue in the app's default dark theme today), documented in
+  `packages/shared/src/constants/tokens.ts` (`SPACE`, `RADIUS`, `FONT_SIZE`, `NUMERIC_STYLE`, etc.);
+  badges/pills/tables/modals/detail-panes/etc. from `packages/ui/src/primitives/` — see
+  [`docs/design-system/CONTRIBUTING.md`](docs/design-system/CONTRIBUTING.md) for which one to reach
+  for. Existing pages are NOT migrated onto these yet — that's Phase 5, in progress per
+  [`docs/design-system/migration-plan.md`](docs/design-system/migration-plan.md) — so this rule
+  governs new code only until a given page's migration lands.
+- **P&L gain/loss color must read `var(--pnl-gain)`/`var(--pnl-loss)`, never a hardcoded hex or
+  `var(--acc)`/`var(--c1)` directly.** `HoldingRow.tsx`, `HoldingDetail.tsx`, and `SignalsTable.tsx`
+  currently hardcode the light theme's exact green/red (`#16A34A`/`#DC2626`) regardless of active
+  theme — a real, live bug (P&L text renders the wrong hue in the app's default dark theme today),
+  documented in
   [`docs/design-system/audit/04-additional-inconsistencies.md`](docs/design-system/audit/04-additional-inconsistencies.md).
-  The correct tokens now exist; migrating those 3 files is still open (flagged, not yet done — see
+  The correct tokens now exist; migrating those 3 files is the first sub-pass of the Stock Picks phase
+  in [`docs/design-system/migration-plan.md`](docs/design-system/migration-plan.md) (still open — see
   Next Steps).
 - **Never set `outline: 'none'` on a focusable element without a visible replacement.** Tailwind-class
   inputs in this app correctly pair `focus:outline-none` with `focus:border-acc`; several inline-
   `style` inputs (`SettingsPage.tsx`, all three `FilterBar` variants) set `outline: 'none'` with
-  nothing replacing it — a real keyboard-accessibility regression, not just a style nit. Any new input
-  styling must follow the remove-and-replace pattern, never remove-only.
+  nothing replacing it — a real keyboard-accessibility regression, not just a style nit. **New code:
+  use the `TextInput` primitive** (`packages/ui/src/primitives/TextInput.tsx`), which pairs
+  `focus:outline-none` with a visible focus border by construction — don't hand-roll a new input style.
+  This specific pattern isn't lint-checked (it's not a static AST-detectable literal), so it's on
+  code review, not `pnpm lint`, to catch a regression here.
 
 ---
 
 ## Design System
 
-> **A formal design-token + component system is in progress** at
-> [`plans/stw-design-system.md`](plans/stw-design-system.md) (see Next Steps #1) — a 4-phase,
-> checkpointed build (audit → tokens → core components → enforcement/migration plan) triggered by
-> real inconsistency found during the 2026-07-06 My Portfolio redesign (3+ badge treatments, two
-> unrelated "primary button" styles, inconsistent numeric alignment). **Phase 1 (audit) and Phase 2
-> (tokens) are done and host-approved** (`claude/design-system-audit` branch, unmerged — see Current
-> Status); Phase 3 (core components) is next. **The color variables below are no longer the sole
-> source of truth** — `packages/ui/src/styles/tokens.css` is now the canonical file both apps import
-> (this table is a quick-reference subset, kept in sync manually); non-color scales live in
-> `packages/shared/src/constants/tokens.ts`. Full reference:
-> [`docs/design-system/tokens.md`](docs/design-system/tokens.md). Still true until Phase 3/4 land:
-> don't invent a second parallel token scheme (e.g. a new Tailwind theme extension) — extend the
-> existing token files instead.
+> **A formal design-token + component system is built** (`claude/design-system-audit` branch, unmerged
+> — see Current Status and Next Steps #1) — all 4 planned phases (audit → tokens → core components →
+> enforcement/migration plan) are done and host-approved, per
+> [`plans/stw-design-system.md`](plans/stw-design-system.md). **New UI code builds from `packages/ui`'s
+> component library and the token files — not fresh literals, not a new one-off component** — this is
+> now a standing rule, not just a phase-in-progress note; see
+> [`docs/design-system/CONTRIBUTING.md`](docs/design-system/CONTRIBUTING.md) for the full usage guide
+> (which `Badge` kind/`StatusPill` variant to use and why, `Button` variants, numeric-formatting and
+> P&L color rules) and is **enforced by `pnpm lint`** (a brand-new literal color/font-size anywhere in
+> `apps/**`/`packages/**` fails immediately — see CONTRIBUTING.md's Enforcement section). **The color
+> variables below are no longer the sole source of truth** — `packages/ui/src/styles/tokens.css` is the
+> canonical file both apps import (this table is a quick-reference subset, kept in sync manually);
+> non-color scales live in `packages/shared/src/constants/tokens.ts`. Full reference:
+> [`docs/design-system/tokens.md`](docs/design-system/tokens.md). Existing pages are not migrated yet
+> — that's Phase 5, in progress per
+> [`docs/design-system/migration-plan.md`](docs/design-system/migration-plan.md) — so don't be
+> surprised to see plenty of pre-Phase-5 pages still on literal values; don't invent a second parallel
+> token scheme (e.g. a new Tailwind theme extension) or a new one-off component when migrating one —
+> extend the existing token files / `packages/ui/src/primitives/` instead.
 
 - **Font:** Barlow Condensed (700/800) for the **STW logo** in the header only; system sans-serif (`font-sans`) everywhere else including page headings and login
 - **Logo:** STW mic + green arrow SVG
