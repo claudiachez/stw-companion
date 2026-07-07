@@ -84,3 +84,9 @@ export const NUMERIC_STYLE = { fontVariantNumeric: 'tabular-nums' } as const;
 // docs/design-system/audit/03-responsive-mobile-conventions.md). Replaces 3
 // distinct ad hoc modal maxWidth values (420, 480, 520).
 export const MODAL_WIDTH = { sm: 420, md: 480, lg: 520 } as const;
+
+// The one literal rgba value every existing modal (PositionEditor, EventForm,
+// IbkrOrderModal, etc.) already uses consistently for its backdrop — named here so
+// Phase 3's Modal component (and any future modal) has a token instead of retyping
+// the literal.
+export const OVERLAY = { backdrop: 'rgba(0,0,0,0.55)' } as const;
