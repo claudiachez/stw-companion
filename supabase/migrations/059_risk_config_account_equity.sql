@@ -35,8 +35,6 @@ alter table public.risk_config
   add column if not exists account_equity numeric not null default 100000,
   add column if not exists equity_peak    numeric;
 
-update public.risk_config set account_equity = 100000 where account_equity is null;
-
 comment on column public.risk_config.account_equity is
   'Account Net Liquidation Value (or equivalent) — the real denominator for gross/position/sector exposure checks. Defaults to a $100,000 placeholder (is_placeholder=true) until the user enters their real figure.';
 comment on column public.risk_config.equity_peak is
@@ -59,5 +57,11 @@ drop trigger if exists trg_risk_config_track_equity_peak on public.risk_config;
 create trigger trg_risk_config_track_equity_peak
   before insert or update on public.risk_config
   for each row execute function public.fn_risk_config_track_equity_peak();
+
+-- The ADD COLUMN above backfills account_equity via its DEFAULT at the DDL level (no
+-- row trigger fires for that) — so equity_peak is still null for any pre-existing row
+-- (e.g. the operator's own, seeded by migration 055). This no-op UPDATE (same value,
+-- different row) forces the now-active trigger to fire per row and populate it.
+update public.risk_config set account_equity = account_equity where equity_peak is null;
 
 commit;
