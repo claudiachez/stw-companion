@@ -86,6 +86,27 @@ async function tdDailyCloses(symbol: string, key: string, outputsize = 252): Pro
   return [];
 }
 
+// TwelveData bills 1 credit PER SYMBOL, not per HTTP call, and the free tier caps
+// at ~8 credits/minute (CLAUDE.md → Macro data sources). This function fetches ~10
+// daily series; firing them all at once 429s everything past the 8th — which is
+// exactly why earlier snapshot rows landed with null trend/volatility/credit/rates
+// scores. Fetch in ≤8-symbol chunks, one paced ~65s apart, mirroring maCache.ts's
+// tdBatchCloses/fetchClosesChunked in the browser. The 65s gap is why netlify.toml
+// gives this function an extended timeout.
+const TD_CHUNK_SIZE = 8;
+const TD_CHUNK_GAP_MS = 65_000;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function pacedDailyCloses(symbols: string[], key: string): Promise<Record<string, number[]>> {
+  const out: Record<string, number[]> = {};
+  for (let i = 0; i < symbols.length; i += TD_CHUNK_SIZE) {
+    const chunk = symbols.slice(i, i + TD_CHUNK_SIZE);
+    await Promise.all(chunk.map(async (s) => { out[s] = await tdDailyCloses(s, key); }));
+    if (i + TD_CHUNK_SIZE < symbols.length) await sleep(TD_CHUNK_GAP_MS);
+  }
+  return out;
+}
+
 async function fetchEventRisk(): Promise<{ events: MacroEvent[]; source: string; warning?: string }> {
   const base = process.env.URL ?? process.env.DEPLOY_URL;
   if (!base) return { events: [], source: 'unavailable', warning: 'No site URL available for internal fetch.' };
@@ -155,15 +176,18 @@ const handlerImpl: Handler = async () => {
   const runLogBase = { run_type: 'macro-snapshot' };
 
   try {
+  // ── Fetch every TwelveData series up front, rate-limit-safe ──────────
+  // One paced batch (≤8 symbols/chunk, ~65s apart) for ALL daily series any
+  // module needs, so no module's fetch 429s the next one's. SPY/RSP closes are
+  // then reused across Modules 4 and 9 instead of re-fetched.
+  const TD_SYMBOLS = [...TREND_SYMBOLS, 'VIX', 'VVIX', 'HYG', 'TNX', 'UUP'];
+  const closesBySymbol = await pacedDailyCloses(TD_SYMBOLS, twelveDataKey);
+
   // ── Module 4: Trend / Market Structure ──────────────────────────────
-  // SPY/RSP closes are fetched once here and reused below (Module 9) instead of
-  // re-fetched — halves the redundant TwelveData credit spend from the prior version.
-  const closesBySymbol: Record<string, number[]> = {};
   const indicatorScores: Record<string, number | null> = {};
   const buckets: Record<string, ReturnType<typeof trendBucket>> = {};
   for (const symbol of TREND_SYMBOLS) {
-    const closes = await tdDailyCloses(symbol, twelveDataKey);
-    closesBySymbol[symbol] = closes;
+    const closes = closesBySymbol[symbol] ?? [];
     const close = closes[closes.length - 1] ?? null;
     const ma9 = sma(closes, 9);
     const ma21 = sma(closes, 21);
@@ -175,14 +199,14 @@ const handlerImpl: Handler = async () => {
   const trendScore = trendSleeveScore([buckets.SPY, buckets.QQQ]);
 
   // ── Module 5: Volatility / Stress ────────────────────────────────────
-  const spyCloses = closesBySymbol.SPY;
+  const spyCloses = closesBySymbol.SPY ?? [];
   let vix = finnhubKey ? await finnhubQuote('^VIX', finnhubKey) : null;
-  const vixCloses = await tdDailyCloses('VIX', twelveDataKey);
+  const vixCloses = closesBySymbol.VIX ?? [];
   if (vix === null && vixCloses.length) vix = vixCloses[vixCloses.length - 1];
   const vixDelta5 = vixCloses.length >= 6 ? vixCloses[vixCloses.length - 1] - vixCloses[vixCloses.length - 6] : null;
 
   let vvix = finnhubKey ? await finnhubQuote('^VVIX', finnhubKey) : null;
-  const vvixCloses = await tdDailyCloses('VVIX', twelveDataKey);
+  const vvixCloses = closesBySymbol.VVIX ?? [];
   if (vvix === null && vvixCloses.length) vvix = vvixCloses[vvixCloses.length - 1];
 
   const spyHv = hv30(spyCloses);
@@ -204,17 +228,17 @@ const handlerImpl: Handler = async () => {
   const stressRising = vixDelta5 !== null && vixDelta5 > 0;
 
   // ── Module 6: Credit / Liquidity ─────────────────────────────────────
-  const hygCloses = await tdDailyCloses('HYG', twelveDataKey);
+  const hygCloses = closesBySymbol.HYG ?? [];
   const hyg50 = sma(hygCloses, 50);
   const hygNow = hygCloses[hygCloses.length - 1] ?? null;
   const hygPrev = hygCloses[hygCloses.length - 2] ?? null;
   const creditScore = hyg50 && hygNow && hygPrev ? creditHygScore(hygNow > hyg50, hygNow > hygPrev) : null;
 
   // ── Module 7: Rates + Dollar ──────────────────────────────────────────
-  const tnxCloses = (await tdDailyCloses('TNX', twelveDataKey)).map((c) => normalizeYield(c) as number);
+  const tnxCloses = (closesBySymbol.TNX ?? []).map((c) => normalizeYield(c) as number);
   const us10y = tnxCloses.length ? tnxCloses[tnxCloses.length - 1] : null;
   const us10yDelta5 = tnxCloses.length >= 6 ? tnxCloses[tnxCloses.length - 1] - tnxCloses[tnxCloses.length - 6] : null;
-  const uupCloses = await tdDailyCloses('UUP', twelveDataKey, 60);
+  const uupCloses = closesBySymbol.UUP ?? [];
   const uup = uupCloses[uupCloses.length - 1] ?? null;
   const uup9 = sma(uupCloses, 9);
   const uup21 = sma(uupCloses, 21);
@@ -248,7 +272,7 @@ const handlerImpl: Handler = async () => {
   }
 
   let breadth: number | null = null;
-  const rspCloses = closesBySymbol.RSP;
+  const rspCloses = closesBySymbol.RSP ?? [];
   const L = Math.min(rspCloses.length, spyCloses.length);
   if (L >= 51) {
     const ratios = rspCloses.slice(-L).map((r, i) => r / spyCloses.slice(-L)[i]);
