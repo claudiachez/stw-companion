@@ -83,7 +83,7 @@ export function MacroEventRiskCard({ read, loading, error, warning, qqqBucket, v
             : 'Nothing major scheduled in the next 48 hours.'}
         </div>
         {warning && <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: 8 }}>{warning}</div>}
-        <FxStreetLink />
+        <EventSourceNote />
       </div>
     );
   }
@@ -134,18 +134,15 @@ export function MacroEventRiskCard({ read, loading, error, warning, qqqBucket, v
       </div>
 
       {warning && <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: 8 }}>{warning}</div>}
-      <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 10, lineHeight: 1.4 }}>
-        Source: {event.source} Economic Calendar · observed {fmtDateTime(event.sourceTimestamp)}
-      </div>
-      <FxStreetLink />
+      <EventSourceNote />
     </div>
   );
 }
 
-function FxStreetLink() {
+function EventSourceNote() {
   return (
     <div style={{ marginTop: 8, fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>
-      Source: FRED release calendar + FOMC schedule · cross-check: <a href="https://www.fxstreet.com/economic-calendar" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--t2)' }}>FXStreet ↗</a>
+      Source: FRED release calendar + FOMC schedule
     </div>
   );
 }
