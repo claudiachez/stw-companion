@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import {
-  hv30, vixScore, ivPremiumScore, gexScore, creditHygScore,
-  breadthScore, RISK_APPETITE_WEIGHTS, riskAppetiteScore,
+  hv30, vixScore, ivPremiumScore, gexScore, creditOasScore,
+  breadthScore, RISK_APPETITE_WEIGHTS, riskAppetiteScore, FRED_SERIES,
 } from '@stw/shared';
 import { fetchGraddox } from '../signals/api';
-import { loadCloses, tdDailyCloses, finnhubQuote, sma } from './maCache';
+import { loadCloses, tdDailyCloses, sma } from './maCache';
+import { fredCloses } from './fredCache';
 import type { SentimentInput, SentimentScore } from '@stw/shared';
 
 // ── Module 9: Risk Appetite ─────────────────────────────────────────
@@ -12,9 +13,10 @@ import type { SentimentInput, SentimentScore } from '@stw/shared';
 // right now?". Dollar moved to the Rates+Dollar sleeve; Breadth (RSP/SPY) added.
 // VVIX/Tail-Risk removed 2026-07-08 (no free feed serves it). The other six
 // weights kept their relative proportions, so the gauge is materially unchanged
-// from when VVIX was perpetually null.
+// from when VVIX was perpetually null. VIX + credit read from FRED (VIXCLS /
+// HY OAS) to match the Market Internals sleeves; momentum/breadth stay TwelveData.
 
-export function useSentimentGauge(finnhubKey?: string, twelveDataKey?: string) {
+export function useSentimentGauge(twelveDataKey?: string) {
   const [score, setScore] = useState<SentimentScore | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -37,10 +39,9 @@ export function useSentimentGauge(finnhubKey?: string, twelveDataKey?: string) {
       }
       inputs.push({ label: 'Market Momentum', weight: RISK_APPETITE_WEIGHTS.momentum, score: momentumScore, description: 'SPY vs 125d MA' });
 
-      // 2. Volatility (16%) — VIX level (Finnhub, TwelveData fallback).
-      let vix: number | null = finnhubKey ? await finnhubQuote('^VIX', finnhubKey) : null;
-      const vixCloses = twelveDataKey ? await tdDailyCloses('VIX', twelveDataKey) : loadCloses('VIX');
-      if (vix === null && vixCloses.length) vix = vixCloses[vixCloses.length - 1];
+      // 2. Volatility (16%) — VIX level from FRED (VIXCLS), matching the sleeve.
+      const vixCloses = await fredCloses(FRED_SERIES.vix);
+      const vix: number | null = vixCloses.length ? vixCloses[vixCloses.length - 1] : null;
       const vixSc = vixScore(vix);
       inputs.push({ label: 'Volatility (VIX)', weight: RISK_APPETITE_WEIGHTS.vix, score: vixSc, description: `VIX ${vix?.toFixed(1) ?? '—'}` });
 
@@ -58,16 +59,14 @@ export function useSentimentGauge(finnhubKey?: string, twelveDataKey?: string) {
       } catch { /* ignore */ }
       inputs.push({ label: 'GEX Bias', weight: RISK_APPETITE_WEIGHTS.gex, score: gexInput, description: 'Graddox daily signal' });
 
-      // 5. Credit (10%) — HYG vs 50d MA.
+      // 5. Credit (10%) — HY OAS from FRED vs its 50d MA, matching the sleeve.
       let creditScore: number | null = null;
-      if (twelveDataKey) {
-        const hyg = await tdDailyCloses('HYG', twelveDataKey);
-        const hyg50 = sma(hyg, 50);
-        const now = hyg[hyg.length - 1] ?? null;
-        const prev = hyg[hyg.length - 2] ?? null;
-        if (hyg50 && now && prev) creditScore = creditHygScore(now > hyg50, now > prev);
-      }
-      inputs.push({ label: 'Credit', weight: RISK_APPETITE_WEIGHTS.credit, score: creditScore, description: 'HYG vs 50d MA' });
+      const oasCloses = await fredCloses(FRED_SERIES.hyOas);
+      const oas = oasCloses.length ? oasCloses[oasCloses.length - 1] : null;
+      const oas50 = sma(oasCloses, 50);
+      const oasPrev = oasCloses.length >= 2 ? oasCloses[oasCloses.length - 2] : null;
+      if (oas !== null && oas50 !== null && oasPrev !== null) creditScore = creditOasScore(oas < oas50, oas < oasPrev);
+      inputs.push({ label: 'Credit', weight: RISK_APPETITE_WEIGHTS.credit, score: creditScore, description: 'HY OAS vs 50d MA' });
 
       // 6. Breadth (10%) — RSP/SPY relative strength (is the average stock confirming?).
       let breadth: number | null = null;
@@ -101,7 +100,7 @@ export function useSentimentGauge(finnhubKey?: string, twelveDataKey?: string) {
 
     compute();
     return () => { cancelled = true; };
-  }, [finnhubKey, twelveDataKey]);
+  }, [twelveDataKey]);
 
   return { score, loading };
 }

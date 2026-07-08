@@ -179,6 +179,18 @@ export function creditHygScore(aboveMa50: boolean, rising: boolean): number {
   return rising ? 45 : 20;                // stabilizing-mixed / warning
 }
 
+/**
+ * HY OAS (ICE BofA high-yield option-adjusted spread, FRED BAMLH0A0HYM2) → credit
+ * score. A SPREAD, so the sign inverts vs the HYG *price* proxy: a spread BELOW
+ * its 50D MA (tight relative to trend) that's TIGHTENING (falling day-over-day)
+ * is credit confirming / risk-on; a spread ABOVE its MA and WIDENING is stress.
+ * Higher score = calmer credit — same 0–100 bands + creditLabel as the HYG proxy.
+ */
+export function creditOasScore(belowMa50: boolean, tightening: boolean): number {
+  if (belowMa50) return tightening ? 80 : 60; // confirming / mild caution
+  return tightening ? 45 : 20;                 // stabilizing-mixed / warning
+}
+
 export function creditLabel(score: number | null): string {
   if (score === null) return '—';
   if (score >= 70) return 'Confirming';

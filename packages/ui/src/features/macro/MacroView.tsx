@@ -60,12 +60,12 @@ export function MacroView() {
 
   const { indicators, loading: indLoading, asOf: trendAsOf } = useMacroIndicators(allSymbols, finnhubKey, twelveDataKey);
   const { data: volatility, loading: volLoading } = useVolatilityStress(twelveDataKey);
-  const { data: credit, loading: creditLoading } = useCreditLiquidity(twelveDataKey);
-  // Stress rising = VIX climbing or credit below its 50D — feeds the US10Y
-  // flight-to-safety cross-check so a fast yield drop in stress isn't read bullish.
-  const stressRising = (volatility?.vixDelta5 ?? 0) > 0.5 || credit?.aboveMa50 === false;
+  const { data: credit, loading: creditLoading } = useCreditLiquidity();
+  // Stress rising = VIX climbing or the HY spread wide vs its 50D — feeds the
+  // US10Y flight-to-safety cross-check so a fast yield drop in stress isn't read bullish.
+  const stressRising = (volatility?.vixDelta5 ?? 0) > 0.5 || credit?.belowMa50 === false;
   const { data: rates, loading: ratesLoading } = useRatesDollar(stressRising);
-  const { score, loading: sentLoading } = useSentimentGauge(finnhubKey, twelveDataKey);
+  const { score, loading: sentLoading } = useSentimentGauge(twelveDataKey);
   const { recap, recapDate, recapSession, loading: recapLoading, error: recapError, generate } = useDailyRecap();
   const { read: eventsRead, loading: eventsLoading, error: eventsError, warning: eventsWarning } = useMacroEvents();
   const { rows: sectorRows, loading: sectorLoading, asOf: sectorAsOf, constituents: sectorConstituents, constituentsLoading: sectorConstituentsLoading } = useSectorRotation(twelveDataKey);

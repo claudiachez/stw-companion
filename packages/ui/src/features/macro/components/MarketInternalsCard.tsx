@@ -72,7 +72,7 @@ export function MarketInternalsCard({
       score: creditScore,
       label: creditLabel(creditScore),
       read: read(creditLoading, !!credit,
-        `HYG ${credit?.aboveMa50 == null ? '—' : credit.aboveMa50 ? 'above 50D' : 'below 50D'}${credit?.aboveMa50 == null ? '' : credit.rising ? ' · rising' : ' · falling'}`),
+        `HY OAS ${credit?.oas != null ? `${credit.oas.toFixed(2)}%` : '—'} · ${credit?.belowMa50 == null ? '—' : credit.belowMa50 ? 'tight' : 'wide'}`),
       body: <CreditLiquidityCard data={credit} loading={creditLoading} />,
     },
     {

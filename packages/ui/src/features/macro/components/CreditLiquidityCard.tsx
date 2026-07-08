@@ -9,37 +9,37 @@ interface Props {
 
 export function CreditLiquidityCard({ data, loading }: Props) {
   if (loading && !data) return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>Loading credit…</div>;
-  if (!data) return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>Credit data unavailable (needs TwelveData key).</div>;
+  if (!data) return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>Credit data unavailable.</div>;
 
-  const { hyg, hyg50, aboveMa50, rising, delta5Pct, sleeveScore } = data;
-  const trendWord = aboveMa50 === null ? '—' : `${aboveMa50 ? 'above' : 'below'} 50D${rising ? ' · rising' : ' · falling'}`;
+  const { oas, oas50, belowMa50, tightening, delta5, sleeveScore } = data;
+  const trendWord = belowMa50 === null ? '—' : `${belowMa50 ? 'tight vs 50D' : 'wide vs 50D'}${tightening === null ? '' : tightening ? ' · tightening' : ' · widening'}`;
 
   return (
     <div>
       <TileGrid>
         <StatTile
-          label="HYG"
-          value={hyg !== null ? hyg.toFixed(2) : '—'}
+          label="HY OAS"
+          value={oas !== null ? `${oas.toFixed(2)}%` : '—'}
           sub={trendWord}
           score={sleeveScore}
         />
         <StatTile
           label="vs 50D MA"
-          value={hyg50 !== null ? hyg50.toFixed(2) : '—'}
-          sub={aboveMa50 === null ? '' : aboveMa50 ? 'credit confirming' : 'credit warning'}
+          value={oas50 !== null ? `${oas50.toFixed(2)}%` : '—'}
+          sub={belowMa50 === null ? '' : belowMa50 ? 'credit confirming' : 'credit warning'}
           score={sleeveScore}
         />
         <StatTile
           label="5D Change"
-          value={delta5Pct !== null ? `${delta5Pct >= 0 ? '+' : ''}${delta5Pct.toFixed(2)}%` : '—'}
-          sub="short-term direction"
-          score={delta5Pct === null ? null : delta5Pct >= 0 ? 70 : 30}
+          value={delta5 !== null ? `${delta5 >= 0 ? '+' : ''}${delta5.toFixed(2)}pp` : '—'}
+          sub={delta5 === null ? 'spread, + = widening' : delta5 <= 0 ? 'tightening (risk-on)' : 'widening (stress)'}
+          score={delta5 === null ? null : delta5 <= 0 ? 70 : 30}
         />
       </TileGrid>
       <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 10 }}>
-        Credit proxy via HYG — true HY OAS spread coming later.
+        ICE BofA US High Yield option-adjusted spread — a spread widens as credit stress rises.
       </div>
-      <SourceNote source="TwelveData daily (HYG)" asOf={data.asOf} />
+      <SourceNote source="FRED daily (BAMLH0A0HYM2)" asOf={data.asOf} />
     </div>
   );
 }

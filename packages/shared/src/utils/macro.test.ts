@@ -4,7 +4,7 @@ import {
   environmentScore, regimeBand, hv30, SLEEVE_WEIGHTS,
   vixScore, ivPremiumScore, vixDirectionScore,
   volatilityStressScore, stressLabel, percentileRank,
-  creditHygScore, creditLabel,
+  creditHygScore, creditOasScore, creditLabel,
   us10yScore, uupScore, ratesDollarScore, ratesDollarLabel,
   gexScore, gexBiasLabel, gexImplication,
   breadthScore, RISK_APPETITE_WEIGHTS, riskAppetiteScore,
@@ -162,6 +162,12 @@ describe('credit / liquidity scorers', () => {
     expect(creditHygScore(true, false)).toBe(60);
     expect(creditHygScore(false, true)).toBe(45);
     expect(creditHygScore(false, false)).toBe(20);
+  });
+  it('creditOasScore: spread below 50D + tightening = confirming (inverted vs HYG)', () => {
+    expect(creditOasScore(true, true)).toBe(80);   // tight & tightening
+    expect(creditOasScore(true, false)).toBe(60);  // tight but widening
+    expect(creditOasScore(false, true)).toBe(45);  // wide but tightening
+    expect(creditOasScore(false, false)).toBe(20); // wide & widening = warning
   });
   it('creditLabel maps scores', () => {
     expect(creditLabel(80)).toBe('Confirming');
