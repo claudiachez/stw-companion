@@ -22,9 +22,7 @@ import { RegimeBanner } from './components/RegimeBanner';
 import { ModuleScoreStrip } from './components/ModuleScoreStrip';
 import { MacroEventRiskCard } from './components/MacroEventRiskCard';
 import { TrendStructureTable } from './components/TrendStructureTable';
-import { VolatilityStressCard } from './components/VolatilityStressCard';
-import { CreditLiquidityCard } from './components/CreditLiquidityCard';
-import { RatesDollarCard } from './components/RatesDollarCard';
+import { MarketInternalsCard } from './components/MarketInternalsCard';
 import { GexPositioningCard } from './components/GexPositioningCard';
 import { SentimentGauge } from './components/SentimentGauge';
 import { MacroRecapCard } from './components/MacroRecapCard';
@@ -37,9 +35,7 @@ const HELP = {
   regime: 'The overall market read, computed from weighted sleeve scores — Trend 30%, Volatility 20%, Credit 15%, Rates+Dollar 15%, GEX 20%. 75–100 = Risk-On, 60–74 = Constructive, 45–59 = Cautious, 30–44 = Defensive, 0–29 = Risk-Off. It answers: how aggressive should I be right now?',
   strip: "Each sleeve's 0–100 score at a glance (higher = more risk-on). Shows what's actually driving the regime — whether it's trend, stress, credit, rates, or positioning.",
   trend: 'Are risk assets technically intact? Each index vs its 9-, 21- and 200-day moving averages. Above all three = momentum; below the 200-day = risk-off; below the 200-day but bouncing above the short ones = a bear-market rally (not bullish). The heaviest sleeve (30%).',
-  volatility: 'Is fear rising? VIX = expected S&P volatility; IV Premium = VIX ÷ realized vol (how expensive hedges are vs how much the market is actually moving). Higher score = calmer.',
-  credit: 'Is credit confirming the equity move? HYG (high-yield bond ETF) vs its 50-day average — credit usually weakens before stocks do, so it acts as an early warning. A proxy for now; true high-yield spreads come later.',
-  rates: 'Are macro headwinds building? Rising 10-year yields and a strengthening dollar pressure growth and speculative stocks. Key nuance: yields falling while stress rises is a flight to safety, not a growth tailwind.',
+  internals: 'Three cross-check sleeves in one place — tap a row to expand. Volatility/Stress: is fear rising? (VIX = expected S&P volatility; IV Premium = VIX ÷ realized vol). Credit/Liquidity: is credit confirming the equity move? (HYG vs its 50-day average — an early warning; a proxy until true HY spreads land). Rates+Dollar: are macro headwinds building? (rising 10-year yields + a strengthening dollar pressure growth stocks; yields falling while stress rises is a flight to safety, not a tailwind). Higher score = more risk-on.',
   gex: "STW Graddox's options-positioning read (dealer gamma exposure) — Bullish / Flat / Conflicted / Bearish, with key SPY and QQQ levels. A tactical overlay: it helps time entries and spot pivots, but doesn't set the whole macro picture on its own.",
   riskAppetite: 'How much fear vs greed is priced right now (0 = extreme fear, 100 = extreme greed). A different question from the regime: the regime is what the environment IS; this is how emotional the tape is. Built from momentum, VIX, IV premium, tail risk, GEX, credit and breadth.',
   recap: 'An AI note that turns all the module scores into a plain-English read plus a suggested trading mode. Auto-generates twice daily: a pre-market note at 8am ET and a post-market recap at 4:30pm ET.',
@@ -207,28 +203,15 @@ export function MacroView() {
         </div>
       </section>
 
-      {/* ── Module 5: Volatility / Stress ──────────────────────────── */}
+      {/* ── Modules 5–7: Market Internals (Volatility · Credit · Rates+Dollar) ── */}
       <section>
-        <ModuleHeader title="Volatility / Stress" help={HELP.volatility} />
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
-          <VolatilityStressCard data={volatility} loading={volLoading} />
-        </div>
-      </section>
-
-      {/* ── Module 6: Credit / Liquidity ───────────────────────────── */}
-      <section>
-        <ModuleHeader title="Credit / Liquidity" help={HELP.credit} />
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
-          <CreditLiquidityCard data={credit} loading={creditLoading} />
-        </div>
-      </section>
-
-      {/* ── Module 7: Rates + Dollar Headwinds ─────────────────────── */}
-      <section>
-        <ModuleHeader title="Rates + Dollar Headwinds" help={HELP.rates} />
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
-          <RatesDollarCard data={rates} loading={ratesLoading} stressRising={stressRising} />
-        </div>
+        <ModuleHeader title="Market Internals" help={HELP.internals} />
+        <MarketInternalsCard
+          volatility={volatility} volLoading={volLoading}
+          credit={credit} creditLoading={creditLoading}
+          rates={rates} ratesLoading={ratesLoading}
+          stressRising={stressRising}
+        />
       </section>
 
       {/* ── Module 8: GEX / Positioning ────────────────────────────── */}

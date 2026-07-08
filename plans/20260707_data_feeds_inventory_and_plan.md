@@ -292,6 +292,15 @@ in `@stw/shared` (`utils/pacing.ts`, unit-tested) is the generic chunked-pacer, 
 (FRED ~120/min, Finnhub ~60/min, TwelveData 8/min). Every feed routes through it so a new feed can't
 reintroduce this class of bug.
 
+### Macro UI: Market Internals consolidation (host, 2026-07-08) — DONE
+Volatility/Stress + Credit/Liquidity + Rates+Dollar were three near-identical full-width cards (sleeve
+score + StatTiles + source) stacking into ~3 screens of mobile scroll and duplicating the scores the
+Module Scores strip already shows. Folded into ONE **Market Internals** module
+(`MarketInternalsCard.tsx`): each sleeve is a collapsed `AccordionList` row (score chip + one-line
+read), expandable into its existing tile detail. The three card components stay (SleeveSummary removed
+— the row header carries the score) as the accordion bodies, so per-sleeve tile logic + source notes
+live in their own files. Typecheck green; **visual check deferred to the post-FRED verification pass.**
+
 ### Sequencing + keys (host, 2026-07-08)
 - **Feeds first**, then sector taxonomy. Build order within feeds: (1) shared pacing helper [DONE] →
   (2) FRED proxy + client, reassign VIX/VIX3M/US10Y/credit/dollar (VVIX→null) → (3) Event Risk rebuild

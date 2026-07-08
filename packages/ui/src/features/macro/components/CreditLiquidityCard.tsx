@@ -1,6 +1,6 @@
-import { creditLabel, FONT_SIZE } from '@stw/shared';
+import { FONT_SIZE } from '@stw/shared';
 import type { CreditLiquidity } from '../useCreditLiquidity';
-import { StatTile, SleeveSummary, TileGrid, SourceNote } from './macroVisuals';
+import { StatTile, TileGrid, SourceNote } from './macroVisuals';
 
 interface Props {
   data: CreditLiquidity | null;
@@ -16,7 +16,6 @@ export function CreditLiquidityCard({ data, loading }: Props) {
 
   return (
     <div>
-      <SleeveSummary score={sleeveScore} label={creditLabel(sleeveScore)} hint="HYG credit proxy" />
       <TileGrid>
         <StatTile
           label="HYG"
