@@ -17,6 +17,7 @@
  * `user_positions` to derive it from) — this keeps the module pure and lets the
  * caller decide the baseline (e.g. IBKR NetLiquidation, or a configured value).
  */
+import { isNonEquityBucket } from '../constants/sectors';
 
 export interface PositionInput {
   underlying: string;
@@ -141,6 +142,9 @@ export function sectorConcentration(
   const bySector: Record<string, number> = {};
   for (const p of positions) {
     const sector = sectorMap[p.underlying] ?? UNMAPPED_SECTOR;
+    // ETF / Cash are not an equity sector — exclude them from concentration
+    // entirely (never a bucket, never 'unevaluated'), per the GICS taxonomy.
+    if (isNonEquityBucket(sector)) continue;
     bySector[sector] = (bySector[sector] ?? 0) + Math.abs(positionMarketValue(p));
   }
   return Object.entries(bySector).map(([sector, mv]) =>

@@ -219,8 +219,8 @@ export function ConfigPage() {
         </Section>
 
         <Section
-          title={<>Capital allocation <span className="text-t3 text-[10px] font-semibold uppercase tracking-wide align-middle ml-1">Admin only</span></>}
-          hint="Powers the quantity suggestion in the IBKR order modal (Transaction History → Open/Close via IBKR) — a starting point only, still fully adjustable per-order. Never read by apps/web."
+          title={<>Capital allocation &amp; live trading <span className="text-t3 text-[10px] font-semibold uppercase tracking-wide align-middle ml-1">Admin only</span></>}
+          hint="Capital defaults power the quantity suggestion in the IBKR order modal (Transaction History → Open/Close via IBKR) — a starting point only, still adjustable per-order. Never read by apps/web. Save covers the capital fields; the live-trading switch below saves on toggle."
           dirty={Object.keys(capitalDrafts).length > 0}
           saving={savingSection === 'capital'}
           onSave={saveCapital}
@@ -249,6 +249,36 @@ export function ConfigPage() {
             step={0.5}
             onChange={(value) => setCapitalDrafts((d) => ({ ...d, options: value }))}
           />
+          {/* Live-trading switch — saves immediately on toggle (independent of the capital Save). */}
+          <div className="py-3 first:pt-0 last:pb-0">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-text font-semibold text-xs mb-1">Live IBKR trading</div>
+                <div className="text-t3 text-xs max-w-md">
+                  Reveals "Open via IBKR" / "Close via IBKR" on the Transaction History ledger — places
+                  REAL orders against whatever IB Gateway your local proxy is connected to. Never shown
+                  to subscribers regardless of this setting.
+                </div>
+              </div>
+              <button
+                onClick={toggleIbkr}
+                disabled={savingSection === 'ibkr'}
+                className={`shrink-0 ml-4 flex items-center w-11 h-6 px-0.5 rounded-full transition-colors ${
+                  ibkrLiveTradingEnabled ? 'bg-acc justify-end' : 'bg-s2 border border-border justify-start'
+                }`}
+              >
+                <span className="w-5 h-5 rounded-full bg-white shadow" />
+              </button>
+            </div>
+            {ibkrLiveTradingEnabled && (
+              <div className="mt-3">
+                <AlertStrip severity="warning">
+                  Live — the IBKR buttons are currently visible in Transaction History. Confirm your local
+                  proxy is pointed at paper (IB_PORT=4002) before placing any order while testing.
+                </AlertStrip>
+              </div>
+            )}
+          </div>
         </Section>
 
         <Section
@@ -270,36 +300,6 @@ export function ConfigPage() {
             <span className="text-t3 text-xs">normalized — ratios are what matter, needn't equal 100%</span>
           </div>
         </Section>
-
-        <div className="bg-surface border border-border rounded-xl p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-text font-semibold text-sm mb-1">Live IBKR trading</div>
-              <div className="text-t3 text-xs max-w-md">
-                Reveals "Open via IBKR" / "Close via IBKR" on the Transaction History ledger —
-                places REAL orders against whatever IB Gateway your local proxy is connected to.
-                Admin-only; never shown to subscribers regardless of this setting.
-              </div>
-            </div>
-            <button
-              onClick={toggleIbkr}
-              disabled={savingSection === 'ibkr'}
-              className={`shrink-0 ml-4 flex items-center w-11 h-6 px-0.5 rounded-full transition-colors ${
-                ibkrLiveTradingEnabled ? 'bg-acc justify-end' : 'bg-s2 border border-border justify-start'
-              }`}
-            >
-              <span className="w-5 h-5 rounded-full bg-white shadow" />
-            </button>
-          </div>
-          {ibkrLiveTradingEnabled && (
-            <div className="mt-3">
-              <AlertStrip severity="warning">
-                Live — the IBKR buttons are currently visible in Transaction History. Confirm your local
-                proxy is pointed at paper (IB_PORT=4002) before placing any order while testing.
-              </AlertStrip>
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );

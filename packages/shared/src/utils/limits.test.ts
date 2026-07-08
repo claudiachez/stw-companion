@@ -156,6 +156,22 @@ describe('sectorConcentration — Unmapped is UNEVALUATED, never a breach', () =
   });
 });
 
+describe('sectorConcentration — ETF/Cash are excluded, never a bucket', () => {
+  it('drops ETF/Cash positions entirely (not a sector row, not unevaluated)', () => {
+    const book: PositionInput[] = [
+      { underlying: 'AAPL', quantity: 100, markPrice: 150, multiplier: 1 },  // Tech
+      { underlying: 'SPY', quantity: 100, markPrice: 500, multiplier: 1 },   // ETF
+      { underlying: 'CASH', quantity: 1, markPrice: 20000, multiplier: 1 },  // Cash
+    ];
+    const sectors = { AAPL: 'Information Technology', SPY: 'ETF', CASH: 'Cash' };
+    const violations = sectorConcentration(book, sectors, 100_000, 25);
+    const scopes = violations.map((v) => v.scope);
+    expect(scopes).toContain('Information Technology');
+    expect(scopes).not.toContain('ETF');
+    expect(scopes).not.toContain('Cash');
+  });
+});
+
 describe('drawdownLadderTarget — all four ladder cells + no-breach', () => {
   it('no drawdown breached → null (no glide-path target)', () => {
     expect(drawdownLadderTarget(OPERATOR_LADDER, -5)).toBeNull();
