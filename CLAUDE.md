@@ -1,25 +1,27 @@
 # STW Companion — Claude Code Guide
 
 > **⚠️ START HERE — branch.** **`staging` is the active trunk** — all feature work happens here.
-> **`staging` is ~69 commits ahead of `main` as of 2026-07-08** (check `git log --oneline
-> origin/main..origin/staging | wc -l` for the exact count — it'll have grown by the time you read
-> this) (last promotion was PR #66 on
+> **`staging` is ~75 commits ahead of `main` as of 2026-07-09** (check `git log --oneline
+> origin/main..origin/staging | wc -l` for the exact count) (last promotion was PR #66 on
 > 2026-07-05) — none of this file's "Current Status" work below is on production yet. A
 > `staging → main` PR is a separate, approval-gated production deploy; **do not open one without
 > explicit host approval**, even if staging looks ready.
-> **No open PRs stacking on `staging` right now** — PR #73 and #74 (this session's two) both merged
-> cleanly on 2026-07-08 and their branches are deleted. If you're starting fresh work, cut a
-> normal feature branch from `staging` (see below); there's no PR stack to branch from.
+> **No open PRs on `staging` right now** — this session's three all merged to `staging`: **PR #75**
+> (My Portfolio + Overview overhaul: Portfolio Heatmap, sector data, detail-pane rework, tailing),
+> **PR #76** (mobile fixes), and the **plans/ folder reorg** (date-prefixed filenames). Branches are
+> cleaned up. Cut a normal feature branch from `staging` for new work.
 > Migrations run to **060 on `staging`**, applied on **both PROD and sandbox** (058 is PROD-only —
 > sandbox has no `tiers`/`profiles` tables to apply it to; this is a known, permanent gap, not
-> pending work). **060 (`risk_config.max_option_position_pct`, default 5) was already applied to
-> both DBs this session** — no pending SQL.
+> pending work). **No new migration this session** — but the previously-empty **`ticker_sector_map`**
+> table was **seeded from Finnhub (53 held/tracked tickers → market sector) on BOTH PROD and sandbox**
+> (see Current Status; taxonomy is Finnhub's, to be refined in the data-feeds work).
 > `app_config.ibkr_live_trading_enabled` = **`0` on both PROD and sandbox** (last confirmed 2026-07-05).
 > If migrations stop well short of 060 you are on a stale checkout, re-sync.
 > **First commands every session:** `git fetch origin && git checkout staging && git pull --ff-only`.
-> Sanity check: `supabase/migrations/` should go up to `060_risk_config_max_option_position.sql`, and
-> `docs/design-system/CONTRIBUTING.md` should exist — if either is missing, you're on a stale
-> checkout. Then **cut a feature branch** before making any change:
+> Sanity check: `supabase/migrations/` should go up to `060_risk_config_max_option_position.sql`,
+> `docs/design-system/CONTRIBUTING.md` should exist, and `plans/` files are now **date-prefixed**
+> (`YYYYMMDD_<name>`, e.g. `plans/20260627_macro_dashboard_spec.md`) — if any is missing, you're on a
+> stale checkout. Then **cut a feature branch** before making any change:
 > `git checkout -b claude/<short-feature-name>`. **Never commit directly to `staging`** — work on
 > the branch, push it, open a PR back to `staging` (host merges/approves).
 > (Note: `memory/` lives in local `~/.claude/`, NOT in the repo — never reference it in a prompt meant
@@ -44,111 +46,53 @@
 
 ---
 
-## Current Status — admin nav cleanup + macro regime fix + My Portfolio redesign (handoff 2026-07-08)
+## Current Status — Portfolio Heatmap, My Portfolio overhaul, mobile fixes, plans reorg (handoff 2026-07-09)
 
-**This session merged two PRs to `staging` (both branches now deleted), fixed a critical sandbox RLS
-advisory, added migration 060, and — for the first time — verified `apps/web` live in a real browser
-against a real subscriber account (the auth gap that blocked the prior three sessions is resolved,
-see the last bullet).** Everything is on `staging` only, NOT production.
+**Everything this session is on `staging` only, NOT production.** Three things merged to `staging`
+(PR #75, PR #76, plans-folder reorg); all branches cleaned up. No new migration, but the empty
+`ticker_sector_map` table was seeded (see below).
 
-**[PR #73](https://github.com/claudiachez/stw-companion/pull/73) — admin nav cleanup + macro regime cross-device fix:**
-1. Removed the admin **Limits page** (nav item + route + the orphaned `apps/admin/src/features/limits/LimitsPage.tsx`).
-   Risk-limits config is per-subscriber (web Settings + My Portfolio); the editor has no use for its
-   own book's limits. Shared `RiskConfigForm`/`ViolationsSummary`/`LimitsPanel` untouched.
-2. Moved the **Design System** gallery out of the admin nav bar into the account (hamburger) menu —
-   new `showDesignSystemLink` prop on `Layout` (mirrors the web-only Settings link); route kept.
-3. **Macro "Market Regime" now reads the same on web and admin.** Root cause: the 5D trend engine kept
-   a per-BROWSER localStorage history and the two sites are separate domains, so each accrued a
-   different history → different 5D deltas / regime-direction words. `useMacroTrendHistory` now reads
-   the shared `macro_daily_snapshots` table; `macro-snapshot.ts` TwelveData fetches are paced ≤8/65s
-   (an unpaced burst 429'd every series past the 8th → the null trend/vol/credit scores in stored
-   rows; timeout raised 60→120s); `macro-events.ts` copied into `apps/admin/netlify/functions` (admin's
-   Event Risk card was hitting a 404/SPA-fallback → JSON parse error). **⚠️ The 5D deltas stay flat
-   until ≥~6 good snapshot rows accrue** — PROD had 2 rows at handoff; the *divergence* is fixed
-   immediately (both sites read one table), the *data* fills in over trading days.
+**[PR #75](https://github.com/claudiachez/stw-companion/pull/75) — Portfolio Heatmap + My Portfolio / Overview overhaul:**
+- **Portfolio Heatmap** (the last open Macro-spec item) — a shared squarified-treemap component
+  (`packages/ui/src/components/PortfolioHeatmap.tsx`; pure `squarify` util in `@stw/shared` + tests, no
+  charting lib) on BOTH Stock Picks Overview (`PortfolioDashboard`) and My Portfolio Overview. Box ∝
+  weight, color ∝ performance. Color modes **Today | Total** (Today only where a live day-change feed
+  exists — Stock Picks yes, My Portfolio no); grouping **All | Basket | Sector**, each grouped mode
+  drawing a labeled header per block.
+- **Sector data now exists.** `ticker_sector_map` was empty (that was the "no sector data yet /
+  UNEVALUATED" everywhere) — seeded from Finnhub `profile2` (53 held/tracked tickers → market sector)
+  on **PROD + sandbox**. Lights up the Risk-tab sector concentration, the detail-pane Sector row, and
+  the heatmap Sector grouping. **Taxonomy is Finnhub's (finer than a clean GICS-11) — to be made
+  authoritative in the data-feeds work (Next Steps #1).**
+- **My Portfolio detail pane** (`PortfolioPositionDetail`) opens for EVERY position (tailed or not);
+  market **sector badge** next to the ticker; all tailed-pick info (trader · basket · conviction +
+  tier badge · you-vs-STW sizing) grouped on one Tailing row with a compact ↗ link to STW's position.
+- **Tailing tab**: oversized vs undersized now DISTINCT colors (amber vs blue) via the shared
+  `sizingTone` helper; a diverging sizing bar per row; full-width (dropped the blank-right-half cap).
+- **Settings** `FormRow` (stacked): reserve the prefix slot so `$`-prefixed and suffix-only inputs
+  align down a column; hint indented under the input.
 
-**[PR #74](https://github.com/claudiachez/stw-companion/pull/74) — My Portfolio redesign (`packages/ui/src/features/portfolio/` + `.../limits/`):**
-split the page into an `Overview / Positions / Risk / Tailing` sub-nav (`SubNav`); KPI declutter
-(consistent hero/qualifier, `91% / 9%` ratio, clickable alert chips, Top Movers); a reworked Risk tab
-(NEAR/UNEVALUATED tiers, option cap, per-concept explanations, non-collapsible); the detail pane
-converged onto the shared `DetailPane`; bidirectional pick↔execution cross-linking; Positions-table
-cleanup (drop Return, add Weight %, group-by-default, Type = Shares/Call/Put). Durable rules are in
-the sections below (UI consistency; Decisions locked — risk limits). **§4 multi-trader tailing is
-deferred (host)** — the Tailing tab + detail pane are built over a trader array so a real link table
-drops in later without rework; only STW is wired today.
+**[PR #76](https://github.com/claudiachez/stw-companion/pull/76) — mobile (≤390px).** Audited every
+subscriber + admin page; the app was already largely mobile-solid. Two real bugs fixed: `HoldingRow`
+badge overlap (long basket/action badges overran the metric column → dropped on tight rows, `compact ||
+isMobile`) and the admin header nav sliding under the IBKR badge (nav now scrolls horizontally via a new
+`.hide-scrollbar` util in `tokens.css`).
 
-**Sandbox RLS "critical" advisory — fixed.** `holdings`/`signals`/`conviction_comments`/`run_log`/
-`holding_transactions` had RLS disabled on sandbox; enabled it replicating PROD's exact policies
-(authenticated read; writes locked to the editor email; service-role bypasses). Verified all five
-`relrowsecurity=true` on sandbox. The remaining advisor entries (2 SECURITY DEFINER views —
-`run_log_latest`/`recent_changes`; function `search_path` warnings) are **intentional/minor and match
-PROD — leave them.**
+**plans/ folder reorg** — every file (and `prod_import/`) date-prefixed `YYYYMMDD_<name>` by its git
+add-date; folder-internal cross-links updated. Provenance comments in applied migrations + component
+header comments still point to old names (historical build-notes; deliberately not chased — editing
+applied migrations is inappropriate).
 
-**Migration 060** (`risk_config.max_option_position_pct`, default 5) — a separate, typically-tighter
-cap on any single underlying's OPTIONS exposure. **Already applied to PROD + sandbox this session**
-(column verified present on both); no pending SQL.
-
-**`apps/web` live verification is now UNBLOCKED — this was the #1 recurring blocker for 3 sessions.**
-How it was solved (repeatable): the editor account is Google-OAuth-only (no password), and the preview
-browser blocks the OAuth redirect (localhost-only). So a temporary bcrypt password was set on
-`auth.users` via SQL, used to log into the local `apps/web` dev server, then **reverted to NULL** (the
-account is exactly as before — still OAuth-only). That account is `premium`/`approved` and owns 25
-synced `user_positions`, so it renders a fully-populated My Portfolio + Risk tab — the canonical
-live-verification account. `apps/web/.env.local` (gitignored; PROD Supabase URL + anon key) was created
-so the local dev server can authenticate. **Every My Portfolio + Risk-tab change this session was
-verified in-browser against this real book** (all four tabs, filter scoping, NEAR/BREACH tiers, tailing
-deltas, detail pane, both cross-link directions). See Next Steps #1 for how to re-run it.
-
-**Design system status (context, not this session's work): fully rolled out, not queued.** The
-"Design System" section further down in this file still described a raw-CSS-variable table as the
-"queued" plan — that was stale; the full token + primitive system (`packages/ui/src/primitives/`,
-`packages/ui/src/styles/tokens.css`, `packages/shared/src/constants/tokens.ts`, an eslint rule with
-zero baseline) shipped repo-wide before this session started. See `docs/design-system/CONTRIBUTING.md`
-for the actual current source of truth.
-
-**Previous session's actual code work: a host-approved UX proposal, then a full build, for
-Settings/My Portfolio**, landed as [PR #69](https://github.com/claudiachez/stw-companion/pull/69)
-(at the time, stacked on the still-open PR #67 — both have since merged to `staging`, see Current
-Status above). Full proposal at
-[`plans/my-portfolio-settings-redesign-proposal.md`](plans/my-portfolio-settings-redesign-proposal.md),
-reviewed and approved by the host before any code was written (standing practice worth repeating for
-similarly-sized UI changes — presenting the proposal first surfaced a real ambiguity, "how exactly do
-Gross Exposure/Sector Concentration render on My Portfolio", that would have been a wrong-guess
-otherwise). What shipped:
-- **Settings now holds only account setup.** IBKR Connection + a pure `RiskConfigForm` (thresholds
-  only, no sync button, no violation display) in a 2-column layout. One Sync button total (on the
-  Connection card).
-- **`LimitsPanel` split**: `RiskConfigForm` (Settings, both apps) stays; a new collapsible
-  `ViolationsSummary` (`packages/ui/src/features/limits/ViolationsSummary.tsx` — gross-exposure
-  progress bar, breach-only concentration rows with a "show all" expander, honest "Unmapped (no
-  sector data yet)" labeling) moved to **My Portfolio**, gated by a new `canUseLimits` capability
-  (wired via a `PortfolioRoute` wrapper in apps/web, same pattern as `PicksRoute`'s `canViewHistory`;
-  admin gets it unconditionally). Admin's Limits tab now composes both pieces via a slimmed
-  `LimitsPanel.tsx`.
-- **Ticker click on My Portfolio opens an own-position detail pane**
-  (`packages/ui/src/features/portfolio/PortfolioPositionDetail.tsx`) instead of navigating to STW's
-  tracked position — tailing status vs. STW with an explicit "View STW's tracked position →" link
-  (the old default-click behavior, now opt-in), a per-ticker risk/regime rollup, Open P&L (real) /
-  Closed P&L ("coming soon" — the subscriber Flex sync still only returns open positions, see Next
-  Steps #7 below, unchanged). Follows `PicksView.tsx`'s list+detail contract: desktop resizable split,
-  mobile full-screen swap.
-- **Four value-adds** on My Portfolio, all reusing data already flowing in (no new pipelines): sizing
-  delta vs. the tailed pick ("You: X% · STW: Y%"), a declining-STW-conviction alert (reuses the
-  existing `useConvictionChanges` batch classifier, filtered to tailed tickers), an advisory
-  regime note under the Equity:Options card (same `regimeGate()`/STW→IWM proxy as the admin's
-  `RegimeLight`, same "advisory, not a trade signal" framing), and a stale-sync banner past 24h.
-- **Verified:** `pnpm -r typecheck` (all 4 workspaces) and `pnpm -r test` (187/187, `@stw/shared` —
-  no logic changed, this was UI-only) both green. `ViolationsSummary`/`RiskConfigForm` verified live
-  in-browser via apps/admin (shares the same components) — collapse/expand, gross-exposure bar, empty
-  states, no console errors, both desktop and 390px mobile.
-- **NOT verified: apps/web itself.** No real subscriber credentials were available in that session's
-  environment, and apps/web points at the production Supabase project, so login wasn't attempted —
-  the My Portfolio detail pane, the split/mobile-swap wiring, and the four value-add banners are
-  typechecked but have never been seen rendering in a real browser. **This is still the single
-  biggest confidence gap on `apps/web`** as of 2026-07-08 — carried forward through two more
-  sessions' worth of changes to this same app without ever being resolved, since none of them had
-  real subscriber credentials either. Whoever has access to a real subscriber login should do this
-  first.
+**`apps/web` + `apps/admin` live-verification recipe (reused this session — the way to see either app
+render):** the editor account `cc@claudiachez.com` is Google-OAuth-only, and the preview browser blocks
+the OAuth redirect. To log into a local dev server, temporarily set a bcrypt password via SQL
+(`update auth.users set encrypted_password = crypt('<tmp>', gen_salt('bf')) where email =
+'cc@claudiachez.com'`), sign in with email+password, then **revert immediately** — to **NULL** on PROD
+(it's OAuth-only), or to the **captured original hash** on sandbox (it HAS a password; `select
+encrypted_password` first, restore it verbatim). `apps/web/.env.local` (gitignored; PROD URL + anon key)
+already exists; `VITE_FINNHUB_KEY` is empty there but present in `apps/admin/.env.local` + `apps/web/.env`.
+Everything this session was verified in-browser at 390px + 1280px against the real book (both apps);
+password/hash restored exactly each time.
 
 **Previous handoff (2026-07-05) — TwelveData rate-limit bug fixed + shipped to production, unchanged
 since.** This session found the REAL reason the per-ticker regime badge never rendered: it
@@ -174,7 +118,7 @@ Ingestion section for the durable rule), processed the missed Episode 29 webinar
 verbatim portfolio-update archive step to `stw-friday-weighting`. None of this touched
 `packages/`/`apps/`/`supabase/migrations/` — see Data Ingestion below if picking this up, otherwise
 skip straight to Next Steps. The Macro tab's full v2 rebuild (spec:
-[`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md)) is now **feature-complete and
+[`plans/20260627_macro_dashboard_spec.md`](plans/20260627_macro_dashboard_spec.md)) is now **feature-complete and
 QA-verified on `staging`** — all 11 modules, including the two that were previously deferred (P2 5D
 trend engine, P3 Event Risk) and Sector Rotation. Read the spec first if extending any module.
 
@@ -274,7 +218,7 @@ blended — **Open** shows Shares/Options return + lot; **Closed** shows per-ass
 contribution. `closedPnlPct` + `closedPnlContribution` + `hasClosedPnl` in `@stw/shared`.
 
 **Post-import holdings fix (Next Step #2) DONE ✅ on SANDBOX:**
-- **`last_action`/`action_date` derived from each ticker's latest diary event** (`plans/post_import_holdings_fix.sql`).
+- **`last_action`/`action_date` derived from each ticker's latest diary event** (`plans/20260618_post_import_holdings_fix.sql`).
   Same-day conversion ties (ADEA/CXDO/FIVN/GDYN/SHLS) resolve to the keep-open `New`; `Expired` →
   `Closed` at the holding level (last_action has no "Expired"). (At import time AMZN/HOOD/TSLA had no
   legs and were skipped — but that was a transient state, NOT a rule; **the host has since added real
@@ -295,10 +239,10 @@ contribution. `closedPnlPct` + `closedPnlContribution` + `hasClosedPnl` in `@stw
   Conviction on PROD is left to the routines (some cores not yet tier 5).
 - **SANDBOX (`uolabcgbnrkhzpwuvzlk`):** same scripts + the revert all applied. Admin dev `.env.local` →
   sandbox, so **localhost reads/writes the sandbox directly**. 25 tickers / 42 legs.
-- **PROD import gotchas (baked into `plans/prod_import/*` + the SQL files):** (1) PROD's STW
+- **PROD import gotchas (baked into `plans/20260619_prod_import/*` + the SQL files):** (1) PROD's STW
   `trader_id` = `64a779f9-13ba-4cb4-824b-d70dcab3a49b` (sandbox = `9ec36b89-…`); seeds now resolve the
   trader **by name**. (2) The Supabase SQL editor threw "Failed to fetch" on the one big import — it was
-  split into 9 small files in **`plans/prod_import/`** (run `1_wipe` → `8_legs` → `9_weights` in order).
+  split into 9 small files in **`plans/20260619_prod_import/`** (run `1_wipe` → `8_legs` → `9_weights` in order).
   (3) The wipe deletes **all** legs (PROD carried 28 stale ones from the old 029/030 system) with the
   `trg_leg_transactions_sync` trigger disabled during the delete.
 
@@ -320,7 +264,7 @@ NOT touch conviction; the 6/18 stars OSS/VPG/SYNA/VIAV/NBIS/ENS/AMKR/LEU/AMZN/TS
 **Decisions locked — admin IBKR trading (host 2026-07-03):** real order placement is **admin-only,
 local-proxy-only, single-account** — extending it to arbitrary subscribers is explicitly out of scope
 without a separate legal/compliance review and a different integration entirely (IBKR's Client Portal
-Web API, or Alpaca's OAuth trading API per `plans/mobile-transition.md`); don't build toward it
+Web API, or Alpaca's OAuth trading API per `plans/20260524_mobile-transition.md`); don't build toward it
 incrementally. **Legs stay weight-only (%) forever** — real share/contract quantities are never derived
 from weight and are always entered directly at order time (there is no plan to add share/contract
 counts to the `legs`/`leg_transactions` schema). A confirmed broker fill is the only thing allowed to
@@ -360,10 +304,11 @@ evaluated** — that was the exact tautology bug found and fixed (gross exposure
   option / sector) carries a one-line what-and-why explanation. Exceptions-first is the resting view
   (breach + near + unevaluated shown; "Show all" reveals the OK rows).
 
-**New plan docs (`plans/`):** `legs_event_sourcing_redesign.md` (spec) · `import_open_positions.sql`
-(clean open-position import) · `post_import_holdings_fix.sql` (Next Step #2 seed) ·
-`revert_legacy_category.sql` (drops the bad Legacy category) · `040_sandbox_verify.sql` (trigger test) ·
-`legs_inspect.sql` (inspect legs/diary) · `zzadea_populate.sql` (seed test fixture).
+**Event-sourcing plan docs (`plans/`, now date-prefixed):** `20260618_legs_event_sourcing_redesign.md`
+(spec) · `20260618_import_open_positions.sql` (clean open-position import) ·
+`20260618_post_import_holdings_fix.sql` (post-import seed) · `20260618_revert_legacy_category.sql`
+(drops the bad Legacy category) · `20260618_040_sandbox_verify.sql` (trigger test) ·
+`20260618_legs_inspect.sql` (inspect legs/diary) · `20260618_zzadea_populate.sql` (seed test fixture).
 
 **Tooling:** `pnpm` not on PATH — use `corepack pnpm …` or `~/.local/bin/pnpm`. No local Postgres (can't
 run DDL locally — apply migrations via the Supabase SQL editor). Prod service key (read-only checks) at
@@ -388,8 +333,8 @@ run DDL locally — apply migrations via the Supabase SQL editor). Prod service 
   (`action_date` preserved); Closed/Expired terminal.
 - **transcripts:** conviction note — routine-owned, **mutable both ways on an explicit signal incl.
   promoting a Legacy (0)**; never inferred from sizing.
-- **One-time SQL applied (PROD + sandbox):** `plans/conviction_618_stars.sql` (8 stars → tier 5;
-  AMZN/TSLA stay 0) + `plans/fix_fivn_shares_weight.sql` (FIVN shares lot 3.5→2.5, net-neutral 6.0%).
+- **One-time SQL applied (PROD + sandbox):** `plans/20260619_conviction_618_stars.sql` (8 stars → tier 5;
+  AMZN/TSLA stay 0) + `plans/20260619_fix_fivn_shares_weight.sql` (FIVN shares lot 3.5→2.5, net-neutral 6.0%).
 - **PENDING (host) — NOT a repo task, doesn't affect the apps:** the stale **`gradoxx-daily-summary`**
   Cowork scheduled task (duplicates morning PART 1's Graddox) is an **orphaned backend object** — it
   still fires ~9am but has no working delete UI (absent from Cowork→Scheduled; its task page 404s; the
@@ -448,25 +393,31 @@ it, shipped it to production, then separately investigated + fixed a live data-i
 
 ## Next Steps
 
-0. **A `staging → main` production promotion is PENDING and approval-gated.** `staging` is ~69 commits
-   ahead of `main` — all of this session's work (PRs #73/#74, migration 060) plus the prior Settings
-   redesign (#67/#69/#72) are on `staging` only, NOT production. Do **not** open a `staging → main` PR
-   without explicit host approval. When approved, note migration 060 is already on PROD, so no DB step
-   is needed for the promotion itself.
+0. **A `staging → main` production promotion is PENDING and approval-gated.** `staging` is ~75 commits
+   ahead of `main` — everything since the 2026-07-05 promotion (PRs #75/#76, the plans reorg, and all
+   prior unpromoted work) is on `staging` only, NOT production. Do **not** open a `staging → main` PR
+   without explicit host approval. No pending DB step for the promotion itself — migration 060 **and**
+   the `ticker_sector_map` seed are already on PROD.
 
-1. **`apps/web` live verification is UNBLOCKED — reuse the recipe when touching subscriber UI.** No
-   longer an open blocker (see Current Status). To re-verify in a browser: create `apps/web/.env.local`
-   with `VITE_SUPABASE_URL`=PROD + its anon key (get via the Supabase MCP `get_publishable_keys`);
-   start the web dev server (launch.json `web` config, `autoPort` on); log in as the editor account by
-   temporarily setting its `auth.users.encrypted_password` via SQL (`crypt('<tmp>', gen_salt('bf'))`),
-   signing in with email+password in the preview browser, then **immediately reverting the password to
-   NULL** (it's an OAuth-only account — leave it exactly as found). That account is `premium` with 25
-   synced positions. Market-data keys can stay blank (portfolio renders from stored `user_positions`).
+1. **★ NEXT SESSION (host-chosen) — data feeds + sector categories: inventory the APIs, then propose a
+   plan.** Fix "all the data feeds, sector categories, etc." properly. **Start with an inventory**, not
+   code: what APIs we have access to (Finnhub, TwelveData, IBKR Flex/proxy, Anthropic), each one's
+   rate/quota limits and what it does/doesn't serve, what we actually need, and where the current gaps
+   are — then propose a plan and get it approved before building. Concrete threads to fold in:
+   - **Sector taxonomy is a stopgap.** `ticker_sector_map` was seeded this session from Finnhub
+     `profile2` (finer-grained than a clean ~11 GICS/market-sector set, e.g. "Semiconductors" /
+     "Electrical Equipment"). Decide the canonical taxonomy + a durable source & refresh path (a new
+     row appears whenever a new ticker is added — nothing repopulates the map automatically today).
+   - **TwelveData free-tier pacing** (1 credit/symbol, ≤8/min) is the constraint behind the slow
+     cold Macro/Picks loads and the flaky 5D engine — see Conventions → Macro data sources.
+   - **`macro_daily_snapshots` PROD writer is a stale pre-instrumentation build** (see #6) — the
+     data-feeds pass should confirm/repair it.
 
-2. **PR #67's own deferred items — still not run, independent of the merge:** Item 0's live cron
-   verification and Item 3's `regime_daily` backfill (see
-   [`plans/integrity-guardrails-report.md`](plans/integrity-guardrails-report.md) for exact status).
-   Merging the PR didn't resolve these; they're still open work.
+2. **★ ROADMAP (host, formally added this session) — integrity guardrails.** Spec:
+   [`plans/20260706_integrity-guardrails.md`](plans/20260706_integrity-guardrails.md); status report:
+   [`plans/20260706_integrity-guardrails-report.md`](plans/20260706_integrity-guardrails-report.md).
+   Two items were never run and are independent of any merge: **(a)** the live cron verification and
+   **(b)** the `regime_daily` backfill. Pick this up as the step after / alongside the data-feeds work.
 
 3. **Visually confirm the regime badge actually renders** now that the rate-limit fix is live. Open a
    held ticker's detail page (or the Picks list at normal width) and check for the trend-structure
@@ -482,7 +433,7 @@ it, shipped it to production, then separately investigated + fixed a live data-i
    lookup doesn't find a previously-placed order from a new connection.
 
 5. **Phase 4 admin Manage area, Parts B/C — still not built** (Part A, Config, shipped 2026-07-03).
-   Spec: [`plans/phase4_admin_manage.md`](plans/phase4_admin_manage.md). **Categories CRUD**
+   Spec: [`plans/20260619_phase4_admin_manage.md`](plans/20260619_phase4_admin_manage.md). **Categories CRUD**
    (delete-guarded — block or reassign-to-Uncategorized on delete) and **Traders** (read-only
    recommended — only 2 seeded, FK'd everywhere, high-risk/low-value to make editable). No migrations
    expected.
@@ -496,12 +447,15 @@ it, shipped it to production, then separately investigated + fixed a live data-i
    confirm a fresh snapshot row carries a non-null `engine_version` + real trend/vol scores AND a
    `run_log` row (`run_type='macro-snapshot'`) before trusting the 5D engine.
 
-7. **Macro Dashboard — remaining roadmap item** (spec: [`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md)).
-   All 11 modules are built and in production. The one item left from the spec:
-   - **Portfolio Heatmap** — treemap block on `PortfolioDashboard`, box ∝ `current_weight`,
-     Today/Total + By Basket/All toggles. Spec § "Phase 4: Portfolio Heatmap".
+7. **Macro Dashboard — COMPLETE.** All 11 modules + the Portfolio Heatmap (shipped this session on
+   both Stock Picks Overview and My Portfolio) are done. Nothing left from
+   [`plans/20260627_macro_dashboard_spec.md`](plans/20260627_macro_dashboard_spec.md).
 
-8. **Overview/experience enrichment (host-requested, queued).** Stop the click-each-ticker experience:
+8. **BACKLOG — Overview/experience enrichment + multi-trader tailing (host-requested, no firm order):**
+   - **§4 multi-trader tailing** (deferred). A real data-model change — a position ↔ pick link table +
+     a migration + a host-decided conflict rule. The UI is already built over a trader array (read
+     `PortfolioPage.tsx`'s `FOLLOWED_TRADERS` / `pickMap.traders` and `PortfolioPositionDetail.tsx`);
+     only STW is wired. **Present a proposal + get the conflict rule decided BEFORE building.**
    - **Transcripts library tab** — a NEW subscriber-facing **episode recap** (host's *trading psychology* +
      that episode's *per-ticker commentary*). **NOT** the local methodology `.md` files (apps never read those).
      Needs a new `webinars` table written by `stw-transcripts` + a new tab.
@@ -558,9 +512,14 @@ apps/
   admin/                     admin shell: no paywall, Edit + Users + Config + IBKR (pricer + order placement)
     ibkr_proxy.py            local IBKR writer (run on your machine, not deployed)
     netlify.toml             (Netlify base dir = apps/admin)
-supabase/migrations/         001..059 — single source of truth for DB schema/RLS
+supabase/migrations/         001..060 — single source of truth for DB schema/RLS
+plans/                       specs, runbooks & one-off SQL; files are date-prefixed YYYYMMDD_<name>
 CLAUDE.md                    this file
 ```
+
+**`plans/` naming (convention, 2026-07-09):** every file in `plans/` is prefixed with its
+creation date, `YYYYMMDD_<name>` (e.g. `20260627_macro_dashboard_spec.md`), so the folder reads
+chronologically. Name any new plan doc the same way.
 
 ### Layer rules (keep them honest)
 - `@stw/ui` takes everything via **props/context** — no app-specific imports, no env,
@@ -686,6 +645,7 @@ repo**. Know who writes what before you reason about freshness or "why is this r
 | `run_log` | **the routines** | ingestion audit + high-water mark; newest `digest` → "Latest Portfolio Changes" |
 | `user_positions` | **web `ibkr-flex.ts`** | each subscriber's own IBKR account; user-owned RLS |
 | `profiles` / `tiers` | auth + Settings | per-user creds/preferences, tier paywall |
+| `ticker_sector_map` | **manual/one-off seed** (no auto-writer) | ticker → market sector, read by `useSectorMap` (Risk-tab sector concentration, detail-pane Sector, heatmap Sector grouping). Seeded 2026-07-09 from Finnhub `profile2` (53 tickers, PROD+sandbox) — **stopgap taxonomy; nothing repopulates it when a new ticker appears.** Making it authoritative + auto-refreshed is the data-feeds work (Next Steps #1) |
 
 "The routines" = three cowork cron tasks that ingest Discord into Supabase — **the primary writers of
 `holdings`, `signals`, `conviction_comments`, `run_log`.** They are not in this repo (they live at
@@ -764,7 +724,7 @@ never the requested/guessed price. Gated by `canEdit` + `app_config.ibkr_live_tr
 **This is explicitly admin-only, local-proxy-only, single-account.** Do not extend it to
 arbitrary subscribers without a separate legal/compliance review — that would need an entirely
 different integration (IBKR's Client Portal Web API, or Alpaca's OAuth trading API per
-`plans/mobile-transition.md`), not more gating on this one. `IB_PORT` is an env var
+`plans/20260524_mobile-transition.md`), not more gating on this one. `IB_PORT` is an env var
 (`IB_PORT=4002` for paper mode) so testing never requires editing the file.
 
 ### Subscriber — Flex Query portfolio sync
@@ -869,7 +829,7 @@ active filter (closed hidden by default). The FilterBar count shows `N of {total
   appear in the subscriber-facing digest (`run_log.digest` → "Latest Portfolio Changes"). The public digest
   carries only **confirmed** changes; review-flags go to `run_log.summary` / the chat output (admin-gated).
 - **Ticker Detail = four non-overlapping surfaces, one job each** (contract:
-  [`plans/commentary_vs_transaction_boundary_spec.md`](plans/commentary_vs_transaction_boundary_spec.md)):
+  [`plans/20260625_commentary_vs_transaction_boundary_spec.md`](plans/20260625_commentary_vs_transaction_boundary_spec.md)):
   **Highlight box** = `holdings.summary` (durable narrative paragraph) · **Key Points** = `holdings.bullets`
   (durable supporting detail — receipts + angles, **de-duped vs the summary**, never restating it; §2A) ·
   **Commentary** = `conviction_comments` (dated episodic views) · **Transaction History** =
@@ -926,7 +886,8 @@ active filter (closed hidden by default). The FilterBar count shows `N of {total
   tracked position (`PortfolioPositionDetail.tsx`) — the STW-position view is still reachable, but
   as an explicit named link inside the pane, not the default click target. Apply the same instinct to
   any future page that lists a subscriber's own data but is tempted to default-link into STW's data
-  instead.
+  instead. **Every row opens the pane, tailed or not** (host, 2026-07-09) — don't gate the detail on
+  whether STW tracks the ticker; an untailed position still has its own P&L / sector / risk to show.
 - **Onboarding/setup content collapses once its job is done — never permanent prime real estate**
   (host decision, 2026-07-08, Settings redesign). The IBKR "How to connect" 7-step walkthrough used
   to render unconditionally even for an already-connected returning user; it's now collapsed behind
@@ -955,7 +916,11 @@ active filter (closed hidden by default). The FilterBar count shows `N of {total
   Stock Picks (`HoldingDetail`) and My Portfolio (`PortfolioPositionDetail`) share header + badge
   strip + 3-column metric block + stacked section cards. A new detail surface copies this, never a
   bespoke card stack. Reach for `EmptyState` for any "coming soon"/no-data block (icon + one line),
-  never a paragraph of apology prose.
+  never a paragraph of apology prose. **On the My Portfolio pane specifically** (host, 2026-07-09):
+  the header badge is the ticker's **market sector** (universal to the position); everything about the
+  *tailed pick* — trader badge · basket · conviction + tier badge · you-vs-STW sizing · a compact ↗
+  link to STW's tracked position — is grouped onto ONE row in the Tailing section, not scattered into
+  the header. Don't spread pick metadata across the header again.
 - **The pick ↔ execution loop is bidirectional and must stay so.** Stock Picks detail → "View your
   position →" (shown only when the signed-in subscriber holds it, gated `!isAdmin`, via
   `/portfolio?ticker=`) and My Portfolio detail → "View STW's tracked position →" (via
@@ -970,6 +935,18 @@ active filter (closed hidden by default). The FilterBar count shows `N of {total
   real values; surface a genuine gap as an `EmptyState`, not a table of dashes.
 - **A "Type" column shows the instrument kind (Shares / Call / Put), not the direction.** In a
   long-only book "Long" on every row is near-zero information; the kind is what distinguishes legs.
+- **Position sizing vs a tailed trader has TWO distinct tones, never one** (host, 2026-07-09):
+  **oversized** (you hold MORE than the trader → concentration caution) = **warning/amber**;
+  **undersized** (you hold less → informational) = **info/blue**; within ±0.5pp = neutral "in line".
+  One source of truth: `sizingTone()` in `@stw/shared` (returns the label + `var(--status-*)` token
+  refs) — used by both the Tailing tab (`DeltaChip`/`SizingBar`) and the detail pane. Don't render
+  divergence as a single amber-for-both chip again.
+- **The Portfolio Heatmap is a shared, library-free treemap** (`packages/ui/src/components/PortfolioHeatmap.tsx`,
+  built on the pure `squarify` util in `@stw/shared`): box area ∝ weight, color ∝ performance
+  (`color-mix` on `--pnl-gain`/`--pnl-loss`, Today ±3% / Total ±25% full-saturation). Offer the
+  **Today** color mode only where a live day-change feed exists (Stock Picks yes; My Portfolio no —
+  stored marks only). Grouping is **All | Basket | Sector**, and every grouped mode draws a labeled
+  header per block so it's clear which cluster is which. Feed `sector` from `useSectorMap`.
 
 ---
 
@@ -977,7 +954,7 @@ active filter (closed hidden by default). The FilterBar count shows `N of {total
 
 **Fully rolled out repo-wide, not queued** — the note that used to live here calling this "queued
 and spec'd" was stale; the build described in
-[`plans/stw-design-system.md`](plans/stw-design-system.md) (4 phases: audit → tokens → core
+[`plans/20260706_stw-design-system.md`](plans/20260706_stw-design-system.md) (4 phases: audit → tokens → core
 components → enforcement) shipped completely before the 2026-07-08 session, including an eslint
 rule (`no-restricted-syntax` for literal colors/raw font-sizes) with **zero baseline exceptions
 left**. **Read [`docs/design-system/CONTRIBUTING.md`](docs/design-system/CONTRIBUTING.md) first** —
