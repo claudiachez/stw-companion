@@ -125,22 +125,33 @@ Mostly already done on `staging` (pacing helpers, run_log instrumentation). Rema
 
 ---
 
-## Part 4 — Decisions needed from the host BEFORE building
+## Part 4 — Decisions (host-answered 2026-07-07) ✅
 
-**Q1. Canonical sector taxonomy.** Keep Finnhub's finer 13+ labels, or fold to clean GICS-11
-(+ ETF/Cash)? (Recommendation: GICS-11 — a concentration limit and a heatmap are only meaningful
-against a small, stable, mutually-exclusive set; 13 drifting labels with singletons defeat both.)
+**Q1. Canonical taxonomy → GICS-11 + ETF + Cash.** Fold the 13 Finnhub labels into the standard 11
+GICS sectors plus explicit ETF and Cash buckets. Stored as a code-level constant in `@stw/shared`.
 
-**Q2. Auto-refresh mechanism.** New scheduled `sector-map-sync` function (recommended), vs. fold the
-sector lookup into the existing out-of-repo routines (they already write `holdings` when a new
-position opens — they could write the sector at the same time), vs. leave it manual.
+**Q2. Auto-refresh → new scheduled `sector-map-sync` Netlify function.** Finds `holdings` tickers
+missing from `ticker_sector_map`, resolves + upserts them, `run_log`-instrumented, in this repo.
 
-**Q3. Ambiguous mappings** (solar / fuel-cell / nuclear-fuel names like ARRY/SHLS/BLDP/LEU): map to
-GICS Energy, Industrials, or Utilities? These don't fold cleanly and the host's mental model should
-drive it, since it feeds the concentration read.
+**Q3. Ambiguous names → use the AUTHORITATIVE MSCI GICS classification per ticker, not a blanket
+default.** (Host: "use framework classification: https://www.msci.com/indexes/index-resources/gics".)
+So each company is assigned the GICS sector MSCI actually places it in — resolved per-name during the
+build, verified where a company's real GICS bucket is non-obvious (e.g. Array/Shoals solar,
+Ballard fuel cells, Centrus/LEU nuclear-fuel). No "default everything clean-energy to X" rule.
 
 **Q4. Promotion timing** for Phase 0 (the `staging → main` deploy that ships the fixed snapshot
-writer) — separate approval, host-gated.
+writer) — still separate, host-gated, not yet given.
+
+### What Q1–Q3 mean concretely for the build
+- **`@stw/shared`:** a `GICS_SECTORS` union of the 11 GICS sectors + `'ETF'` + `'Cash'`; a
+  per-ticker `TICKER_GICS` map for the current book (each held/tracked ticker → its authoritative
+  MSCI GICS sector), plus a Finnhub-label → GICS fallback map for tickers not yet hand-verified.
+  Both unit-tested.
+- **`sector-map-sync` function:** for each `holdings` ticker missing from `ticker_sector_map`, resolve
+  via `TICKER_GICS` first, else Finnhub `profile2` → Finnhub→GICS fallback map; ETFs → `'ETF'`,
+  CASH → `'Cash'`. Upsert; log to `run_log`. Scheduled after close.
+- **Re-seed:** map the existing 53 rows through `TICKER_GICS` (one-off, so history matches).
+- **Risk tab:** `'ETF'`/`'Cash'` excluded from sector-concentration, not counted `unevaluated`.
 
 ---
 
