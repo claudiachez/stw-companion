@@ -6,8 +6,8 @@
  * silently drifts from the daily-append logic):
  *
  *   - Daily mode (default, no query params): computes + upserts just the most
- *     recent trading day for every tracked instrument. Intended to run on a
- *     schedule after market close (added to netlify.toml once verified).
+ *     recent trading day for every tracked instrument. Runs on the cron below
+ *     (`schedule('0 23 * * 1-5', …)`) after market close.
  *   - Backfill mode (`?backfill=1&days=N`): computes + upserts the last N
  *     trading days from whatever history TwelveData returns in one call.
  *     TwelveData's outputsize cap (5000) limits a single call to roughly the
@@ -16,6 +16,14 @@
  *     (each one is its own TwelveData credits, subject to the free tier's
  *     rate limit — see maCache.ts's header comment on that limit). This is
  *     the "spread over multiple quota cycles" approach the operator approved.
+ *
+ * NOTE — once this is a scheduled function, Netlify no longer exposes it over
+ * public HTTP (a scheduled fn only fires on its cron; the UI "Run now" button
+ * sends no querystring, so it only triggers daily mode). Backfill therefore runs
+ * via the CLI against Netlify Dev — `netlify functions:invoke --name regime-daily
+ * --querystring "backfill=1&days=500"` — or a local node harness that calls this
+ * same handler with a synthetic `queryStringParameters`. Both hit the identical
+ * code path; the "one function, one code path" intent is preserved.
  *
  * Deliberately separate from macro-snapshot.ts / macro_daily_snapshots — do
  * not merge this with the Macro Dashboard composite (standing prohibition).
@@ -28,6 +36,7 @@
  * written, error detail — a silent no-op is treated as a defect, not a rest day.
  */
 import type { Handler } from '@netlify/functions';
+import { schedule } from '@netlify/functions';
 import {
   REGIME_GATE_CONFIG, trendStateFromClose, volStateFromVix,
   sma, rocPositive, smaSlopePositive, realizedVolAnnualized, percentileRankOf,
@@ -89,7 +98,7 @@ async function sbInsert(url: string, key: string, table: string, row: Record<str
   } catch { /* run_log is best-effort */ }
 }
 
-export const handler: Handler = async (event) => {
+const handlerImpl: Handler = async (event) => {
   const twelveDataKey = (process.env.VITE_TWELVEDATA_KEY ?? process.env.TWELVEDATA_KEY ?? '').trim();
   const fredKey = (process.env.FRED_API_KEY ?? '').trim();
   const supabaseUrl = (process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? '').trim();
@@ -205,3 +214,11 @@ export const handler: Handler = async (event) => {
     return { statusCode: 500, body: JSON.stringify({ error: detail }) };
   }
 };
+
+// Daily append runs on the schedule; matches the repo's in-code wrapper pattern
+// (macro-snapshot / sector-map-sync), not a netlify.toml `schedule` key. 23:00 UTC
+// weekdays — after the equity close AND after macro-snapshot (21:30) /
+// sector-map-sync (22:00), so FRED + TwelveData have posted the day's values and
+// the three writers don't contend. Backfill mode is NOT reachable this way (see
+// header) — it needs the `?backfill=` querystring, which a scheduled cron never sends.
+export const handler = schedule('0 23 * * 1-5', handlerImpl);
