@@ -22,16 +22,14 @@ export interface FeedRateConfig {
 // Free-tier limits per provider (confirmed 2026-07: see plans/20260707_data_feeds_inventory_and_plan.md).
 // gapMs is the rate window plus a safety margin so a chunk boundary never lands
 // inside the previous window. Values that would gate a realistic batch (TwelveData)
-// are tuned tight; roomy tiers (FRED/Finnhub/Tiingo) rarely reach a second chunk.
+// are tuned tight; roomy tiers (FRED/Finnhub) rarely reach a second chunk.
 export const FEED_LIMITS = {
-  /** 8 credits/min, 1 credit per symbol. */
+  /** 8 credits/min, 1 credit per symbol — the binding constraint (equity closes). */
   twelvedata: { name: 'twelvedata', chunkSize: 8, gapMs: 65_000 },
-  /** ~120 requests/min. */
+  /** ~120 requests/min — macro indices (VIX/VIX3M/US10Y/credit/dollar) + event calendar. */
   fred: { name: 'fred', chunkSize: 100, gapMs: 65_000 },
-  /** ~60 requests/min. */
+  /** ~60 requests/min — live quotes + sector-map-sync profile2. */
   finnhub: { name: 'finnhub', chunkSize: 50, gapMs: 65_000 },
-  /** 50 requests/hour (the binding window for Tiingo's free tier). */
-  tiingo: { name: 'tiingo', chunkSize: 50, gapMs: 3_600_000 },
 } as const satisfies Record<string, FeedRateConfig>;
 
 /** Split a list into consecutive chunks of at most `size`. */

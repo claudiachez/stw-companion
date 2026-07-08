@@ -47,31 +47,34 @@ live/on-load reads; cron cadence for scheduled writers). "Current plan" = the pr
 | Stock Picks | Overview — Sector grouping | `ticker_sector_map` (Supabase) | 1h staleTime | — | — | canonical GICS via `sector-map-sync` | **OK once sync built** (stopgap today) |
 | Stock Picks | List + Ticker Detail — live price/day-change | Finnhub | 60s staleTime | Free | 60/min | — (keep) | **OK** |
 | Stock Picks | Ticker Detail — option leg marks | IBKR local proxy (admin) | on-demand (admin prices) | self-hosted | none | — (keep) | **OK** — admin-only |
-| Stock Picks | Ticker Detail — regime badge | TwelveData daily closes | 1x/day cache | Free | **8/min · 800/day · 1cr/sym** | **Tiingo primary + TD fallback** | resolved by replacement (was CONSTRAINED) |
+| Stock Picks | Ticker Detail — regime badge | TwelveData daily closes | 1x/day cache | Free | **8/min · 800/day · 1cr/sym** | **TwelveData (kept, unburdened)** | improved — freed once indices leave for FRED |
 | **Macro** | Summary / Recap | Anthropic | 2x/day (8am / 4:30pm) | Pay per token | No hard cap | — (keep) | **OK** |
-| Macro | Trend / Score Strip / Banner (equity ETFs) | TwelveData daily closes | 1x/day cache | Free | 8/min · 800/day | **Tiingo primary + TD fallback** | resolved by replacement |
-| Macro | Vol / Stress · Credit · Rates+Dollar (indices) | TwelveData daily closes | 1x/day cache | Free | 8/min · 800/day | **FRED** (VIXCLS / BAMLH0A0HYM2 / DGS10 / DTWEXBGS) | resolved by replacement |
-| Macro | VIX / VVIX live reads | Finnhub → TwelveData fallback | on load | Free | 60/min | **VIX → FRED**; VVIX → TD single call (Stooq last-resort) | resolved (FRED serves the VIX index Finnhub can't) |
-| Macro | Sector Rotation | TwelveData daily closes (constituents) | 1x/day cache | Free | 8/min · 800/day | **Tiingo primary + TD fallback** | resolved by replacement |
+| Macro | Trend / Score Strip / Banner (equity ETFs) | TwelveData daily closes | 1x/day cache | Free | 8/min · 800/day | **TwelveData (kept, unburdened)** | improved — indices off-loaded to FRED |
+| Macro | Vol / Stress · Credit · Rates+Dollar (indices) | TwelveData daily closes | 1x/day cache | Free | 8/min · 800/day | **FRED** (VIXCLS / VXVCLS / BAMLH0A0HYM2 / DGS10 / DTWEXBGS) | resolved by replacement |
+| Macro | VIX / VVIX live reads | Finnhub → TwelveData fallback | on load | Free | 60/min | **VIX → FRED**; **VVIX → accept null** (non-critical, see Part 5) | resolved (FRED serves the VIX Finnhub can't) |
+| Macro | Sector Rotation | TwelveData daily closes (constituents) | 1x/day cache | Free | 8/min · 800/day | **TwelveData (kept, unburdened)** | improved — indices off-loaded to FRED |
 | Macro | GEX / Positioning | Supabase `signals` (morning routine) | 1x/day | — | — | — (keep) | **OK** |
 | Macro | Event Risk | MarketWatch (HTML scrape) | on load | Free scrape | none | **FRED `releases/dates` + static FOMC list** | resolved (retires the scrape) |
-| Macro | 5D trend engine | `macro_daily_snapshots` (← `macro-snapshot` fn) | 1x/day 4:30pm | Free | 8/min · 800/day | writer → **FRED (indices) + Tiingo (equity)** | resolved by replacement + promotion |
+| Macro | 5D trend engine | `macro_daily_snapshots` (← `macro-snapshot` fn) | 1x/day 4:30pm | Free | 8/min · 800/day | writer → **FRED (indices) + TwelveData (equity)** | resolved by rebuild + promotion |
 | **My Portfolio** | Overview — Heatmap (Total color only) | stored marks (Supabase) | on sync | — | — | — (keep) | **OK** — no live day-change feed here by design |
 | My Portfolio | Positions | IBKR Flex Web Service | manual sync | Free | ~1 req / few-min per token | — (keep) | **OK** — open positions only (closed history = Next Steps #9) |
 | My Portfolio | Risk — sector concentration | `ticker_sector_map` | 1h staleTime | — | — | canonical GICS via `sector-map-sync` | **OK once canonical** (ETF/Cash excluded, not `unevaluated`) |
 | My Portfolio | Tailing | Supabase `holdings` | on load | — | — | — (keep) | **OK** |
-| **Signals** | GEX charts | Finnhub + TwelveData | 60s / daily | Free | 60/min · 8/min | Finnhub keep; daily → Tiingo/TD fallback | **OK** |
-| **Backend (scheduled)** | `macro-snapshot` writer | TwelveData (~10 series) | 1x/day wkdays | Free | 8/min · 800/day | **FRED (indices) + Tiingo (equity)**; VVIX → TD | rebuild + promote to schedule it |
-| Backend | `regime-daily` writer | TwelveData (~5 series) | proposed 1x/day | Free | 8/min · 800/day | **FRED (VIX/TNX) + Tiingo (IWM/SPY/QQQ)**; VIX3M stays TD | schedule + backfill |
+| **Signals** | GEX charts | Finnhub + TwelveData | 60s / daily | Free | 60/min · 8/min | — (Finnhub + TwelveData, unchanged) | **OK** |
+| **Backend (scheduled)** | `macro-snapshot` writer | TwelveData (~10 series) | 1x/day wkdays | Free | 8/min · 800/day | **FRED (indices) + TwelveData (equity)**; VVIX dropped | rebuild + promote to schedule it |
+| Backend | `regime-daily` writer | TwelveData (~5 series) | proposed 1x/day | Free | 8/min · 800/day | **FRED (VIX/VIX3M/TNX) + TwelveData (IWM/SPY/QQQ)** | schedule + backfill; VIX3M→FRED fixes `vol_state` |
 | Backend | `sector-map-sync` (proposed) | Finnhub `profile2` | daily, only unmapped tickers | Free | 60/min | — (Finnhub is fine here) | **OK** — fires rarely, a few symbols |
 | Backend | `macro-recap-am/pm` writer | Anthropic | 2x/day wkdays | Pay per token | No hard cap | — (keep) | **OK** |
 
-**Read of the matrix:** every row that was **CONSTRAINED / BROKEN / FRAGILE** is resolved by the
-agreed replacement, not by spending. Macro *indices* → **FRED** (free, no CORS from browser so via a
-proxy); equity daily closes → **Tiingo** (free, 50/hr) with TwelveData demoted to **fallback + VVIX
-only**; Event Risk → **FRED calendar**, retiring the scrape; the 5D-engine writer is rebuilt onto the
-same feeds and starts self-populating once promoted to `main` (see Phase 0 on why promotion is
-required). **No paid tier needed** — revisit only if Tiingo's 50/hr proves tight on real cold loads.
+**Read of the matrix (corrected 2026-07-08 after host review):** every **CONSTRAINED / BROKEN /
+FRAGILE** row is resolved without spending. Macro *indices* (VIX, VIX3M, US10Y, credit, dollar) →
+**FRED** (free, ~120/min; server-only, so via a proxy — no CORS from the browser). Equity daily closes
+→ **TwelveData, kept** — once the indices leave for FRED, TD's 8/min is no longer contended and clears
+the ~90-symbol equity cold burst faster than any free alternative (Tiingo's 50/hr would *stall* that
+burst, so Tiingo was dropped). Event Risk → **FRED release-calendar + static FOMC**, retiring the
+scrape. **VVIX is dropped** (no free source serves it; both scorers already null-tolerate it — see
+Part 5). The 5D-engine writer is rebuilt onto FRED+TD and self-populates once promoted to `main` (Phase
+0 explains why promotion is required). **No paid tier, and only one new key: `FRED_API_KEY`.**
 
 ---
 
@@ -129,7 +132,7 @@ The work splits cleanly into **(A) sector taxonomy**, **(B) feed reliability/ins
   The self-populating fix therefore only starts once promoted to `main` (Next Steps #0, host-gated).
 - **Note:** this is specifically about the *scheduler*. The staging code can be proven correct without
   promoting — hit the staging function URL directly over HTTP (manual invoke isn't cron-gated). NOTE
-  this rebuilds onto FRED+Tiingo in Phase B, so verify the *rebuilt* writer, not just the current one.
+  this rebuilds onto FRED (indices) + TwelveData (equity) in Phase B, so verify the *rebuilt* writer.
   After promotion, confirm a fresh row carries non-null `engine_version` + real trend/vol scores + a
   `run_log` row.
 
@@ -152,23 +155,27 @@ The work splits cleanly into **(A) sector taxonomy**, **(B) feed reliability/ins
 5. **UI:** ensure the Risk tab treats "ETF"/"Cash" as excluded-from-concentration, not `unevaluated`;
    confirm Heatmap "Sector" grouping + detail-pane badge read the canonical labels.
 
-### Phase B — Feed re-platform onto FRED + Tiingo (the real fix, not "keep pacing TwelveData")
-This REPLACES the earlier "verify TwelveData pacing" framing — TwelveData is demoted to fallback + VVIX.
-Build order (host: feeds first):
+### Phase B — Feed re-platform: FRED for indices, TwelveData kept for equity (host-corrected 2026-07-08)
+This REPLACES the earlier "verify TwelveData pacing" framing. TwelveData is **not** dropped — it stays
+the equity-EOD source, unburdened once indices move to FRED. **Tiingo dropped** (its 50/hr stalls the
+~90-symbol equity cold burst; TD's 8/min is faster). Build order (host: feeds first):
 1. **Shared pacing helper** — DONE (`runPaced`/`FEED_LIMITS` in `@stw/shared`, unit-tested). Every feed
-   below routes through it so no provider can re-introduce the unpaced-burst 429 bug.
-2. **FRED proxy + client** — a Netlify `fred.ts` proxy (server-only key, CORS) that the browser hooks
-   call; server writers call FRED directly. Reassign the *index* reads: VIX→`VIXCLS`, US10Y→`DGS10`,
-   credit→`BAMLH0A0HYM2` (real HY OAS, an upgrade over the HYG proxy), dollar→`DTWEXBGS`. Touches
-   `useVolatilityStress`, `useRatesDollar`, `useCreditLiquidity`, and the `macro-snapshot` writer.
+   routes through it so no provider can re-introduce the unpaced-burst 429 bug.
+2. **FRED proxy + client** — a Netlify `fred.ts` proxy (server-only key; browser hooks call it, server
+   writers call FRED directly). Reassign the *index* reads: VIX→`VIXCLS`, **VIX3M→`VXVCLS`**,
+   US10Y→`DGS10`, credit→`BAMLH0A0HYM2` (real HY OAS, an upgrade over the HYG proxy), dollar→`DTWEXBGS`.
+   Touches `useVolatilityStress`, `useRatesDollar`, `useCreditLiquidity`, `macro-snapshot`, `regime-daily`.
+   **VVIX dropped** — pass `null`; `volatilityStressScore`/`riskAppetiteScore` already renormalize.
+   **Bonus:** VIX3M via FRED fixes `regime-daily`'s current `vol_state='UNKNOWN'`.
 3. **Event Risk rebuild** — replace the MarketWatch scrape in `macro-events.ts` with FRED
    `releases/dates` (CPI/PCE/Employment/GDP) + a small static FOMC-date list. Anthropic may phrase
    "why it matters," never source dates (recap grounded-only rule).
-4. **Tiingo equity EOD** — Tiingo primary + TwelveData fallback for SPY/QQQ/IWM/RSP/VEA, sector
-   constituents, and the per-ticker regime badge. VVIX stays a single TwelveData call.
-5. **Verify** after keys + promotion: FRED-backed cells populate; snapshot/regime rows carry real
-   scores; cold-load is fast (FRED 120/min + Tiingo 50/hr removes the 8/min bottleneck).
-Graceful-degrade throughout: a missing key → `—` cell, never a hard failure.
+4. **Timestamp audit** — every module's `SourceNote` shows a full `fmtDateTime` "Updated" stamp,
+   distinct from the date-only "Data through" close date. Fix Rates+Dollar, Trend/Market Structure, +
+   any other date-only offenders across all 11 modules.
+5. **Verify** after key + promotion: FRED-backed cells populate; snapshot/regime rows carry real
+   scores; macro cold-load is fast (FRED ~120/min removes the index contention on TD's 8/min).
+Graceful-degrade throughout: a missing `FRED_API_KEY` → `—` cell, never a hard failure.
 
 ### Phase C — Integrity guardrails (Next Steps #2, independent of any merge)
 1. **Schedule `regime-daily`** — add the `schedule()` wrapper + a cron entry in admin `netlify.toml`
@@ -223,6 +230,7 @@ every macro *index* indicator we currently pull from TwelveData, plus the event 
 | Need (module) | Today | → FRED series | Note |
 |---|---|---|---|
 | VIX (Volatility/Stress) | TwelveData / Finnhub-fails | **VIXCLS** | authoritative CBOE close |
+| VIX3M (regime `vol_state`) | TwelveData (unreliable → `UNKNOWN`) | **VXVCLS** | CBOE 3-month vol — **fixes the current `vol_state='UNKNOWN'`** |
 | US10Y (Rates+Dollar) | TwelveData TNX | **DGS10** | actual 10Y CMT yield, no `/10` normalization hack |
 | Credit (Credit/Liquidity) | HYG ETF *proxy* | **BAMLH0A0HYM2** (HY OAS) | **upgrade** — the real spread the module footnotes it's proxying |
 | Dollar (Rates+Dollar) | UUP ETF proxy | **DTWEXBGS** (broad $ index) | actual index vs ETF; daily, 1-business-day lag |
@@ -233,23 +241,34 @@ serve individual equity prices or **VVIX**. **FOMC** meeting dates aren't a clea
 small maintained/annual static list (dates are pre-published a year out) rather than a scrape or a
 model guess.
 
-### Equity daily OHLC (SPY/QQQ/IWM/RSP/VEA, sector constituents, per-ticker regime badge)
-FRED can't serve these. Best free supplement is **Tiingo** (free "Starter"): **50 req/hr, 1000/day,
-500 unique symbols/month, 30+yr EOD history** — far roomier than TwelveData's 8/min for our ~53-name
-book + trend ETFs. Plan: Tiingo primary for equity EOD, TwelveData as fallback (or vice-versa), so
-neither free tier is the sole point of failure.
+### Equity daily OHLC (SPY/QQQ/IWM/RSP/VEA, sector constituents, per-ticker regime badge) → keep TwelveData
+FRED can't serve equities. **Decision (host, 2026-07-08): keep TwelveData, drop Tiingo.** Once the
+indices move to FRED, TD's 8/min is no longer contended and clears the ~90-symbol equity cold burst
+(~53 held tickers + ~40 sector constituents) in ~12 min. **Tiingo was considered and rejected:** its
+free tier is only **50 req/hr** (per-symbol, no batch), which would *stall* a ~90-symbol burst to 1–2
+hours — slower than TD, not faster. So Tiingo adds a key + integration for worse burst behavior. If TD
+ever proves tight for equity, re-add a second source then (the pacing helper already supports it).
 
-### Rejected / fallback-only
-- **Yahoo Finance:** no official free API in 2026; the reverse-engineered chart endpoint works but is
-  fragile/unsupported (can add auth without notice) — same risk class as the MarketWatch scrape, so
-  **not** a dependency. Acceptable only as a last-resort VVIX source.
-- **Alpha Vantage:** free tier is now **25 req/day, 5/min** — too small to be primary; emergency
-  single-series fallback at most.
+### VVIX — dropped as a dependency (host asked: how critical is it?)
+**Not critical; no free source serves it, so accept null (unchanged from today).** No provider delivers
+VVIX free: TwelveData's free tier hasn't been serving it (it's been null the whole time), FRED doesn't
+carry it (VVIX is the one CBOE vol series absent from FRED), and Yahoo/Stooq are fragile. Its model
+weight is small and it's largely redundant with signals we DO have: in the Risk-Appetite gauge it's
+**12%** and its weight **redistributes** when null; in the Volatility sleeve it's **1 of 4** equal
+sub-scores and that sleeve is only **20%** of the regime score (so ≤~5% reach), and it moves together
+with `vixScore` + `ivPremiumScore` (both from FRED). Both scorers already renormalize around a null
+VVIX. → Pass `null`; no fragile Stooq/Yahoo dependency.
+
+### Rejected
+- **Tiingo:** 50 req/hr stalls the equity cold burst (see above).
+- **Yahoo Finance:** no official free API in 2026; reverse-engineered endpoint is fragile/unsupported —
+  same risk class as the scrape we're retiring. Not a dependency.
+- **Alpha Vantage:** **25 req/day, 5/min** — too small for anything primary.
 
 ### What this does to the paid-plan question
-Offloading all macro indices → **FRED (free)** and equity EOD → **Tiingo (free)** removes essentially
-the entire TwelveData load. **Recommendation: stay free.** Revisit paid only if Tiingo's 50/hr proves
-insufficient on real cold loads — measure first (Phase B).
+Offloading all macro indices → **FRED (free)** frees TwelveData to serve only equity closes on its
+existing free tier. **Recommendation: stay free.** The only new key is `FRED_API_KEY`. Revisit paid
+only if TD's freed-up 8/min proves tight for equity on real cold loads — measure first (Phase B).
 
 ### Q: keep the raw Finnhub label after mapping to canonical?
 **No — don't persist it.** `ticker_sector_map.sector` stores only the canonical GICS value; the raw
@@ -265,19 +284,21 @@ date-only stamp. Fix: each module's `SourceNote` shows a full `fmtDateTime` **"U
 is legitimately date-only. Audit all 11 modules for this in the build.
 
 ### Generalize the pacing guard to ALL feeds (host)
-The ≤8/65s TwelveData chunker in `maCache.ts` proved the pattern; extract a **generic rate-limit /
-pacing helper** (token-bucket or chunked-pacer, configured per feed: FRED 120/min, Finnhub 60/min,
-Tiingo 50/hr, TwelveData 8/min) that every feed routes through, so a new feed can't reintroduce this
-class of bug. Lives once in a shared util; each caller passes its feed's limit.
+The ≤8/65s TwelveData chunker in `maCache.ts` proved the pattern; **DONE** — `runPaced`/`FEED_LIMITS`
+in `@stw/shared` (`utils/pacing.ts`, unit-tested) is the generic chunked-pacer, configured per feed
+(FRED ~120/min, Finnhub ~60/min, TwelveData 8/min). Every feed routes through it so a new feed can't
+reintroduce this class of bug.
 
 ### Sequencing + keys (host, 2026-07-08)
-- **Feeds first**, then sector taxonomy. Build order within feeds: (1) shared generic pacing helper →
-  (2) FRED client + reassign VIX/US10Y/credit/dollar → (3) Event Risk rebuild (FRED calendar + static
-  FOMC) → (4) Tiingo equity-EOD primary + TwelveData fallback → (5) timestamp audit across 11 modules.
-- **Keys:** the host registers the free `FRED_API_KEY` (and `TIINGO_API_KEY` if adopted) and adds them
-  to Netlify env on both sites; I write all wiring. Code graceful-degrades when a key is absent
-  (module cell → `—`, same as the current missing-TwelveData behavior) so nothing hard-fails
-  pre-provisioning. Live verification waits on the keys.
+- **Feeds first**, then sector taxonomy. Build order within feeds: (1) shared pacing helper [DONE] →
+  (2) FRED proxy + client, reassign VIX/VIX3M/US10Y/credit/dollar (VVIX→null) → (3) Event Risk rebuild
+  (FRED calendar + static FOMC) → (4) timestamp audit across 11 modules. Equity stays on TwelveData
+  (no Tiingo).
+- **Promotion:** host will promote `staging → main` **after** this build lands (so the rebuilt
+  scheduled writers start firing).
+- **Keys:** the host registers the one free `FRED_API_KEY` and adds it to Netlify env (server-side, no
+  `VITE_` prefix) on both sites; I write all wiring. Code graceful-degrades when the key is absent
+  (module cell → `—`) so nothing hard-fails pre-provisioning. Live verification waits on the key.
 
 ### Architecture: FRED is server-only (CORS) → proxy function
 FRED's `api.stlouisfed.org` sends **no `Access-Control-Allow-Origin` header**, so a browser `fetch`
@@ -286,19 +307,16 @@ is blocked — FRED cannot be called directly from the macro module hooks. Acces
 browser hooks call; the server-side writers (`macro-snapshot`, `regime-daily`, `macro-events`) call
 FRED directly. Bonus: the `FRED_API_KEY` stays **server-side only** (no `VITE_` prefix), unlike the
 client-exposed `VITE_TWELVEDATA_KEY` — a security improvement, and the pattern to prefer for any new
-key. Same applies to `TIINGO_API_KEY` if the equity-EOD reads move behind a proxy too (decide when we
-get there; equity reads may stay client-direct on TwelveData/Tiingo since those DO allow CORS).
+key. Equity reads stay client-direct on TwelveData (it allows CORS) — only FRED needs the proxy.
 
-### Revised feed plan (net)
-- **Macro indices (VIX, US10Y, credit, dollar) → FRED.** Fixes Volatility/Stress, Rates+Dollar,
-  Credit; removes them from TwelveData.
+### Revised feed plan (net) — final, host-approved 2026-07-08
+- **Macro indices (VIX, VIX3M, US10Y, credit, dollar) → FRED.** Fixes Volatility/Stress, Rates+Dollar,
+  Credit; removes them from TwelveData; VIX3M→`VXVCLS` fixes `regime-daily` `vol_state`.
 - **Event Risk → FRED releases calendar (+ static FOMC list).** Retires the MarketWatch scrape.
-  Anthropic may *phrase* the "why it matters", never *source* the dates (violates the recap's
-  grounded-only rule / hallucination risk).
-- **Equity EOD → Tiingo primary + TwelveData fallback.** VVIX stays a single TwelveData call
-  (or Stooq/Yahoo last-resort).
-- **New Netlify env var:** `FRED_API_KEY` (+ `TIINGO_API_KEY` if adopted). New scheduled
-  `sector-map-sync` unchanged.
+  Anthropic may *phrase* "why it matters", never *source* dates (recap grounded-only rule).
+- **Equity EOD → TwelveData (kept, unburdened).** No Tiingo.
+- **VVIX → null** (dropped; non-critical, no free source).
+- **One new Netlify env var:** `FRED_API_KEY` (server-side). New scheduled `sector-map-sync` unchanged.
 
 ---
 
