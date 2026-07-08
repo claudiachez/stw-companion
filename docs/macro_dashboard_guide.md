@@ -3,8 +3,10 @@
 The Macro tab is a single dashboard built to answer one question: *is now a good time to be
 aggressive or defensive, and what's actually driving that?* It pulls together trend, volatility,
 credit, rates, the dollar, options positioning, sentiment, scheduled economic events, and sector
-rotation into 11 stacked modules — so instead of checking eight different sites, you get one
-read on the overall market environment and the specific pieces feeding it.
+rotation into one page — so instead of checking eight different sites, you get one read on the
+overall market environment and the specific pieces feeding it. (The three market-internals
+sleeves — volatility, credit, and rates/dollar — now share one compact "Market Internals" section
+rather than three separate cards, but each still answers its own question.)
 
 This guide explains every module in the order it appears on the page: what question it answers,
 every metric and indicator it shows, how the scoring works where it's a calculated score, why it
@@ -36,7 +38,9 @@ matters, and where the data comes from and how often it updates.
 
 This is the headline of the whole page: a single 0–100 **Environment Score** that blends five
 underlying "sleeves" — Trend, Volatility, Credit, Rates+Dollar, and GEX/positioning — into one
-number, and then maps that number to a plain-English **regime band**:
+number, and then maps that number to a plain-English **regime band**. The default sleeve weights
+(Trend 30% / Volatility 20% / Credit 15% / Rates+Dollar 15% / GEX 20%) are now **admin-configurable**
+— the STW editor can retune them, though the defaults are what's shown throughout this guide:
 
 | Score range | Band | Trading mode |
 |---|---|---|
@@ -105,19 +109,20 @@ rate decisions, Fed Chair speeches, the monthly jobs report, the unemployment ra
 (PPI — producer prices, average hourly earnings), **Medium** (weekly jobless claims, retail
 sales, ISM manufacturing/services surveys, Treasury bond auctions), and everything else **Low**.
 
-Once an event has actually been released, the card compares the actual figure to what was
-expected (the "consensus") and calls it a **shock** if the surprise is at least 20% the size of
-the consensus figure. It then pairs that against the live setup — is QQQ's trend intact, is the
-VIX elevated and rising, are 10-year yields rising — to build a plain-language read of how much
-that event actually matters right now.
+**A note on what actually works here:** the upcoming-event states — Event Watch and High Event
+Risk — are the reliable part of this module: they tell you a known release is coming in the next
+day or two, so a strong technical setup could be about to get tested. The economic-release
+calendar carries scheduled dates, but *not* the actual print value or the consensus estimate, so
+the post-release "surprise / shock" reaction is **not** computed from the feed. Treat this module
+as a heads-up window on what's coming, not a scorer of what just landed.
 
 **Why it matters:** a strong technical setup can get knocked over by a surprise inflation print
 or jobs number. This module gives you a heads-up window rather than a surprise.
 
-**Source/cadence:** MarketWatch's public economic calendar (the only free option available),
-with a manual link to FXStreet's calendar shown alongside every event so you can cross-check
-independently. If the data source becomes unavailable, the card says so plainly rather than
-showing a fabricated event.
+**Source/cadence:** scheduled events come from **FRED's economic-release calendar** (the Federal
+Reserve's free, authoritative data service — CPI, PCE, Employment/NFP, GDP, and PPI releases)
+plus a built-in static list of FOMC rate-decision dates. If the data source becomes unavailable,
+the card says so plainly rather than showing a fabricated event.
 
 [↑ Back to top](#table-of-contents)
 
@@ -161,28 +166,39 @@ day.
 
 ---
 
+## Market Internals (Modules 5–7)
+
+The next three sleeves — **Volatility / Stress**, **Credit / Liquidity**, and **Rates + Dollar
+Headwinds** — now live together in one compact **Market Internals** section, shown as one row per
+sleeve (each with its score, status word, and key values) rather than as three separate cards.
+Each still answers its own distinct question, explained below.
+
+All three now read their index-level inputs from **FRED** — Federal Reserve Economic Data, the
+Fed's free, authoritative public data service. This replaced the older ETF-proxy and third-party
+approach: the VIX, the 10-year Treasury yield, the credit spread, and the dollar index are now the
+real published series, not stand-ins.
+
+---
+
 ## 5. Volatility / Stress
 
 **Question it answers:** Is fear rising in the options market?
 
-Three indicators, each scored 0–100 where a **higher number means calmer markets**:
+Two indicators, each scored 0–100 where a **higher number means calmer markets**:
 
 - **VIX** — the CBOE Volatility Index, the market's measure of how much the S&P 500 is expected
   to move over the next 30 days. The classic "fear gauge." Scored: below 15 → 90 (calm), 15–20 →
   55 (normal), 20–25 → 30 (elevated), 25 and above → 10 (severe).
-- **VVIX** — short for "volatility of the VIX" — a measure of how much the VIX itself is
-  expected to swing, used as a read on tail/crash risk. Scored: below 85 → 85 (calm), 85–100 →
-  50 (elevated), 100 and above → 20 (fear).
 - **IV Premium** — the VIX divided by SPY's own actual ("realized") 30-day volatility. A ratio
   above 1 means options are pricing in more future movement than has actually been happening
   lately — hedges are relatively expensive. Scored: below 0.90 → 85 (calm), 0.90–1.25 → 55
   (normal), above 1.25 → 20 (fear).
 
-A fourth input — VIX's own 5-day direction — also feeds the sleeve average without getting its
+A third input — VIX's own 5-day direction — also feeds the sleeve average without getting its
 own card: VIX falling at least 1 point over 5 trading days scores 80 (calming), roughly flat
 scores 50, and rising at least 2 points scores 20 (fear building).
 
-The sleeve's overall score averages whichever of these four are available, and is labeled Calm
+The sleeve's overall score averages whichever of these three are available, and is labeled Calm
 (70+), Normal (45+), Elevated (25+), or Stress (below 25). The card also shows VIX's roughly
 1-year **percentile rank**, so a VIX reading of 19 can be read in context — calm relative to the
 past year, rather than just a number on its own.
@@ -190,10 +206,9 @@ past year, rather than just a number on its own.
 **Why it matters:** options-market fear often moves before price does. This sleeve is 20% of the
 regime score.
 
-**Source/cadence:** VIX and VVIX come from Finnhub's live quote when available, and fall back to
-TwelveData's most recent daily close otherwise (Finnhub's free tier doesn't always carry index
-symbols). The historical daily data used for the percentile and 5-day trend comes from
-TwelveData.
+**Source/cadence:** the VIX comes from FRED (series `VIXCLS`), the authoritative published daily
+close; the historical daily VIX series used for the percentile and 5-day trend comes from FRED as
+well. Realized volatility for the IV Premium is computed from SPY daily closes (TwelveData).
 
 [↑ Back to top](#table-of-contents)
 
@@ -204,22 +219,27 @@ TwelveData.
 **Question it answers:** Is the credit/bond market confirming the move in stocks? Credit stress
 tends to show up *before* a stock-market selloff, so this acts as an early warning sleeve.
 
-This module uses **HYG** — a high-yield corporate bond ETF — as a stand-in for credit market
-health. The dashboard is explicit that this is a proxy for now; true high-yield credit-spread
-data is a planned future upgrade, not yet built. The score combines two simple facts — is HYG
-above its 50-day moving average, and is it rising today — into a four-way score:
+This module now uses the **real ICE BofA US High Yield Option-Adjusted Spread (OAS)** — the extra
+yield investors demand to hold risky high-yield ("junk") corporate bonds over safe Treasuries.
+This replaced the old HYG-ETF proxy with the actual credit-spread series. **Read the direction
+carefully: the spread *widens* when credit stress rises** — a higher, rising spread is *worse*,
+the opposite sign to a bond ETF's price. The score combines two simple facts — is the spread below
+its 50-day average, and is it tightening (narrowing) today — into a four-way score:
 
-| HYG vs. 50-day average | Today's move | Score | Label |
+| Spread vs. 50-day average | Today's move | Score | Label |
 |---|---|---|---|
-| Above | Rising | 80 | Confirming |
-| Above | Falling | 60 | Mild Caution |
-| Below | Rising | 45 | Mixed |
-| Below | Falling | 20 | Warning |
+| Below (tighter) | Tightening | 80 | Confirming |
+| Below (tighter) | Widening | 60 | Mild Caution |
+| Above (wider) | Tightening | 45 | Mixed |
+| Above (wider) | Widening | 20 | Warning |
+
+In short: a spread that's below its 50-day average and still tightening means credit is confirming
+the move in stocks; a spread that's above its average and widening is a stress warning.
 
 **Why it matters:** this sleeve is 15% of the regime score, and is meant as an early warning —
 credit often cracks before equities notice.
 
-**Source/cadence:** TwelveData daily closing prices for HYG.
+**Source/cadence:** FRED daily data for the ICE BofA US High Yield OAS (series `BAMLH0A0HYM2`).
 
 [↑ Back to top](#table-of-contents)
 
@@ -237,17 +257,17 @@ Two inputs feed this sleeve:
   (35, or 20 if actively rising). There's an important nuance here — see the gotcha section below
   for the "flight to safety" case, where a fast yield drop during rising stress is scored as
   defensive (30), not as a bullish tailwind.
-- **UUP** — an ETF that tracks the U.S. Dollar Index. Below both its 9-day and 21-day moving
-  averages scores as a tailwind (80 — a weak dollar tends to help multinational earnings and
-  commodities); above both scores as a headwind (20); a mixed read scores neutral (50).
+- **The broad dollar index** — the trade-weighted value of the U.S. dollar. A falling dollar
+  scores as a tailwind (80 — a weak dollar tends to help multinational earnings and commodities);
+  a rising dollar scores as a headwind (20); a flat/mixed read scores neutral (50).
 
 The sleeve score averages the two, labeled Tailwind (60+), Neutral (40+), or Headwind (below 40).
 
 **Why it matters:** rates and the dollar are 15% of the regime score, and both can quietly choke
 off growth-stock rallies even when the broader trend looks fine.
 
-**Source/cadence:** TwelveData daily closing prices (the CBOE TNX series for the 10-year yield,
-UUP for the dollar).
+**Source/cadence:** FRED daily data — the 10-year Treasury yield (series `DGS10`) and the broad
+trade-weighted dollar index (series `DTWEXBGS`).
 
 [↑ Back to top](#table-of-contents)
 
@@ -301,17 +321,16 @@ A semicircular gauge from 0 (Extreme Fear) to 100 (Extreme Greed), split into fi
 | Greed | 55–74 |
 | Extreme Greed | 75 and above |
 
-It's built from seven weighted inputs:
+It's built from six weighted inputs:
 
-| Input | Weight | What it measures |
-|---|---|---|
-| Market Momentum | 18% | SPY's price vs. its 125-day moving average |
-| Volatility (VIX) | 16% | Same VIX scoring as Module 5 |
-| IV Premium | 16% | Same VIX-vs-realized-volatility scoring as Module 5 |
-| Tail Risk (VVIX) | 12% | VVIX, weighted toward its trailing ~1-year percentile when enough history exists |
-| GEX Bias | 18% | Same Graddox bias scoring as Module 8 |
-| Credit | 10% | HYG vs. its 50-day moving average |
-| Breadth | 10% | The equal-weight S&P 500 (RSP) vs. the cap-weighted S&P 500 (SPY) — is the *average* stock confirming the rally, or is it narrow? |
+| Input | What it measures |
+|---|---|
+| Market Momentum | SPY's price vs. its 125-day moving average |
+| Volatility (VIX) | Same VIX scoring as Module 5 |
+| IV Premium | Same VIX-vs-realized-volatility scoring as Module 5 |
+| GEX Bias | Same Graddox bias scoring as Module 8 |
+| Credit | The high-yield credit spread vs. its 50-day average (as in Module 6) |
+| Breadth | The equal-weight S&P 500 (RSP) vs. the cap-weighted S&P 500 (SPY) — is the *average* stock confirming the rally, or is it narrow? |
 
 These same weights are shared between this live gauge and the background process that writes
 the daily history snapshot, so the two can never drift out of sync. As with the other composite
@@ -321,9 +340,9 @@ scores, if an input is missing, its weight is spread across whichever inputs are
 informative — a "Constructive" regime read paired with "Extreme Greed" sentiment is a different
 situation than the same regime read paired with "Fear."
 
-**Source/cadence:** Finnhub live quotes for VIX/VVIX (refreshed at most every 15 minutes) plus
-TwelveData daily closes for SPY/RSP/HYG plus STW's Graddox signal for GEX. Daily metrics refresh
-once per browser session.
+**Source/cadence:** FRED for the VIX and the high-yield credit spread, plus TwelveData daily
+closes for SPY/RSP (momentum and breadth), plus STW's Graddox signal for GEX. Daily metrics
+refresh once per browser session.
 
 [↑ Back to top](#table-of-contents)
 
@@ -476,11 +495,15 @@ easing inflation, even though the yield chart looks identical either way.
 
 - **Basis point (bp):** one-hundredth of a percentage point (0.01%). Used when describing small
   moves in yields.
+- **Credit spread (HY OAS):** the extra yield ("option-adjusted spread") investors demand to hold
+  risky high-yield corporate bonds over safe Treasuries. It *widens* when credit stress rises, so
+  a higher, rising spread is worse. This dashboard uses the ICE BofA US High Yield OAS.
+- **FRED:** Federal Reserve Economic Data — the free, authoritative public data service run by
+  the St. Louis Fed. This dashboard sources its VIX, 10-year Treasury yield, high-yield credit
+  spread, dollar index, and economic-release calendar from FRED.
 - **GEX (gamma exposure):** a measure of how options dealers are positioned, used here via STW's
   proprietary "Graddox" signal to classify dealer bias as Bullish/Flat/Conflicted/Bearish and to
   surface key price levels.
-- **HYG:** a high-yield corporate bond ETF, used on this dashboard as a proxy for credit-market
-  health.
 - **ISO week:** a standardized way of numbering calendar weeks (Monday–Sunday) used to schedule
   when the weekly Market Recap refreshes.
 - **IV Premium:** the VIX divided by an asset's own realized (actual) volatility — a measure of
@@ -491,15 +514,13 @@ easing inflation, even though the yield chart looks identical either way.
   same time window, expressed in percentage points.
 - **SPDR:** a family of sector-tracking ETFs (e.g. one per S&P 500 sector); this dashboard uses
   all 11 SPDR sector funds in the Sector Rotation module.
-- **SPY / QQQ / IWM / RSP / VEA / UUP / HYG:** ticker symbols for ETFs that track, respectively,
-  the S&P 500, the Nasdaq 100, the Russell 2000 (small caps), the equal-weight S&P 500, developed
-  international markets, the U.S. Dollar Index, and high-yield corporate bonds.
+- **SPY / QQQ / IWM / RSP / VEA:** ticker symbols for ETFs that track, respectively, the S&P 500,
+  the Nasdaq 100, the Russell 2000 (small caps), the equal-weight S&P 500, and developed
+  international markets.
 - **US10Y:** the yield on the 10-year U.S. Treasury bond, a benchmark interest rate that
   influences borrowing costs and stock valuations broadly.
 - **VIX:** the CBOE Volatility Index — the market's measure of expected S&P 500 volatility over
   the next 30 days; the classic "fear gauge."
-- **VVIX:** a measure of expected volatility *in the VIX itself*, used as a read on tail/crash
-  risk.
 
 [↑ Back to top](#table-of-contents)
 
@@ -511,13 +532,13 @@ easing inflation, even though the yield chart looks identical either way.
 |---|---|---|
 | Market Regime (banner) | Derived from Modules 4–8 | No separate fetch |
 | Module Scores (strip) | Derived from Modules 4–8 | No separate fetch |
-| Event Risk | MarketWatch economic calendar (cross-check link to FXStreet) | Checked on page load |
+| Event Risk | FRED economic-release calendar + static FOMC date list | Checked on page load |
 | Trend / Market Structure | Finnhub (live quotes) + TwelveData (daily closes for moving averages) | Live quotes ≤15 min; daily closes once/day |
-| Volatility / Stress | Finnhub (live VIX/VVIX, falling back to TwelveData) + TwelveData (history) | Live ≤15 min; daily history once/day |
-| Credit / Liquidity | TwelveData (HYG daily closes) | Once/day |
-| Rates + Dollar Headwinds | TwelveData (CBOE TNX, UUP daily closes) | Once/day |
+| Volatility / Stress | FRED (VIX close + history) + TwelveData (SPY closes for realized vol) | Once/day |
+| Credit / Liquidity | FRED (ICE BofA HY OAS daily) | Once/day |
+| Rates + Dollar Headwinds | FRED (10-year yield + broad dollar index, daily) | Once/day |
 | GEX / Positioning | STW's Graddox signal | Once/weekday morning (~9am ET) |
-| Risk Appetite (gauge) | Finnhub (live VIX/VVIX) + TwelveData (SPY/RSP/HYG daily closes) + Graddox | Live ≤15 min; daily once/session |
+| Risk Appetite (gauge) | FRED (VIX + credit spread) + TwelveData (SPY/RSP daily closes) + Graddox | Daily once/session |
 | Market Recap | Server-side AI process (Claude Sonnet, fallback Haiku), grounded in Modules 1–9 | Once/calendar week |
 | Sector Rotation | TwelveData (sector ETFs + constituent stocks) | Once/day |
 

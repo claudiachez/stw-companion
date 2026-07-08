@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useAppConfig } from '@stw/ui';
+import { useAppConfig, AlertStrip } from '@stw/ui';
 import { supabase } from '../../lib/supabase';
 
 function errMsg(e: unknown): string {
@@ -119,9 +119,10 @@ function NumberRow({
 
 interface SizingDrafts { equity?: number; shortLong?: number }
 interface CapitalDrafts { total?: number; shares?: number; options?: number }
+interface RegimeDrafts { trend?: number; volatility?: number; credit?: number; rates_dollar?: number; gex?: number }
 
 export function ConfigPage() {
-  const { config, ibkrLiveTradingEnabled } = useAppConfig();
+  const { config, ibkrLiveTradingEnabled, regimeWeights } = useAppConfig();
   const qc = useQueryClient();
 
   const saveMany = useMutation({
@@ -136,7 +137,8 @@ export function ConfigPage() {
 
   const [sizingDrafts, setSizingDrafts] = useState<SizingDrafts>({});
   const [capitalDrafts, setCapitalDrafts] = useState<CapitalDrafts>({});
-  const [savingSection, setSavingSection] = useState<'sizing' | 'capital' | 'ibkr' | null>(null);
+  const [regimeDrafts, setRegimeDrafts] = useState<RegimeDrafts>({});
+  const [savingSection, setSavingSection] = useState<'sizing' | 'capital' | 'regime' | 'ibkr' | null>(null);
 
   async function saveSizing() {
     const entries: [string, number][] = [];
@@ -157,6 +159,26 @@ export function ConfigPage() {
     try { await saveMany.mutateAsync(entries); setCapitalDrafts({}); } finally { setSavingSection(null); }
   }
 
+  async function saveRegime() {
+    // Stored as percent integers, as-is (environmentScore normalizes by the total).
+    const map: [keyof RegimeDrafts, string][] = [
+      ['trend', 'regime_weight_trend'], ['volatility', 'regime_weight_volatility'],
+      ['credit', 'regime_weight_credit'], ['rates_dollar', 'regime_weight_rates_dollar'],
+      ['gex', 'regime_weight_gex'],
+    ];
+    const entries: [string, number][] = [];
+    for (const [k, key] of map) if (regimeDrafts[k] !== undefined) entries.push([key, regimeDrafts[k] as number]);
+    if (!entries.length) return;
+    setSavingSection('regime');
+    try { await saveMany.mutateAsync(entries); setRegimeDrafts({}); } finally { setSavingSection(null); }
+  }
+
+  const regimeTotal = (regimeDrafts.trend ?? regimeWeights.trend)
+    + (regimeDrafts.volatility ?? regimeWeights.volatility)
+    + (regimeDrafts.credit ?? regimeWeights.credit)
+    + (regimeDrafts.rates_dollar ?? regimeWeights.rates_dollar)
+    + (regimeDrafts.gex ?? regimeWeights.gex);
+
   async function toggleIbkr() {
     setSavingSection('ibkr');
     try { await saveMany.mutateAsync([['ibkr_live_trading_enabled', ibkrLiveTradingEnabled ? 0 : 1]]); }
@@ -168,9 +190,7 @@ export function ConfigPage() {
       <div className="max-w-2xl mx-auto flex flex-col gap-4">
         {/* No page title — the active nav tab is context (matches Picks/Signals/Users). */}
         {saveMany.isError && (
-          <div className="text-xs font-medium text-[#ef4444] bg-[#ef444415] border border-[#ef444433] rounded px-3 py-2">
-            Save failed: {errMsg(saveMany.error)}
-          </div>
+          <AlertStrip severity="negative">Save failed: {errMsg(saveMany.error)}</AlertStrip>
         )}
 
         <Section
@@ -199,8 +219,8 @@ export function ConfigPage() {
         </Section>
 
         <Section
-          title={<>Capital allocation <span className="text-t3 text-[10px] font-semibold uppercase tracking-wide align-middle ml-1">Admin only</span></>}
-          hint="Powers the quantity suggestion in the IBKR order modal (Transaction History → Open/Close via IBKR) — a starting point only, still fully adjustable per-order. Never read by apps/web."
+          title={<>Capital allocation &amp; live trading <span className="text-t3 text-[10px] font-semibold uppercase tracking-wide align-middle ml-1">Admin only</span></>}
+          hint="Capital defaults power the quantity suggestion in the IBKR order modal (Transaction History → Open/Close via IBKR) — a starting point only, still adjustable per-order. Never read by apps/web. Save covers the capital fields; the live-trading switch below saves on toggle."
           dirty={Object.keys(capitalDrafts).length > 0}
           saving={savingSection === 'capital'}
           onSave={saveCapital}
@@ -229,35 +249,57 @@ export function ConfigPage() {
             step={0.5}
             onChange={(value) => setCapitalDrafts((d) => ({ ...d, options: value }))}
           />
+          {/* Live-trading switch — saves immediately on toggle (independent of the capital Save). */}
+          <div className="py-3 first:pt-0 last:pb-0">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-text font-semibold text-xs mb-1">Live IBKR trading</div>
+                <div className="text-t3 text-xs max-w-md">
+                  Reveals "Open via IBKR" / "Close via IBKR" on the Transaction History ledger — places
+                  REAL orders against whatever IB Gateway your local proxy is connected to. Never shown
+                  to subscribers regardless of this setting.
+                </div>
+              </div>
+              <button
+                onClick={toggleIbkr}
+                disabled={savingSection === 'ibkr'}
+                className={`shrink-0 ml-4 flex items-center w-11 h-6 px-0.5 rounded-full transition-colors ${
+                  ibkrLiveTradingEnabled ? 'bg-acc justify-end' : 'bg-s2 border border-border justify-start'
+                }`}
+              >
+                <span className="w-5 h-5 rounded-full bg-white shadow" />
+              </button>
+            </div>
+            {ibkrLiveTradingEnabled && (
+              <div className="mt-3">
+                <AlertStrip severity="warning">
+                  Live — the IBKR buttons are currently visible in Transaction History. Confirm your local
+                  proxy is pointed at paper (IB_PORT=4002) before placing any order while testing.
+                </AlertStrip>
+              </div>
+            )}
+          </div>
         </Section>
 
-        <div className="bg-surface border border-border rounded-xl p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-text font-semibold text-sm mb-1">Live IBKR trading</div>
-              <div className="text-t3 text-xs max-w-md">
-                Reveals "Open via IBKR" / "Close via IBKR" on the Transaction History ledger —
-                places REAL orders against whatever IB Gateway your local proxy is connected to.
-                Admin-only; never shown to subscribers regardless of this setting.
-              </div>
-            </div>
-            <button
-              onClick={toggleIbkr}
-              disabled={savingSection === 'ibkr'}
-              className={`shrink-0 ml-4 flex items-center w-11 h-6 px-0.5 rounded-full transition-colors ${
-                ibkrLiveTradingEnabled ? 'bg-acc justify-end' : 'bg-s2 border border-border justify-start'
-              }`}
-            >
-              <span className="w-5 h-5 rounded-full bg-white shadow" />
-            </button>
+        <Section
+          title="Market Regime weights"
+          hint="How the five sleeves blend into the overall Market Regime score on the Macro tab. Scores are normalized by the total, so these need not sum to exactly 100% — the ratios are what matter. Applies forward to the live banner and the next daily snapshot."
+          dirty={Object.keys(regimeDrafts).length > 0}
+          saving={savingSection === 'regime'}
+          onSave={saveRegime}
+        >
+          <NumberRow label="Trend" storedValue={regimeWeights.trend} draftValue={regimeDrafts.trend} suffix="%" onChange={(v) => setRegimeDrafts((d) => ({ ...d, trend: v }))} />
+          <NumberRow label="Volatility" storedValue={regimeWeights.volatility} draftValue={regimeDrafts.volatility} suffix="%" onChange={(v) => setRegimeDrafts((d) => ({ ...d, volatility: v }))} />
+          <NumberRow label="Credit" storedValue={regimeWeights.credit} draftValue={regimeDrafts.credit} suffix="%" onChange={(v) => setRegimeDrafts((d) => ({ ...d, credit: v }))} />
+          <NumberRow label="Rates + Dollar" storedValue={regimeWeights.rates_dollar} draftValue={regimeDrafts.rates_dollar} suffix="%" onChange={(v) => setRegimeDrafts((d) => ({ ...d, rates_dollar: v }))} />
+          <NumberRow label="GEX" storedValue={regimeWeights.gex} draftValue={regimeDrafts.gex} suffix="%" onChange={(v) => setRegimeDrafts((d) => ({ ...d, gex: v }))} />
+          <div className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+            <span className={rowLabel}>Total</span>
+            <span className={rowPrefix} />
+            <span className="text-sm font-semibold text-t2">{regimeTotal}%</span>
+            <span className="text-t3 text-xs">normalized — ratios are what matter, needn't equal 100%</span>
           </div>
-          {ibkrLiveTradingEnabled && (
-            <div className="mt-3 text-xs font-medium text-[#f59e0b] bg-[#f59e0b15] border border-[#f59e0b33] rounded px-3 py-2">
-              ⚠ Live — the IBKR buttons are currently visible in Transaction History. Confirm your local
-              proxy is pointed at paper (IB_PORT=4002) before placing any order while testing.
-            </div>
-          )}
-        </div>
+        </Section>
       </div>
     </div>
   );

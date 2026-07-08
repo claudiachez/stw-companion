@@ -69,7 +69,7 @@ interface RecapBody {
   modules: { trend: RecapModule; volatility: RecapModule; credit: RecapModule; ratesDollar: RecapModule; gex: RecapModule };
   context: {
     indicators: { symbol: string; name: string; bucket: string | null; close: number | null; chgPct: number | null }[];
-    volatility: { vix: number | null; vvix: null; ivPremium: null };
+    volatility: { vix: number | null; ivPremium: null };
     gex: { bias: string; biasNote: string; lastUpdated: string; spx: LevelSet | null; qqq: LevelSet | null } | null;
   };
 }
@@ -277,7 +277,7 @@ export async function generateDailyRecap(tag: string, session: 'am' | 'pm'): Pro
         { symbol: 'SPY', name: 'S&P 500',    bucket: spyBucket, close: spyCloses.at(-1) ?? null, chgPct: spyChg },
         { symbol: 'QQQ', name: 'Nasdaq 100', bucket: qqqBucket, close: qqqCloses.at(-1) ?? null, chgPct: qqqChg },
       ],
-      volatility: { vix, vvix: null, ivPremium: null },
+      volatility: { vix, ivPremium: null },
       gex: signalRow ? {
         bias:        signalRow.bias ?? '',
         biasNote:    signalRow.bias_note ?? '',

@@ -1,4 +1,4 @@
-import { fmtDateTime, eventOverlayLabel, eventImportanceLabel, TREND_BUCKET_META } from '@stw/shared';
+import { fmtDateTime, eventOverlayLabel, eventImportanceLabel, TREND_BUCKET_META, FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
 import type { EventRiskRead, TrendBucket } from '@stw/shared';
 
 interface Props {
@@ -68,27 +68,27 @@ function interpret(eventName: string, surprise: number | null, us10yDelta5: numb
 }
 
 export function MacroEventRiskCard({ read, loading, error, warning, qqqBucket, vix, vixDelta5, us10yDelta5 }: Props) {
-  if (loading && !read.event) return <div style={{ color: 'var(--t3)', fontSize: 12 }}>Loading event calendar…</div>;
-  if (error) return <div style={{ color: 'var(--c1)', fontSize: 12 }}>Event data unavailable: {error}</div>;
+  if (loading && !read.event) return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>Loading event calendar…</div>;
+  if (error) return <div style={{ color: 'var(--c1)', fontSize: FONT_SIZE.sm }}>Event data unavailable: {error}</div>;
 
   const { overlay, riskLevel, event, surprise } = read;
 
   if (overlay === 'none') {
     return (
       <div>
-        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--t2)' }}>{eventOverlayLabel('none')}</div>
-        <div style={{ fontSize: 12, color: 'var(--t3)', marginTop: 4 }}>
+        <div style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--t2)' }}>{eventOverlayLabel('none')}</div>
+        <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)', marginTop: 4 }}>
           {event
             ? <>Next tracked event: {event.eventName} — {fmtDateTime(event.releaseTimeEt)}, outside the 48h risk window.</>
             : 'Nothing major scheduled in the next 48 hours.'}
         </div>
-        {warning && <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 8 }}>{warning}</div>}
-        <FxStreetLink />
+        {warning && <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: 8 }}>{warning}</div>}
+        <EventSourceNote />
       </div>
     );
   }
 
-  if (!event) return <div style={{ color: 'var(--t3)', fontSize: 12 }}>No event data available.</div>;
+  if (!event) return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>No event data available.</div>;
 
   const isPreRelease = overlay === 'event_watch' || overlay === 'high_event_risk';
   const setup = buildSetup(qqqBucket, vix, vixDelta5, us10yDelta5);
@@ -97,18 +97,18 @@ export function MacroEventRiskCard({ read, loading, error, warning, qqqBucket, v
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 16, fontWeight: 700, color: RISK_COLOR[riskLevel] }}>{eventOverlayLabel(overlay)}</span>
-        <span style={{ fontSize: 11, color: 'var(--t3)' }}>{eventImportanceLabel(event.importance)} impact</span>
+        <span style={{ fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, color: RISK_COLOR[riskLevel] }}>{eventOverlayLabel(overlay)}</span>
+        <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>{eventImportanceLabel(event.importance)} impact</span>
       </div>
 
-      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>
+      <div style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>
         {event.eventName}{event.period ? ` (${event.period})` : ''}
       </div>
-      <div style={{ fontSize: 12, color: 'var(--t2)', marginTop: 2 }}>
+      <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', marginTop: 2 }}>
         {fmtDateTime(event.releaseTimeEt)}
       </div>
 
-      <div style={{ display: 'flex', gap: 16, marginTop: 10, flexWrap: 'wrap', fontSize: 12 }}>
+      <div style={{ display: 'flex', gap: 16, marginTop: 10, flexWrap: 'wrap', fontSize: FONT_SIZE.sm }}>
         {isPreRelease ? (
           <>
             <div><span style={{ color: 'var(--t3)' }}>Consensus:</span> {event.consensus ?? '—'}</div>
@@ -128,24 +128,21 @@ export function MacroEventRiskCard({ read, loading, error, warning, qqqBucket, v
         )}
       </div>
 
-      <div style={{ marginTop: 12, fontSize: 12, color: 'var(--t2)', lineHeight: 1.5 }}>
-        <div><span style={{ color: 'var(--t3)', fontWeight: 600 }}>Setup:</span> {setup}</div>
-        <div><span style={{ color: 'var(--t3)', fontWeight: 600 }}>Interpretation:</span> {interpretation}</div>
+      <div style={{ marginTop: 12, fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.5 }}>
+        <div><span style={{ color: 'var(--t3)', fontWeight: FONT_WEIGHT.semibold }}>Setup:</span> {setup}</div>
+        <div><span style={{ color: 'var(--t3)', fontWeight: FONT_WEIGHT.semibold }}>Interpretation:</span> {interpretation}</div>
       </div>
 
-      {warning && <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 8 }}>{warning}</div>}
-      <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 10, lineHeight: 1.4 }}>
-        Source: {event.source} Economic Calendar · observed {fmtDateTime(event.sourceTimestamp)}
-      </div>
-      <FxStreetLink />
+      {warning && <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: 8 }}>{warning}</div>}
+      <EventSourceNote />
     </div>
   );
 }
 
-function FxStreetLink() {
+function EventSourceNote() {
   return (
-    <div style={{ marginTop: 8, fontSize: 10, color: 'var(--t3)' }}>
-      Manual cross-check: <a href="https://www.fxstreet.com/economic-calendar" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--t2)' }}>FXStreet Economic Calendar ↗</a>
+    <div style={{ marginTop: 8, fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>
+      Source: FRED release calendar + FOMC schedule
     </div>
   );
 }

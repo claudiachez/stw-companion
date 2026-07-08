@@ -5,6 +5,9 @@ import { useAuthStore } from '../../store/auth';
 interface SyncResult {
   count: number;
   lastSyncedAt: string;
+  /** The IBKR account the Flex Query resolved to — lets a save-time verification
+   * echo a concrete fact instead of a bare position count. */
+  accountId: string | null;
 }
 
 export function useSyncPortfolio() {
@@ -34,7 +37,7 @@ export function useSyncPortfolio() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
-      setLastResult({ count: json.count, lastSyncedAt: json.lastSyncedAt });
+      setLastResult({ count: json.count, lastSyncedAt: json.lastSyncedAt, accountId: json.accountId ?? null });
       await queryClient.invalidateQueries({ queryKey: ['user-positions', userId] });
     } catch (e) {
       setSyncError(e instanceof Error ? e.message : 'Sync failed');

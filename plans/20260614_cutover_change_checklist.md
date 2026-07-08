@@ -42,7 +42,7 @@ Decided with the user and implemented + sandbox-validated:
     NULL where unstated; exercise spawns a SHARES leg. **✅ Validated on the sandbox 2026-06-14**
     (ran clean end-to-end; Section 1 made idempotent via `ON CONFLICT … DO NOTHING`; use the
     editor's **Run without RLS** — the RLS linter false-flags a phantom `shares` table). See the
-    runbook's Step 3 + [`plans/cutover_runbook.md`](cutover_runbook.md).
+    runbook's Step 3 + [`plans/20260614_cutover_runbook.md`](20260614_cutover_runbook.md).
 - **`$100k` notional portfolio + SPY benchmark: deferred** (separate follow-up; legs don't depend
   on it). With per-leg weights it's now fully computable later.
 
@@ -93,7 +93,7 @@ notes below are the actionable takeaways.
 > here; this is the spec to apply to each SKILL.md.
 >
 > **Line-level worklist (exact before/after, UUID resolution, payload skeletons):**
-> [`plans/workstream2_routine_edits.md`](workstream2_routine_edits.md) — drafted + decision-complete
+> [`plans/20260614_workstream2_routine_edits.md`](20260614_workstream2_routine_edits.md) — drafted + decision-complete
 > 2026-06-14. Apply the SKILL.md edits **only inside the cutover window** (the cron tasks run against
 > prod on a timer — applying Phase 1 early breaks every write until the migrations land).
 
@@ -214,7 +214,7 @@ per-leg weight override only (no full leg CRUD).
 ### Workstream 2 — Routines Phase 2
 
 > Full event-model spec (per-host-action ordering table, 90/10 weight default, curl templates):
-> [`plans/workstream2_routine_edits.md`](workstream2_routine_edits.md) §Phase 2.
+> [`plans/20260614_workstream2_routine_edits.md`](20260614_workstream2_routine_edits.md) §Phase 2.
 
 **`stw-morning-run` + `stw-afternoon-run`:**
 - [ ] Stop writing `position_detail` to `holdings` (column dropped in 034)

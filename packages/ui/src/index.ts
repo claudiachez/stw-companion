@@ -30,6 +30,40 @@ export { useAppConfig } from './hooks/useAppConfig';
 // ── Primitives ────────────────────────────────────────────────
 export { LoadingSpinner } from './primitives/LoadingSpinner';
 export { EmptyState } from './primitives/EmptyState';
+export type { EmptyStateProps } from './primitives/EmptyState';
+
+// ── Design system (Phase 3 — plans/stw-design-system.md) ───────
+export { StatusPill } from './primitives/StatusPill';
+export type { StatusPillVariant, StatusPillProps } from './primitives/StatusPill';
+export { Badge } from './primitives/Badge';
+export type { BadgeKind, BadgeProps } from './primitives/Badge';
+export { KpiCard } from './primitives/KpiCard';
+export type { KpiCardProps, KpiDeltaDirection, KpiStatus } from './primitives/KpiCard';
+export { SectionHeader } from './primitives/SectionHeader';
+export type { SectionHeaderProps } from './primitives/SectionHeader';
+export { Button } from './primitives/Button';
+export type { ButtonProps, ButtonVariant } from './primitives/Button';
+export { DataTable } from './primitives/DataTable';
+export type { DataTableColumn, DataTableProps } from './primitives/DataTable';
+export { DetailPane, DetailPaneMetricLabel } from './primitives/DetailPane';
+export type { DetailPaneProps, DetailPaneMetric } from './primitives/DetailPane';
+export { ListDetailSplit } from './primitives/ListDetailSplit';
+export type { ListDetailSplitProps } from './primitives/ListDetailSplit';
+export { AccordionList } from './primitives/AccordionList';
+export type { AccordionListProps } from './primitives/AccordionList';
+export { FormRow } from './primitives/FormRow';
+export type { FormRowProps } from './primitives/FormRow';
+export { AlertStrip } from './primitives/AlertStrip';
+export type { AlertSeverity, AlertStripProps } from './primitives/AlertStrip';
+export { SubNav } from './primitives/SubNav';
+export type { SubNavItem, SubNavProps } from './primitives/SubNav';
+export { Modal } from './primitives/Modal';
+export type { ModalProps } from './primitives/Modal';
+export { Icon } from './primitives/Icon';
+export type { IconName, IconProps } from './primitives/Icon';
+export { TextInput } from './primitives/TextInput';
+export type { TextInputProps } from './primitives/TextInput';
+export { DesignSystemGallery } from './primitives/DesignSystemGallery';
 
 // ── Picks ─────────────────────────────────────────────────────
 export { PicksView } from './features/picks/PicksView';
@@ -52,6 +86,22 @@ export { useUserPositions, useIbkrSettings } from './features/portfolio/useUserP
 export { useSyncPortfolio } from './features/portfolio/useSyncPortfolio';
 export { saveIbkrSettings } from './features/portfolio/api';
 export type { UserPosition, IbkrSettings } from './features/portfolio/api';
+
+// ── Limits engine (Item 2, plans/integrity-guardrails.md) ──────
+// Split 2026-07-06 (host decision): RiskConfigForm = Settings (account setup
+// only); ViolationsSummary = My Portfolio (book-level breach display, lives
+// with the position data it's about). LimitsPanel remains as apps/admin's
+// composite of both, since admin has no separate "My Portfolio" page.
+export { LimitsPanel } from './features/limits/LimitsPanel';
+export { RiskConfigForm } from './features/limits/RiskConfigForm';
+export { ViolationsSummary } from './features/limits/ViolationsSummary';
+export { useRiskConfig, useSectorMap, useViolationAcks, useAcknowledgeViolation, useEnsureRiskConfig, useSaveRiskConfig } from './features/limits/useRiskConfig';
+export type { RiskConfigRow, ViolationAck, AckStatus, ViolationType } from './features/limits/api';
+
+// ── Advisory regime light (Item 3, plans/integrity-guardrails.md) ─────
+export { RegimeLight } from './features/regime/RegimeLight';
+export { useLatestRegime } from './features/regime/useLatestRegime';
+export type { RegimeDailyRow } from './features/regime/api';
 
 // ── Macro ─────────────────────────────────────────────────────
 export { MacroView } from './features/macro/MacroView';

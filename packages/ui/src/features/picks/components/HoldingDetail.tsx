@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { Holding } from '../api';
 import {
-  TIERS, ACTION_VARS, bColor, fmtDateTime,
+  TIERS, fmtDateTime, FONT_SIZE, FONT_WEIGHT, SPACE,
   holdingType, holdingPnlPct, closedPnlPct, closedPnlContribution, legIsOpen, legUnrealizedPnlPct, legMarkReason,
   fmtOptionExpiry, fmtLegInstrument, displayInitialWeight,
 } from '@stw/shared';
@@ -13,11 +14,15 @@ import { LegTimeline } from './LegTimeline';
 import { ConvictionTimeline } from './ConvictionTimeline';
 import { SourceLink } from './SourceLink';
 import { RegimeBadge } from './RegimeBadge';
+import { Badge } from '../../../primitives/Badge';
+import { DetailPane, DetailPaneMetricLabel } from '../../../primitives/DetailPane';
+import { useUserPositions } from '../../portfolio/useUserPositions';
+import { cleanUnderlying } from '../../portfolio/api';
 import type { TickerRegime } from '../useTickerRegime';
 
 function PriceEmptyState({ fetchStatus }: { fetchStatus: string }) {
-  if (fetchStatus === 'fetching') return <div style={{ fontSize: 12, color: 'var(--t3)', fontStyle: 'italic' }}>Loading…</div>;
-  return <div style={{ fontSize: 12, color: 'var(--t3)' }}>Unavailable</div>;
+  if (fetchStatus === 'fetching') return <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)', fontStyle: 'italic' }}>Loading…</div>;
+  return <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)' }}>Unavailable</div>;
 }
 
 function fmtDate(s: string | null): string {
@@ -38,7 +43,7 @@ function HistorySection({ title, children }: { title: string; children: React.Re
         }}
       >
         <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-        <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', whiteSpace: 'nowrap' }}>
+        <span style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', whiteSpace: 'nowrap' }}>
           {title} {open ? '▲' : '▼'}
         </span>
         <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
@@ -62,13 +67,18 @@ interface Props {
 export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = false, latestOptionsSync = null, regime }: Props) {
   const { canEdit, canViewHistory, isAdmin } = useCapabilities();
   const showHistory = canViewHistory || isAdmin;
+
+  // §5.5 reverse cross-link: on the subscriber web app, if you actually hold this ticker,
+  // offer a jump to your own position — the other half of the pick ↔ execution loop.
+  // Gated on !isAdmin so it never shows in the admin app (which has no /portfolio route).
+  const navigate = useNavigate();
+  const { data: ownPositions = [] } = useUserPositions();
+  const holdsOwn = !isAdmin && h.ticker !== 'CASH' && ownPositions.some((p) => cleanUnderlying(p.underlying) === h.ticker);
   const [editing, setEditing] = useState(false);
 
   const quote       = useQuote(h.ticker);
   const fetchStatus = usePriceCacheStore((s) => s.fetchStatus);
   const tier        = TIERS[h.conviction] ?? TIERS[0];
-  const action      = ACTION_VARS[h.last_action];
-  const basketColor = bColor(h.basket);
   const pType       = holdingType(h.legs);
 
   // ── Price (Finnhub live underlying) ───────────────────────
@@ -76,7 +86,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
   const price       = livePrice;
   const isLive      = livePrice != null;
   const dpStr       = quote?.dp != null ? `${quote.dp >= 0 ? '+' : ''}${quote.dp.toFixed(2)}%` : null;
-  const dpColor     = (quote?.dp ?? 0) >= 0 ? '#16A34A' : '#DC2626';
+  const dpColor     = (quote?.dp ?? 0) >= 0 ? 'var(--pnl-gain)' : 'var(--pnl-loss)';
   const hiloStr     = (quote?.h && quote?.l) ? `H $${quote.h.toFixed(2)} · L $${quote.l.toFixed(2)}` : null;
   // All carry the established fmtDateTime stamp ("Mon D · H:MM AM ET").
   const srcTime     = quote?.t ? fmtDateTime(new Date(quote.t * 1000)) : null;   // Finnhub quote time
@@ -99,7 +109,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
   const closedOptionsPnl   = closedPnlPct(optionLegs);
   const closedSharesContrib  = closedPnlContribution(shareLegs);
   const closedOptionsContrib = closedPnlContribution(optionLegs);
-  const pnlCol = (v: number | null | undefined) => (v != null && v >= 0 ? '#16A34A' : v != null ? '#DC2626' : undefined);
+  const pnlCol = (v: number | null | undefined) => (v != null && v >= 0 ? 'var(--pnl-gain)' : v != null ? 'var(--pnl-loss)' : undefined);
 
   // Newest OPTION leg mark across this holding → the "IBKR · <time>" stamp + stale flag.
   const newestMarkAt = optionLegs.reduce<Date | null>((acc, l) => {
@@ -141,29 +151,31 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
   ));
 
   // ── Render helpers ────────────────────────────────────────
-  const colBorder: React.CSSProperties = { borderLeft: '1px solid var(--border)', paddingLeft: 12 };
+  // Still needed for the P&L Breakdown card's own internal 3-column layout (Shares / Options /
+  // Options Detail) — a separate, smaller column split from the top-level DetailPane metrics.
+  const colBorder: React.CSSProperties = { borderLeft: '1px solid var(--border)', paddingLeft: SPACE[3] };
 
-  function renderPriceCol(withBorder = false) {
+  // Content for DetailPane's first metric column — no outer wrapper div; DetailPane owns the
+  // flex/border/spacing for all 3 columns now.
+  function renderPriceContent() {
     return (
-      <div style={{ flex: 1, ...(withBorder ? colBorder : {}) }}>
-        <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>
-          {isLive ? 'Live Market' : 'Last Price'}
-        </div>
+      <>
+        <DetailPaneMetricLabel>{isLive ? 'Live Market' : 'Last Price'}</DetailPaneMetricLabel>
         {price ? (
           <>
-            <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
+            <div style={{ fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)', lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
               ${price.toFixed(2)}
             </div>
-            {isLive && dpStr  && <div style={{ fontSize: 11, fontWeight: 600, color: dpColor, marginTop: 2 }}>{dpStr}</div>}
-            {isLive && hiloStr && <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 1 }}>{hiloStr}</div>}
-            <div style={{ fontSize: 9, color: 'var(--t3)', marginTop: 4, opacity: 0.8 }}>
+            {isLive && dpStr  && <div style={{ fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold, color: dpColor, marginTop: 2 }}>{dpStr}</div>}
+            {isLive && hiloStr && <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 1 }}>{hiloStr}</div>}
+            <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 4, opacity: 0.8 }}>
               {srcTime ? `Finnhub · ${srcTime}` : 'Finnhub'}
             </div>
           </>
         ) : (
           <PriceEmptyState fetchStatus={fetchStatus} />
         )}
-      </div>
+      </>
     );
   }
 
@@ -171,10 +183,10 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
   // portfolio contribution. Exactly one of lot/contrib is passed.
   function assetPnlRow(name: string, pct: number, lot: number | null, contrib: number | null) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 12, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: FONT_SIZE.sm, marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
         <span style={{ color: 'var(--t2)' }}>{name}</span>
         <span>
-          <span style={{ color: pnlCol(pct), fontWeight: 700 }}>{pct >= 0 ? '+' : ''}{pct.toFixed(1)}%</span>
+          <span style={{ color: pnlCol(pct), fontWeight: FONT_WEIGHT.bold }}>{pct >= 0 ? '+' : ''}{pct.toFixed(1)}%</span>
           {lot != null && <span style={{ color: 'var(--t3)' }}> ({lot.toFixed(1)}% lot)</span>}
           {contrib != null && <span style={{ color: 'var(--t3)' }}> ({contrib >= 0 ? '+' : ''}{contrib.toFixed(2)}%)</span>}
         </span>
@@ -182,74 +194,71 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
     );
   }
 
-  function renderPnlCol(withBorder = true) {
+  function renderPnlContent() {
     const srcLines = pnlSrcLines();
     const hasOpenPnl   = openSharesPnl != null || openOptionsPnl != null;
     const hasClosedPnl = closedSharesPnl != null || closedOptionsPnl != null;
-    const subHdr: React.CSSProperties = { fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em' };
     return (
-      <div style={{ flex: 1, ...(withBorder ? colBorder : {}) }}>
+      <>
         {openLegs.length > 0 && (
           <>
-            <div style={{ ...subHdr, marginBottom: 3 }}>Open P&L</div>
+            <DetailPaneMetricLabel>Open P&L</DetailPaneMetricLabel>
             {hasOpenPnl ? (
               <>
                 {openSharesPnl  != null && assetPnlRow('Shares',  openSharesPnl,  sumW(openShareLegs),  null)}
                 {openOptionsPnl != null && assetPnlRow('Options', openOptionsPnl, sumW(openOptionLegs), null)}
                 {srcLines.map((line, i) => (
-                  <div key={i} style={{ fontSize: 9, color: line.stale ? 'var(--c3)' : 'var(--t3)', marginTop: i === 0 ? 4 : 1, opacity: line.stale ? 1 : 0.8 }}>{line.text}</div>
+                  <div key={i} style={{ fontSize: FONT_SIZE['2xs'], color: line.stale ? 'var(--c3)' : 'var(--t3)', marginTop: i === 0 ? 4 : 1, opacity: line.stale ? 1 : 0.8 }}>{line.text}</div>
                 ))}
               </>
             ) : (
               (pType === 'options' || pType === 'mixed')
-                ? <div style={{ fontSize: 12, color: 'var(--t3)' }}>No IBKR data</div>
+                ? <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)' }}>No IBKR data</div>
                 : <PriceEmptyState fetchStatus={fetchStatus} />
             )}
           </>
         )}
         {hasClosedPnl && (
           <div style={{ marginTop: openLegs.length > 0 ? 8 : 0 }}>
-            <div style={{ ...subHdr, marginBottom: 3 }}>Closed <span style={{ textTransform: 'none', letterSpacing: 0 }}>(Portfolio Contribution %)</span></div>
+            <DetailPaneMetricLabel>Closed <span style={{ textTransform: 'none', letterSpacing: 0 }}>(Portfolio Contribution %)</span></DetailPaneMetricLabel>
             {closedSharesPnl  != null && assetPnlRow('Shares',  closedSharesPnl,  null, closedSharesContrib)}
             {closedOptionsPnl != null && assetPnlRow('Options', closedOptionsPnl, null, closedOptionsContrib)}
           </div>
         )}
-        {openLegs.length === 0 && !hasClosedPnl && <div style={{ fontSize: 12, color: 'var(--t3)' }}>Position closed</div>}
-      </div>
+        {openLegs.length === 0 && !hasClosedPnl && <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)' }}>Position closed</div>}
+      </>
     );
   }
 
-  function renderWeightCol(withBorder = true) {
+  function renderWeightContent() {
     // Initial = Σ the open legs' lots (the size actually deployed, from the diary); for a fully-closed
     // position it falls back to the closed legs' entry lots so it still shows the original size.
     // Current = holdings.current_weight — the live portfolio weight the routines restate.
     const initWeight = displayInitialWeight(h.legs);
     const curWeight  = h.current_weight;
     return (
-      <div style={{ flex: 1, ...(withBorder ? colBorder : {}) }}>
-        <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>
-          Initial · Current Weight
-        </div>
-        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
+      <>
+        <DetailPaneMetricLabel>Initial · Current Weight</DetailPaneMetricLabel>
+        <div style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
           {initWeight != null ? `${initWeight}%` : '—'}
-          <span style={{ color: 'var(--t3)', fontWeight: 400, margin: '0 4px' }}>→</span>
+          <span style={{ color: 'var(--t3)', fontWeight: FONT_WEIGHT.medium, margin: '0 4px' }}>→</span>
           {curWeight != null ? `${curWeight}%` : '—'}
         </div>
         {openLegs.length > 0 ? (
           /* one OPEN leg per line — closed legs live in Transaction History */
-          <div style={{ fontSize: isMobile ? 11 : 10, color: 'var(--t2)', marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <div style={{ fontSize: isMobile ? FONT_SIZE.xs : FONT_SIZE['2xs'], color: 'var(--t2)', marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
             {openLegs.map((l) => (
               <div key={l.id} style={{ fontVariantNumeric: 'tabular-nums' }}>
-                {l.weight != null && <span style={{ color: 'var(--text)', fontWeight: 600 }}>{l.weight}% </span>}
+                {l.weight != null && <span style={{ color: 'var(--text)', fontWeight: FONT_WEIGHT.semibold }}>{l.weight}% </span>}
                 {l.instrument_type === 'SHARES' ? 'Shares' : fmtLegInstrument(l)}
                 {l.instrument_type === 'SHARES' && l.entry_price != null ? ` @ $${l.entry_price}` : ''}
               </div>
             ))}
           </div>
         ) : (
-          <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 4 }}>no open legs</div>
+          <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 4 }}>no open legs</div>
         )}
-      </div>
+      </>
     );
   }
 
@@ -258,30 +267,28 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
     if (openSharesPnl == null && openOptionsPnl == null) return null;
     return (
       <div style={{ background: 'var(--s2)', border: '1px solid var(--bsub)', borderRadius: 6, padding: '10px 12px', marginBottom: 12 }}>
-        <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>
-          P&L Breakdown
-        </div>
+        <DetailPaneMetricLabel>P&L Breakdown</DetailPaneMetricLabel>
         {/* Shares 25% · Options 25% · Options Detail 50% (stacks on mobile). */}
         <div style={{ display: 'flex', flexWrap: isMobile ? 'wrap' : 'nowrap', gap: isMobile ? 10 : 0, alignItems: 'flex-start' }}>
           {openSharesPnl != null && (
             <div style={{ flex: isMobile ? '1 1 40%' : '0 0 25%' }}>
-              <div style={{ fontSize: 9, color: 'var(--t3)', marginBottom: 3 }}>Shares</div>
-              <div style={{ fontSize: 17, fontWeight: 700, color: openSharesPnl >= 0 ? '#16A34A' : '#DC2626', fontVariantNumeric: 'tabular-nums' }}>
+              <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginBottom: 3 }}>Shares</div>
+              <div style={{ fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, color: openSharesPnl >= 0 ? 'var(--pnl-gain)' : 'var(--pnl-loss)', fontVariantNumeric: 'tabular-nums' }}>
                 {openSharesPnl >= 0 ? '+' : ''}{openSharesPnl.toFixed(1)}%
               </div>
               {openShareLegs[0]?.entry_price != null && (
-                <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>from ${openShareLegs[0].entry_price!.toFixed(2)}</div>
+                <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 2 }}>from ${openShareLegs[0].entry_price!.toFixed(2)}</div>
               )}
             </div>
           )}
           {openOptionsPnl != null && (
             <div style={{ flex: isMobile ? '1 1 40%' : '0 0 25%', ...(openSharesPnl != null && !isMobile ? colBorder : {}) }}>
-              <div style={{ fontSize: 9, color: 'var(--t3)', marginBottom: 3 }}>Options</div>
-              <div style={{ fontSize: 17, fontWeight: 700, color: openOptionsPnl >= 0 ? '#16A34A' : '#DC2626', fontVariantNumeric: 'tabular-nums' }}>
+              <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginBottom: 3 }}>Options</div>
+              <div style={{ fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, color: openOptionsPnl >= 0 ? 'var(--pnl-gain)' : 'var(--pnl-loss)', fontVariantNumeric: 'tabular-nums' }}>
                 {openOptionsPnl >= 0 ? '+' : ''}{openOptionsPnl.toFixed(1)}%
               </div>
               {validLegs.length > 0 && (
-                <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>
+                <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 2 }}>
                   {validLegs.length} leg{validLegs.length > 1 ? 's' : ''}
                 </div>
               )}
@@ -289,7 +296,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
           )}
           {openOptionLegs.length > 0 && (
             <div style={{ flex: isMobile ? '1 1 100%' : '1 1 50%', ...(isMobile ? { borderTop: '1px solid var(--border)', paddingTop: 10 } : colBorder) }}>
-              <div style={{ fontSize: 9, color: 'var(--t3)', marginBottom: 3 }}>Options Detail</div>
+              <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginBottom: 3 }}>Options Detail</div>
               {renderLegRowsCompact()}
             </div>
           )}
@@ -308,24 +315,24 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
           const pnl         = legUnrealizedPnlPct(leg, livePrice);
           const mark        = leg.mark_price;
           const entry       = leg.entry_price;
-          const lColor      = pnl != null ? (pnl >= 0 ? '#16A34A' : '#DC2626') : 'var(--t3)';
+          const lColor      = pnl != null ? (pnl >= 0 ? 'var(--pnl-gain)' : 'var(--pnl-loss)') : 'var(--t3)';
           const perContract = mark != null && entry != null ? (mark - entry) * 100 : null;
           const reason      = legMarkReason(leg);
           return (
-            <div key={leg.id} style={{ fontSize: 11 }}>
+            <div key={leg.id} style={{ fontSize: FONT_SIZE.xs }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
                 <span style={{ minWidth: 0 }}>
-                  <span style={{ fontWeight: 700, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>${leg.option_strike}{right}</span>
+                  <span style={{ fontWeight: FONT_WEIGHT.bold, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>${leg.option_strike}{right}</span>
                   <span style={{ color: 'var(--t3)', marginLeft: 6 }}>{fmtOptionExpiry(leg.option_expiry)}</span>
                 </span>
                 {pnl != null && (
-                  <span style={{ fontWeight: 700, color: lColor, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+                  <span style={{ fontWeight: FONT_WEIGHT.bold, color: lColor, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
                     {pnl >= 0 ? '+' : ''}{pnl.toFixed(1)}%
                   </span>
                 )}
               </div>
               {mark != null && entry != null ? (
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 10, color: 'var(--t3)', marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>
                   <span>${entry.toFixed(2)} → ${mark.toFixed(2)}</span>
                   {perContract != null && (
                     <span style={{ flexShrink: 0 }}>{perContract >= 0 ? '+' : ''}${Math.abs(perContract).toFixed(0)}/ct</span>
@@ -333,7 +340,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
                 </div>
               ) : (
                 reason && (
-                  <div style={{ fontSize: 9, color: 'var(--c3)', marginTop: 1, lineHeight: 1.3 }}>
+                  <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--c3)', marginTop: 1, lineHeight: 1.3 }}>
                     {reason.title}{reason.hint ? ` · ${reason.hint}` : ''}
                   </div>
                 )
@@ -355,7 +362,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
             const pnl         = legUnrealizedPnlPct(leg, livePrice);
             const mark        = leg.mark_price;
             const entry       = leg.entry_price;
-            const lColor      = pnl != null ? (pnl >= 0 ? '#16A34A' : '#DC2626') : 'var(--t3)';
+            const lColor      = pnl != null ? (pnl >= 0 ? 'var(--pnl-gain)' : 'var(--pnl-loss)') : 'var(--t3)';
             const perContract = mark != null && entry != null ? (mark - entry) * 100 : null;
             const reason      = legMarkReason(leg); // why this leg has no mark (if so)
             return (
@@ -363,17 +370,17 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 padding: '6px 10px', borderRadius: 5,
                 background: 'var(--s2)', border: '1px solid var(--bsub)',
-                fontSize: 11, gap: 8,
+                fontSize: FONT_SIZE.xs, gap: 8,
               }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <span style={{ fontWeight: 700, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
+                    <span style={{ fontWeight: FONT_WEIGHT.bold, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
                       ${leg.option_strike}{right}
                     </span>
                     <span style={{ color: 'var(--t3)' }}>{fmtOptionExpiry(leg.option_expiry)}</span>
                   </div>
                   {reason && (
-                    <span style={{ fontSize: 9, color: 'var(--c3)', lineHeight: 1.3 }}>
+                    <span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--c3)', lineHeight: 1.3 }}>
                       {reason.title}{reason.hint ? ` · ${reason.hint}` : ''}
                     </span>
                   )}
@@ -384,11 +391,11 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
                   </span>
                   {pnl != null && (
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontWeight: 700, color: lColor, fontVariantNumeric: 'tabular-nums' }}>
+                      <div style={{ fontWeight: FONT_WEIGHT.bold, color: lColor, fontVariantNumeric: 'tabular-nums' }}>
                         {pnl >= 0 ? '+' : ''}{pnl.toFixed(1)}%
                       </div>
                       {perContract != null && (
-                        <div style={{ fontSize: 9, color: 'var(--t3)' }}>
+                        <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>
                           {perContract >= 0 ? '+' : ''}${Math.abs(perContract).toFixed(2)}/contract
                         </div>
                       )}
@@ -407,9 +414,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
     if (pType !== 'options' || openOptionLegs.length === 0) return null;
     return (
       <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>
-          Options Legs
-        </div>
+        <DetailPaneMetricLabel>Options Legs</DetailPaneMetricLabel>
         {renderLegRows()}
       </div>
     );
@@ -417,12 +422,14 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
 
   return (
     <div style={{ height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-      {/* Back / Close + Edit buttons */}
+      {/* Back / Close + Edit buttons — a small custom utility bar, not DetailPane's own close
+          button: on mobile this reads "← Back" and moves first via `order`, unlike DetailPane's
+          fixed top-right icon-only close affordance, so it stays its own row above DetailPane. */}
       <div style={{ padding: '10px 16px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <button
           onClick={onClose}
           style={{
-            fontSize: 12, color: 'var(--t3)', background: 'none', border: 'none', cursor: 'pointer',
+            fontSize: FONT_SIZE.sm, color: 'var(--t3)', background: 'none', border: 'none', cursor: 'pointer',
             padding: isMobile ? '8px 0' : '4px 8px',
             minHeight: isMobile ? 44 : 'auto',
             display: 'flex', alignItems: 'center', order: isMobile ? 0 : 2,
@@ -436,7 +443,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
           <button
             onClick={() => setEditing(true)}
             style={{
-              fontSize: 12, color: 'var(--acc)', background: 'none',
+              fontSize: FONT_SIZE.sm, color: 'var(--acc)', background: 'none',
               border: '1px solid var(--border)', borderRadius: 5, cursor: 'pointer',
               padding: '4px 10px', order: 1,
             }}
@@ -448,70 +455,42 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
         )}
       </div>
 
-      <div style={{ padding: '8px 16px 24px', flex: 1 }}>
-        {/* Header: ticker + name */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
-          <div style={{ width: 4, height: 44, borderRadius: 2, background: tier.color, flexShrink: 0, marginTop: 2 }} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 26, fontWeight: 700, color: tier.color, lineHeight: 1.1 }}>{h.ticker}</div>
-            <div style={{ fontSize: 12, color: 'var(--t2)', marginTop: 1 }}>{h.name}</div>
-          </div>
-          {h.action_date && (
-            <div style={{ textAlign: 'right', flexShrink: 0 }}>
-              <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                {isMobile ? '' : 'Last Action'}
-              </div>
-              <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--t2)' }}>{fmtDate(h.action_date)}</div>
-            </div>
-          )}
-        </div>
+      {/* Edit — a single modal: position fields + legs together (admin only) */}
+      {editing && <PositionEditor holding={h} onDone={() => setEditing(false)} />}
 
-        {/* Badges */}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
-          <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: basketColor + '18', color: basketColor, border: `1px solid ${basketColor}28` }}>
-            ● {h.basket}
-          </span>
-          {action && (
-            <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4, color: action.color, background: action.bg }}>
-              {h.last_action}
+      <DetailPane
+        title={<span style={{ color: tier.color }}>{h.ticker}</span>}
+        subtitle={h.name}
+        isMobile={isMobile}
+        badges={
+          <>
+            <Badge kind="category" category={h.basket} />
+            <Badge kind="action" action={h.last_action} />
+            <span style={{ fontSize: FONT_SIZE['2xs'], padding: '2px 6px', borderRadius: 4, color: 'var(--t2)', background: 'var(--s2)', border: '1px solid var(--bsub)' }}>
+              Rank #{String(h.rank).padStart(2, '0')} / {totalCount}
             </span>
-          )}
-          <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, color: 'var(--t2)', background: 'var(--s2)', border: '1px solid var(--bsub)' }}>
-            Rank #{String(h.rank).padStart(2, '0')} / {totalCount}
-          </span>
-          <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 6px', borderRadius: 4, color: tier.color, background: tier.bg, border: `1px solid ${tier.border}` }}>
-            {tier.short}
-          </span>
-          {h.ticker !== 'CASH' && <RegimeBadge regime={regime} />}
-        </div>
-
-        {/* Edit — a single modal: position fields + legs together (admin only) */}
-        {editing && <PositionEditor holding={h} onDone={() => setEditing(false)} />}
-
-        {/* Data card */}
-        {h.ticker !== 'CASH' && (
-          <div style={{ background: 'var(--s2)', border: '1px solid var(--bsub)', borderRadius: 6, padding: '10px 12px', marginBottom: 12 }}>
-            {isMobile ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {/* Row 1: Price + P&L side by side */}
-                <div style={{ display: 'flex', gap: 0 }}>
-                  {renderPriceCol(false)}
-                  {renderPnlCol(true)}
-                </div>
-                {/* Row 2: Weight full width */}
-                <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10 }}>
-                  {renderWeightCol(false)}
-                </div>
-              </div>
-            ) : (
-              /* Desktop: 3 equal columns */
-              <div style={{ display: 'flex', gap: 0, alignItems: 'flex-start' }}>
-                {renderPriceCol(false)}
-                {renderPnlCol(true)}
-                {renderWeightCol(true)}
-              </div>
+            <Badge kind="tier" tier={h.conviction} />
+            {h.ticker !== 'CASH' && <RegimeBadge regime={regime} />}
+            {h.action_date && (
+              <span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>
+                Last action {fmtDate(h.action_date)}
+              </span>
             )}
-          </div>
+          </>
+        }
+        metrics={h.ticker !== 'CASH' ? [
+          { key: 'price', content: renderPriceContent() },
+          { key: 'pnl', content: renderPnlContent() },
+          { key: 'weight', content: renderWeightContent() },
+        ] : undefined}
+      >
+        {holdsOwn && (
+          <button
+            onClick={() => navigate(`/portfolio?ticker=${encodeURIComponent(h.ticker)}`)}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--acc)', background: 'none', border: '1px solid var(--c5b)', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', marginBottom: 12 }}
+          >
+            View your position →
+          </button>
         )}
 
         {/* CASH: show portfolio weight (can be negative = margin / leverage) */}
@@ -519,13 +498,13 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
           const cw = h.current_weight ?? h.initial_weight ?? 0;
           return (
             <div style={{ background: 'var(--s2)', border: '1px solid var(--bsub)', borderRadius: 6, padding: '10px 12px', marginBottom: 12 }}>
-              <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>
-                Portfolio Weight
-              </div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: cw < 0 ? '#DC2626' : 'var(--text)', lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
+              <DetailPaneMetricLabel>Portfolio Weight</DetailPaneMetricLabel>
+              {/* A negative CASH weight is leverage, not P&L — var(--status-negative-text), not
+                  var(--pnl-loss). Same distinction drawn in HoldingRow.tsx's weight readout. */}
+              <div style={{ fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, color: cw < 0 ? 'var(--status-negative-text)' : 'var(--text)', lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
                 {cw.toFixed(1)}%
               </div>
-              <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 4 }}>
+              <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 4 }}>
                 {cw < 0 ? 'Negative — margin / leverage in use' : 'Cash position'}
               </div>
             </div>
@@ -541,11 +520,11 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
         {/* Conviction meter */}
         <div style={{ marginBottom: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
-            <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Conviction</div>
-            {ddDate && <div style={{ fontSize: 9, color: 'var(--t3)' }}>Updated {ddDate}</div>}
+            <DetailPaneMetricLabel>Conviction</DetailPaneMetricLabel>
+            {ddDate && <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>Updated {ddDate}</div>}
           </div>
           <div style={{ display: 'flex', gap: 3 }}>{convSegs}</div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: 'var(--t3)', marginTop: 3 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 3 }}>
             <span>Concern</span><span>Highest</span>
           </div>
         </div>
@@ -553,7 +532,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
         {/* Thesis summary — the durable "why he's in it" (green card). The ↗ opens the
             original DD message (everyone sees it; Discord gates access). */}
         {h.summary && (
-          <div style={{ position: 'relative', padding: '10px 12px', paddingRight: h.dd_source_url ? 30 : 12, borderRadius: 6, background: tier.bg, border: `1px solid ${tier.border}`, marginBottom: 12, fontSize: 13, color: 'var(--text)', lineHeight: 1.6 }}>
+          <div style={{ position: 'relative', padding: '10px 12px', paddingRight: h.dd_source_url ? 30 : 12, borderRadius: 6, background: tier.bg, border: `1px solid ${tier.border}`, marginBottom: 12, fontSize: FONT_SIZE.base, color: 'var(--text)', lineHeight: 1.6 }}>
             {h.summary}
             <SourceLink url={h.dd_source_url} title="Open DD source message" style={{ position: 'absolute', top: 6, right: 6 }} />
           </div>
@@ -562,12 +541,10 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
         {/* Thesis key points (part of the durable thesis, not the latest comment) */}
         {h.bullets && h.bullets.length > 0 && (
           <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>
-              Key Points{ddDate ? ` · ${ddDate}` : ''}
-            </div>
+            <DetailPaneMetricLabel>Key Points{ddDate ? ` · ${ddDate}` : ''}</DetailPaneMetricLabel>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {h.bullets.map((b, i) => (
-                <div key={i} style={{ display: 'flex', gap: 8, fontSize: 13, color: 'var(--t2)', lineHeight: 1.5 }}>
+                <div key={i} style={{ display: 'flex', gap: 8, fontSize: FONT_SIZE.base, color: 'var(--t2)', lineHeight: 1.5 }}>
                   <span style={{ color: tier.color, flexShrink: 0, marginTop: 2 }}>◆</span>
                   <span>{b}</span>
                 </div>
@@ -591,7 +568,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
             <LegTimeline ticker={h.ticker} legs={h.legs} />
           </HistorySection>
         )}
-      </div>
+      </DetailPane>
     </div>
   );
 }

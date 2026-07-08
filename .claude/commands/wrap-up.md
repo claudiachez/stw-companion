@@ -15,6 +15,19 @@ Wrap up this session. We'll continue in a new session.
   - If a new decision **contradicts existing CLAUDE.md text, fix the old text in place** (correct or
     delete it) rather than only appending — stale guidance left standing will mislead the next session.
   - Skip pure implementation details and one-off fixes; record rules, not changelog entries.
+- **Keep the standing reference docs in `docs/` current** if this session changed what they describe.
+  Check each against the work done and update the stale ones (don't rewrite what's still accurate):
+  - `docs/feeds.md` — every external data feed, its key/limits, and consumers. Update whenever a feed,
+    API key, rate limit, scheduled writer, or the sector taxonomy changes.
+  - `docs/workflow.md` — the cold, end-to-end system overview (ingestion → Supabase → apps).
+  - `docs/macro_dashboard_guide.md` + `docs/macro_dashboard_guide_prompt.md` — the subscriber-facing
+    Macro-tab guide + its regenerator prompt. Update when a macro module, indicator, data source, or
+    the regime scoring changes.
+  - `docs/regime_exit_v0.md` — operator-owned advisory de-risking policy (a template; only the operator
+    fills/signs it — don't invent values).
+  - `plans/20260706_integrity-guardrails-report.md` — a historical week-1 report; don't rewrite it, but
+    add a short "superseded / current state" note if later work changed its conclusions.
+  - **Doc filenames are lowercase** (`snake_case.md`) — never ALL-CAPS. Fix any that drift.
 - Before writing the handoff, **verify the repo is synced**: no uncommitted changes, no unpushed
   commits, and everything the handoff will reference is actually committed and **pushed to
   `staging`**. Commit and push the CLAUDE.md update to `staging` too — don't leave it local; the

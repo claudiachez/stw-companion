@@ -1,4 +1,4 @@
--- Legs rebuild — corrective data fix (generated from plans/legs_rebuild_spec.md)
+-- Legs rebuild — corrective data fix (generated from plans/20260616_legs_rebuild_spec.md)
 -- Rebuilds legs + leg_transactions for STW from the 7-snapshot series + pre-redesign backup.
 -- The 030 trigger derives entry/weight/status/exit/realized from the inserted transactions.
 -- holding_transactions (the timeline) is NOT touched. Apply in the Supabase SQL editor.

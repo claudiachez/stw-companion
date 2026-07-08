@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { fmtLegInstrument, humanizeLegEnum } from '@stw/shared';
+import { fmtLegInstrument, humanizeLegEnum, FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
 import { updateLegWeight } from '../api';
 import type { Holding } from '../api';
+import { Modal } from '../../../primitives/Modal';
+import { Button } from '../../../primitives/Button';
 
 interface Props {
   holding: Holding;
@@ -10,12 +12,12 @@ interface Props {
 }
 
 const labelStyle: React.CSSProperties = {
-  fontSize: 9, color: 'var(--t3)', textTransform: 'uppercase',
+  fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', textTransform: 'uppercase',
   letterSpacing: '0.1em', marginBottom: 3, display: 'block',
 };
 const fieldStyle: React.CSSProperties = {
   width: '100%', background: 'var(--bg)', border: '1px solid var(--border)',
-  borderRadius: 5, padding: '6px 8px', fontSize: 13, color: 'var(--text)', boxSizing: 'border-box',
+  borderRadius: 5, padding: '6px 8px', fontSize: FONT_SIZE.base, color: 'var(--text)', boxSizing: 'border-box',
 };
 
 // Per-leg weight editor — overrides the writer's 90/10 default split. Weight is the only
@@ -57,39 +59,20 @@ export function TradeEditForm({ holding: h, onDone }: Props) {
   }
 
   return (
-    <div
-      onClick={onDone}
-      style={{
-        position: 'fixed', inset: 0, zIndex: 1000,
-        background: 'rgba(0,0,0,0.55)', display: 'flex',
-        alignItems: 'flex-start', justifyContent: 'center',
-        padding: '8vh 16px 16px', overflowY: 'auto',
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          width: '100%', maxWidth: 420, background: 'var(--surface)',
-          border: '1px solid var(--acc)', borderRadius: 10, padding: '16px 18px',
-          boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
-        }}
-      >
-        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--acc)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-          ✎ Edit Leg Weights — {h.ticker}
-        </div>
-        <div style={{ fontSize: 11, color: 'var(--t3)', marginBottom: 14 }}>
+    <Modal onClose={onDone} width="sm" title={`✎ Edit Leg Weights — ${h.ticker}`}>
+        <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginBottom: 14 }}>
           Override the default split. Blank clears it back to the auto-weighting.
         </div>
 
         {h.legs.length === 0 ? (
-          <div style={{ fontSize: 12, color: 'var(--t3)' }}>No legs to weight yet.</div>
+          <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)' }}>No legs to weight yet.</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {h.legs.map((l) => (
               <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{fmtLegInstrument(l)}</div>
-                  <div style={{ fontSize: 10, color: 'var(--t3)' }}>
+                  <div style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>{fmtLegInstrument(l)}</div>
+                  <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>
                     {humanizeLegEnum(l.instrument_type)} · {humanizeLegEnum(l.status)}
                   </div>
                 </div>
@@ -110,25 +93,16 @@ export function TradeEditForm({ holding: h, onDone }: Props) {
           </div>
         )}
 
-        {error && <div style={{ fontSize: 11, color: '#ef4444', marginTop: 10 }}>{error}</div>}
+        {error && <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--status-negative-text)', marginTop: 10 }}>{error}</div>}
 
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-          <button
-            onClick={save}
-            disabled={saving || h.legs.length === 0}
-            style={{ padding: '7px 16px', borderRadius: 5, border: 'none', cursor: 'pointer', background: 'var(--acc)', color: '#fff', fontSize: 12, fontWeight: 600, opacity: saving || h.legs.length === 0 ? 0.6 : 1 }}
-          >
+          <Button variant="primary" onClick={save} disabled={saving || h.legs.length === 0}>
             {saving ? 'Saving…' : 'Save'}
-          </button>
-          <button
-            onClick={onDone}
-            disabled={saving}
-            style={{ padding: '7px 16px', borderRadius: 5, cursor: 'pointer', background: 'none', border: '1px solid var(--border)', color: 'var(--t2)', fontSize: 12 }}
-          >
+          </Button>
+          <Button variant="ghost" onClick={onDone} disabled={saving}>
             Cancel
-          </button>
+          </Button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

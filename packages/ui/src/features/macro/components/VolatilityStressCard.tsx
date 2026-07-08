@@ -1,6 +1,6 @@
-import { stressLabel } from '@stw/shared';
+import { FONT_SIZE } from '@stw/shared';
 import type { VolatilityStress } from '../useVolatilityStress';
-import { StatTile, SleeveSummary, TileGrid, SourceNote } from './macroVisuals';
+import { StatTile, TileGrid, SourceNote } from './macroVisuals';
 
 interface Props {
   data: VolatilityStress | null;
@@ -13,14 +13,13 @@ function fmtDelta(v: number | null): string {
 }
 
 export function VolatilityStressCard({ data, loading }: Props) {
-  if (loading && !data) return <div style={{ color: 'var(--t3)', fontSize: 12 }}>Loading volatility…</div>;
-  if (!data) return <div style={{ color: 'var(--t3)', fontSize: 12 }}>Volatility data unavailable.</div>;
+  if (loading && !data) return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>Loading volatility…</div>;
+  if (!data) return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>Volatility data unavailable.</div>;
 
-  const { vix, vixPercentile, vixDelta5, vvix, ivPremium, spyHv30, subScores, sleeveScore } = data;
+  const { vix, vixPercentile, vixDelta5, ivPremium, spyHv30, subScores } = data;
 
   return (
     <div>
-      <SleeveSummary score={sleeveScore} label={stressLabel(sleeveScore)} hint="higher = calmer" />
       <TileGrid>
         <StatTile
           label="VIX"
@@ -29,19 +28,13 @@ export function VolatilityStressCard({ data, loading }: Props) {
           score={subScores.vix}
         />
         <StatTile
-          label="VVIX · Tail Risk"
-          value={vvix !== null ? vvix.toFixed(0) : '—'}
-          sub={vvix !== null ? 'vol-of-vol' : 'unavailable'}
-          score={subScores.vvix}
-        />
-        <StatTile
           label="IV Premium"
           value={ivPremium !== null ? ivPremium.toFixed(2) : '—'}
           sub={spyHv30 !== null ? `VIX ÷ HV30 (${spyHv30.toFixed(1)}%)` : 'VIX ÷ 30D realized'}
           score={subScores.ivPremium}
         />
       </TileGrid>
-      <SourceNote source="VIX/VVIX: Finnhub live · history: TwelveData daily" asOf={data.asOf} />
+      <SourceNote source="VIX: FRED (VIXCLS) daily · IV: TwelveData SPY" asOf={data.asOf} updatedAt={data.updatedAt} />
     </div>
   );
 }

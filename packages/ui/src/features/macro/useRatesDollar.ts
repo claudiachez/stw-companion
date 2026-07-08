@@ -1,65 +1,65 @@
 import { useState, useEffect } from 'react';
-import { us10yScore, uupScore, ratesDollarScore } from '@stw/shared';
-import { tdDailyCloses, sma, loadLastDate } from './maCache';
+import { us10yScore, uupScore, ratesDollarScore, FRED_SERIES } from '@stw/shared';
+import { sma } from './maCache';
+import { fredBatch, loadFredLastDate } from './fredCache';
 
 // ── Module 7: Rates + Dollar Headwinds ──────────────────────────────
-// US10Y shown as a yield %. TwelveData/CBOE 'TNX' quotes 10× the yield
-// (42.5 = 4.25%), so normalize values >20 by /10.
-
-function normalizeYield(v: number | null): number | null {
-  if (v === null) return null;
-  return v > 20 ? v / 10 : v;
-}
+// US10Y is the 10-Year Treasury yield from FRED (DGS10, already a percent — no
+// more ×10 CBOE-TNX normalization). The dollar is FRED's Nominal Broad U.S.
+// Dollar Index (DTWEXBGS, the actual index vs the old UUP ETF proxy), read via
+// its 9/21-day MA cross. Both come through the `fred` proxy.
 
 export interface RatesDollar {
   us10y: number | null;        // yield %
   us10yDelta5: number | null;  // yield points over 5 trading days
-  uup: number | null;
-  uupAbove9: boolean | null;
-  uupAbove21: boolean | null;
-  subScores: { us10y: number | null; uup: number | null };
+  dollar: number | null;       // broad dollar index level
+  dollarAbove9: boolean | null;
+  dollarAbove21: boolean | null;
+  subScores: { us10y: number | null; dollar: number | null };
   sleeveScore: number | null;
   asOf: string | null;
+  updatedAt: string;           // when this was last refreshed (ISO)
 }
 
-export function useRatesDollar(twelveDataKey: string | undefined, stressRising: boolean) {
+export function useRatesDollar(stressRising: boolean) {
   const [data, setData] = useState<RatesDollar | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!twelveDataKey) { setLoading(false); return; }
     let cancelled = false;
     setLoading(true);
 
     async function compute() {
-      // US10Y via CBOE TNX daily closes (normalized to a yield %).
-      const tnxCloses = (await tdDailyCloses('TNX', twelveDataKey!)).map((c) => normalizeYield(c) as number);
+      const closes = await fredBatch([FRED_SERIES.us10y, FRED_SERIES.dollar]);
+
+      // US10Y via FRED DGS10 (yield %, no normalization needed).
+      const tnxCloses = closes[FRED_SERIES.us10y] ?? [];
       const us10y = tnxCloses.length ? tnxCloses[tnxCloses.length - 1] : null;
       const us10yDelta5 = tnxCloses.length >= 6 ? tnxCloses[tnxCloses.length - 1] - tnxCloses[tnxCloses.length - 6] : null;
 
-      // UUP via daily closes vs 9/21D MAs.
-      const uupCloses = await tdDailyCloses('UUP', twelveDataKey!, 60);
-      const uup = uupCloses.length ? uupCloses[uupCloses.length - 1] : null;
-      const uup9 = sma(uupCloses, 9);
-      const uup21 = sma(uupCloses, 21);
-      const uupAbove9 = uup !== null && uup9 !== null ? uup > uup9 : null;
-      const uupAbove21 = uup !== null && uup21 !== null ? uup > uup21 : null;
+      // Dollar via FRED DTWEXBGS broad index vs its 9/21D MAs.
+      const dollarCloses = closes[FRED_SERIES.dollar] ?? [];
+      const dollar = dollarCloses.length ? dollarCloses[dollarCloses.length - 1] : null;
+      const d9 = sma(dollarCloses, 9);
+      const d21 = sma(dollarCloses, 21);
+      const dollarAbove9 = dollar !== null && d9 !== null ? dollar > d9 : null;
+      const dollarAbove21 = dollar !== null && d21 !== null ? dollar > d21 : null;
 
       const subScores = {
         us10y: us10yScore(us10y, us10yDelta5, stressRising),
-        uup: uupAbove9 !== null && uupAbove21 !== null ? uupScore(uupAbove9, uupAbove21) : null,
+        dollar: dollarAbove9 !== null && dollarAbove21 !== null ? uupScore(dollarAbove9, dollarAbove21) : null,
       };
-      const sleeveScore = ratesDollarScore([subScores.us10y, subScores.uup]);
+      const sleeveScore = ratesDollarScore([subScores.us10y, subScores.dollar]);
 
       if (!cancelled) {
-        setData({ us10y, us10yDelta5, uup, uupAbove9, uupAbove21, subScores, sleeveScore, asOf: loadLastDate('TNX') });
+        setData({ us10y, us10yDelta5, dollar, dollarAbove9, dollarAbove21, subScores, sleeveScore, asOf: loadFredLastDate(FRED_SERIES.us10y), updatedAt: new Date().toISOString() });
         setLoading(false);
       }
     }
 
     compute();
     return () => { cancelled = true; };
-  }, [twelveDataKey, stressRising]);
+  }, [stressRising]);
 
   return { data, loading };
 }

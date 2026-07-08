@@ -1,51 +1,54 @@
 import { useState, useEffect } from 'react';
-import { creditHygScore } from '@stw/shared';
-import { tdDailyCloses, sma, loadLastDate } from './maCache';
+import { creditOasScore, FRED_SERIES } from '@stw/shared';
+import { sma } from './maCache';
+import { fredCloses, loadFredLastDate } from './fredCache';
 
 // ── Module 6: Credit / Liquidity ────────────────────────────────────
-// v1 credit proxy = HYG vs its 50D MA + direction. Labeled a proxy in the UI;
-// ICE BofA HY OAS is the cleaner input, deferred to a later pass.
+// Now the real ICE BofA US High Yield option-adjusted spread (FRED
+// BAMLH0A0HYM2) rather than the old HYG price proxy. It's a SPREAD, so the sign
+// inverts: a spread below its 50D MA and tightening is credit confirming; above
+// and widening is stress (see creditOasScore).
 
 export interface CreditLiquidity {
-  hyg: number | null;
-  hyg50: number | null;
-  aboveMa50: boolean | null;
-  rising: boolean | null;
-  delta5Pct: number | null;   // 5-day % change
+  oas: number | null;          // HY OAS, percent
+  oas50: number | null;        // 50D MA of the spread
+  belowMa50: boolean | null;   // spread below its 50D MA = tight (good)
+  tightening: boolean | null;  // spread falling day-over-day = good
+  delta5: number | null;       // 5-day change in spread, points (+ = widening = bad)
   sleeveScore: number | null;
   asOf: string | null;
+  updatedAt: string;           // when this was last refreshed (ISO)
 }
 
-export function useCreditLiquidity(twelveDataKey?: string) {
+export function useCreditLiquidity() {
   const [data, setData] = useState<CreditLiquidity | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!twelveDataKey) { setLoading(false); return; }
     let cancelled = false;
     setLoading(true);
 
     async function compute() {
-      const closes = await tdDailyCloses('HYG', twelveDataKey!);
-      const hyg = closes.length ? closes[closes.length - 1] : null;
+      const closes = await fredCloses(FRED_SERIES.hyOas);
+      const oas = closes.length ? closes[closes.length - 1] : null;
       const prev = closes.length >= 2 ? closes[closes.length - 2] : null;
-      const hyg50 = sma(closes, 50);
+      const oas50 = sma(closes, 50);
       const prior5 = closes.length >= 6 ? closes[closes.length - 6] : null;
 
-      const aboveMa50 = hyg !== null && hyg50 !== null ? hyg > hyg50 : null;
-      const rising = hyg !== null && prev !== null ? hyg > prev : null;
-      const delta5Pct = hyg !== null && prior5 ? ((hyg - prior5) / prior5) * 100 : null;
-      const sleeveScore = aboveMa50 !== null && rising !== null ? creditHygScore(aboveMa50, rising) : null;
+      const belowMa50 = oas !== null && oas50 !== null ? oas < oas50 : null;
+      const tightening = oas !== null && prev !== null ? oas < prev : null;
+      const delta5 = oas !== null && prior5 !== null ? oas - prior5 : null;
+      const sleeveScore = belowMa50 !== null && tightening !== null ? creditOasScore(belowMa50, tightening) : null;
 
       if (!cancelled) {
-        setData({ hyg, hyg50, aboveMa50, rising, delta5Pct, sleeveScore, asOf: loadLastDate('HYG') });
+        setData({ oas, oas50, belowMa50, tightening, delta5, sleeveScore, asOf: loadFredLastDate(FRED_SERIES.hyOas), updatedAt: new Date().toISOString() });
         setLoading(false);
       }
     }
 
     compute();
     return () => { cancelled = true; };
-  }, [twelveDataKey]);
+  }, []);
 
   return { data, loading };
 }

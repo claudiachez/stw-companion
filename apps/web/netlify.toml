@@ -25,6 +25,20 @@
 [functions."macro-recap-pm"]
   timeout = 60
 
+[functions."macro-snapshot"]
+  # Fetches ~10 TwelveData daily series, paced in ≤8-symbol chunks ~65s apart to
+  # stay under the free tier's 8-credit/minute cap (an unpaced burst 429'd every
+  # series past the 8th, which is why early snapshot rows had null trend/vol/credit
+  # scores). The single ~65s inter-chunk sleep needs headroom past the old 60s cap.
+  # See macro-snapshot.ts's pacedDailyCloses().
+  timeout = 120
+
+[functions."sector-map-sync"]
+  # Resolves unmapped holdings tickers to GICS (a few Finnhub profile2 calls,
+  # paced) and upserts ticker_sector_map. Usually 0 work; a modest timeout covers
+  # the rare batch of newly-opened names.
+  timeout = 30
+
 [[redirects]]
   from   = "/*"
   to     = "/index.html"

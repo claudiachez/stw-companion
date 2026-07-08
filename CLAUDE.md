@@ -1,27 +1,34 @@
 # STW Companion — Claude Code Guide
 
 > **⚠️ START HERE — branch.** **`staging` is the active trunk** — all feature work happens here.
-> `staging` is **97+ commits ahead of `main`** (all Macro Dashboard v2 work + QA fixes + this session's
-> regime badges/admin IBKR trading, NOT yet on production).
-> Migrations run to **053** applied (`048_macro_daily_snapshots`, `049_macro_weekly_recaps` [legacy],
-> `050_run_log_latest_view` [unrelated — GEX Signals "Checked: …" stamp], `051_macro_daily_recaps`,
-> `052_ibkr_live_trading` [admin IBKR kill switch + `leg_transactions.broker_*` columns],
-> `053_capital_allocation` [admin IBKR order-quantity suggestion defaults]) — all verified applied on
-> both PROD (`usmqbohcjcyszjxxvnqu`) and sandbox (`uolabcgbnrkhzpwuvzlk`) as of 2026-07-03 (both applied
-> via the Supabase MCP directly, not the SQL editor — same effect).
-> `app_config.ibkr_live_trading_enabled` = **`0` on PROD, `1` on sandbox** (left on from this session's
-> UI testing — no IB Gateway was connected, so no order was ever actually placed; flip it back to `0`
-> on sandbox once you're done testing, see Next Steps).
-> If migrations stop at 021 you are on a stale checkout, re-sync.
-> **First commands every session:**
-> `git fetch origin && git checkout staging && git pull --ff-only`, **then cut a feature branch**
-> before making any change: `git checkout -b claude/<short-feature-name>`. **Never commit directly to
-> `staging`** — work on the branch, push it, open a PR back to `staging` (host merges/approves).
-> `main` is promoted only by an approved staging→main PR (= a production deploy).
-> **Known exception:** commits `bf1359c`…`731dfdc` (2026-06-29 evening through 2026-07-03, ~18 commits
-> incl. this session's regime-badge/IBKR-trading work) went **directly to `staging`**, no branch — the
-> host confirmed (2026-07-03) this was drift, not the intended workflow, and asked to resume
-> feature-branch-per-session starting now. Don't treat that run as precedent.
+> **`staging` is ~112 commits ahead of `main` as of 2026-07-10** (check `git log --oneline
+> origin/main..origin/staging | wc -l` for the exact count) (last completed promotion was PR #66 on
+> 2026-07-05). A `staging → main` PR is a separate, approval-gated production deploy; **do not open one
+> without explicit host approval**, even if staging looks ready.
+> **⏳ A `staging → main` production-promotion PR ([#81](https://github.com/claudiachez/stw-companion/pull/81))
+> is OPEN and pending merge** (host-approved). If it has merged by your session, `staging`≈`main` and the
+> FRED/GICS work is LIVE — run the post-deploy verification in its PR body (esp. confirm `FRED_API_KEY`
+> is set on the Netlify **production** context, and that a fresh `macro_daily_snapshots` row carries
+> `engine_version=macro-snapshot-2.0.0`). If it's still open, the work below is staging-only.
+> **No other open PRs.** This session merged **PR #78** (FRED feeds re-platform + Macro UI), **PR #79**
+> (GICS taxonomy + `sector-map-sync`), and **PR #80** (docs refresh: new `docs/feeds.md`, rewritten
+> `docs/workflow.md`, FRED-updated macro guides, lowercase doc filenames). Branches cleaned up. Cut a
+> normal feature branch from `staging` for new work.
+> Migrations run to **062 on `staging`**, applied on **both PROD and sandbox** (058 is PROD-only —
+> sandbox has no `tiers`/`profiles` tables to apply it to; this is a known, permanent gap, not
+> pending work). This session added **061** (regime sleeve weights → `app_config`) and **062**
+> (`ticker_sector_map` re-seeded Finnhub-label → **GICS-11 + ETF/Cash**) — **both applied to PROD +
+> sandbox, verified identical**.
+> `app_config.ibkr_live_trading_enabled` = **`0` on both PROD and sandbox** (last confirmed 2026-07-05).
+> **New Netlify env var this session: `FRED_API_KEY`** (server-side, no `VITE_` prefix) — set on both
+> sites; the macro index feeds + Event Risk depend on it. If migrations stop well short of 062 you are on a stale checkout, re-sync.
+> **First commands every session:** `git fetch origin && git checkout staging && git pull --ff-only`.
+> Sanity check: `supabase/migrations/` should go up to `062_ticker_sector_map_gics.sql`,
+> `packages/shared/src/constants/sectors.ts` and `packages/shared/src/utils/fred.ts` should exist, and
+> `plans/` files are **date-prefixed** (`YYYYMMDD_<name>`) — if any is missing, you're on a stale
+> checkout. Then **cut a feature branch** before making any change:
+> `git checkout -b claude/<short-feature-name>`. **Never commit directly to `staging`** — work on
+> the branch, push it, open a PR back to `staging` (host merges/approves).
 > (Note: `memory/` lives in local `~/.claude/`, NOT in the repo — never reference it in a prompt meant
 > for a remote session; put anything a future session needs into the repo.)
 
@@ -35,25 +42,96 @@
 - Write shared styling/logic/data **once** in the shared packages, never twice across apps
 - **Every timestamp uses `fmtDateTime` from `@stw/shared`** — never `toLocaleString`/`toLocaleTimeString` or a local date helper (see Conventions → Timestamps)
 - **All UI changes must work on mobile** — design for ≤390px first; test layouts at narrow width before pushing
+- **Refer to the host generically in prose, never by name** — specs, code comments, reports, and
+  commit message bodies say "the host" (confirmed as a standing rule, 2026-07-05), matching existing
+  practice throughout this file. Exception: literal technical identifiers that must stay accurate to
+  be useful (an RLS policy's email, an org/task UUID) — those aren't narrative attribution and are fine
+  as-is.
 - **After ~10 commits in a chat**, run the Session Close routine (see section below)
 
 ---
 
-## Current Status — Regime badges + admin IBKR trading built (handoff 2026-07-03)
+## Current Status — Data-feeds re-platform (FRED) + GICS sector taxonomy (handoff 2026-07-10)
 
-**NEXT SESSION = per-ticker regime badges and admin one-click IBKR order placement are built, tested,
-and committed to `staging`.** The regime badge's visual render is still unconfirmed live (blocked by an
-external TwelveData daily-quota exhaustion, not a code issue — see "New this session" below); the IBKR
-order flow is functionally verified in the browser but **never tested against a real IB Gateway** (no
-Gateway access from this environment). See Next Steps for both. Below that, the Macro Dashboard v2 work
-from the prior handoff (2026-07-02) is unchanged — no app/repo code changed there since. That same prior
-session also did **out-of-repo routine maintenance only** (no commits):
+**Everything this session is on `staging` only, NOT production** (`staging` ~107 ahead of `main`). Two
+PRs merged to `staging`, both branches cleaned up: **PR #78** (feeds re-platform + Macro UI) and
+**PR #79** (GICS taxonomy + sync). Migrations **061 + 062 applied to PROD + sandbox** (verified). The
+detailed inventory + rationale live in [`plans/20260707_data_feeds_inventory_and_plan.md`](plans/20260707_data_feeds_inventory_and_plan.md).
+
+> ⚠️ The older TwelveData-centric macro narratives further down this file (2026-07-05 regime-badge /
+> rate-limit story) are **superseded** by the FRED re-platform — macro *indices* no longer use
+> TwelveData. See **Conventions → Macro data sources** for the current, authoritative wiring.
+
+**[PR #78](https://github.com/claudiachez/stw-companion/pull/78) — feeds re-platform onto FRED + Macro UI:**
+- **Macro indices → FRED** (free, ~120/min, authoritative), replacing the throttled TwelveData free tier:
+  VIX→`VIXCLS`, VIX3M→`VXVCLS`, US10Y→`DGS10` (already %, no ×10 hack), credit→`BAMLH0A0HYM2` (real HY
+  OAS spread, an upgrade over the HYG proxy), dollar→`DTWEXBGS`. FRED is server-only (no CORS) so the
+  browser reads it through the `fred` Netlify proxy; the `macro-snapshot` + `regime-daily` writers call
+  FRED directly. **TwelveData is now equity-daily-closes only** (trend ETFs + sector-rotation constituents).
+- **VIX3M via FRED fixes `regime-daily`'s permanent `vol_state='UNKNOWN'`.**
+- **VVIX removed entirely** — no free feed serves it; it was perpetually null (per the "no
+  permanently-empty field" convention). Risk-Appetite gauge weights rescaled; value materially unchanged.
+- **Event Risk rebuilt on FRED's release calendar** (`/fred/release/dates` per release_id: CPI 10 · PCE 54
+  · NFP 50 · GDP 53 · PPI 46) + a static FOMC list — **the MarketWatch/cheerio scrape is retired** (`cheerio`
+  is now an unused dep, safe to drop). No consensus/actual values (a calendar can't give them), so
+  `classifyEventRisk`'s surprise/shock path no-ops; the upcoming-event windows work fully.
+- **Market Internals** — Volatility/Stress + Credit/Liquidity + Rates+Dollar folded from three stacked
+  cards into ONE compact `MarketInternalsCard` table (score + name + status left, key values right).
+- **Macro tooltips** restructured (one line per indicator via a shared `<Help>` wrapper); the Market
+  Regime tooltip shows the **live** configured weights.
+- **Regime sleeve weights are admin-configurable** (migration 061 → `app_config`; Admin Config → "Market
+  Regime weights"). `engineScore`/`environmentScore` take an optional weights param.
+- **Every macro module footer now shows a full `fmtDateTime` "Updated:" stamp** (was date-only on some).
+- `macro-snapshot` engine bumped to `macro-snapshot-2.0.0`.
+
+**[PR #79](https://github.com/claudiachez/stw-companion/pull/79) — GICS sector taxonomy + auto-refresh:**
+- **Canonical taxonomy = GICS-11 + ETF + Cash** (`packages/shared/src/constants/sectors.ts`). `resolveSector()`
+  = `TICKER_GICS` override → else `FINNHUB_GICS` fold (Finnhub industries roll up to GICS along the real
+  hierarchy) → else null. `ticker_sector_map` now stores GICS values (migration **062** re-seeded the 53
+  rows: IT 25 · Industrials 20 · Cons. Disc. 3 · Comm. Services 2 · Financials 2 · Energy 1; + CASH→Cash,
+  ARKK/SQQQ→ETF). VIAV hand-corrected to IT.
+- **`sector-map-sync`** (web Netlify fn, weekdays 22:00 UTC + manual) auto-populates the map for newly-opened
+  `holdings` tickers (Finnhub `profile2` fold), closing the gap where a new ticker (e.g. CCXI) had no sector.
+- **ETF/Cash excluded from Risk sector concentration** (never a bucket, never `unevaluated`).
+- **Admin Config**: Capital allocation + Live IBKR trading merged into one "Capital allocation & live
+  trading (Admin only)" card.
+
+**`apps/web` + `apps/admin` live-verification recipe (reused this session — the way to see either app
+render):** the editor account `cc@claudiachez.com` is Google-OAuth-only, and the preview browser blocks
+the OAuth redirect. To log into a local dev server, temporarily set a bcrypt password via SQL
+(`update auth.users set encrypted_password = crypt('<tmp>', gen_salt('bf')) where email =
+'cc@claudiachez.com'`), sign in with email+password, then **revert immediately** — to **NULL** on PROD
+(it's OAuth-only), or to the **captured original hash** on sandbox (it HAS a password; `select
+encrypted_password` first, restore it verbatim). `apps/web/.env.local` (gitignored; PROD URL + anon key)
+already exists; `VITE_FINNHUB_KEY` is empty there but present in `apps/admin/.env.local` + `apps/web/.env`.
+Everything this session was verified in-browser at 390px + 1280px against the real book (both apps);
+password/hash restored exactly each time.
+
+**Previous handoff (2026-07-05) — TwelveData rate-limit bug fixed + shipped to production, unchanged
+since.** This session found the REAL reason the per-ticker regime badge never rendered: it
+was never the "daily quota exhausted" cause diagnosed on 2026-07-03 — that was a real, separate event,
+but the actual structural bug (still present after that quota reset) is that `tdBatchCloses()` bundled
+many symbols into one comma-joined TwelveData call assuming that avoided the free tier's rate limit;
+TwelveData actually bills **1 credit per symbol, not per HTTP call**, so any batch over 8 symbols
+429'd unconditionally, every time — this was also silently degrading the already-shipped Macro tab
+(Sector Rotation, Trend Structure, Volatility/Stress, Sentiment Gauge breadth all fire their own
+uncoordinated batch calls on load). Fixed by chunking to ≤8 symbols with ~65s pacing (see "New this
+session" below) — verified at the network level (429→200, pacing recovers across chunk boundaries),
+merged to `staging` via PR #65, then promoted `staging → main` via PR #66 (host-approved) — **the
+regime badge fix is live in production, but its actual visual render (the trend-structure chip
+appearing on a held ticker) was NOT re-confirmed in-browser after the fix** — a cold load takes
+several minutes to fully populate (paced ≤8 symbols/65s), so re-check on a real session rather than
+assuming. The IBKR order flow remains **functionally verified in the browser but never tested against
+a real IB Gateway** (no Gateway access from this environment) — unchanged from last session, still in
+Next Steps. Below that, the Macro Dashboard v2 work from the 2026-07-02 handoff is unchanged — no
+app/repo code changed there since except the rate-limit fix. That prior session (2026-07-02) also did
+**out-of-repo routine maintenance only** (no commits):
 fixed a dedup bug in the `stw-transcripts` routine (it edits Discord posts in place — see Data
 Ingestion section for the durable rule), processed the missed Episode 29 webinar, and added a
 verbatim portfolio-update archive step to `stw-friday-weighting`. None of this touched
 `packages/`/`apps/`/`supabase/migrations/` — see Data Ingestion below if picking this up, otherwise
 skip straight to Next Steps. The Macro tab's full v2 rebuild (spec:
-[`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md)) is now **feature-complete and
+[`plans/20260627_macro_dashboard_spec.md`](plans/20260627_macro_dashboard_spec.md)) is now **feature-complete and
 QA-verified on `staging`** — all 11 modules, including the two that were previously deferred (P2 5D
 trend engine, P3 Event Risk) and Sector Rotation. Read the spec first if extending any module.
 
@@ -74,7 +152,7 @@ US10Y in Rates+Dollar. Pure scorers + 94 unit tests in `packages/shared/src/util
 - **Module 9 Risk Appetite** (`SentimentGauge.tsx`) — renamed from Sentiment; **`react-gauge-component`** library gauge; two-column (gauge ┃ breakdown); 7 inputs (Dollar dropped, Breadth added, percentile VVIX); each row shows its fear/greed word.
 - **Module 10 Recap** (`MacroRecapCard.tsx` + `macro-recap.ts`) — **daily market note**, updated twice per weekday: pre-market AM (8am ET, `macro-recap-am.ts`) and post-market PM (4:30pm ET, `macro-recap-pm.ts`). Headline · verdict · big story · bull/base/bear · playbook · watching levels · final word. Grounded ONLY in passed data (no fabricated figures), Sonnet→Haiku fallback. **Persisted cross-device in Supabase** (`macro_daily_recaps`, migration 051, keyed by `date + session`). Written only by the scheduled functions or the admin Regenerate button (editor-only gate, hard 403); subscribers only ever read. Admin site has a session selector (AM/PM) on the Regenerate button. Both web and admin have their own `macro-recap.ts` function (site-scoped). The old `macro_weekly_recaps` table (migration 049) remains in the DB but nothing writes to it — can be dropped later.
 - **Module 11 Sector Rotation** (`SectorRotationCard.tsx` + `useSectorRotation.ts`) — 11 SPDR sectors as per-sector cards, ranked leader-to-laggard by structure + 1M RS; each card has a `recharts` radar (RS vs SPY across Week/1M/3M/6M/1Y) plus "Leaders"/"Setting Up" chip rows (that sector's own constituents, not STW holdings). Built on `claude/sector-rotation-tooltips`, merged via **PR #61**.
-- **P2 — 5D trend engine** (`useMacroTrendHistory.ts`) — daily snapshots via `macro_daily_snapshots` (migration 048), written by the `macro-snapshot` Netlify scheduled function at 4:30pm ET weekdays. Drives the banner's 5D direction descriptor, score-strip 5D deltas, and gauge 5D delta. **Note: `macro-snapshot.ts` was broken (used `@supabase/supabase-js` which crashes Node 20) — fixed 2026-07-02, but the table was still empty as of that evening — see the ⚠️ note in the DB section above; verify before trusting this module's 5D data.**
+- **P2 — 5D trend engine** (`useMacroTrendHistory.ts`) — reads daily snapshots from `macro_daily_snapshots` (migration 048), written by the `macro-snapshot` Netlify scheduled function at 4:30pm ET weekdays. Drives the banner's 5D direction descriptor, score-strip 5D deltas, and gauge 5D delta. **Now Supabase-backed (PR #73, `staging`), not per-browser localStorage — see Conventions → "5D trend engine" for the current behavior + the PROD-writer-stale caveat.**
 - **P3 — Macro Event Risk** (`useMacroEvents.ts` + `macro-events` fn + `MacroEventRiskCard.tsx`) — CPI/PCE/FOMC/NFP overlay, wired into `MacroView.tsx`.
 - **Help**: every module header has a collapsible ⓘ (`ModuleHeader`) — tap to expand a "what/why/how" blurb; collapsed by default.
 
@@ -95,14 +173,16 @@ snapshot function needs another scheduled cycle to prove out, or it's still fail
 `macro_daily_snapshots` for a row dated 2026-07-02 or later before trusting the 5D trend engine.**
 
 **Netlify env vars required:**
-- Web site: `ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL`, `VITE_TWELVEDATA_KEY`
-- Admin site: `ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL`
+- Web site: `ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL`, `VITE_TWELVEDATA_KEY`, `VITE_FINNHUB_KEY`, **`FRED_API_KEY`** (server-side, no `VITE_` — macro indices + Event Risk)
+- Admin site: `ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL`, **`FRED_API_KEY`**
 - Optional: `MACRO_RECAP_MODEL` (overrides default claude-sonnet-4-6 → haiku fallback)
 - **All Netlify functions now use `.trim()` on env vars** to guard against pasted-key whitespace.
 
-**⏳ PENDING — production deploy:** `staging` is **96 commits ahead of `main`** — everything since
-the 2026-06-23 event-sourcing promotion, including PRs #50–#63 and all Macro Dashboard v2 + QA work,
-is staging-only, **NOT on production**. Promoting `staging → main` needs **explicit approval**.
+**✅ Production deploy done (2026-07-05):** `staging → main` promoted via PR #66 (host-approved) —
+everything since the 2026-06-23 event-sourcing promotion, including PRs #50–#65 and all Macro
+Dashboard v2 + QA + regime-badge/IBKR-trading + rate-limit-fix work, is now live on production.
+`staging` and `main` are identical as of this handoff. Any future promotion still needs **explicit
+approval** — this is a standing rule, not resolved by precedent.
 
 **Event-sourcing migration plan is CLOSED (on `main` since 2026-06-23) — do not reopen.** The weight model,
 locked decisions, and Phase-5 routine semantics below remain authoritative reference.
@@ -151,7 +231,7 @@ blended — **Open** shows Shares/Options return + lot; **Closed** shows per-ass
 contribution. `closedPnlPct` + `closedPnlContribution` + `hasClosedPnl` in `@stw/shared`.
 
 **Post-import holdings fix (Next Step #2) DONE ✅ on SANDBOX:**
-- **`last_action`/`action_date` derived from each ticker's latest diary event** (`plans/post_import_holdings_fix.sql`).
+- **`last_action`/`action_date` derived from each ticker's latest diary event** (`plans/20260618_post_import_holdings_fix.sql`).
   Same-day conversion ties (ADEA/CXDO/FIVN/GDYN/SHLS) resolve to the keep-open `New`; `Expired` →
   `Closed` at the holding level (last_action has no "Expired"). (At import time AMZN/HOOD/TSLA had no
   legs and were skipped — but that was a transient state, NOT a rule; **the host has since added real
@@ -172,10 +252,10 @@ contribution. `closedPnlPct` + `closedPnlContribution` + `hasClosedPnl` in `@stw
   Conviction on PROD is left to the routines (some cores not yet tier 5).
 - **SANDBOX (`uolabcgbnrkhzpwuvzlk`):** same scripts + the revert all applied. Admin dev `.env.local` →
   sandbox, so **localhost reads/writes the sandbox directly**. 25 tickers / 42 legs.
-- **PROD import gotchas (baked into `plans/prod_import/*` + the SQL files):** (1) PROD's STW
+- **PROD import gotchas (baked into `plans/20260619_prod_import/*` + the SQL files):** (1) PROD's STW
   `trader_id` = `64a779f9-13ba-4cb4-824b-d70dcab3a49b` (sandbox = `9ec36b89-…`); seeds now resolve the
   trader **by name**. (2) The Supabase SQL editor threw "Failed to fetch" on the one big import — it was
-  split into 9 small files in **`plans/prod_import/`** (run `1_wipe` → `8_legs` → `9_weights` in order).
+  split into 9 small files in **`plans/20260619_prod_import/`** (run `1_wipe` → `8_legs` → `9_weights` in order).
   (3) The wipe deletes **all** legs (PROD carried 28 stale ones from the old 029/030 system) with the
   `trg_leg_transactions_sync` trigger disabled during the delete.
 
@@ -197,17 +277,51 @@ NOT touch conviction; the 6/18 stars OSS/VPG/SYNA/VIAV/NBIS/ENS/AMKR/LEU/AMZN/TS
 **Decisions locked — admin IBKR trading (host 2026-07-03):** real order placement is **admin-only,
 local-proxy-only, single-account** — extending it to arbitrary subscribers is explicitly out of scope
 without a separate legal/compliance review and a different integration entirely (IBKR's Client Portal
-Web API, or Alpaca's OAuth trading API per `plans/mobile-transition.md`); don't build toward it
+Web API, or Alpaca's OAuth trading API per `plans/20260524_mobile-transition.md`); don't build toward it
 incrementally. **Legs stay weight-only (%) forever** — real share/contract quantities are never derived
 from weight and are always entered directly at order time (there is no plan to add share/contract
 counts to the `legs`/`leg_transactions` schema). A confirmed broker fill is the only thing allowed to
 patch a diary row's price after the fact — the requested/limit price never is, same rule as every other
 close in this ledger.
 
-**New plan docs (`plans/`):** `legs_event_sourcing_redesign.md` (spec) · `import_open_positions.sql`
-(clean open-position import) · `post_import_holdings_fix.sql` (Next Step #2 seed) ·
-`revert_legacy_category.sql` (drops the bad Legacy category) · `040_sandbox_verify.sql` (trigger test) ·
-`legs_inspect.sql` (inspect legs/diary) · `zzadea_populate.sql` (seed test fixture).
+**Decisions locked — risk limits engine (host 2026-07-08):** `risk_config.account_equity` defaults
+to a **$100,000 placeholder** for every new row (migration 059's `DEFAULT`, not left `null`) —
+same "seed a placeholder, flag it via `is_placeholder`, let the user override" pattern already used
+for the threshold defaults (migration 055), not a special case. `equity_peak` is a
+**trigger-maintained high-water mark** (`fn_risk_config_track_equity_peak`) that only ever
+increases — this is a genuinely derived value (same "scoreboard is a pure trigger-derived
+projection" pattern as `legs`/`leg_transactions`), **not** the "fail loud, never silently coalesce"
+pattern migration 054 uses for the closed-weight invariant; don't conflate the two triggers'
+philosophies. The drawdown ladder is validated but **never blocking** — inline warnings
+(monotonicity; position ≤ sector ≤ gross) render but Save stays enabled, matching this engine's
+standing "flags only, nothing here places or blocks a trade" framing everywhere else. **Any UI
+that shows a `risk_config`-derived percentage (gross exposure, position/sector concentration) must
+use `config.account_equity` as the denominator, never re-derive it from the same positions being
+evaluated** — that was the exact tautology bug found and fixed (gross exposure read
+~100% unconditionally because the numerator and denominator were the same sum).
+
+**Decisions locked — risk limits engine v2 (host 2026-07-08, this session):**
+- **Four severity tiers, not two.** `ViolationSeverity` = `ok | near | breach | unevaluated`
+  (`packages/shared/src/utils/limits.ts`, `classifySeverity`): **near** fires at ≥80% of a limit
+  (incl. AT the limit — a 100%/100% bar reads amber, never green, since breaches are already too
+  late); **unevaluated** is missing data (an unmapped sector) and must **never be counted as a
+  breach** (a permanent red flag trains the operator to ignore the engine). `StatusPill` already has
+  matching `near`/`unevaluated` variants — reach for them, don't invent new colors.
+- **Separate, tighter options cap.** `risk_config.max_option_position_pct` (migration 060, default
+  **5%** vs the 10% general position default) caps any single underlying's OPTIONS exposure —
+  options carry more risk per dollar. Pure scorer `optionPositionConcentration` rolls up only option
+  legs (`PositionInput.isOption`). It's **display-only** on the Risk tab (there's no `option` value
+  in `risk_violation_acks.violation_type`, so no acknowledge/glide-path workflow for it).
+- **The Risk surface is its own destination, not a collapsible block.** On My Portfolio it's the
+  "Risk" sub-nav tab and renders expanded directly (no ▶ toggle). Each concept (gross / position /
+  option / sector) carries a one-line what-and-why explanation. Exceptions-first is the resting view
+  (breach + near + unevaluated shown; "Show all" reveals the OK rows).
+
+**Event-sourcing plan docs (`plans/`, now date-prefixed):** `20260618_legs_event_sourcing_redesign.md`
+(spec) · `20260618_import_open_positions.sql` (clean open-position import) ·
+`20260618_post_import_holdings_fix.sql` (post-import seed) · `20260618_revert_legacy_category.sql`
+(drops the bad Legacy category) · `20260618_040_sandbox_verify.sql` (trigger test) ·
+`20260618_legs_inspect.sql` (inspect legs/diary) · `20260618_zzadea_populate.sql` (seed test fixture).
 
 **Tooling:** `pnpm` not on PATH — use `corepack pnpm …` or `~/.local/bin/pnpm`. No local Postgres (can't
 run DDL locally — apply migrations via the Supabase SQL editor). Prod service key (read-only checks) at
@@ -232,8 +346,8 @@ run DDL locally — apply migrations via the Supabase SQL editor). Prod service 
   (`action_date` preserved); Closed/Expired terminal.
 - **transcripts:** conviction note — routine-owned, **mutable both ways on an explicit signal incl.
   promoting a Legacy (0)**; never inferred from sizing.
-- **One-time SQL applied (PROD + sandbox):** `plans/conviction_618_stars.sql` (8 stars → tier 5;
-  AMZN/TSLA stay 0) + `plans/fix_fivn_shares_weight.sql` (FIVN shares lot 3.5→2.5, net-neutral 6.0%).
+- **One-time SQL applied (PROD + sandbox):** `plans/20260619_conviction_618_stars.sql` (8 stars → tier 5;
+  AMZN/TSLA stay 0) + `plans/20260619_fix_fivn_shares_weight.sql` (FIVN shares lot 3.5→2.5, net-neutral 6.0%).
 - **PENDING (host) — NOT a repo task, doesn't affect the apps:** the stale **`gradoxx-daily-summary`**
   Cowork scheduled task (duplicates morning PART 1's Graddox) is an **orphaned backend object** — it
   still fires ~9am but has no working delete UI (absent from Cowork→Scheduled; its task page 404s; the
@@ -241,118 +355,130 @@ run DDL locally — apply migrations via the Supabase SQL editor). Prod service 
   `aea1699f-e0b8-4ed4-80b9-4abb5d0a7711`; the underlying skill is `skill_01UY6zPNf9Do8eR4voyUvtm6`. Being
   cleared via Anthropic support / desktop skill-delete. Also smoke-test the routines on their next live runs.
 
-## New this session (2026-07-03, staging — committed + pushed)
+## From the 2026-07-05 session (staging → main — committed, pushed, promoted)
 
-A product-strategy discussion (regime-aware badges, admin one-click IBKR trades) turned into two
-built-and-refined features, plus a Config page to control them. Went through several rounds of live
-host UX feedback in-browser (button colors, modal consistency, layout) — described below is the
-**final state**, not the iteration history.
+Picked up where 2026-07-03 left off: re-checked the regime badge, found the real bug behind it, fixed
+it, shipped it to production, then separately investigated + fixed a live data-integrity report.
 
-- **Per-ticker regime badge** (`packages/ui/src/features/picks/components/RegimeBadge.tsx` +
-  `useTickerRegime.ts`) — shows a held ticker's own 9/21/200 trend structure (reusing
-  `TREND_BUCKET_META` from `macro.ts` — **never** the Regime Banner's market-wide wording, see the
-  Macro module-structure convention below) plus its sector's Leader/Setting-Up/Laggard standing.
-  Sector is resolved per-ticker via Finnhub's `/stock/profile2` `finnhubIndustry` field, normalized by
-  `mapIndustryToSector()` (keyword-matched, not a hand-maintained STW-basket table — see
-  `packages/shared/src/utils/macro.ts`), then cross-referenced against the existing Sector Rotation
-  module's own 12-symbol rows via `useSectorRotation`'s new `skipConstituents` param (default `false`,
-  backward-compatible) — this per-ticker hook opts in to skip Sector Rotation's own ~66-symbol
-  constituent fetch, which was otherwise firing on every Picks visit and adding real TwelveData
-  rate-limit pressure. Wired into `HoldingDetail.tsx` and `HoldingRow.tsx` (compact mode, trend chip
-  only). **Verified:** unit tests green, Finnhub classification confirmed correct live (SYNA→XLK,
-  OSS→XLK, GLDD→XLI). **Visual badge render still unconfirmed as of session end** — blocked by
-  TwelveData's free-tier daily quota being exhausted (confirmed directly via their API: "1352 API
-  credits used, limit 800" — an account-wide quota, not per-key/per-session, so it doesn't reset by
-  restarting anything). This is a **known external cause, not a code bug** — re-check once the daily
-  quota window resets. If it's still blank after that, treat it as a fresh bug, not the same one.
-- **Admin-only real IBKR order placement** (migrations `052_ibkr_live_trading.sql` +
-  `053_capital_allocation.sql`, `apps/admin/ibkr_proxy.py` `/place_order` + `/order_status`, row-scoped
-  "Open via IBKR"/"Close via IBKR" buttons in `LegTimeline.tsx`, each opening a centered modal) — lets
-  the admin place a REAL order against their own IB Gateway from the same Transaction History row
-  they're logging. **Explicitly admin-only, local-proxy-only — never build toward subscriber-facing
-  trade execution without a separate legal/compliance review** (see the new IBKR Pipelines § below and
-  the Decisions Locked entry — this is now a standing boundary, not just a session note). Gated three
-  ways: `canEdit`, the `app_config.ibkr_live_trading_enabled` kill switch, and
-  `AppCapabilities.onExecuteIbkrOrder` only being wired in `apps/admin/src/main.tsx`. Row-scoped, not a
-  global button — the admin logs the diary row first (as always), then fires the order from that
-  specific row; a confirmed fill PATCHes that row's price (never the originally-typed one). Closing a
-  leg appends a **new** Closed diary row at the confirmed exit price. **`IB_PORT` is an env var**
-  (`IB_PORT=4002 python3 ibkr_proxy.py` for paper mode), not hardcoded.
-- **Quantity suggestion** (migration `053_capital_allocation.sql`, `suggestOrderQuantity()` in
-  `packages/shared/src/utils/legs.ts`) — the order modal pre-fills a starting quantity from
-  `app_config.total_capital` × a per-asset-class deploy % (`default_shares_deploy_pct` /
-  `default_options_deploy_pct`), still fully editable. Shares price off the live Finnhub quote; options
-  fall back to the leg's stored mark/entry price, then the triggering diary row's own price if neither
-  exists yet (a brand-new leg's `entry_price` may not have propagated from the 040 trigger yet). An
-  option contract's per-unit cost is `price × 100` (100-share multiplier) — when the deploy budget
-  can't cover even 1 unit, the modal shows quantity `0` **plus an explicit shortfall note**
-  (never a silently blank field — same "explain, don't hide" spirit as the rest of this ledger).
-- **Admin Config page** (`apps/admin/src/features/manage/ConfigPage.tsx`, new "Config" nav tab) —
-  Phase 4 Part A of `plans/phase4_admin_manage.md`, finally built. Three grouped sections — **Sizing
-  defaults** (Equity:Options, Short:Long), **Capital allocation** (Total capital, Shares/Options deploy
-  %, labeled "Admin only" — never read by `apps/web`), **Live IBKR trading** (the kill switch) — each
-  section has **one Save button covering all its fields**, not one per field. Categories CRUD and
-  Traders (Parts B/C of that plan) are **still not built** — out of scope for this round.
-- **Migrations 052 + 053 applied on both PROD + sandbox.** `ibkr_live_trading_enabled` is `0` on PROD,
-  **left at `1` on sandbox** from this session's UI testing (no IB Gateway was ever connected, so no
-  order was actually placed) — see Next Steps to turn it back off.
-- **STILL NOT LIVE-TESTED against a real IB Gateway** — cannot be, from this environment. Before any
-  real order: (1) run `ibkr_proxy.py` in **paper mode** (`IB_PORT=4002`), (2) place a paper order
-  end-to-end, (3) only then consider port 4001 (live). `/order_status`'s cross-connection lookup
-  (`reqAllOpenOrders`/`reqCompletedOrders`) is written to the documented `ib_insync` API but is also
-  unverified against a live Gateway.
+- **Root-caused + fixed the TwelveData rate-limit bug** (`packages/ui/src/features/macro/maCache.ts`,
+  `useSectorRotation.ts`) — the regime badge was STILL blank after the 2026-07-03 daily-quota window
+  reset, confirming it was a different, deeper bug: `tdBatchCloses()` assumed bundling many symbols
+  into one comma-joined TwelveData call avoided the free tier's rate limit. It doesn't — TwelveData
+  bills **1 credit per symbol, not per HTTP call** (confirmed directly: "12 API credits used, limit
+  8"), so any batch over 8 symbols 429'd unconditionally, forever, regardless of waiting. This was
+  ALSO silently degrading the already-shipped Macro tab (Sector Rotation's 12-symbol sector batch,
+  Trend Structure's SPY/QQQ/IWM/RSP/VEA, Volatility's VIX/VVIX, Rates+Dollar's UUP, Sentiment Gauge's
+  ~15 breadth stocks all fire independently on load with no shared rate budget). Fixed by chunking
+  `tdBatchCloses` to ≤8 symbols per call, paced ~65s apart (shared constants with the existing
+  `fetchClosesChunked` helper, whose own default delay of 2000ms was also too short and got corrected
+  to match). **Verified at the network level** in-browser: confirmed chunked requests return 200
+  instead of 429, and pacing correctly recovers across chunk boundaries — but did NOT re-open a ticker
+  detail page afterward to visually confirm the badge chip itself renders (a cold load takes several
+  minutes to fully populate at this pacing). **Tradeoff accepted by host:** first Picks/Macro load each
+  day is slow (several minutes) instead of failing outright; cached 24h after. One narrow residual gap:
+  two independently-paced hooks (Sector Rotation + Ticker Regime) can still collide at their handoff
+  boundary and drop one chunk for that session — those few tickers just show no badge until the next
+  paced cycle or next day's cache refresh, no crash. Typecheck + 152 tests green. Merged via
+  [PR #65](https://github.com/claudiachez/stw-companion/pull/65).
+- **`staging → main` promoted** via [PR #66](https://github.com/claudiachez/stw-companion/pull/66)
+  (host-approved) — 104 commits, everything since the 2026-06-23 event-sourcing promotion is now live
+  in production, including this session's fix.
+- **Investigated a host-reported data-integrity concern from a prior session** ("VPG and TENB each have
+  two identical duplicate OPEN legs... MITK has 3 OPEN legs... LEU has a probable year-typo in
+  action_date"). Verified directly against PROD (`usmqbohcjcyszjxxvnqu`) rather than trusting the old
+  claim or the host's own screenshot-based re-check:
+  - **VPG/TENB "duplicate legs" — false alarm, confirmed.** Each has exactly 2 distinct `legs` rows
+    (one SHARES + one OPTION) opened the same day as a single combo entry — different `leg_id`,
+    different `instrument_type`/strike. Not a parser bug; a normal shares+option combo position. The
+    prior claim almost certainly misread "same ticker, same date" without checking instrument type.
+  - **MITK "3 open legs" — real, but legitimate.** SHARES (2.9%) + two different-expiry calls ($12.5C
+    Nov'26 1.8%, $12.5C Jan'27 1.7%) — a deliberately layered position built via separate
+    Upsized/rolled ledger events (notes confirm "raising total weighting to 6.4%" = 2.9+1.8+1.7). Not
+    a duplicate.
+  - **LEU year-typo — confirmed real, and fixed on both PROD + sandbox.** The host had already
+    corrected the leg's open date in the UI (`legs.opened_at`/`leg_transactions.executed_at` both
+    correctly read 2025-05-21), but **`holdings.action_date` is a separate write path** — the
+    editor's own `PositionEditor.tsx` exposes it as an independently-editable field — and it still
+    read `2026-05-21`, a year off. Corrected directly via SQL to `2025-05-21` on both PROD and
+    sandbox (kept `last_action` untouched: `Hold` on PROD, `New` on sandbox — only the date was
+    wrong). **Standing lesson, now in Conventions below:** fixing a leg's date via the ledger does
+    NOT auto-correct `holdings.action_date` — always check both when correcting a date.
 
 ## Next Steps
 
-1. **Re-verify the regime badge renders once TwelveData's daily quota resets.** Confirmed via direct
-   API call this session that the free-tier daily quota (800 credits) was exhausted (1352 used) — the
-   badge code itself is unit-tested and the Finnhub half of the pipeline was confirmed correct live.
-   Reload the Picks tab and check a held ticker for the trend-structure chip; if still blank after the
-   quota window resets, that's a real bug now, not the known cause.
+0. **★ Production promotion PR [#81](https://github.com/claudiachez/stw-companion/pull/81)
+   (`staging → main`, 112 commits) is OPEN and host-approved — likely merged by your session.**
+   **DB is ready** — migrations through 062 on PROD + sandbox. The scheduled writers
+   (`macro-snapshot` v2.0.0, `sector-map-sync`) only fire on the `main` deploy, so they go live on merge.
+   **If merged, VERIFY on production:** (a) `FRED_API_KEY` is set on the Netlify **production** context
+   of both sites (else FRED cells go `—`); (b) a fresh `macro_daily_snapshots` row carries
+   `engine_version = macro-snapshot-2.0.0` + non-null trend/vol/credit + a `run_log` row; (c)
+   `sector-map-sync` mapped CCXI (`run_log`); (d) the Macro tab renders live FRED data + the regime
+   badge shows on a held ticker. **If still open, don't merge without re-confirming host approval.**
 
-2. **Turn `ibkr_live_trading_enabled` back to `0` on sandbox** (Config page → Live IBKR trading toggle,
-   or `update app_config set value = 0 where key = 'ibkr_live_trading_enabled'`) once you're done testing
-   the IBKR order UI — it was left on from this session's testing. PROD is already `0`.
+1. **✅ DONE — data feeds + sector taxonomy (PRs #78/#79, this session).** Macro indices re-platformed
+   onto FRED, Event Risk on FRED's calendar, VVIX dropped, GICS-11 taxonomy + `sector-map-sync`,
+   admin-configurable regime weights. Migrations 061 + 062 applied to both environments. See Current
+   Status + Conventions → Macro data sources / Sector taxonomy. Nothing left here — it just needs the
+   promotion (#0) to run live on production.
 
-3. **Live-test the admin IBKR order flow against a real IB Gateway** — cannot be done from this
+2. **★ ROADMAP — integrity guardrails.** Spec:
+   [`plans/20260706_integrity-guardrails.md`](plans/20260706_integrity-guardrails.md); status report:
+   [`plans/20260706_integrity-guardrails-report.md`](plans/20260706_integrity-guardrails-report.md).
+   Two items still open: **(a)** live cron verification (now includes the new `sector-map-sync` +
+   `regime-daily` writers) and **(b)** the `regime_daily` backfill via `?backfill=1&days=N` (the
+   `regime-daily` fn is on `staging` but **not yet scheduled** — it has no `schedule()` wrapper; wiring
+   its cron + running the backfill is part of this). `regime_daily` is still **0 rows** on PROD.
+
+3. **Visually confirm the regime badge + the FRED-backed Macro tab render** after the promotion. Open a
+   held ticker's detail page (regime chip) and the Macro tab (Market Internals values populated, Event
+   Risk showing the upcoming calendar). FRED is 120/min so cold loads should be fast now; equity closes
+   still pace on TwelveData. If a cell is blank after a full cycle, check the `fred` proxy / `FRED_API_KEY`
+   before assuming a deeper bug.
+
+4. **Live-test the admin IBKR order flow against a real IB Gateway** — cannot be done from this
    environment. In order: (1) `IB_PORT=4002 python3 ibkr_proxy.py` against Gateway in **paper** mode,
    (2) place a real paper order end-to-end from the "Open via IBKR" modal, confirm the fill patches the
    diary row's price correctly, (3) test "Close via IBKR" on an open leg, (4) only after both work
    cleanly, consider port 4001 (live). Flag if `/order_status`'s `reqAllOpenOrders`/`reqCompletedOrders`
    lookup doesn't find a previously-placed order from a new connection.
 
-4. **Phase 4 admin Manage area, Parts B/C — still not built** (Part A, Config, shipped this session).
-   Spec: [`plans/phase4_admin_manage.md`](plans/phase4_admin_manage.md). **Categories CRUD**
+5. **Phase 4 admin Manage area, Parts B/C — still not built** (Part A, Config, shipped 2026-07-03).
+   Spec: [`plans/20260619_phase4_admin_manage.md`](plans/20260619_phase4_admin_manage.md). **Categories CRUD**
    (delete-guarded — block or reassign-to-Uncategorized on delete) and **Traders** (read-only
    recommended — only 2 seeded, FK'd everywhere, high-risk/low-value to make editable). No migrations
    expected.
 
-5. **Verify `macro_daily_snapshots` (migration 048) is actually populating** after the
-   `macro-snapshot.ts` fix (commit `3aa5528`, 2026-07-02). Was still empty on PROD as of that fix
-   shipping. Check for a row dated recently; if still empty, check the Netlify function logs for the
-   `macro-snapshot` scheduled function.
+6. **`macro_daily_snapshots` is populating but the PROD writer is a STALE build; the good fix is on
+   staging, not main.** PROD had 2 rows at handoff (up from 0/1), but the currently-DEPLOYED (main)
+   `macro-snapshot` writes rows with **null `engine_version` and no `run_log` row** — i.e. it's a
+   pre-instrumentation build, and its trend/vol/credit scores are still null (the unpaced-TwelveData
+   429 bug). PR #73's fix (Supabase-read hook + ≤8/65s pacing + run_log/engine_version) is on
+   **`staging` only** — it won't take effect on PROD until the promotion in #0. After promotion,
+   confirm a fresh snapshot row carries a non-null `engine_version` + real trend/vol scores AND a
+   `run_log` row (`run_type='macro-snapshot'`) before trusting the 5D engine.
 
-6. **Promote `staging → main` when approved (production deploy).** `staging` is 97+ commits ahead of
-   `main` (PRs #50–#63 + Macro Dashboard v2 + QA work + this session's regime badges/IBKR trading). Open
-   a `staging → main` PR **only on explicit host approval**.
+7. **Macro Dashboard — COMPLETE.** All 11 modules + the Portfolio Heatmap (shipped this session on
+   both Stock Picks Overview and My Portfolio) are done. Nothing left from
+   [`plans/20260627_macro_dashboard_spec.md`](plans/20260627_macro_dashboard_spec.md).
 
-7. **Macro Dashboard — remaining roadmap item** (spec: [`plans/macro_dashboard_spec.md`](plans/macro_dashboard_spec.md)).
-   All 11 modules are built and on staging. The one item left from the spec:
-   - **Portfolio Heatmap** — treemap block on `PortfolioDashboard`, box ∝ `current_weight`,
-     Today/Total + By Basket/All toggles. Spec § "Phase 4: Portfolio Heatmap".
-
-8. **Overview/experience enrichment (host-requested, queued).** Stop the click-each-ticker experience:
+8. **BACKLOG — Overview/experience enrichment + multi-trader tailing (host-requested, no firm order):**
+   - **§4 multi-trader tailing** (deferred). A real data-model change — a position ↔ pick link table +
+     a migration + a host-decided conflict rule. The UI is already built over a trader array (read
+     `PortfolioPage.tsx`'s `FOLLOWED_TRADERS` / `pickMap.traders` and `PortfolioPositionDetail.tsx`);
+     only STW is wired. **Present a proposal + get the conflict rule decided BEFORE building.**
    - **Transcripts library tab** — a NEW subscriber-facing **episode recap** (host's *trading psychology* +
      that episode's *per-ticker commentary*). **NOT** the local methodology `.md` files (apps never read those).
      Needs a new `webinars` table written by `stw-transcripts` + a new tab.
    - **Global Activity Feed** — one cross-ticker, reverse-chron feed merging Commentary + Transactions across
      all holdings, filterable. No schema (reads `conviction_comments` + `leg_transactions`). Low-cost.
 
-9. **Subscriber closed-position P&L history — explicitly postponed by the host this session, design
-   already researched.** The subscriber IBKR Flex query returns *open positions only* and the sync is
+9. **Subscriber closed-position P&L history — explicitly postponed by the host, design already
+   researched.** The subscriber IBKR Flex query returns *open positions only* and the sync is
    delete-all-then-insert; closed history needs a genuinely different append-only, dedup-on-execution-id
    sync (a second Flex Query template + a new `user_closed_trades` table). Don't build until the host
-   asks again — see the session's plan file for the full design if picking this up.
+   asks again. **Note:** the My Portfolio detail pane (this session) already surfaces this gap
+   honestly to users as a "Closed position history — coming soon" placeholder rather than hiding it.
 
 10. **Future features (not migration work):** inline 2-line leg editing in the modal (deferred); `$100k`
     notional + SPY benchmark (the `spy_daily` table from migration 032 already exists; the population
@@ -397,19 +523,28 @@ apps/
   admin/                     admin shell: no paywall, Edit + Users + Config + IBKR (pricer + order placement)
     ibkr_proxy.py            local IBKR writer (run on your machine, not deployed)
     netlify.toml             (Netlify base dir = apps/admin)
-supabase/migrations/         001..053 — single source of truth for DB schema/RLS
+supabase/migrations/         001..060 — single source of truth for DB schema/RLS
+plans/                       specs, runbooks & one-off SQL; files are date-prefixed YYYYMMDD_<name>
 CLAUDE.md                    this file
 ```
+
+**`plans/` naming (convention, 2026-07-09):** every file in `plans/` is prefixed with its
+creation date, `YYYYMMDD_<name>` (e.g. `20260627_macro_dashboard_spec.md`), so the folder reads
+chronologically. Name any new plan doc the same way.
 
 ### Layer rules (keep them honest)
 - `@stw/ui` takes everything via **props/context** — no app-specific imports, no env,
   no routes. The Supabase client + `VITE_*` env are created in each app and injected.
 - Admin/subscriber differences flow through **one `AppCapabilities` context**
-  (`isAdmin`, `canEdit`, `onEditHolding`, `showIbkrBadge`, `onExecuteIbkrOrder`) — never scatter
+  (`isAdmin`, `canEdit`, `showIbkrBadge`, `canViewHistory`, `canUseLimits`, `onEditHolding`,
+  `onExecuteIbkrOrder`, plus the injected `finnhubKey`/`twelveDataKey`) — never scatter
   `isAdmin` checks deep in shared components. `onExecuteIbkrOrder` is the one capability that reaches
   outside the app entirely (the local IBKR proxy) — it's wired only in `apps/admin/src/main.tsx`;
   `apps/web` never sets it, which is what actually keeps real order placement out of the subscriber app
-  (not just a UI-level gate).
+  (not just a UI-level gate). Note: `apps/web`'s own `SettingsPage.tsx` computes its `canUseLimits`
+  locally via `useTierAccess('limits')` rather than reading it off this context — an existing (pre-
+  2026-07-08) inconsistency with how `PortfolioPage.tsx` reads `capabilities.canUseLimits`, not
+  something this session introduced; worth reconciling if you're back in this area.
 - `@stw/shared` is the only home for derived-number logic (P&L, weights, sector %, date formatting).
   Don't re-implement it in an app. (End state: move the math into Supabase views/RPC.)
 
@@ -479,7 +614,7 @@ OAuth on web does a full-page redirect).
 ## Database (Supabase)
 
 - Project: `usmqbohcjcyszjxxvnqu.supabase.co`; client created per-app and injected into `@stw/ui`.
-- `supabase/migrations/` is the single source of truth (through **053**).
+- `supabase/migrations/` is the single source of truth (through **059**).
   **Claude authors migrations; you apply them** via the Supabase SQL editor / `supabase db push`.
 - **Local DB backups → gitignored `backups/`** (never committed — may carry PII), named
   `<date>_<purpose>.json` (e.g. `*_pre-coldrop.json`). Take a fresh logical snapshot of the
@@ -500,6 +635,13 @@ OAuth on web does a full-page redirect).
   "+ Add Event" form is a manual backup (a direct insert that doesn't touch `holdings`,
   so it never double-fires the trigger). This intentionally differs from conviction
   history, which uses explicit appends (see migration 015).
+- **`holdings.action_date` is a separate write path from a leg's own open date** —
+  `legs.opened_at`/`leg_transactions.executed_at` and `holdings.action_date` are NOT kept in sync
+  automatically. Correcting a mis-dated leg via the ledger (or a direct `legs`/`leg_transactions` fix)
+  does **not** touch `holdings.action_date` — it's an independently-editable field on
+  `PositionEditor.tsx`. Confirmed by a real bug (LEU, fixed 2026-07-05): the leg was corrected to the
+  right year but `holdings.action_date` still carried the old one. When fixing any date on a position,
+  check and fix **both** sides.
 
 ### Data sources / writers
 The apps mostly **read** these tables; the rows are written by systems that live **outside this
@@ -514,6 +656,7 @@ repo**. Know who writes what before you reason about freshness or "why is this r
 | `run_log` | **the routines** | ingestion audit + high-water mark; newest `digest` → "Latest Portfolio Changes" |
 | `user_positions` | **web `ibkr-flex.ts`** | each subscriber's own IBKR account; user-owned RLS |
 | `profiles` / `tiers` | auth + Settings | per-user creds/preferences, tier paywall |
+| `ticker_sector_map` | **`sector-map-sync`** Netlify fn (auto) + one-off migration 062 | ticker → **canonical GICS-11 (+ ETF/Cash)** sector, read by `useSectorMap` (Risk-tab concentration, detail-pane Sector, heatmap Sector grouping). Migration 062 re-seeded the existing rows to GICS; `sector-map-sync` (web, weekdays 22:00 UTC) auto-maps newly-opened `holdings` tickers via `resolveSector` (`@stw/shared`). No longer a manual stopgap |
 
 "The routines" = three cowork cron tasks that ingest Discord into Supabase — **the primary writers of
 `holdings`, `signals`, `conviction_comments`, `run_log`.** They are not in this repo (they live at
@@ -592,7 +735,7 @@ never the requested/guessed price. Gated by `canEdit` + `app_config.ibkr_live_tr
 **This is explicitly admin-only, local-proxy-only, single-account.** Do not extend it to
 arbitrary subscribers without a separate legal/compliance review — that would need an entirely
 different integration (IBKR's Client Portal Web API, or Alpaca's OAuth trading API per
-`plans/mobile-transition.md`), not more gating on this one. `IB_PORT` is an env var
+`plans/20260524_mobile-transition.md`), not more gating on this one. `IB_PORT` is an env var
 (`IB_PORT=4002` for paper mode) so testing never requires editing the file.
 
 ### Subscriber — Flex Query portfolio sync
@@ -620,14 +763,53 @@ subscriber's own account, read-only. Do not conflate them.
 - **Env var whitespace:** always call `.trim()` on env vars read in functions — pasted keys/URLs sometimes carry a trailing newline that causes "Invalid API key" from Supabase even when the value looks correct in the Netlify UI.
 - **Both web and admin deploy functions.** Both `apps/web/netlify/functions/` and `apps/admin/netlify/functions/` are deployed by their respective Netlify sites. Functions that must work on both sites (e.g. `macro-recap.ts`) need a copy in each app — Netlify functions are site-scoped, not cross-domain callable.
 
-### Macro data sources & module structure
-- **Finnhub** (`VITE_FINNHUB_KEY`): live quotes for stock symbols only. Free tier does NOT serve index symbols (`^VIX`, `^TNX`, etc.) — they return empty. For index indicators, fall back to TwelveData last daily close.
-- **TwelveData** (`VITE_TWELVEDATA_KEY`): daily OHLC for MA computation. Cache via `packages/ui/src/features/macro/maCache.ts` (`tdDailyCloses`, `loadCloses`, `loadLastDate`, `sma`), keyed `macro-ma-{symbol}` with `date` + `lastDate` (refresh once per day). Also the authoritative close source for VIX/US10Y/CBOE-TNX.
-- Without `VITE_TWELVEDATA_KEY`, MA/score cells degrade to `—` gracefully.
-- **Module structure (v2):** the Macro tab is **weighted module scores**, NOT a single MA table. The 9/21/200 MA table is **Trend only**; **VIX → Volatility/Stress**, **US10Y → Rates+Dollar** — never put stress/rates indicators in the trend table. Pure scorers live in `packages/shared/src/utils/macro.ts` (unit-tested); fetching lives in the per-module hooks. Every macro card shows a **source + data-age** footer (`SourceNote`); daily series show their latest close date (`loadLastDate`).
-- **Macro recap** (`macro-recap-am/pm` scheduled fns + `macro-recap.ts` manual fn): a **daily** note, two sessions per weekday (AM pre-market, PM post-market). Grounded ONLY in data passed to it — **never fabricate figures**. Prefers Sonnet, falls back to Haiku; override with `MACRO_RECAP_MODEL`. **Persisted cross-device** in `public.macro_daily_recaps` (migration 051, unique on `(date, session)`) — functions write with service-role key; RLS grants read-only `SELECT` to `authenticated`; admin-only Regenerate button with AM/PM selector. Scheduled: AM at 12:00 UTC (8am EDT), PM at 21:30 UTC (4:30pm EDT). Hook: `useDailyRecap.ts`.
-- **5D trend engine** (`useMacroTrendHistory.ts`): daily module/indicator-score snapshots persisted server-side in `public.macro_daily_snapshots` (migration 048, one row per weekday, written by the `macro-snapshot` scheduled Netlify function at 4:30pm ET). **`macro-snapshot.ts` was broken (imported `@supabase/supabase-js` which crashes Node 20) — fixed 2026-07-02 to use direct REST fetch. Table was empty until that fix deployed.** Banner direction descriptor, score-strip deltas, and gauge delta are consistent across devices once rows accumulate.
-- **Sector Rotation** (Module 11, `useSectorRotation.ts` + `SectorRotationCard.tsx`): per-sector radar cards (RS vs SPY across Week/1M/3M/6M/1Y via `recharts`) plus "Leaders"/"Setting Up" constituent chips, fetched via `fetchClosesChunked` in `maCache.ts` (small sequential chunks to respect TwelveData's free-tier rate limit for the larger constituent symbol list).
+### Macro data sources & module structure (FRED re-platform, 2026-07-10)
+Feed responsibilities, post-re-platform (full inventory: [`plans/20260707_data_feeds_inventory_and_plan.md`](plans/20260707_data_feeds_inventory_and_plan.md)):
+- **FRED** (`FRED_API_KEY`, server-side, no `VITE_`): the authoritative source for macro **index**
+  indicators — VIX (`VIXCLS`), VIX3M (`VXVCLS`), US10Y (`DGS10`, already %), HY-OAS credit
+  (`BAMLH0A0HYM2`), broad dollar (`DTWEXBGS`) — **and** the Event Risk release calendar. Free,
+  ~120/min, no daily cap. **FRED is server-only (no CORS): browsers reach it through the `fred`
+  Netlify proxy** (`apps/{web,admin}/netlify/functions/fred.ts`); the scheduled writers call FRED
+  directly. Series ids + URL/parse helpers are in `packages/shared/src/utils/fred.ts` (`FRED_SERIES`,
+  `buildFredUrl`, `parseFredObservations`); the browser cache is `fredCache.ts` (mirrors `maCache`).
+  This is the pattern to prefer for any new key — keep it server-side behind a proxy.
+- **TwelveData** (`VITE_TWELVEDATA_KEY`): now **equity daily closes ONLY** — the trend ETFs
+  (SPY/QQQ/IWM/RSP/VEA) and Sector-Rotation constituents. Cache via `maCache.ts`. **It still bills 1
+  credit/symbol on the free ~8/min tier**, so keep routing any batch through `tdBatchCloses`/
+  `fetchClosesChunked` (≤8 symbols, ~65s pacing) — never one big unchunked call. Indices are OFF
+  TwelveData now; do not add index series back to it.
+- **Finnhub** (`VITE_FINNHUB_KEY`): live stock quotes only (free tier serves neither index symbols nor
+  daily candles), plus `profile2` for `sector-map-sync`'s GICS resolution.
+- **VVIX is dropped** — no free feed serves it; don't re-add a perpetually-null input.
+- **Generic pacing helper**: `runPaced` + `FEED_LIMITS` in `@stw/shared` (`utils/pacing.ts`) is the one
+  chunk-and-pause throttle every feed routes through (FRED/Finnhub/TwelveData). Reuse it for new feeds.
+- **Module structure (v2):** the Macro tab is **weighted module scores**, NOT a single MA table. The
+  9/21/200 MA table is **Trend only**; **VIX → Volatility/Stress**, **US10Y → Rates+Dollar**. Modules
+  5–7 (Volatility / Credit / Rates+Dollar) are consolidated into ONE **Market Internals** table
+  (`MarketInternalsCard.tsx`) — one row per sleeve, values right-aligned; the three underlying card
+  components are kept but parked. Pure scorers live in `packages/shared/src/utils/macro.ts`. Every card
+  shows a `SourceNote` footer with a full `fmtDateTime` **"Updated:"** stamp + a date-only "data through".
+- **Regime weights are admin-configurable** — `app_config` keys `regime_weight_*` (percent, migration
+  061), read via `useAppConfig().regimeWeights`, passed to `environmentScore(sleeves, weights?)` (which
+  normalizes by the total, so scale is cosmetic). Edited on Admin Config → "Market Regime weights". The
+  `macro-snapshot` writer reads the same keys so the persisted regime matches the live banner.
+- **Event Risk** (`macro-events.ts`, web + admin): FRED `/fred/release/dates` **per release_id**
+  (CPI 10 · PCE 54 · NFP 50 · GDP 53 · PPI 46) + a static `FOMC_DECISION_DATES` list, window-filtered.
+  The MarketWatch/`cheerio` scrape is retired. A calendar has no actual/consensus values, so
+  `classifyEventRisk`'s surprise/shock path no-ops; upcoming-event windows work fully. **FOMC dates are
+  a hardcoded best-effort list — verify against the Fed's published schedule when they roll over.**
+- **Macro recap** (`macro-recap-am/pm` scheduled fns + `macro-recap.ts` manual fn): a **daily** note, two
+  sessions per weekday (AM pre-market 12:00 UTC, PM post-market 21:30 UTC). Grounded ONLY in passed data
+  — **never fabricate figures**. Sonnet→Haiku (`MACRO_RECAP_MODEL` override). Persisted in
+  `public.macro_daily_recaps` (migration 051). Hook: `useDailyRecap.ts`.
+- **5D trend engine** (`useMacroTrendHistory.ts`): reads `public.macro_daily_snapshots` (migration 048),
+  written by the `macro-snapshot` scheduled fn (4:30pm ET weekdays), folding today's live scores in.
+  Supabase-backed (not localStorage). The **v2.0.0 writer (FRED indices + HY-OAS + paced equity) is on
+  `staging`**; it self-populates only on the **production (`main`) deploy** (Netlify fires scheduled
+  functions only there), so PROD snapshot rows won't carry real trend/vol/credit scores until the
+  pending `staging → main` promotion — see Next Steps. Deltas are legitimately null until ≥~6 rows accrue.
+- **Sector Rotation** (Module 11): per-sector radar cards + constituent chips, fetched via
+  `fetchClosesChunked` (TwelveData, paced).
 
 ### Timestamps
 All UI timestamps use `fmtDateTime(val: Date | string | null)` from `@stw/shared`.
@@ -650,6 +832,17 @@ holdings set), so there's no detail page for most of these symbols to link to.
 ### Counts
 "Positions" counts exclude the `CASH` balance row (it's not a position) and reflect the
 active filter (closed hidden by default). The FilterBar count shows `N of {total}`.
+
+### Sector taxonomy (standing, 2026-07-10)
+- The canonical sector set is **GICS-11 + `ETF` + `Cash`** (`packages/shared/src/constants/sectors.ts`,
+  `GicsSector`/`SectorBucket`). `ticker_sector_map.sector` holds one of these values — never a raw
+  Finnhub industry label. Resolve with `resolveSector(ticker, finnhubLabel?)` (TICKER_GICS override →
+  Finnhub→GICS fold → null); never re-implement the mapping. A new ticker is auto-mapped by the
+  `sector-map-sync` scheduled fn; add a `TICKER_GICS` entry only to correct a mis-folded name or a
+  non-equity holding (ETF/Cash).
+- **`ETF` and `Cash` are excluded from sector-concentration** (`isNonEquityBucket`) — they're not an
+  equity sector, so they never form a bucket and never show as `unevaluated`. A genuinely unmapped
+  ticker (no override, no Finnhub industry) stays `unevaluated`, never a breach.
 
 ### UI consistency (standing rules, host 2026-06-23)
 - **White text on green.** Any filled `--acc`/green button or active toggle uses **white** text, never
@@ -690,7 +883,7 @@ active filter (closed hidden by default). The FilterBar count shows `N of {total
   appear in the subscriber-facing digest (`run_log.digest` → "Latest Portfolio Changes"). The public digest
   carries only **confirmed** changes; review-flags go to `run_log.summary` / the chat output (admin-gated).
 - **Ticker Detail = four non-overlapping surfaces, one job each** (contract:
-  [`plans/commentary_vs_transaction_boundary_spec.md`](plans/commentary_vs_transaction_boundary_spec.md)):
+  [`plans/20260625_commentary_vs_transaction_boundary_spec.md`](plans/20260625_commentary_vs_transaction_boundary_spec.md)):
   **Highlight box** = `holdings.summary` (durable narrative paragraph) · **Key Points** = `holdings.bullets`
   (durable supporting detail — receipts + angles, **de-duped vs the summary**, never restating it; §2A) ·
   **Commentary** = `conviction_comments` (dated episodic views) · **Transaction History** =
@@ -734,39 +927,110 @@ active filter (closed hidden by default). The FilterBar count shows `N of {total
   can't cover one unit, rather than leaving the field empty (which reads as "nothing computed" instead
   of "budget insufficient"). Apply the same instinct anywhere a calculation can legitimately land on
   zero/empty — show the result and why, don't hide it.
+- **Settings pages hold only account setup — never live evaluation/violation display** (host decision,
+  2026-07-06). A Settings form configures thresholds/credentials; it does not also show you how you're
+  doing against them. That belongs on the page the data itself lives on (e.g. Limits violations live
+  on My Portfolio, not Settings, even though the thresholds that drive them are edited in Settings).
+  If a future Settings addition is tempted to add a "preview" of live data next to a config field,
+  don't — split it the same way `RiskConfigForm` (Settings) and `ViolationsSummary` (My Portfolio)
+  were split.
+- **A list page's default ticker-click action should open that page's OWN data about the ticker, not
+  jump to a different page's tracked version of it** (host decision, 2026-07-06, My Portfolio). My
+  Portfolio's ticker click now opens an own-position detail pane instead of navigating to STW's
+  tracked position (`PortfolioPositionDetail.tsx`) — the STW-position view is still reachable, but
+  as an explicit named link inside the pane, not the default click target. Apply the same instinct to
+  any future page that lists a subscriber's own data but is tempted to default-link into STW's data
+  instead. **Every row opens the pane, tailed or not** (host, 2026-07-09) — don't gate the detail on
+  whether STW tracks the ticker; an untailed position still has its own P&L / sector / risk to show.
+- **Onboarding/setup content collapses once its job is done — never permanent prime real estate**
+  (host decision, 2026-07-08, Settings redesign). The IBKR "How to connect" 7-step walkthrough used
+  to render unconditionally even for an already-connected returning user; it's now collapsed behind
+  an "Edit connection ▸" toggle (default-collapsed once connected, default-expanded on first-ever
+  setup). Apply the same instinct to any future setup/walkthrough content: default-collapse it the
+  moment the thing it's walking the user through is already done.
+- **A value that's conceptually always one sign should never make the user type that sign.** The
+  drawdown-ladder inputs used to require typing a negative number (`-10`); they now show "At 10%
+  drawdown" (a positive magnitude) and flip the sign internally on read/write. Apply this to any
+  future numeric input where the sign is a fixed property of the concept, not a real choice the user
+  is making — typing the sign invites a flipped-logic error for no benefit.
+- **A hardcoded-length list backed by a JSONB/array column is almost never actually fixed-length** —
+  it's just however many rows the first version happened to seed. The risk-limits drawdown ladder
+  was hardcoded to exactly 2 rungs in the UI (`RiskConfigForm.tsx`) even though the underlying
+  `risk_config.ladder` column was always a JSONB array and the pure scorer
+  (`packages/shared/src/utils/limits.ts`'s `drawdownLadderTarget`) already iterated it generically —
+  the 2-step limit was a UI artifact, not a real constraint. It's now a dynamic array (Add/Remove
+  rung). Before hardcoding a "fixed" count for any array-backed config, check whether the schema and
+  pure logic already support N — if so, don't under-build the UI to match an arbitrary seed value.
+- **A subscriber page with several distinct jobs gets a `SubNav` sub-tab bar, not one long scroll**
+  (host, 2026-07-08, My Portfolio → Overview / Positions / Risk / Tailing). Same secondary-nav
+  pattern as the admin (`SubNav` primitive). Corollary: **the filter toolbar is tab-scoped, not
+  global** — it belongs only to the tab that browses a list (Positions), not the whole page. Global
+  actions (Sync, last-synced stamp, P&L eye) sit in a persistent strip beside the sub-nav.
+- **Both detail panes are instances of the shared `DetailPane` primitive** (`packages/ui/src/primitives/DetailPane.tsx`) —
+  Stock Picks (`HoldingDetail`) and My Portfolio (`PortfolioPositionDetail`) share header + badge
+  strip + 3-column metric block + stacked section cards. A new detail surface copies this, never a
+  bespoke card stack. Reach for `EmptyState` for any "coming soon"/no-data block (icon + one line),
+  never a paragraph of apology prose. **On the My Portfolio pane specifically** (host, 2026-07-09):
+  the header badge is the ticker's **market sector** (universal to the position); everything about the
+  *tailed pick* — trader badge · basket · conviction + tier badge · you-vs-STW sizing · a compact ↗
+  link to STW's tracked position — is grouped onto ONE row in the Tailing section, not scattered into
+  the header. Don't spread pick metadata across the header again.
+- **The pick ↔ execution loop is bidirectional and must stay so.** Stock Picks detail → "View your
+  position →" (shown only when the signed-in subscriber holds it, gated `!isAdmin`, via
+  `/portfolio?ticker=`) and My Portfolio detail → "View STW's tracked position →" (via
+  `/picks?ticker=`). Both target pages read the `?ticker=` param to open that detail. Don't add one
+  direction without the other.
+- **KPI cards read uniformly: hero number · qualifier (delta) · uppercase label** — always, via the
+  `KpiCard` primitive (`primaryValue` = the number, `delta` = the qualifier, `secondaryValue` = a
+  ratio's second half like `/ 9%`). Don't put the % on top in one card and below in the next.
+- **A permanently-empty column/field reads as broken, not pending — remove it until its data exists.**
+  My Portfolio's Positions table dropped the Return column (100% em-dashes: `unrealized_pnl_pct` isn't
+  in the subscriber Flex feed) rather than ship a dead column. Show a column only when it can carry
+  real values; surface a genuine gap as an `EmptyState`, not a table of dashes.
+- **A "Type" column shows the instrument kind (Shares / Call / Put), not the direction.** In a
+  long-only book "Long" on every row is near-zero information; the kind is what distinguishes legs.
+- **Position sizing vs a tailed trader has TWO distinct tones, never one** (host, 2026-07-09):
+  **oversized** (you hold MORE than the trader → concentration caution) = **warning/amber**;
+  **undersized** (you hold less → informational) = **info/blue**; within ±0.5pp = neutral "in line".
+  One source of truth: `sizingTone()` in `@stw/shared` (returns the label + `var(--status-*)` token
+  refs) — used by both the Tailing tab (`DeltaChip`/`SizingBar`) and the detail pane. Don't render
+  divergence as a single amber-for-both chip again.
+- **The Portfolio Heatmap is a shared, library-free treemap** (`packages/ui/src/components/PortfolioHeatmap.tsx`,
+  built on the pure `squarify` util in `@stw/shared`): box area ∝ weight, color ∝ performance
+  (`color-mix` on `--pnl-gain`/`--pnl-loss`, Today ±3% / Total ±25% full-saturation). Offer the
+  **Today** color mode only where a live day-change feed exists (Stock Picks yes; My Portfolio no —
+  stored marks only). Grouping is **All | Basket | Sector**, and every grouped mode draws a labeled
+  header per block so it's clear which cluster is which. Feed `sector` from `useSectorMap`.
 
 ---
 
 ## Design System
 
+**Fully rolled out repo-wide, not queued** — the note that used to live here calling this "queued
+and spec'd" was stale; the build described in
+[`plans/20260706_stw-design-system.md`](plans/20260706_stw-design-system.md) (4 phases: audit → tokens → core
+components → enforcement) shipped completely before the 2026-07-08 session, including an eslint
+rule (`no-restricted-syntax` for literal colors/raw font-sizes) with **zero baseline exceptions
+left**. **Read [`docs/design-system/CONTRIBUTING.md`](docs/design-system/CONTRIBUTING.md) first** —
+it's the actual current source of truth for which token or `packages/ui/src/primitives/` component
+to reach for, not this section. Don't invent a second parallel token scheme (e.g. a new Tailwind
+theme extension) — extend `packages/ui/src/styles/tokens.css` / `packages/shared/src/constants/tokens.ts`
+instead, the same way every page since has.
+
 - **Font:** Barlow Condensed (700/800) for the **STW logo** in the header only; system sans-serif (`font-sans`) everywhere else including page headings and login
 - **Logo:** STW mic + green arrow SVG
 - **Default theme:** Dark. Toggle persists to `localStorage` (`stwTheme`); light
   theme applied via `[data-theme="light"]`. Never hardcode colors outside `:root` /
-  `[data-theme="light"]` — always use CSS variables.
-
-#### Color Variables (`:root`)
-| Variable | Value | Usage |
-|---|---|---|
-| `--bg` | `#0a0a0a` | Page background |
-| `--surface` | `#111111` | Cards, header |
-| `--s2` | `#1a1a1a` | Secondary surfaces |
-| `--border` | `#2a2a2a` | Borders |
-| `--bsub` | `#1f1f1f` | Subtle dividers |
-| `--text` | `#f0f0f0` | Primary text |
-| `--t2` | `#a0a0a0` | Secondary text |
-| `--t3` | `#525252` | Muted text |
-| `--acc` | `#22c55e` | STW green |
-
-#### Tier Colors
-| Tier | Color | Meaning |
-|---|---|---|
-| `--c5` | `#22c55e` | Highest conviction |
-| `--c4` | `#3b82f6` | High conviction |
-| `--c3` | `#f59e0b` | Moderate |
-| `--c2` | `#6b7280` | Waning interest |
-| `--c1` | `#ef4444` | Concern |
-| `--c0` | `#52525b` | Legacy |
+  `[data-theme="light"]` — always use CSS variables, defined once in `packages/ui/src/styles/tokens.css`.
+- **`--t3` (muted text) was fixed for AA contrast** during the design-system Phase 2 pass — old dark-theme
+  value `#525252` (~2.5:1 on `--bg`, fails AA) is now `#808080` (~5:1); old light-theme value similarly
+  darkened. If you see `--t3: #525252` anywhere, that's a stale/reverted copy, not the current token.
+- **Core primitives** (`packages/ui/src/primitives/`): `Button` (4 variants incl. a `dirty` prop for
+  unsaved-changes highlighting), `FormRow` (`'stacked'`/`'horizontal'` layout, label/input/suffix/hint
+  grid — combine `layout="horizontal"` with `hint` freely, a real wrapping bug there was found and
+  fixed 2026-07-08), `TextInput`, `AlertStrip` (info/positive/warning/negative), `StatusPill`,
+  `Badge`, `KpiCard`, `Modal`, `AccordionList`, `DetailPane`/`ListDetailSplit`, `SectionHeader`,
+  `DataTable`. Reach for one of these before writing a new inline-styled control.
 
 ---
 

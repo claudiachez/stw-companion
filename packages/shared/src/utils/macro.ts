@@ -86,15 +86,21 @@ export function trendSleeveScore(buckets: (TrendBucket | null)[]): number | null
  * Weighted sum of available sleeve scores. A missing sleeve (null) has its
  * weight redistributed proportionally across the present sleeves, so the score
  * stays meaningful while modules are still being built / data is unavailable.
+ *
+ * `weights` defaults to SLEEVE_WEIGHTS but is admin-configurable via app_config
+ * (migration 061). The result normalizes by the total present weight, so the
+ * weights' absolute scale is irrelevant — fractions (0.30) and percents (30)
+ * give the identical score.
  */
 export function environmentScore(
   sleeves: { key: RegimeSleeveKey; score: number | null }[],
+  weights: Record<RegimeSleeveKey, number> = SLEEVE_WEIGHTS,
 ): number | null {
   const present = sleeves.filter((s) => s.score !== null);
   if (present.length === 0) return null;
-  const totalWeight = present.reduce((a, s) => a + SLEEVE_WEIGHTS[s.key], 0);
+  const totalWeight = present.reduce((a, s) => a + weights[s.key], 0);
   if (totalWeight === 0) return null;
-  const sum = present.reduce((a, s) => a + (s.score as number) * SLEEVE_WEIGHTS[s.key], 0);
+  const sum = present.reduce((a, s) => a + (s.score as number) * weights[s.key], 0);
   return Math.round(sum / totalWeight);
 }
 
@@ -122,14 +128,6 @@ export function vixScore(vix: number | null): number | null {
   if (vix < 20) return 55;
   if (vix < 25) return 30;
   return 10;
-}
-
-/** VVIX (vol-of-vol / tail risk) → calm score. <85 calm, 85–100 elevated, >100 fear. */
-export function vvixScore(vvix: number | null): number | null {
-  if (vvix === null) return null;
-  if (vvix < 85) return 85;
-  if (vvix < 100) return 50;
-  return 20;
 }
 
 /** IV-premium ratio (VIX ÷ 30D realized vol) → score. <0.90 calm, 0.90–1.25 normal, >1.25 fear. */
@@ -185,6 +183,18 @@ export function percentileRank(value: number, series: number[]): number | null {
 export function creditHygScore(aboveMa50: boolean, rising: boolean): number {
   if (aboveMa50) return rising ? 80 : 60; // confirming / mild caution
   return rising ? 45 : 20;                // stabilizing-mixed / warning
+}
+
+/**
+ * HY OAS (ICE BofA high-yield option-adjusted spread, FRED BAMLH0A0HYM2) → credit
+ * score. A SPREAD, so the sign inverts vs the HYG *price* proxy: a spread BELOW
+ * its 50D MA (tight relative to trend) that's TIGHTENING (falling day-over-day)
+ * is credit confirming / risk-on; a spread ABOVE its MA and WIDENING is stress.
+ * Higher score = calmer credit — same 0–100 bands + creditLabel as the HYG proxy.
+ */
+export function creditOasScore(belowMa50: boolean, tightening: boolean): number {
+  if (belowMa50) return tightening ? 80 : 60; // confirming / mild caution
+  return tightening ? 45 : 20;                 // stabilizing-mixed / warning
 }
 
 export function creditLabel(score: number | null): string {
@@ -279,19 +289,22 @@ export function breadthScore(aboveMa: boolean, rising: boolean): number {
 }
 
 /**
- * Risk Appetite gauge weights (sum to 100%) — the single source of truth
- * shared by the live gauge (useSentimentGauge) and the daily snapshot writer
- * (macro-snapshot.ts), so the persisted 5D/20D trend tracks the same number
- * the gauge displays instead of drifting out of sync.
+ * Risk Appetite gauge weights (sum to 100%) — the single source of truth shared
+ * by the live gauge (useSentimentGauge) and the daily snapshot writer
+ * (macro-snapshot.ts), so the persisted 5D/20D trend tracks the same number the
+ * gauge displays. VVIX (was 0.12) was removed 2026-07-08 — no free feed serves
+ * it, so it was permanently null. The other six kept their prior RELATIVE weights
+ * (0.18/0.16/0.16/0.18/0.10/0.10) rescaled to sum to 1.0; since riskAppetiteScore
+ * normalizes by the active weight sum, the gauge value is materially unchanged
+ * from when VVIX was perpetually null.
  */
 export const RISK_APPETITE_WEIGHTS = {
-  momentum: 0.18,
-  vix: 0.16,
-  ivPremium: 0.16,
-  vvix: 0.12,
-  gex: 0.18,
-  credit: 0.10,
-  breadth: 0.10,
+  momentum: 0.21,
+  vix: 0.18,
+  ivPremium: 0.18,
+  gex: 0.21,
+  credit: 0.11,
+  breadth: 0.11,
 } as const;
 
 export type RiskAppetiteInputs = Partial<Record<keyof typeof RISK_APPETITE_WEIGHTS, number | null>>;

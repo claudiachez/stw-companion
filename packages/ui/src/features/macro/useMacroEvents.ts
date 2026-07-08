@@ -4,7 +4,7 @@ import { classifyEventRisk } from '@stw/shared';
 
 interface MacroEventsResponse {
   events: MacroEvent[];
-  source: 'MarketWatch' | 'unavailable';
+  source: 'FRED' | 'unavailable';
   warning?: string;
 }
 
@@ -19,7 +19,7 @@ async function fetchMacroEvents(): Promise<MacroEventsResponse> {
 }
 
 /**
- * Module 3 — Macro Event Risk. Pulls the MarketWatch-sourced calendar rows
+ * Module 3 — Macro Event Risk. Pulls the FRED-sourced calendar rows
  * from the `macro-events` Netlify function (web-only; on admin this 404s and
  * surfaces as `error`, same convention as `useWeeklyRecap`/`MacroRecapCard`)
  * and classifies the current overlay with the pure `classifyEventRisk`.
