@@ -9,3 +9,4 @@ export * from './utils/filters';
 export * from './utils/macro';
 export * from './utils/limits';
 export * from './utils/regime';
+export * from './utils/treemap';

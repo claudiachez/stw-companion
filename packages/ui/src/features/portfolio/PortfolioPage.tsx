@@ -12,6 +12,7 @@ import { Badge } from '../../primitives/Badge';
 import { Button } from '../../primitives/Button';
 import { AlertStrip } from '../../primitives/AlertStrip';
 import { KpiCard, type KpiStatus } from '../../primitives/KpiCard';
+import { PortfolioHeatmap, type HeatmapCell } from '../../components/PortfolioHeatmap';
 import { AccordionList } from '../../primitives/AccordionList';
 import { SubNav } from '../../primitives/SubNav';
 import { useIsMobile } from '../../hooks/useIsMobile';
@@ -649,6 +650,16 @@ export function PortfolioPage() {
 
   const portfolioValue = useMemo(() => allGroups.reduce((s, g) => s + g.marketValue, 0), [allGroups]);
 
+  // Heatmap cells — box ∝ market value, colored by total unrealized return. No "Today"
+  // mode: the subscriber Flex feed carries no day-change field (positions render from the
+  // stored sync, not a live quote). Untailed names group under "Other" in By-Basket view.
+  const heatmapCells = useMemo<HeatmapCell[]>(
+    () => allGroups
+      .filter((g) => g.marketValue > 0)
+      .map((g) => ({ ticker: g.underlying, weight: g.marketValue, todayPct: null, totalPct: g.returnPct, basket: g.basket || 'Other' })),
+    [allGroups],
+  );
+
   // §5.5 reverse cross-link: Stock Picks → "View your position" lands here with
   // ?ticker=; open that position's detail on the Positions tab, then clear the param.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -858,6 +869,12 @@ export function PortfolioPage() {
       )}
       <PortfolioSummary groups={allGroups} showPnl={showPnl} regimeAdvisory={regimeAdvisory} onOpenTailing={() => changeTab('tailing')} />
       {showPnl && <TopMovers groups={allGroups} onOpenPosition={openPosition} />}
+      {/* Heatmap colors by return, so it follows the P&L-visibility toggle like Top Movers. */}
+      {showPnl && heatmapCells.length > 0 && (
+        <div style={{ marginTop: 18 }}>
+          <PortfolioHeatmap cells={heatmapCells} onSelectTicker={openPosition} />
+        </div>
+      )}
     </div>
   );
 
