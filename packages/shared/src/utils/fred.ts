@@ -24,9 +24,11 @@ const FRED_BASE = 'https://api.stlouisfed.org/fred/series/observations';
 /**
  * Build a FRED observations URL for the most-recent `limit` daily points
  * (newest-first — parseFredObservations reverses to ascending). Using
- * sort_order=desc + limit avoids any client-side date arithmetic.
+ * sort_order=desc + limit avoids any client-side date arithmetic. Pass
+ * `observationEnd` (YYYY-MM-DD) to end the window at a past date — the cursor
+ * regime-daily's backfill walks back with.
  */
-export function buildFredUrl(seriesId: string, apiKey: string, limit = 400): string {
+export function buildFredUrl(seriesId: string, apiKey: string, limit = 400, observationEnd?: string): string {
   const params = new URLSearchParams({
     series_id: seriesId,
     api_key: apiKey,
@@ -34,6 +36,7 @@ export function buildFredUrl(seriesId: string, apiKey: string, limit = 400): str
     sort_order: 'desc',
     limit: String(limit),
   });
+  if (observationEnd) params.set('observation_end', observationEnd);
   return `${FRED_BASE}?${params.toString()}`;
 }
 

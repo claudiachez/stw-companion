@@ -31,11 +31,26 @@ import type { Handler } from '@netlify/functions';
 import {
   REGIME_GATE_CONFIG, trendStateFromClose, volStateFromVix,
   sma, rocPositive, smaSlopePositive, realizedVolAnnualized, percentileRankOf,
+  buildFredUrl, parseFredObservations, FRED_SERIES,
 } from '@stw/shared';
 
 const TREND_INSTRUMENTS = ['IWM', 'SPY', 'QQQ'];
 
 interface Bar { date: string; close: number }
+
+// VIX / VIX3M / US10Y now come from FRED (VIXCLS / VXVCLS / DGS10) — free,
+// authoritative, and VXVCLS finally makes vol_state real instead of 'UNKNOWN'
+// (TwelveData's free tier didn't reliably serve VIX3M). DGS10 is already a
+// percent, so the old ×10 TNX normalization is gone. Equity trend instruments
+// stay on TwelveData. FRED has no 5000-row cap, so backfill can pull deep history
+// in one call, ending the window at `endDate` (the backfill cursor).
+async function fredBars(seriesId: string, key: string, limit: number, endDate?: string): Promise<Bar[]> {
+  try {
+    const res = await fetch(buildFredUrl(seriesId, key, limit, endDate));
+    if (res.ok) return parseFredObservations(await res.json());
+  } catch { /* ignore — caller handles empty */ }
+  return [];
+}
 
 async function tdSeries(symbol: string, key: string, outputsize: number, endDate?: string): Promise<Bar[]> {
   const endParam = endDate ? `&end_date=${endDate}` : '';
@@ -76,11 +91,12 @@ async function sbInsert(url: string, key: string, table: string, row: Record<str
 
 export const handler: Handler = async (event) => {
   const twelveDataKey = (process.env.VITE_TWELVEDATA_KEY ?? process.env.TWELVEDATA_KEY ?? '').trim();
+  const fredKey = (process.env.FRED_API_KEY ?? '').trim();
   const supabaseUrl = (process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? '').trim();
   const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim();
 
-  if (!supabaseUrl || !serviceKey || !twelveDataKey) {
-    return { statusCode: 500, body: JSON.stringify({ error: 'Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / TWELVEDATA_KEY' }) };
+  if (!supabaseUrl || !serviceKey || !twelveDataKey || !fredKey) {
+    return { statusCode: 500, body: JSON.stringify({ error: 'Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / TWELVEDATA_KEY / FRED_API_KEY' }) };
   }
 
   const qs = event.queryStringParameters ?? {};
@@ -94,19 +110,16 @@ export const handler: Handler = async (event) => {
 
   try {
     const [vixBars, vix3mBars, tnxBars] = await Promise.all([
-      tdSeries('VIX', twelveDataKey, outputsize, beforeDate),
-      tdSeries('VIX3M', twelveDataKey, outputsize, beforeDate),
-      tdSeries('TNX', twelveDataKey, outputsize, beforeDate),
+      fredBars(FRED_SERIES.vix, fredKey, outputsize, beforeDate),
+      fredBars(FRED_SERIES.vix3m, fredKey, outputsize, beforeDate),
+      fredBars(FRED_SERIES.us10y, fredKey, outputsize, beforeDate),
     ]);
     const vix3mAvailable = vix3mBars.length > 0;
 
     const vixByDate = new Map(vixBars.map((b) => [b.date, b.close]));
     const vix3mByDate = new Map(vix3mBars.map((b) => [b.date, b.close]));
-    // TwelveData's TNX sometimes returns "27.5" for a 2.75% yield — normalize per-bar,
-    // matching macro-snapshot.ts's normalizeYield() (duplicated here on purpose; regime
-    // stays self-contained, see the module header).
-    const tnxNormalized = tnxBars.map((b) => ({ date: b.date, close: b.close > 20 ? b.close / 10 : b.close }));
-    const tnxByDate = new Map(tnxNormalized.map((b) => [b.date, b.close]));
+    // DGS10 is already a percent (e.g. 4.25) — no normalization needed.
+    const tnxByDate = new Map(tnxBars.map((b) => [b.date, b.close]));
 
     const rows: Record<string, unknown>[] = [];
     let rowsWritten = 0;
@@ -128,8 +141,8 @@ export const handler: Handler = async (event) => {
         const vix3m = vix3mAvailable ? (vix3mByDate.get(date) ?? null) : null;
         const vol_state = volStateFromVix(vix, vix3m);
         const tnx = tnxByDate.get(date) ?? null;
-        const tnxIdx = tnxNormalized.findIndex((b) => b.date === date);
-        const tnx63Ago = tnxIdx >= 63 ? tnxNormalized[tnxIdx - 63].close : null;
+        const tnxIdx = tnxBars.findIndex((b) => b.date === date);
+        const tnx63Ago = tnxIdx >= 63 ? tnxBars[tnxIdx - 63].close : null;
 
         // 504-day realized-vol percentile window ending the day before `date`.
         const rvWindowCloses = closesUpToToday.slice(0, -1);
@@ -159,7 +172,7 @@ export const handler: Handler = async (event) => {
           vol_state: vix3mAvailable ? vol_state : 'UNKNOWN',
           tnx_level: tnx,
           tnx_63d_change_positive: tnx !== null && tnx63Ago !== null ? tnx > tnx63Ago : null,
-          source: 'twelvedata',
+          source: 'twelvedata+fred',
           engine_version: REGIME_GATE_CONFIG.engine_version,
         });
       }

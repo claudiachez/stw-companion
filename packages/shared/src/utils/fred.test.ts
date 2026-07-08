@@ -13,6 +13,10 @@ describe('buildFredUrl', () => {
   it('defaults limit to 400', () => {
     expect(buildFredUrl('DGS10', 'k')).toContain('limit=400');
   });
+  it('adds observation_end only when provided', () => {
+    expect(buildFredUrl('VIXCLS', 'k', 400)).not.toContain('observation_end');
+    expect(buildFredUrl('VIXCLS', 'k', 400, '2024-01-31')).toContain('observation_end=2024-01-31');
+  });
 });
 
 describe('parseFredObservations', () => {
