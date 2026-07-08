@@ -1,6 +1,7 @@
 import type { Holding } from '../api';
 import { TIERS, holdingPnlPct, FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
 import { useQuote } from '../../../hooks/useLivePrice';
+import { useIsMobile } from '../../../hooks/useIsMobile';
 import { RegimeBadge } from './RegimeBadge';
 import { Badge } from '../../../primitives/Badge';
 import type { TickerRegime } from '../useTickerRegime';
@@ -25,7 +26,13 @@ interface Props {
 
 export function HoldingRow({ holding: h, isSelected, maxWeight, onClick, isUserHeld, compact = false, regime }: Props) {
   const quote = useQuote(h.ticker);
+  const isMobile = useIsMobile();
   const tier = TIERS[h.conviction] ?? TIERS[0];
+  // The long basket/action badges don't fit a narrow row alongside the right-hand metric
+  // column — they overran it (e.g. "DATACENTER + AI INFRASTRUCTURE" + Held colliding with
+  // the weight). Drop them when the row is tight (split dragged narrow OR mobile); the full
+  // category/action are still on the detail pane. Same treatment `compact` already applied.
+  const hideSecondary = compact || isMobile;
 
   // Row P&L: weight-weighted across the holding's legs. Shares legs price off the live quote;
   // option legs use their stored IBKR mark.
@@ -57,11 +64,11 @@ export function HoldingRow({ holding: h, isSelected, maxWeight, onClick, isUserH
 
       {/* Main content */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 1 }}>
-          <span style={{ fontWeight: FONT_WEIGHT.bold, fontSize: FONT_SIZE.base, color: 'var(--text)' }}>{h.ticker}</span>
-          {/* Secondary badges drop out when the list pane is too narrow to fit them (compact). */}
-          {!compact && <Badge kind="category" category={h.basket} />}
-          {!compact && <Badge kind="action" action={h.last_action} />}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 1, minWidth: 0, overflow: 'hidden' }}>
+          <span style={{ fontWeight: FONT_WEIGHT.bold, fontSize: FONT_SIZE.base, color: 'var(--text)', flexShrink: 0 }}>{h.ticker}</span>
+          {/* Secondary badges drop out when the row is too narrow to fit them (compact/mobile). */}
+          {!hideSecondary && <Badge kind="category" category={h.basket} />}
+          {!hideSecondary && <Badge kind="action" action={h.last_action} />}
           {/* User holds this ticker — not a Badge kind: none of source/category/tier/flag/
               action represent "this is your own position", even though its colors happen
               to coincide with kind="source"'s (picking a kind by color, not meaning, is

@@ -207,6 +207,11 @@
   ::-webkit-scrollbar-track { background: var(--bg); }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
   ::-webkit-scrollbar-thumb:hover { background: var(--t3); }
+
+  /* Utility: a horizontal scroller that hides its scrollbar (e.g. the header nav on a
+     narrow viewport, where a visible track under 46px-tall tabs reads as chrome noise). */
+  .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .hide-scrollbar::-webkit-scrollbar { display: none; }
 }
 
 @keyframes ibkr-pulse {
