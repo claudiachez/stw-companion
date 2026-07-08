@@ -186,8 +186,13 @@ export function Layout({ navItems = DEFAULT_NAV, headerSlot, title = 'STW Compan
           {/* Separator */}
           <div style={{ width: 1, height: 18, background: 'var(--border)', marginRight: 6, flexShrink: 0 }} className="hidden sm:block" />
 
-          {/* Nav tabs */}
-          <nav style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          {/* Nav tabs — scroll horizontally when they don't fit (admin has 5 items + the
+              IBKR badge, which overran the right-hand slot at ≤390px). minWidth:0 lets the
+              nav shrink inside the flex:1 parent instead of pushing under the header slot. */}
+          <nav
+            className="hide-scrollbar"
+            style={{ display: 'flex', alignItems: 'center', gap: 2, flex: '1 1 auto', minWidth: 0, overflowX: 'auto' }}
+          >
             {navItems.map(({ to, label, short }) => (
               <NavLink
                 key={to}
@@ -203,6 +208,7 @@ export function Layout({ navItems = DEFAULT_NAV, headerSlot, title = 'STW Compan
                   transition: 'color 0.15s, background 0.15s',
                   whiteSpace: 'nowrap',
                   minHeight: 36,
+                  flexShrink: 0,
                   display: 'flex',
                   alignItems: 'center',
                 })}
