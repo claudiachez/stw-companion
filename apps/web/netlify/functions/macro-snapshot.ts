@@ -48,8 +48,9 @@ import { schedule } from '@netlify/functions';
 import {
   trendBucket, trendSleeveScore, environmentScore,
   vixScore, ivPremiumScore, vixDirectionScore, volatilityStressScore, hv30,
-  creditHygScore, us10yScore, uupScore, ratesDollarScore, gexScore, breadthScore,
+  creditOasScore, us10yScore, uupScore, ratesDollarScore, gexScore, breadthScore,
   classifyEventRisk, riskAppetiteScore,
+  buildFredUrl, parseFredObservations, runPaced, FEED_LIMITS, FRED_SERIES,
 } from '@stw/shared';
 import type { MacroEvent } from '@stw/shared';
 
@@ -60,19 +61,19 @@ function sma(closes: number[], n: number): number | null {
   return closes.slice(-n).reduce((a, b) => a + b, 0) / n;
 }
 
-function normalizeYield(v: number | null): number | null {
-  if (v === null) return null;
-  return v > 20 ? v / 10 : v;
-}
-
-async function finnhubQuote(symbol: string, key: string): Promise<number | null> {
-  try {
-    const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${key}`);
-    const d = await res.json() as { c?: number };
-    return d.c || null;
-  } catch {
-    return null;
-  }
+// Macro INDEX series (VIX, US10Y, credit, dollar) now come from FRED — free,
+// ~120/min, authoritative — instead of TwelveData, which freed TD's 8/min budget
+// for the equity trend ETFs below. Paced through the shared runPaced anyway.
+async function fredCloses(seriesIds: string[], key: string): Promise<Record<string, number[]>> {
+  const out: Record<string, number[]> = {};
+  await runPaced(seriesIds, async (id) => {
+    try {
+      const res = await fetch(buildFredUrl(id, key));
+      out[id] = res.ok ? parseFredObservations(await res.json()).map((b) => b.close) : [];
+    } catch { out[id] = []; }
+    return id;
+  }, FEED_LIMITS.fred);
+  return out;
 }
 
 async function tdDailyCloses(symbol: string, key: string, outputsize = 252): Promise<number[]> {
@@ -158,11 +159,13 @@ async function sbInsert(url: string, key: string, table: string, row: Record<str
   } catch { /* run_log is best-effort — never let a logging failure mask the real result */ }
 }
 
-const ENGINE_VERSION = 'macro-snapshot-1.1.0';
+// 2.0.0: macro indices moved to FRED (VIX/US10Y/dollar) + real HY OAS credit,
+// VVIX removed — a stored score's provenance changes, so the version bumps.
+const ENGINE_VERSION = 'macro-snapshot-2.0.0';
 
 const handlerImpl: Handler = async () => {
-  const finnhubKey = (process.env.VITE_FINNHUB_KEY ?? process.env.FINNHUB_KEY ?? '').trim();
   const twelveDataKey = (process.env.VITE_TWELVEDATA_KEY ?? process.env.TWELVEDATA_KEY ?? '').trim();
+  const fredKey = (process.env.FRED_API_KEY ?? '').trim();
   const supabaseUrl = (process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? '').trim();
   const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim();
 
@@ -176,12 +179,15 @@ const handlerImpl: Handler = async () => {
   const runLogBase = { run_type: 'macro-snapshot' };
 
   try {
-  // ── Fetch every TwelveData series up front, rate-limit-safe ──────────
-  // One paced batch (≤8 symbols/chunk, ~65s apart) for ALL daily series any
-  // module needs, so no module's fetch 429s the next one's. SPY/RSP closes are
-  // then reused across Modules 4 and 9 instead of re-fetched.
-  const TD_SYMBOLS = [...TREND_SYMBOLS, 'VIX', 'HYG', 'TNX', 'UUP'];
-  const closesBySymbol = await pacedDailyCloses(TD_SYMBOLS, twelveDataKey);
+  // ── Fetch equity trend ETFs from TwelveData (paced ≤8/65s) and the macro
+  //    index series from FRED (VIX/US10Y/credit/dollar) in parallel. Splitting
+  //    the indices off to FRED freed TD's 8/min budget for just these 5 ETFs. ──
+  const [closesBySymbol, fredBySeries] = await Promise.all([
+    pacedDailyCloses(TREND_SYMBOLS, twelveDataKey),
+    fredKey
+      ? fredCloses([FRED_SERIES.vix, FRED_SERIES.us10y, FRED_SERIES.hyOas, FRED_SERIES.dollar], fredKey)
+      : Promise.resolve({} as Record<string, number[]>),
+  ]);
 
   // ── Module 4: Trend / Market Structure ──────────────────────────────
   const indicatorScores: Record<string, number | null> = {};
@@ -198,11 +204,10 @@ const handlerImpl: Handler = async () => {
   }
   const trendScore = trendSleeveScore([buckets.SPY, buckets.QQQ]);
 
-  // ── Module 5: Volatility / Stress ────────────────────────────────────
+  // ── Module 5: Volatility / Stress ── VIX from FRED (VIXCLS); IV vs SPY HV ──
   const spyCloses = closesBySymbol.SPY ?? [];
-  let vix = finnhubKey ? await finnhubQuote('^VIX', finnhubKey) : null;
-  const vixCloses = closesBySymbol.VIX ?? [];
-  if (vix === null && vixCloses.length) vix = vixCloses[vixCloses.length - 1];
+  const vixCloses = fredBySeries[FRED_SERIES.vix] ?? [];
+  const vix = vixCloses.length ? vixCloses[vixCloses.length - 1] : null;
   const vixDelta5 = vixCloses.length >= 6 ? vixCloses[vixCloses.length - 1] - vixCloses[vixCloses.length - 6] : null;
 
   const spyHv = hv30(spyCloses);
@@ -213,26 +218,26 @@ const handlerImpl: Handler = async () => {
   const volatilityScore = volatilityStressScore([vixSc, ivSc, vixDirectionScore(vixDelta5)]);
   const stressRising = vixDelta5 !== null && vixDelta5 > 0;
 
-  // ── Module 6: Credit / Liquidity ─────────────────────────────────────
-  const hygCloses = closesBySymbol.HYG ?? [];
-  const hyg50 = sma(hygCloses, 50);
-  const hygNow = hygCloses[hygCloses.length - 1] ?? null;
-  const hygPrev = hygCloses[hygCloses.length - 2] ?? null;
-  const creditScore = hyg50 && hygNow && hygPrev ? creditHygScore(hygNow > hyg50, hygNow > hygPrev) : null;
+  // ── Module 6: Credit / Liquidity ── real HY OAS spread from FRED ──────
+  const oasCloses = fredBySeries[FRED_SERIES.hyOas] ?? [];
+  const oas50 = sma(oasCloses, 50);
+  const oasNow = oasCloses[oasCloses.length - 1] ?? null;
+  const oasPrev = oasCloses[oasCloses.length - 2] ?? null;
+  const creditScore = oas50 && oasNow && oasPrev ? creditOasScore(oasNow < oas50, oasNow < oasPrev) : null;
 
-  // ── Module 7: Rates + Dollar ──────────────────────────────────────────
-  const tnxCloses = (closesBySymbol.TNX ?? []).map((c) => normalizeYield(c) as number);
+  // ── Module 7: Rates + Dollar ── FRED DGS10 (yield %, no normalize) + DTWEXBGS ──
+  const tnxCloses = fredBySeries[FRED_SERIES.us10y] ?? [];
   const us10y = tnxCloses.length ? tnxCloses[tnxCloses.length - 1] : null;
   const us10yDelta5 = tnxCloses.length >= 6 ? tnxCloses[tnxCloses.length - 1] - tnxCloses[tnxCloses.length - 6] : null;
-  const uupCloses = closesBySymbol.UUP ?? [];
-  const uup = uupCloses[uupCloses.length - 1] ?? null;
-  const uup9 = sma(uupCloses, 9);
-  const uup21 = sma(uupCloses, 21);
-  const uupAbove9 = uup !== null && uup9 !== null ? uup > uup9 : null;
-  const uupAbove21 = uup !== null && uup21 !== null ? uup > uup21 : null;
+  const dollarCloses = fredBySeries[FRED_SERIES.dollar] ?? [];
+  const dollar = dollarCloses[dollarCloses.length - 1] ?? null;
+  const dollar9 = sma(dollarCloses, 9);
+  const dollar21 = sma(dollarCloses, 21);
+  const dollarAbove9 = dollar !== null && dollar9 !== null ? dollar > dollar9 : null;
+  const dollarAbove21 = dollar !== null && dollar21 !== null ? dollar > dollar21 : null;
   const ratesDollarSc = ratesDollarScore([
     us10yScore(us10y, us10yDelta5, stressRising),
-    uupAbove9 !== null && uupAbove21 !== null ? uupScore(uupAbove9, uupAbove21) : null,
+    dollarAbove9 !== null && dollarAbove21 !== null ? uupScore(dollarAbove9, dollarAbove21) : null,
   ]);
 
   // ── Module 8: GEX (from Supabase signals, written by the morning routine) ──
@@ -246,7 +251,7 @@ const handlerImpl: Handler = async () => {
   } catch { /* ignore — gexScore(null) below */ }
   const gexSc = gexScore(gexBias);
 
-  // ── Module 9: Risk Appetite gauge — same 7 weighted inputs as
+  // ── Module 9: Risk Appetite gauge — same weighted inputs as
   //    useSentimentGauge.ts, via the shared riskAppetiteScore() so the
   //    persisted trend tracks the same number the gauge displays. ──
   const spy125 = sma(spyCloses, 125);
