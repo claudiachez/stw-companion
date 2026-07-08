@@ -39,36 +39,39 @@ limits for our volume.
 Refresh rate = how often that surface actually pulls the feed (TanStack Query `staleTime` for
 live/on-load reads; cron cadence for scheduled writers). "Current plan" = the pricing tier we're on;
 "Rate / quota" = that tier's hard limit. **Conclusion** flags where need vs. limit is a problem.
+**Replacement (agreed)** = the feed each row moves to under the 2026-07-08 plan (— = no change).
 
-| Page | Module | Feed | Refresh rate | Current plan | Rate / quota | Conclusion |
-|---|---|---|---|---|---|---|
-| **Stock Picks** | Overview — Heatmap (Today color) | Finnhub | live, 60s staleTime | Free | 60/min | **OK** — ~53 held tickers, well under |
-| Stock Picks | Overview — Sector grouping | `ticker_sector_map` (Supabase) | 1h staleTime | — | — | **OK once sync built** (stopgap today) |
-| Stock Picks | List + Ticker Detail — live price/day-change | Finnhub | 60s staleTime | Free | 60/min | **OK** |
-| Stock Picks | Ticker Detail — option leg marks | IBKR local proxy (admin) | on-demand (admin prices) | self-hosted | none | **OK** — admin-only |
-| Stock Picks | Ticker Detail — regime badge | TwelveData daily closes | 1x/day cache | Free | **8/min · 800/day · 1cr/sym** | **CONSTRAINED** — paced ≤8/65s; slow cold load, can collide with Sector Rotation |
-| **Macro** | Summary / Recap | Anthropic | 2x/day (8am / 4:30pm) | Pay per token | No hard cap | **OK** |
-| Macro | Trend / Vol / Credit / Rates+Dollar / Risk-Appetite / Score Strip / Banner | TwelveData daily closes | 1x/day cache | Free | 8/min · 800/day | **CONSTRAINED** — the cold-load bottleneck (~10 series, paced) |
-| Macro | VIX / VVIX live reads | Finnhub → TwelveData fallback | on load | Free | 60/min | **OK w/ caveat** — Finnhub free doesn't serve index symbols; always falls back to TD close |
-| Macro | Sector Rotation | TwelveData daily closes (constituents) | 1x/day cache | Free | 8/min · 800/day | **CONSTRAINED** — largest symbol list; `fetchClosesChunked`, paced |
-| Macro | GEX / Positioning | Supabase `signals` (morning routine) | 1x/day | — | — | **OK** |
-| Macro | Event Risk | MarketWatch (HTML scrape) | on load | Free scrape | none | **FRAGILE** — interim source, `unavailable` on parse fail |
-| Macro | 5D trend engine | `macro_daily_snapshots` (← `macro-snapshot` fn → TD) | 1x/day 4:30pm | Free | 8/min · 800/day | **CONSTRAINED + BROKEN on PROD** — stale writer, null scores until promotion |
-| **My Portfolio** | Overview — Heatmap (Total color only) | stored marks (Supabase) | on sync | — | — | **OK** — no live day-change feed here by design |
-| My Portfolio | Positions | IBKR Flex Web Service | manual sync | Free | ~1 req / few-min per token | **OK** — open positions only (closed history = Next Steps #9) |
-| My Portfolio | Risk — sector concentration | `ticker_sector_map` | 1h staleTime | — | — | **OK once canonical** (ETF/Cash must be excluded, not `unevaluated`) |
-| My Portfolio | Tailing | Supabase `holdings` | on load | — | — | **OK** |
-| **Signals** | GEX charts | Finnhub + TwelveData | 60s / daily | Free | 60/min · 8/min | **OK** |
-| **Backend (scheduled)** | `macro-snapshot` writer | TwelveData (~10 series) | 1x/day wkdays | Free | 8/min · 800/day | **OK when paced** — v1.1.0 (staging) chunks ≤8/65s; PROD still stale |
-| Backend | `regime-daily` writer | TwelveData (~5 series) | proposed 1x/day | Free | 8/min · 800/day | **OK small** — daily is cheap; backfill spread across quota cycles |
-| Backend | `sector-map-sync` (proposed) | Finnhub `profile2` | daily, only unmapped tickers | Free | 60/min | **OK** — fires rarely, a few symbols at a time |
-| Backend | `macro-recap-am/pm` writer | Anthropic | 2x/day wkdays | Pay per token | No hard cap | **OK** |
+| Page | Module | Feed (today) | Refresh rate | Current plan | Rate / quota | Replacement (agreed) | Conclusion |
+|---|---|---|---|---|---|---|---|
+| **Stock Picks** | Overview — Heatmap (Today color) | Finnhub | live, 60s staleTime | Free | 60/min | — (keep) | **OK** — ~53 held tickers, well under |
+| Stock Picks | Overview — Sector grouping | `ticker_sector_map` (Supabase) | 1h staleTime | — | — | canonical GICS via `sector-map-sync` | **OK once sync built** (stopgap today) |
+| Stock Picks | List + Ticker Detail — live price/day-change | Finnhub | 60s staleTime | Free | 60/min | — (keep) | **OK** |
+| Stock Picks | Ticker Detail — option leg marks | IBKR local proxy (admin) | on-demand (admin prices) | self-hosted | none | — (keep) | **OK** — admin-only |
+| Stock Picks | Ticker Detail — regime badge | TwelveData daily closes | 1x/day cache | Free | **8/min · 800/day · 1cr/sym** | **Tiingo primary + TD fallback** | resolved by replacement (was CONSTRAINED) |
+| **Macro** | Summary / Recap | Anthropic | 2x/day (8am / 4:30pm) | Pay per token | No hard cap | — (keep) | **OK** |
+| Macro | Trend / Score Strip / Banner (equity ETFs) | TwelveData daily closes | 1x/day cache | Free | 8/min · 800/day | **Tiingo primary + TD fallback** | resolved by replacement |
+| Macro | Vol / Stress · Credit · Rates+Dollar (indices) | TwelveData daily closes | 1x/day cache | Free | 8/min · 800/day | **FRED** (VIXCLS / BAMLH0A0HYM2 / DGS10 / DTWEXBGS) | resolved by replacement |
+| Macro | VIX / VVIX live reads | Finnhub → TwelveData fallback | on load | Free | 60/min | **VIX → FRED**; VVIX → TD single call (Stooq last-resort) | resolved (FRED serves the VIX index Finnhub can't) |
+| Macro | Sector Rotation | TwelveData daily closes (constituents) | 1x/day cache | Free | 8/min · 800/day | **Tiingo primary + TD fallback** | resolved by replacement |
+| Macro | GEX / Positioning | Supabase `signals` (morning routine) | 1x/day | — | — | — (keep) | **OK** |
+| Macro | Event Risk | MarketWatch (HTML scrape) | on load | Free scrape | none | **FRED `releases/dates` + static FOMC list** | resolved (retires the scrape) |
+| Macro | 5D trend engine | `macro_daily_snapshots` (← `macro-snapshot` fn) | 1x/day 4:30pm | Free | 8/min · 800/day | writer → **FRED (indices) + Tiingo (equity)** | resolved by replacement + promotion |
+| **My Portfolio** | Overview — Heatmap (Total color only) | stored marks (Supabase) | on sync | — | — | — (keep) | **OK** — no live day-change feed here by design |
+| My Portfolio | Positions | IBKR Flex Web Service | manual sync | Free | ~1 req / few-min per token | — (keep) | **OK** — open positions only (closed history = Next Steps #9) |
+| My Portfolio | Risk — sector concentration | `ticker_sector_map` | 1h staleTime | — | — | canonical GICS via `sector-map-sync` | **OK once canonical** (ETF/Cash excluded, not `unevaluated`) |
+| My Portfolio | Tailing | Supabase `holdings` | on load | — | — | — (keep) | **OK** |
+| **Signals** | GEX charts | Finnhub + TwelveData | 60s / daily | Free | 60/min · 8/min | Finnhub keep; daily → Tiingo/TD fallback | **OK** |
+| **Backend (scheduled)** | `macro-snapshot` writer | TwelveData (~10 series) | 1x/day wkdays | Free | 8/min · 800/day | **FRED (indices) + Tiingo (equity)**; VVIX → TD | rebuild + promote to schedule it |
+| Backend | `regime-daily` writer | TwelveData (~5 series) | proposed 1x/day | Free | 8/min · 800/day | **FRED (VIX/TNX) + Tiingo (IWM/SPY/QQQ)**; VIX3M stays TD | schedule + backfill |
+| Backend | `sector-map-sync` (proposed) | Finnhub `profile2` | daily, only unmapped tickers | Free | 60/min | — (Finnhub is fine here) | **OK** — fires rarely, a few symbols |
+| Backend | `macro-recap-am/pm` writer | Anthropic | 2x/day wkdays | Pay per token | No hard cap | — (keep) | **OK** |
 
-**Read of the matrix:** every **CONSTRAINED** / **BROKEN** / **FRAGILE** row is one of three known
-causes — (1) TwelveData's 8/min free tier (all daily-close reads), (2) the stale PROD snapshot writer
-(promotion fixes it), (3) the MarketWatch scrape (interim by design). Everything else is comfortably
-within limits. A **paid TwelveData tier** is the single lever that would clear the whole first group at
-once — quantify against the 800/day budget in Phase B before recommending it.
+**Read of the matrix:** every row that was **CONSTRAINED / BROKEN / FRAGILE** is resolved by the
+agreed replacement, not by spending. Macro *indices* → **FRED** (free, no CORS from browser so via a
+proxy); equity daily closes → **Tiingo** (free, 50/hr) with TwelveData demoted to **fallback + VVIX
+only**; Event Risk → **FRED calendar**, retiring the scrape; the 5D-engine writer is rebuilt onto the
+same feeds and starts self-populating once promoted to `main` (see Phase 0 on why promotion is
+required). **No paid tier needed** — revisit only if Tiingo's 50/hr proves tight on real cold loads.
 
 ---
 
@@ -116,11 +119,19 @@ handler with no `schedule()` wrapper**, and the backfill (`?backfill=1&days=N`) 
 The work splits cleanly into **(A) sector taxonomy**, **(B) feed reliability/instrumentation**, and
 **(C) the two dangling integrity-guardrail items**. A and B need host decisions (Part 4) before code.
 
-### Phase 0 — Unblock what's already fixed (no new code; approval-gated because it's a prod deploy)
-- The stale `macro_daily_snapshots` writer + everything else is fixed on `staging`. This is resolved
-  **by the pending `staging → main` promotion**, which needs explicit host approval (Next Steps #0).
-  Nothing to build; flagged here so it isn't re-diagnosed as a code bug. After promotion, verify one
-  fresh snapshot row carries a non-null `engine_version` + real trend/vol scores + a `run_log` row.
+### Phase 0 — Unblock what's already fixed (no new code; needs a prod deploy)
+- The `macro_daily_snapshots` writer is already fixed on `staging` (v1.1.0: paced, instrumented,
+  `engine_version`-stamped). **Why it still needs `main`:** Netlify only runs **scheduled functions on
+  a site's production deploy (`main`)** — a branch deploy like `staging` builds the function but its
+  cron never fires. So the good writer exists on staging but nothing triggers it there on the 4:30pm
+  timer; the only writer running on a schedule is the stale one on the production (`main`) deploy,
+  which is why PROD's rows are the old null-`engine_version` ones and no v1.1.0 rows exist anywhere.
+  The self-populating fix therefore only starts once promoted to `main` (Next Steps #0, host-gated).
+- **Note:** this is specifically about the *scheduler*. The staging code can be proven correct without
+  promoting — hit the staging function URL directly over HTTP (manual invoke isn't cron-gated). NOTE
+  this rebuilds onto FRED+Tiingo in Phase B, so verify the *rebuilt* writer, not just the current one.
+  After promotion, confirm a fresh row carries non-null `engine_version` + real trend/vol scores + a
+  `run_log` row.
 
 ### Phase A — Sector taxonomy (the core of Next Steps #1)
 1. **Decide the canonical taxonomy** (Part 4, Q1) — recommendation: a fixed **GICS-11 + ETF + Cash**
@@ -141,15 +152,23 @@ The work splits cleanly into **(A) sector taxonomy**, **(B) feed reliability/ins
 5. **UI:** ensure the Risk tab treats "ETF"/"Cash" as excluded-from-concentration, not `unevaluated`;
    confirm Heatmap "Sector" grouping + detail-pane badge read the canonical labels.
 
-### Phase B — Feed reliability (TwelveData pacing + instrumentation)
-Mostly already done on `staging` (pacing helpers, run_log instrumentation). Remaining:
-1. **Verify the paced cold-load actually populates** end-to-end after promotion (regime badge renders;
-   snapshot scores non-null) — Next Steps #3/#6.
-2. **Consider a shared TwelveData credit budget.** Today Sector Rotation + Ticker Regime pace
-   *independently* and can collide at a chunk boundary (documented residual gap). A single
-   module-level pacing queue would remove that class of flakiness — propose as a follow-up, not P0.
-3. **Document the daily 800-credit budget** against actual consumption (snapshot ~10/day +
-   regime-daily ~5/day + per-user cold loads) so we know how much headroom a paid tier would buy.
+### Phase B — Feed re-platform onto FRED + Tiingo (the real fix, not "keep pacing TwelveData")
+This REPLACES the earlier "verify TwelveData pacing" framing — TwelveData is demoted to fallback + VVIX.
+Build order (host: feeds first):
+1. **Shared pacing helper** — DONE (`runPaced`/`FEED_LIMITS` in `@stw/shared`, unit-tested). Every feed
+   below routes through it so no provider can re-introduce the unpaced-burst 429 bug.
+2. **FRED proxy + client** — a Netlify `fred.ts` proxy (server-only key, CORS) that the browser hooks
+   call; server writers call FRED directly. Reassign the *index* reads: VIX→`VIXCLS`, US10Y→`DGS10`,
+   credit→`BAMLH0A0HYM2` (real HY OAS, an upgrade over the HYG proxy), dollar→`DTWEXBGS`. Touches
+   `useVolatilityStress`, `useRatesDollar`, `useCreditLiquidity`, and the `macro-snapshot` writer.
+3. **Event Risk rebuild** — replace the MarketWatch scrape in `macro-events.ts` with FRED
+   `releases/dates` (CPI/PCE/Employment/GDP) + a small static FOMC-date list. Anthropic may phrase
+   "why it matters," never source dates (recap grounded-only rule).
+4. **Tiingo equity EOD** — Tiingo primary + TwelveData fallback for SPY/QQQ/IWM/RSP/VEA, sector
+   constituents, and the per-ticker regime badge. VVIX stays a single TwelveData call.
+5. **Verify** after keys + promotion: FRED-backed cells populate; snapshot/regime rows carry real
+   scores; cold-load is fast (FRED 120/min + Tiingo 50/hr removes the 8/min bottleneck).
+Graceful-degrade throughout: a missing key → `—` cell, never a hard failure.
 
 ### Phase C — Integrity guardrails (Next Steps #2, independent of any merge)
 1. **Schedule `regime-daily`** — add the `schedule()` wrapper + a cron entry in admin `netlify.toml`
