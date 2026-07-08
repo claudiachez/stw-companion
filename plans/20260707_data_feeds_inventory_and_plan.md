@@ -34,6 +34,42 @@ limits for our volume.
 - **Scheduled writers (Netlify functions, service-role key, direct REST):** `macro-snapshot.ts`
   (web, `30 21 * * 1-5`), `macro-recap-am/pm.ts` (web), `regime-daily.ts` (admin, **NOT scheduled**).
 
+### Feed usage by page / module (rate-vs-need matrix)
+
+Refresh rate = how often that surface actually pulls the feed (TanStack Query `staleTime` for
+live/on-load reads; cron cadence for scheduled writers). "Current plan" = the pricing tier we're on;
+"Rate / quota" = that tier's hard limit. **Conclusion** flags where need vs. limit is a problem.
+
+| Page | Module | Feed | Refresh rate | Current plan | Rate / quota | Conclusion |
+|---|---|---|---|---|---|---|
+| **Stock Picks** | Overview — Heatmap (Today color) | Finnhub | live, 60s staleTime | Free | 60/min | **OK** — ~53 held tickers, well under |
+| Stock Picks | Overview — Sector grouping | `ticker_sector_map` (Supabase) | 1h staleTime | — | — | **OK once sync built** (stopgap today) |
+| Stock Picks | List + Ticker Detail — live price/day-change | Finnhub | 60s staleTime | Free | 60/min | **OK** |
+| Stock Picks | Ticker Detail — option leg marks | IBKR local proxy (admin) | on-demand (admin prices) | self-hosted | none | **OK** — admin-only |
+| Stock Picks | Ticker Detail — regime badge | TwelveData daily closes | 1x/day cache | Free | **8/min · 800/day · 1cr/sym** | **CONSTRAINED** — paced ≤8/65s; slow cold load, can collide with Sector Rotation |
+| **Macro** | Summary / Recap | Anthropic | 2x/day (8am / 4:30pm) | Pay per token | No hard cap | **OK** |
+| Macro | Trend / Vol / Credit / Rates+Dollar / Risk-Appetite / Score Strip / Banner | TwelveData daily closes | 1x/day cache | Free | 8/min · 800/day | **CONSTRAINED** — the cold-load bottleneck (~10 series, paced) |
+| Macro | VIX / VVIX live reads | Finnhub → TwelveData fallback | on load | Free | 60/min | **OK w/ caveat** — Finnhub free doesn't serve index symbols; always falls back to TD close |
+| Macro | Sector Rotation | TwelveData daily closes (constituents) | 1x/day cache | Free | 8/min · 800/day | **CONSTRAINED** — largest symbol list; `fetchClosesChunked`, paced |
+| Macro | GEX / Positioning | Supabase `signals` (morning routine) | 1x/day | — | — | **OK** |
+| Macro | Event Risk | MarketWatch (HTML scrape) | on load | Free scrape | none | **FRAGILE** — interim source, `unavailable` on parse fail |
+| Macro | 5D trend engine | `macro_daily_snapshots` (← `macro-snapshot` fn → TD) | 1x/day 4:30pm | Free | 8/min · 800/day | **CONSTRAINED + BROKEN on PROD** — stale writer, null scores until promotion |
+| **My Portfolio** | Overview — Heatmap (Total color only) | stored marks (Supabase) | on sync | — | — | **OK** — no live day-change feed here by design |
+| My Portfolio | Positions | IBKR Flex Web Service | manual sync | Free | ~1 req / few-min per token | **OK** — open positions only (closed history = Next Steps #9) |
+| My Portfolio | Risk — sector concentration | `ticker_sector_map` | 1h staleTime | — | — | **OK once canonical** (ETF/Cash must be excluded, not `unevaluated`) |
+| My Portfolio | Tailing | Supabase `holdings` | on load | — | — | **OK** |
+| **Signals** | GEX charts | Finnhub + TwelveData | 60s / daily | Free | 60/min · 8/min | **OK** |
+| **Backend (scheduled)** | `macro-snapshot` writer | TwelveData (~10 series) | 1x/day wkdays | Free | 8/min · 800/day | **OK when paced** — v1.1.0 (staging) chunks ≤8/65s; PROD still stale |
+| Backend | `regime-daily` writer | TwelveData (~5 series) | proposed 1x/day | Free | 8/min · 800/day | **OK small** — daily is cheap; backfill spread across quota cycles |
+| Backend | `sector-map-sync` (proposed) | Finnhub `profile2` | daily, only unmapped tickers | Free | 60/min | **OK** — fires rarely, a few symbols at a time |
+| Backend | `macro-recap-am/pm` writer | Anthropic | 2x/day wkdays | Pay per token | No hard cap | **OK** |
+
+**Read of the matrix:** every **CONSTRAINED** / **BROKEN** / **FRAGILE** row is one of three known
+causes — (1) TwelveData's 8/min free tier (all daily-close reads), (2) the stale PROD snapshot writer
+(promotion fixes it), (3) the MarketWatch scrape (interim by design). Everything else is comfortably
+within limits. A **paid TwelveData tier** is the single lever that would clear the whole first group at
+once — quantify against the 800/day budget in Phase B before recommending it.
+
 ---
 
 ## Part 2 — Current State (verified against PROD `usmqbohcjcyszjxxvnqu`, 2026-07-07)
