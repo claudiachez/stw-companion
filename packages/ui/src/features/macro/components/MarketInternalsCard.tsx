@@ -81,7 +81,7 @@ export function MarketInternalsCard({
       score: ratesScore,
       label: ratesDollarLabel(ratesScore),
       read: read(ratesLoading, !!rates,
-        `US10Y ${rates?.us10y != null ? `${rates.us10y.toFixed(2)}%` : '—'} · $ ${rates?.uupAbove9 == null ? '—' : rates.uupAbove9 && rates.uupAbove21 ? 'strengthening' : 'soft'}`),
+        `US10Y ${rates?.us10y != null ? `${rates.us10y.toFixed(2)}%` : '—'} · $ ${rates?.dollarAbove9 == null ? '—' : rates.dollarAbove9 && rates.dollarAbove21 ? 'strengthening' : 'soft'}`),
       body: <RatesDollarCard data={rates} loading={ratesLoading} stressRising={stressRising} />,
     },
   ];
