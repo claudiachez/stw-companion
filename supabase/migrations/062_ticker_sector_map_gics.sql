@@ -35,3 +35,11 @@ update public.ticker_sector_map set sector = 'Financials'
 -- not Communication Services (Finnhub's ambiguous "Communications" folded it there
 -- in the update above). Matches TICKER_GICS in @stw/shared. Run LAST.
 update public.ticker_sector_map set sector = 'Information Technology' where ticker = 'VIAV';
+
+-- Non-equity holdings that were never in the map (the cash balance row + closed
+-- ETFs) — seed their buckets so the Risk tab excludes them cleanly instead of
+-- flagging them 'unevaluated'. Matches TICKER_GICS. (CCXI is left for
+-- sector-map-sync, which resolves it via Finnhub profile2 post-deploy.)
+insert into public.ticker_sector_map (ticker, sector) values
+  ('CASH', 'Cash'), ('ARKK', 'ETF'), ('SQQQ', 'ETF')
+on conflict (ticker) do nothing;
