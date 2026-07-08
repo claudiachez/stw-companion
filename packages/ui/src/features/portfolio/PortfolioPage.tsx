@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { TIERS, fmtDateTime, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, SPACE, regimeGate } from '@stw/shared';
+import { TIERS, fmtDateTime, sizingTone, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, SPACE, regimeGate } from '@stw/shared';
 import { useUserPositions, useIbkrSettings } from './useUserPositions';
 import { useSyncPortfolio } from './useSyncPortfolio';
 import { useHoldings } from '../picks/useHoldings';
@@ -18,6 +18,7 @@ import { SubNav } from '../../primitives/SubNav';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useCapabilities } from '../../context/AppCapabilities';
 import { ViolationsSummary } from '../limits/ViolationsSummary';
+import { useSectorMap } from '../limits/useRiskConfig';
 import { useLatestRegime } from '../regime/useLatestRegime';
 import { PortfolioPositionDetail, type DetailGroup } from './PortfolioPositionDetail';
 import {
@@ -141,9 +142,8 @@ function FlatLegRow({ row, onSelectTicker, showPnl, isMobile, portfolioValue }: 
     <tr>
       <td style={td}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          {isTailed
-            ? <TickerLink ticker={underlying} onSelect={onSelectTicker} />
-            : <span style={{ fontWeight: 600, color: 'var(--text)' }}>{underlying}</span>}
+          {/* Every position opens its own detail pane, tailed or not (host, 2026-07-08). */}
+          <TickerLink ticker={underlying} onSelect={onSelectTicker} />
           {isTailed && traders.map((t) => <Badge key={t} kind="source" trader={t} />)}
         </div>
         <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 1 }}>{instrumentLabel(p)}</div>
@@ -242,13 +242,10 @@ function GroupHeader({ group, onSelectTicker, showPnl, isMobile, portfolioValue 
     <>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 1 }}>
-          {isTailed ? (
-            <span onClick={(e) => e.stopPropagation()} style={{ flexShrink: 0 }}>
-              <TickerLink ticker={underlying} onSelect={onSelectTicker} style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.bold }} />
-            </span>
-          ) : (
-            <span style={{ fontWeight: FONT_WEIGHT.bold, fontSize: FONT_SIZE.base, color: 'var(--text)', flexShrink: 0 }}>{underlying}</span>
-          )}
+          {/* Every position's ticker links to its own detail pane, tailed or not. */}
+          <span onClick={(e) => e.stopPropagation()} style={{ flexShrink: 0 }}>
+            <TickerLink ticker={underlying} onSelect={onSelectTicker} style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.bold }} />
+          </span>
           {isTailed && traders.map((t) => <Badge key={t} kind="source" trader={t} />)}
           {conviction !== null && <ConvictionBadge level={conviction} />}
         </div>
@@ -443,15 +440,33 @@ function InfoCard({ title, body, action }: { title: string; body: string; action
 // array of traders + a per-trader row list, so a second source drops in without a
 // rework. `pickMap.traders` and FOLLOWED_TRADERS are the seams.
 
+// Oversized (heavier than the trader) and undersized (lighter) get DISTINCT colors via the
+// shared sizingTone — amber vs blue — so a glance tells you which way you diverge, not just
+// that you diverge (host, 2026-07-08). Same tone drives the detail pane's Tailing line.
 function DeltaChip({ delta }: { delta: number | null }) {
-  if (delta === null) return <span style={{ color: 'var(--t3)', fontSize: FONT_SIZE.xs }}>—</span>;
-  const flat = Math.abs(delta) <= 0.5;
-  const color = flat ? 'var(--t3)' : 'var(--status-warning-text)';
-  const label = flat ? 'in line' : `${delta > 0 ? '+' : ''}${delta.toFixed(1)}% ${delta > 0 ? 'oversized' : 'undersized'}`;
+  const tone = sizingTone(delta);
   return (
-    <span style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.semibold, color, background: flat ? 'var(--s2)' : 'var(--status-warning-bg)', border: `1px solid ${flat ? 'var(--border)' : 'var(--status-warning-border)'}`, borderRadius: 999, padding: '1px 8px', whiteSpace: 'nowrap' }}>
-      {label}
+    <span style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.semibold, color: tone.textVar, background: tone.bgVar, border: `1px solid ${tone.borderVar}`, borderRadius: 999, padding: '1px 8px', whiteSpace: 'nowrap' }}>
+      {tone.label}
     </span>
+  );
+}
+
+// A diverging bar centered on parity — fills right (oversized) or left (undersized),
+// length ∝ |delta| (±5pp = full half). Fills the horizontal room the Tailing table used
+// to leave blank, and reinforces the amber/blue direction split visually.
+function SizingBar({ delta }: { delta: number | null }) {
+  const tone = sizingTone(delta);
+  if (delta === null) return null;
+  const frac = Math.min(1, Math.abs(delta) / 5) * 50; // % of the full track (half each side)
+  const over = delta > 0;
+  return (
+    <div style={{ position: 'relative', height: 8, width: '100%', minWidth: 90, background: 'var(--s2)', borderRadius: 4, overflow: 'hidden' }}>
+      <div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: 'var(--border)' }} />
+      {tone.state !== 'inline' && (
+        <div style={{ position: 'absolute', top: 1, bottom: 1, background: tone.textVar, borderRadius: 2, ...(over ? { left: '50%', width: `${frac}%` } : { right: '50%', width: `${frac}%` }) }} />
+      )}
+    </div>
   );
 }
 
@@ -467,7 +482,7 @@ function TailingTab({ groups, portfolioValue, pickMap, decliningTailed, onSelect
   const card: React.CSSProperties = { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 860 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {FOLLOWED_TRADERS.map((trader) => {
         const rows = tailed
           .filter((g) => g.traders.includes(trader))
@@ -495,7 +510,7 @@ function TailingTab({ groups, portfolioValue, pickMap, decliningTailed, onSelect
                       <th style={th}>Ticker</th>
                       <th style={thR}>Your wt</th>
                       <th style={thR}>{trader} wt</th>
-                      <th style={{ ...th, textAlign: 'right' }}>Sizing</th>
+                      <th style={{ ...th, width: '45%' }}>Sizing</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -506,7 +521,12 @@ function TailingTab({ groups, portfolioValue, pickMap, decliningTailed, onSelect
                         </td>
                         <td style={{ ...tdR, color: 'var(--text)', fontWeight: 600 }}>{yourPct.toFixed(1)}%</td>
                         <td style={{ ...tdR, color: 'var(--t2)' }}>{stwWeight !== null ? `${stwWeight.toFixed(1)}%` : '—'}</td>
-                        <td style={{ ...td, textAlign: 'right' }}><DeltaChip delta={delta} /></td>
+                        <td style={td}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div style={{ flex: 1 }}><SizingBar delta={delta} /></div>
+                            <div style={{ flexShrink: 0, width: 120, textAlign: 'right' }}><DeltaChip delta={delta} /></div>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -652,12 +672,14 @@ export function PortfolioPage() {
 
   // Heatmap cells — box ∝ market value, colored by total unrealized return. No "Today"
   // mode: the subscriber Flex feed carries no day-change field (positions render from the
-  // stored sync, not a live quote). Untailed names group under "Other" in By-Basket view.
+  // stored sync, not a live quote). Untailed names group under "Other" in By-Basket view;
+  // sector comes from the shared ticker_sector_map (By-Sector grouping).
+  const { data: sectorMap } = useSectorMap();
   const heatmapCells = useMemo<HeatmapCell[]>(
     () => allGroups
       .filter((g) => g.marketValue > 0)
-      .map((g) => ({ ticker: g.underlying, weight: g.marketValue, todayPct: null, totalPct: g.returnPct, basket: g.basket || 'Other' })),
-    [allGroups],
+      .map((g) => ({ ticker: g.underlying, weight: g.marketValue, todayPct: null, totalPct: g.returnPct, basket: g.basket || 'Other', sector: sectorMap?.[g.underlying] ?? null })),
+    [allGroups, sectorMap],
   );
 
   // §5.5 reverse cross-link: Stock Picks → "View your position" lands here with

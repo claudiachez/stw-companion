@@ -1,4 +1,4 @@
-import { regimeGate, classifySeverity, formatDate, FONT_SIZE, FONT_WEIGHT, SPACE, RADIUS, type ViolationSeverity } from '@stw/shared';
+import { regimeGate, classifySeverity, formatDate, sizingTone, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, SPACE, RADIUS, type ViolationSeverity } from '@stw/shared';
 import { useAuthStore } from '../../store/auth';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { DetailPane, DetailPaneMetricLabel } from '../../primitives/DetailPane';
@@ -97,13 +97,18 @@ export function PortfolioPositionDetail({
 
   const sizeDelta = ownPortfolioPct !== null && stwWeight !== null ? ownPortfolioPct - stwWeight : null;
 
-  const badges = (
-    <>
-      {group.basket && <Badge kind="category" category={group.basket} />}
-      {group.conviction !== null && <Badge kind="tier" tier={group.conviction} />}
-      {group.isTailed && group.traders.map((t) => <Badge key={t} kind="source" trader={t} />)}
-    </>
-  );
+  // Header badge = the ticker's market SECTOR (universal to the position). The tailed-pick
+  // info (trader / basket / conviction / sizing) is grouped together in the Tailing section
+  // below, not scattered across the header (host, 2026-07-08).
+  const badges = sector ? (
+    <span style={{
+      fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: LETTER_SPACING.label,
+      textTransform: 'uppercase', color: 'var(--t2)', background: 'var(--s2)',
+      border: '1px solid var(--border)', borderRadius: RADIUS.DEFAULT, padding: '2px 6px', whiteSpace: 'nowrap',
+    }}>{sector}</span>
+  ) : null;
+
+  const tone = sizingTone(sizeDelta);
 
   const metrics = [
     {
@@ -141,20 +146,12 @@ export function PortfolioPositionDetail({
       key: 'weight',
       content: (
         <>
-          <DetailPaneMetricLabel>Weight vs STW</DetailPaneMetricLabel>
+          <DetailPaneMetricLabel>Weight</DetailPaneMetricLabel>
           <div style={{ fontSize: FONT_SIZE.display, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)', lineHeight: 1.1 }}>
             {ownPortfolioPct !== null ? `${ownPortfolioPct.toFixed(1)}%` : '—'}
           </div>
-          {group.isTailed && stwWeight !== null && sizeDelta !== null ? (
-            <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: SPACE[0.5] }}>
-              you · STW {stwWeight.toFixed(1)}%
-              {Math.abs(sizeDelta) > 0.5 && (
-                <span style={{ color: 'var(--status-warning-text)' }}> · {sizeDelta > 0 ? '+' : ''}{sizeDelta.toFixed(1)}% {sizeDelta > 0 ? 'oversized' : 'undersized'}</span>
-              )}
-            </div>
-          ) : (
-            <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: SPACE[0.5] }}>of your book</div>
-          )}
+          {/* STW comparison lives in the Tailing section now — this stays a clean book %. */}
+          <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: SPACE[0.5] }}>of your book</div>
         </>
       ),
     },
@@ -169,16 +166,37 @@ export function PortfolioPositionDetail({
       isMobile={isMobile}
       onClose={onClose}
     >
-      {/* Tailing */}
+      {/* Tailing — all the tailed-pick info on one line (trader · basket · conviction ·
+          your-vs-trader sizing) with a compact link icon to STW's tracked position, so
+          nothing about the pick is scattered into the header (host, 2026-07-08). */}
       <Section title="Tailing">
         {group.isTailed ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE[2], alignItems: 'flex-start' }}>
-            <div style={{ fontSize: FONT_SIZE.base, color: 'var(--text)' }}>
-              Tailing <strong>{group.traders.join(', ')}</strong>
-              {group.conviction !== null && <span style={{ color: 'var(--t2)' }}> · STW conviction {group.conviction}</span>}
-            </div>
-            <button onClick={onViewStwPosition} style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--acc)', background: 'none', border: '1px solid var(--c5b)', borderRadius: RADIUS.md, padding: '6px 12px', cursor: 'pointer' }}>
-              View STW's tracked position →
+          <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap' }}>
+            {group.traders.map((t) => <Badge key={t} kind="source" trader={t} />)}
+            {group.basket && <Badge kind="category" category={group.basket} />}
+            {group.conviction !== null && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: SPACE[1] }}>
+                <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>Conviction {group.conviction}</span>
+                <Badge kind="tier" tier={group.conviction} />
+              </span>
+            )}
+            {stwWeight !== null && (
+              <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>
+                You {ownPortfolioPct !== null ? `${ownPortfolioPct.toFixed(1)}%` : '—'} · STW {stwWeight.toFixed(1)}%
+                {tone.state !== 'inline' && <span style={{ color: tone.textVar, fontWeight: FONT_WEIGHT.semibold }}> · {tone.label}</span>}
+              </span>
+            )}
+            <button
+              onClick={onViewStwPosition}
+              title="View STW's tracked position"
+              aria-label="View STW's tracked position"
+              style={{
+                marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                width: 28, height: 28, flexShrink: 0, borderRadius: RADIUS.md,
+                border: '1px solid var(--c5b)', background: 'none', color: 'var(--acc)', cursor: 'pointer', fontSize: FONT_SIZE.base,
+              }}
+            >
+              ↗
             </button>
           </div>
         ) : (

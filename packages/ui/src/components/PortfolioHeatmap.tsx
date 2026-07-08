@@ -20,9 +20,14 @@ export interface HeatmapCell {
   todayPct: number | null;
   /** Total unrealized return %. null when it can't be resolved. */
   totalPct: number | null;
-  /** Sector/basket, for the "By Basket" grouping. Empty string → grouped as "Other". */
+  /** STW's thematic basket, for the "By Basket" grouping. Empty → grouped as "Other". */
   basket: string;
+  /** Market sector (ticker_sector_map), for the "By Sector" grouping. null → "Other". */
+  sector: string | null;
 }
+
+type GroupMode = 'all' | 'basket' | 'sector';
+const GROUP_LABEL_H = 15; // px strip reserved at the top of a group block for its name
 
 interface PortfolioHeatmapProps {
   cells: HeatmapCell[];
@@ -89,11 +94,12 @@ function Segmented<T extends string>({ value, onChange, options }: {
 }
 
 interface PlacedTile extends TreemapRect { cell: HeatmapCell }
+interface GroupBlock { label: string; x: number; y: number; w: number; h: number }
 
 export function PortfolioHeatmap({ cells, onSelectTicker, showToday = false, title = 'Portfolio Heatmap', updated }: PortfolioHeatmapProps) {
   const isMobile = useIsMobile();
   const [mode, setMode] = useState<HeatmapMode>(showToday ? 'today' : 'total');
-  const [group, setGroup] = useState<'all' | 'basket'>('all');
+  const [group, setGroup] = useState<GroupMode>('all');
 
   // Measure the container width so the treemap lays out in real pixels — that lets us gate
   // per-tile text on the tile's actual rendered size (labels stay tappable, never clipped).
@@ -118,35 +124,43 @@ export function PortfolioHeatmap({ cells, onSelectTicker, showToday = false, tit
     ? (isMobile ? Math.round(width * 1.15) : Math.min(460, Math.max(300, Math.round(width * 0.42))))
     : 0;
 
-  const tiles = useMemo<PlacedTile[]>(() => {
-    if (width <= 0 || height <= 0 || valid.length === 0) return [];
+  const { tiles, groupBlocks } = useMemo<{ tiles: PlacedTile[]; groupBlocks: GroupBlock[] }>(() => {
+    if (width <= 0 || height <= 0 || valid.length === 0) return { tiles: [], groupBlocks: [] };
     if (group === 'all') {
-      return squarify(valid.map((c) => c.weight), width, height)
-        .map((r) => ({ ...r, cell: valid[r.index] }));
+      return {
+        tiles: squarify(valid.map((c) => c.weight), width, height).map((r) => ({ ...r, cell: valid[r.index] })),
+        groupBlocks: [],
+      };
     }
-    // By Basket: two-level treemap — first partition the canvas among baskets by summed
-    // weight, then squarify each basket's cells inside its block.
-    const byBasket = new Map<string, HeatmapCell[]>();
+    // By Basket / By Sector: two-level treemap — partition the canvas among groups by
+    // summed weight, reserve a label strip at the top of each block, then squarify that
+    // group's cells in the region below so the grouping is legible (which block = which).
+    const keyOf = (c: HeatmapCell) => (group === 'sector' ? (c.sector || 'Other') : (c.basket || 'Other'));
+    const byGroup = new Map<string, HeatmapCell[]>();
     for (const c of valid) {
-      const k = c.basket || 'Other';
-      if (!byBasket.has(k)) byBasket.set(k, []);
-      byBasket.get(k)!.push(c);
+      const k = keyOf(c);
+      if (!byGroup.has(k)) byGroup.set(k, []);
+      byGroup.get(k)!.push(c);
     }
-    const groups = [...byBasket.entries()].map(([basket, gcells]) => ({
-      basket, gcells, weight: gcells.reduce((s, c) => s + c.weight, 0),
+    const groups = [...byGroup.entries()].map(([label, gcells]) => ({
+      label, gcells, weight: gcells.reduce((s, c) => s + c.weight, 0),
     }));
     const blocks = squarify(groups.map((g) => g.weight), width, height);
-    const out: PlacedTile[] = [];
+    const outTiles: PlacedTile[] = [];
+    const outBlocks: GroupBlock[] = [];
     for (const b of blocks) {
       const g = groups[b.index];
-      // inset each block so basket boundaries are legible
       const bx = b.x + GROUP_GAP / 2, by = b.y + GROUP_GAP / 2;
       const bw = Math.max(1, b.w - GROUP_GAP), bh = Math.max(1, b.h - GROUP_GAP);
-      for (const r of squarify(g.gcells.map((c) => c.weight), bw, bh)) {
-        out.push({ index: r.index, x: bx + r.x, y: by + r.y, w: r.w, h: r.h, cell: g.gcells[r.index] });
+      outBlocks.push({ label: g.label, x: bx, y: by, w: bw, h: bh });
+      // Only reserve the label strip when the block is tall enough to still show tiles.
+      const labelH = bh > GROUP_LABEL_H * 2.2 ? GROUP_LABEL_H : 0;
+      const cy = by + labelH, ch = bh - labelH;
+      for (const r of squarify(g.gcells.map((c) => c.weight), bw, ch)) {
+        outTiles.push({ index: r.index, x: bx + r.x, y: cy + r.y, w: r.w, h: r.h, cell: g.gcells[r.index] });
       }
     }
-    return out;
+    return { tiles: outTiles, groupBlocks: outBlocks };
   }, [valid, width, height, group]);
 
   if (valid.length === 0) return null;
@@ -168,7 +182,7 @@ export function PortfolioHeatmap({ cells, onSelectTicker, showToday = false, tit
         <Segmented
           value={group}
           onChange={setGroup}
-          options={[{ v: 'all', label: 'All' }, { v: 'basket', label: 'By Basket' }]}
+          options={[{ v: 'all', label: 'All' }, { v: 'basket', label: 'Basket' }, { v: 'sector', label: 'Sector' }]}
         />
         {/* Legend — what the color means + its saturation scale */}
         <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[1.5], marginLeft: 'auto', fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>
@@ -179,6 +193,21 @@ export function PortfolioHeatmap({ cells, onSelectTicker, showToday = false, tit
       </div>
 
       <div ref={wrapRef} style={{ position: 'relative', width: '100%', height: height || (isMobile ? 400 : 320), borderRadius: 8, overflow: 'hidden', background: 'var(--bg)' }}>
+        {/* Group-name labels (By Basket / By Sector) — a header strip per block so it's
+            clear which group each cluster of tiles belongs to. */}
+        {groupBlocks.map((b) => (
+          <div
+            key={b.label}
+            style={{
+              position: 'absolute', left: b.x, top: b.y, width: b.w, height: GROUP_LABEL_H,
+              padding: '0 5px', display: 'flex', alignItems: 'center', pointerEvents: 'none',
+              fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: LETTER_SPACING.label,
+              textTransform: 'uppercase', color: 'var(--t3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}
+          >
+            {b.label}
+          </div>
+        ))}
         {tiles.map((t) => {
           const pct = pctFor(t.cell, mode);
           const { bg, fg } = tileColors(pct, mode);
