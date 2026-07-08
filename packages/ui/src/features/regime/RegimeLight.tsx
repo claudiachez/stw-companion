@@ -13,7 +13,7 @@ const STATE_COLOR: Record<'GREEN' | 'RED' | 'UNKNOWN', string> = {
  * (`isAdmin` capability gate, matching the repo convention for admin-only
  * action hints). Shows STW's own proxy instrument (traders.regime_proxy) by
  * default. Purely informational: nothing here places, blocks, or adjusts an
- * order — see docs/REGIME_EXIT_v0.md for the operator's own manual playbook.
+ * order — see docs/regime_exit_v0.md for the operator's own manual playbook.
  */
 export function RegimeLight({ instrument = 'IWM' }: { instrument?: string }) {
   const { isAdmin } = useCapabilities();

@@ -9,7 +9,7 @@
  * freely; this is intentional, documented duplication, not an oversight.
  *
  * Advisory only — nothing here enforces a trade or a position change. See
- * docs/REGIME_EXIT_v0.md for the (unsigned, operator-owned) policy that would
+ * docs/regime_exit_v0.md for the (unsigned, operator-owned) policy that would
  * act on this signal by hand.
  */
 
