@@ -251,6 +251,25 @@ pacing helper** (token-bucket or chunked-pacer, configured per feed: FRED 120/mi
 Tiingo 50/hr, TwelveData 8/min) that every feed routes through, so a new feed can't reintroduce this
 class of bug. Lives once in a shared util; each caller passes its feed's limit.
 
+### Sequencing + keys (host, 2026-07-08)
+- **Feeds first**, then sector taxonomy. Build order within feeds: (1) shared generic pacing helper →
+  (2) FRED client + reassign VIX/US10Y/credit/dollar → (3) Event Risk rebuild (FRED calendar + static
+  FOMC) → (4) Tiingo equity-EOD primary + TwelveData fallback → (5) timestamp audit across 11 modules.
+- **Keys:** the host registers the free `FRED_API_KEY` (and `TIINGO_API_KEY` if adopted) and adds them
+  to Netlify env on both sites; I write all wiring. Code graceful-degrades when a key is absent
+  (module cell → `—`, same as the current missing-TwelveData behavior) so nothing hard-fails
+  pre-provisioning. Live verification waits on the keys.
+
+### Architecture: FRED is server-only (CORS) → proxy function
+FRED's `api.stlouisfed.org` sends **no `Access-Control-Allow-Origin` header**, so a browser `fetch`
+is blocked — FRED cannot be called directly from the macro module hooks. Access goes through a
+**Netlify function proxy** (`fred.ts`, one copy per site per the site-scoped-functions rule) that the
+browser hooks call; the server-side writers (`macro-snapshot`, `regime-daily`, `macro-events`) call
+FRED directly. Bonus: the `FRED_API_KEY` stays **server-side only** (no `VITE_` prefix), unlike the
+client-exposed `VITE_TWELVEDATA_KEY` — a security improvement, and the pattern to prefer for any new
+key. Same applies to `TIINGO_API_KEY` if the equity-EOD reads move behind a proxy too (decide when we
+get there; equity reads may stay client-direct on TwelveData/Tiingo since those DO allow CORS).
+
 ### Revised feed plan (net)
 - **Macro indices (VIX, US10Y, credit, dollar) → FRED.** Fixes Volatility/Stress, Rates+Dollar,
   Credit; removes them from TwelveData.
