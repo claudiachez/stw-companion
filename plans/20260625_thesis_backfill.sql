@@ -2,7 +2,7 @@
 -- per-ticker DD research files (~/Documents/Claude/Projects/Stock Talk Weekly/Tickers DD/<T>.md),
 -- replacing the EPISODIC commentary the routines had stored in summary/bullets.
 --
--- Boundary contract: plans/commentary_vs_transaction_boundary_spec.md (§2A summary↔bullets rule,
+-- Boundary contract: plans/20260625_commentary_vs_transaction_boundary_spec.md (§2A summary↔bullets rule,
 -- §3 CASE D). Source of truth = the DD files (DD-primary, enriched from comments only where it does
 -- not contradict the DD). This is a DATA backfill, NOT a migration.
 --

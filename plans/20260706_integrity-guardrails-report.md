@@ -1,7 +1,7 @@
 # Week 1 Integrity Guardrails — Report
 
 Branch `claude/week1-integrity-guardrails` off `staging`. Source spec:
-[`plans/integrity-guardrails.md`](plans/integrity-guardrails.md). All 7 items addressed; details,
+[`plans/20260706_integrity-guardrails.md`](20260706_integrity-guardrails.md). All 7 items addressed; details,
 deviations, and open follow-ups below.
 
 ## Item 0 — macro-snapshot cron fix

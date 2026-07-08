@@ -1,7 +1,7 @@
 # Legs / Transaction History — Event-Sourcing Redesign (spec for review)
 
 **Status:** DRAFT for review (2026-06-18). No code written yet. Supersedes the half-event-sourced
-editor + the `plans/leg_transactions_redate.sql` one-off (folded in here).
+editor + the `plans/20260618_leg_transactions_redate.sql` one-off (folded in here).
 
 ## Why (root cause)
 
@@ -214,7 +214,7 @@ of migrating the rebuilt-but-messy `leg_transactions`, we **wipe and re-import c
 - **Import mechanism — TBD when the Excel arrives** (not blocking Phase 1): either (a) I parse the
   Excel and generate a one-time seed SQL the host applies, or (b) a reusable admin CSV-import tool. Lean
   (a) for the one-time rebuild unless the host wants to re-import repeatedly.
-- This **supersedes** `plans/leg_transactions_redate.sql` for open positions (re-imported with true
+- This **supersedes** `plans/20260618_leg_transactions_redate.sql` for open positions (re-imported with true
   dates); closed legs get true dates from their synthesized diary.
 
 ## Migration / rollout sequencing
