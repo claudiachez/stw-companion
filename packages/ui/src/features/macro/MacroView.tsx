@@ -4,6 +4,7 @@ import {
   gexBiasLabel, stressLabel, creditLabel, ratesDollarLabel, regimeDirectionLabel, FONT_SIZE,
 } from '@stw/shared';
 import { useCapabilities } from '../../context/AppCapabilities';
+import { useAppConfig } from '../../hooks/useAppConfig';
 import {
   useMacroIndicators, ALL_INDICATORS,
   DEFAULT_TREND_SYMBOLS, EXPERT_TREND_SYMBOLS,
@@ -39,13 +40,8 @@ function Help({ children }: { children: ReactNode }) {
 const dim = { color: 'var(--t3)' } as const;
 
 const HELP = {
-  regime: (
-    <Help>
-      <div>The overall market read — <strong>how aggressive to be right now</strong> — from weighted sleeve scores.</div>
-      <div>75–100 <strong>Risk-On</strong> · 60–74 Constructive · 45–59 Cautious · 30–44 Defensive · 0–29 <strong>Risk-Off</strong>.</div>
-      <div style={dim}>Weights: Trend 30% · Volatility 20% · Credit 15% · Rates+Dollar 15% · GEX 20%.</div>
-    </Help>
-  ),
+  // regime help is built in the component (regimeHelp) so it shows the live,
+  // admin-configured weights (migration 061) rather than a hardcoded line.
   strip: (
     <Help>
       <div>Each sleeve's 0–100 score at a glance — <strong>higher = more risk-on</strong>.</div>
@@ -106,6 +102,7 @@ const HELP = {
 
 export function MacroView() {
   const { finnhubKey, twelveDataKey, canEdit } = useCapabilities();
+  const { regimeWeights } = useAppConfig();
   const { prefs, toggle } = useMacroPrefs();
   const { data: graddox } = useGraddox();
 
@@ -149,9 +146,9 @@ export function MacroView() {
       { key: 'credit', score: credit?.sleeveScore ?? null },
       { key: 'rates_dollar', score: rates?.sleeveScore ?? null },
       { key: 'gex', score: gexSleeve },
-    ]);
+    ], regimeWeights);
     return env === null ? null : regimeBand(env);
-  }, [trendSleeve, volatility?.sleeveScore, credit?.sleeveScore, rates?.sleeveScore, gexSleeve]);
+  }, [trendSleeve, volatility?.sleeveScore, credit?.sleeveScore, rates?.sleeveScore, gexSleeve, regimeWeights]);
 
   // P2: 5D trend engine — one localStorage snapshot/day, read back as 5D/20D
   // deltas + a direction classification. Deltas stay null until ~5 trading
@@ -219,7 +216,16 @@ export function MacroView() {
 
       {/* ── Module 1: Market Regime Banner ─────────────────────────── */}
       <section>
-        <ModuleHeader title="Market Regime" help={HELP.regime} />
+        <ModuleHeader
+          title="Market Regime"
+          help={(
+            <Help>
+              <div>The overall market read — <strong>how aggressive to be right now</strong> — from weighted sleeve scores.</div>
+              <div>75–100 <strong>Risk-On</strong> · 60–74 Constructive · 45–59 Cautious · 30–44 Defensive · 0–29 <strong>Risk-Off</strong>.</div>
+              <div style={dim}>Weights: Trend {regimeWeights.trend}% · Volatility {regimeWeights.volatility}% · Credit {regimeWeights.credit}% · Rates+Dollar {regimeWeights.rates_dollar}% · GEX {regimeWeights.gex}%.</div>
+            </Help>
+          )}
+        />
         <RegimeBanner regime={dataReady ? regime : null} updatedAt={updatedAt} direction={regimeDirection} />
       </section>
 

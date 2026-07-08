@@ -86,15 +86,21 @@ export function trendSleeveScore(buckets: (TrendBucket | null)[]): number | null
  * Weighted sum of available sleeve scores. A missing sleeve (null) has its
  * weight redistributed proportionally across the present sleeves, so the score
  * stays meaningful while modules are still being built / data is unavailable.
+ *
+ * `weights` defaults to SLEEVE_WEIGHTS but is admin-configurable via app_config
+ * (migration 061). The result normalizes by the total present weight, so the
+ * weights' absolute scale is irrelevant — fractions (0.30) and percents (30)
+ * give the identical score.
  */
 export function environmentScore(
   sleeves: { key: RegimeSleeveKey; score: number | null }[],
+  weights: Record<RegimeSleeveKey, number> = SLEEVE_WEIGHTS,
 ): number | null {
   const present = sleeves.filter((s) => s.score !== null);
   if (present.length === 0) return null;
-  const totalWeight = present.reduce((a, s) => a + SLEEVE_WEIGHTS[s.key], 0);
+  const totalWeight = present.reduce((a, s) => a + weights[s.key], 0);
   if (totalWeight === 0) return null;
-  const sum = present.reduce((a, s) => a + (s.score as number) * SLEEVE_WEIGHTS[s.key], 0);
+  const sum = present.reduce((a, s) => a + (s.score as number) * weights[s.key], 0);
   return Math.round(sum / totalWeight);
 }
 

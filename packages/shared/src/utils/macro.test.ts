@@ -95,6 +95,21 @@ describe('environmentScore', () => {
   it('all null → null', () => {
     expect(environmentScore([{ key: 'trend', score: null }])).toBeNull();
   });
+  it('accepts custom weights; percent scale == fraction scale (normalized)', () => {
+    const sleeves = [
+      { key: 'trend' as const, score: 60 },
+      { key: 'volatility' as const, score: null },
+      { key: 'credit' as const, score: null },
+      { key: 'rates_dollar' as const, score: null },
+      { key: 'gex' as const, score: 80 },
+    ];
+    const frac = environmentScore(sleeves, { trend: 0.30, volatility: 0.20, credit: 0.15, rates_dollar: 0.15, gex: 0.20 });
+    const pct = environmentScore(sleeves, { trend: 30, volatility: 20, credit: 15, rates_dollar: 15, gex: 20 });
+    expect(frac).toBe(68);
+    expect(pct).toBe(68);
+    // A heavier GEX weight pulls the blend toward gex's 80.
+    expect(environmentScore(sleeves, { trend: 10, volatility: 20, credit: 15, rates_dollar: 15, gex: 90 })!).toBeGreaterThan(68);
+  });
   it('sleeve weights total 1.0', () => {
     const total = Object.values(SLEEVE_WEIGHTS).reduce((a, b) => a + b, 0);
     expect(total).toBeCloseTo(1, 10);

@@ -49,10 +49,10 @@ import {
   trendBucket, trendSleeveScore, environmentScore,
   vixScore, ivPremiumScore, vixDirectionScore, volatilityStressScore, hv30,
   creditOasScore, us10yScore, uupScore, ratesDollarScore, gexScore, breadthScore,
-  classifyEventRisk, riskAppetiteScore,
+  classifyEventRisk, riskAppetiteScore, SLEEVE_WEIGHTS,
   buildFredUrl, parseFredObservations, runPaced, FEED_LIMITS, FRED_SERIES,
 } from '@stw/shared';
-import type { MacroEvent } from '@stw/shared';
+import type { MacroEvent, RegimeSleeveKey } from '@stw/shared';
 
 const TREND_SYMBOLS = ['SPY', 'QQQ', 'IWM', 'RSP', 'VEA'];
 
@@ -129,6 +129,32 @@ async function sbGet<T>(url: string, key: string, table: string, query: string):
     const rows = await res.json() as T[];
     return Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
   } catch { return null; }
+}
+
+// Admin-configurable regime sleeve weights (app_config, migration 061), percent
+// scale. Per-key fallback to the hardcoded defaults (×100) so the persisted
+// regime matches the live banner and never breaks on a missing/unseeded row.
+async function fetchRegimeWeights(url: string, key: string): Promise<Record<RegimeSleeveKey, number>> {
+  const def: Record<RegimeSleeveKey, number> = {
+    trend: SLEEVE_WEIGHTS.trend * 100, volatility: SLEEVE_WEIGHTS.volatility * 100,
+    credit: SLEEVE_WEIGHTS.credit * 100, rates_dollar: SLEEVE_WEIGHTS.rates_dollar * 100,
+    gex: SLEEVE_WEIGHTS.gex * 100,
+  };
+  try {
+    const res = await fetch(`${url.replace(/\/$/, '')}/rest/v1/app_config?select=key,value&key=like.regime_weight*`, {
+      headers: { apikey: key, Authorization: `Bearer ${key}`, Accept: 'application/json' },
+    });
+    if (!res.ok) return def;
+    const rows = await res.json() as { key: string; value: number }[];
+    const m = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+    return {
+      trend: m.regime_weight_trend ?? def.trend,
+      volatility: m.regime_weight_volatility ?? def.volatility,
+      credit: m.regime_weight_credit ?? def.credit,
+      rates_dollar: m.regime_weight_rates_dollar ?? def.rates_dollar,
+      gex: m.regime_weight_gex ?? def.gex,
+    };
+  } catch { return def; }
 }
 
 async function sbUpsert(url: string, key: string, table: string, row: Record<string, unknown>, onConflict: string): Promise<string | null> {
@@ -277,13 +303,14 @@ const handlerImpl: Handler = async () => {
     gex: gexSc, credit: creditScore, breadth,
   });
 
+  const regimeWeights = await fetchRegimeWeights(supabaseUrl, serviceKey);
   const regimeScore = environmentScore([
     { key: 'trend', score: trendScore },
     { key: 'volatility', score: volatilityScore },
     { key: 'credit', score: creditScore },
     { key: 'rates_dollar', score: ratesDollarSc },
     { key: 'gex', score: gexSc },
-  ]);
+  ], regimeWeights);
 
   // ── Module 3: Event Risk overlay (reuse the deployed scraper, don't duplicate it) ──
   const eventRiskResp = await fetchEventRisk();
