@@ -191,6 +191,79 @@ writer) — still separate, host-gated, not yet given.
 
 ---
 
+## Part 5 — Free-alternative research + feed reassignment (host questions, 2026-07-08)
+
+Before considering a paid TwelveData tier, researched every free option. **Conclusion: a free-only
+path clears the entire TwelveData-CONSTRAINED group AND fixes the fragile MarketWatch scrape.** No
+paid plan recommended yet.
+
+### FRED (Federal Reserve Economic Data) — the big win
+Free, single tier, **~120 req/min, no daily cap**, one free API key, authoritative. Directly serves
+every macro *index* indicator we currently pull from TwelveData, plus the event calendar:
+
+| Need (module) | Today | → FRED series | Note |
+|---|---|---|---|
+| VIX (Volatility/Stress) | TwelveData / Finnhub-fails | **VIXCLS** | authoritative CBOE close |
+| US10Y (Rates+Dollar) | TwelveData TNX | **DGS10** | actual 10Y CMT yield, no `/10` normalization hack |
+| Credit (Credit/Liquidity) | HYG ETF *proxy* | **BAMLH0A0HYM2** (HY OAS) | **upgrade** — the real spread the module footnotes it's proxying |
+| Dollar (Rates+Dollar) | UUP ETF proxy | **DTWEXBGS** (broad $ index) | actual index vs ETF; daily, 1-business-day lag |
+| Event Risk calendar | MarketWatch scrape | **`releases/dates` API** | CPI/PCE/Employment/GDP authoritative dates — replaces the scrape |
+
+Caveats: FRED daily series post on a ~1-day lag (fine for a daily-close dashboard). FRED does **not**
+serve individual equity prices or **VVIX**. **FOMC** meeting dates aren't a clean FRED release — use a
+small maintained/annual static list (dates are pre-published a year out) rather than a scrape or a
+model guess.
+
+### Equity daily OHLC (SPY/QQQ/IWM/RSP/VEA, sector constituents, per-ticker regime badge)
+FRED can't serve these. Best free supplement is **Tiingo** (free "Starter"): **50 req/hr, 1000/day,
+500 unique symbols/month, 30+yr EOD history** — far roomier than TwelveData's 8/min for our ~53-name
+book + trend ETFs. Plan: Tiingo primary for equity EOD, TwelveData as fallback (or vice-versa), so
+neither free tier is the sole point of failure.
+
+### Rejected / fallback-only
+- **Yahoo Finance:** no official free API in 2026; the reverse-engineered chart endpoint works but is
+  fragile/unsupported (can add auth without notice) — same risk class as the MarketWatch scrape, so
+  **not** a dependency. Acceptable only as a last-resort VVIX source.
+- **Alpha Vantage:** free tier is now **25 req/day, 5/min** — too small to be primary; emergency
+  single-series fallback at most.
+
+### What this does to the paid-plan question
+Offloading all macro indices → **FRED (free)** and equity EOD → **Tiingo (free)** removes essentially
+the entire TwelveData load. **Recommendation: stay free.** Revisit paid only if Tiingo's 50/hr proves
+insufficient on real cold loads — measure first (Phase B).
+
+### Q: keep the raw Finnhub label after mapping to canonical?
+**No — don't persist it.** `ticker_sector_map.sector` stores only the canonical GICS value; the raw
+Finnhub label is an intermediate the fallback map consumes and discards. Keeping it as a column means
+two "sources of truth" that drift. If a bad mapping ever needs debugging, `sector-map-sync` records
+the raw label it saw in its `run_log` summary (transient), not as a schema column.
+
+### Timestamps — every module footer needs the full time, not just the date
+Standing rule (CLAUDE.md → Timestamps): every "as-of/updated/checked" stamp uses `fmtDateTime`
+(`Mon D · H:MM AM ET`). Today **Rates + Dollar** and **Trend / Market Structure** (and others) show a
+date-only stamp. Fix: each module's `SourceNote` shows a full `fmtDateTime` **"Updated"** stamp
+(when we last refreshed), kept distinct from the **"Data through {date}"** daily-bar close date, which
+is legitimately date-only. Audit all 11 modules for this in the build.
+
+### Generalize the pacing guard to ALL feeds (host)
+The ≤8/65s TwelveData chunker in `maCache.ts` proved the pattern; extract a **generic rate-limit /
+pacing helper** (token-bucket or chunked-pacer, configured per feed: FRED 120/min, Finnhub 60/min,
+Tiingo 50/hr, TwelveData 8/min) that every feed routes through, so a new feed can't reintroduce this
+class of bug. Lives once in a shared util; each caller passes its feed's limit.
+
+### Revised feed plan (net)
+- **Macro indices (VIX, US10Y, credit, dollar) → FRED.** Fixes Volatility/Stress, Rates+Dollar,
+  Credit; removes them from TwelveData.
+- **Event Risk → FRED releases calendar (+ static FOMC list).** Retires the MarketWatch scrape.
+  Anthropic may *phrase* the "why it matters", never *source* the dates (violates the recap's
+  grounded-only rule / hallucination risk).
+- **Equity EOD → Tiingo primary + TwelveData fallback.** VVIX stays a single TwelveData call
+  (or Stooq/Yahoo last-resort).
+- **New Netlify env var:** `FRED_API_KEY` (+ `TIINGO_API_KEY` if adopted). New scheduled
+  `sector-map-sync` unchanged.
+
+---
+
 ## Appendix — files touched by any eventual build
 - `packages/shared/src/constants/` — new `SECTORS` union + Finnhub→GICS map (+ tests)
 - `packages/shared/src/utils/limits.ts` — `sectorConcentration` already generic; classify ETF/Cash
