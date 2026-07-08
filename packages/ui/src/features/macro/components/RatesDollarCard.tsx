@@ -44,7 +44,7 @@ export function RatesDollarCard({ data, loading, stressRising }: Props) {
           ⚠ Yields falling fast while stress rises — flight to safety, not a growth tailwind.
         </div>
       )}
-      <SourceNote source="FRED daily (DGS10, DTWEXBGS)" asOf={data.asOf} />
+      <SourceNote source="FRED daily (DGS10, DTWEXBGS)" asOf={data.asOf} updatedAt={data.updatedAt} />
     </div>
   );
 }

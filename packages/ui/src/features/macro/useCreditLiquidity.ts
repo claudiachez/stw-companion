@@ -17,6 +17,7 @@ export interface CreditLiquidity {
   delta5: number | null;       // 5-day change in spread, points (+ = widening = bad)
   sleeveScore: number | null;
   asOf: string | null;
+  updatedAt: string;           // when this was last refreshed (ISO)
 }
 
 export function useCreditLiquidity() {
@@ -40,7 +41,7 @@ export function useCreditLiquidity() {
       const sleeveScore = belowMa50 !== null && tightening !== null ? creditOasScore(belowMa50, tightening) : null;
 
       if (!cancelled) {
-        setData({ oas, oas50, belowMa50, tightening, delta5, sleeveScore, asOf: loadFredLastDate(FRED_SERIES.hyOas) });
+        setData({ oas, oas50, belowMa50, tightening, delta5, sleeveScore, asOf: loadFredLastDate(FRED_SERIES.hyOas), updatedAt: new Date().toISOString() });
         setLoading(false);
       }
     }

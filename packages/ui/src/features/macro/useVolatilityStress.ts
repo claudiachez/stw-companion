@@ -22,6 +22,7 @@ export interface VolatilityStress {
   subScores: { vix: number | null; ivPremium: number | null; direction: number | null };
   sleeveScore: number | null;
   asOf: string | null;            // latest daily-history bar date
+  updatedAt: string;              // when this was last refreshed (ISO)
 }
 
 export function useVolatilityStress(twelveDataKey?: string) {
@@ -56,7 +57,7 @@ export function useVolatilityStress(twelveDataKey?: string) {
       const sleeveScore = volatilityStressScore([subScores.vix, subScores.ivPremium, subScores.direction]);
 
       if (!cancelled) {
-        setData({ vix, vixPercentile, vixDelta5, spyHv30, ivPremium, subScores, sleeveScore, asOf: loadFredLastDate(FRED_SERIES.vix) });
+        setData({ vix, vixPercentile, vixDelta5, spyHv30, ivPremium, subScores, sleeveScore, asOf: loadFredLastDate(FRED_SERIES.vix), updatedAt: new Date().toISOString() });
         setLoading(false);
       }
     }

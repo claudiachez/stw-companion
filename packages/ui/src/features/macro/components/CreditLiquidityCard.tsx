@@ -39,7 +39,7 @@ export function CreditLiquidityCard({ data, loading }: Props) {
       <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 10 }}>
         ICE BofA US High Yield option-adjusted spread — a spread widens as credit stress rises.
       </div>
-      <SourceNote source="FRED daily (BAMLH0A0HYM2)" asOf={data.asOf} />
+      <SourceNote source="FRED daily (BAMLH0A0HYM2)" asOf={data.asOf} updatedAt={data.updatedAt} />
     </div>
   );
 }

@@ -34,7 +34,7 @@ export function VolatilityStressCard({ data, loading }: Props) {
           score={subScores.ivPremium}
         />
       </TileGrid>
-      <SourceNote source="VIX: FRED (VIXCLS) daily · IV: TwelveData SPY" asOf={data.asOf} />
+      <SourceNote source="VIX: FRED (VIXCLS) daily · IV: TwelveData SPY" asOf={data.asOf} updatedAt={data.updatedAt} />
     </div>
   );
 }

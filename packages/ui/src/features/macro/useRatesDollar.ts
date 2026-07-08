@@ -18,6 +18,7 @@ export interface RatesDollar {
   subScores: { us10y: number | null; dollar: number | null };
   sleeveScore: number | null;
   asOf: string | null;
+  updatedAt: string;           // when this was last refreshed (ISO)
 }
 
 export function useRatesDollar(stressRising: boolean) {
@@ -51,7 +52,7 @@ export function useRatesDollar(stressRising: boolean) {
       const sleeveScore = ratesDollarScore([subScores.us10y, subScores.dollar]);
 
       if (!cancelled) {
-        setData({ us10y, us10yDelta5, dollar, dollarAbove9, dollarAbove21, subScores, sleeveScore, asOf: loadFredLastDate(FRED_SERIES.us10y) });
+        setData({ us10y, us10yDelta5, dollar, dollarAbove9, dollarAbove21, subScores, sleeveScore, asOf: loadFredLastDate(FRED_SERIES.us10y), updatedAt: new Date().toISOString() });
         setLoading(false);
       }
     }

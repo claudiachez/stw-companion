@@ -1,6 +1,14 @@
 # Data Feeds + Sector Categories — Inventory & Plan
 
-> Status: **PROPOSAL — awaiting host approval before any feed/schema code.**
+> Status: **BUILT on `claude/data-feeds-inventory` (2026-07-08) — awaiting host review + a staging
+> deploy for live verification.** All 7 chunks done: (1) shared `runPaced` pacing helper · (2) VVIX
+> removed · (3) Market Internals consolidation · (4) FRED proxy + client, VIX/US10Y/credit/dollar
+> reassigned · (5) Credit → real HY OAS · (6) macro-snapshot + regime-daily writers → FRED (fixes
+> vol_state) · (7) Event Risk rebuilt on FRED calendar + timestamp audit (every module footer now
+> carries a full `fmtDateTime` "Updated:" stamp). Typecheck green across all 4 projects; 225 shared
+> tests pass. **Nothing live-verified yet** — the proxy runs on Netlify and FRED is server-only, so
+> verify after a staging deploy. Two review flags: the **FOMC static dates** in `macro-events.ts` need
+> checking against the Fed schedule, and **`cheerio`** is now an unused dependency.
 > Author pass: 2026-07-07. Scope: Next Steps #1 (data feeds + sector categories) folding in
 > #2 (integrity guardrails: regime backfill + cron verification) and #6 (stale `macro_daily_snapshots`
 > PROD writer). This is an inventory + plan only — no code written yet.

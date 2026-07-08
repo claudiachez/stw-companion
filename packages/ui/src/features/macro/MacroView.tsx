@@ -197,6 +197,7 @@ export function MacroView() {
               visibleSymbols={visibleSymbols}
               onToggle={toggle}
               asOf={trendAsOf}
+              updatedAt={updatedAt}
               indicatorDeltas={trendHistory.indicatorDeltas}
             />
           )}
@@ -252,6 +253,7 @@ export function MacroView() {
             rows={sectorRows}
             loading={sectorLoading}
             asOf={sectorAsOf}
+            updatedAt={updatedAt}
             constituents={sectorConstituents}
             constituentsLoading={sectorConstituentsLoading}
           />
