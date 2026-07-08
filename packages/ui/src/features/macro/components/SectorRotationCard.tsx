@@ -13,6 +13,7 @@ interface Props {
   rows: SectorRotationRow[];
   loading: boolean;
   asOf: string | null;
+  updatedAt?: Date | string | null;
   constituents: Record<string, SectorConstituents>;
   constituentsLoading: boolean;
 }
@@ -124,7 +125,7 @@ function SectorCard({ row, rank, constituents }: { row: SectorRotationRow; rank:
   );
 }
 
-export function SectorRotationCard({ rows, loading, asOf, constituents, constituentsLoading }: Props) {
+export function SectorRotationCard({ rows, loading, asOf, updatedAt, constituents, constituentsLoading }: Props) {
   if (loading && rows.length === 0) {
     return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>Loading sector data…</div>;
   }
@@ -141,6 +142,7 @@ export function SectorRotationCard({ rows, loading, asOf, constituents, constitu
       <SourceNote
         source={`RS = relative strength vs SPY (pp) over each lookback · radar plots RS across Week/1M/3M/6M/1Y · Leaders/Setting Up are each sector's own constituents${constituentsLoading ? ' (loading…)' : ''}, not STW holdings · MAs: TwelveData daily`}
         asOf={asOf}
+        updatedAt={updatedAt}
       />
     </div>
   );

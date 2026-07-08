@@ -1,6 +1,6 @@
-import { ratesDollarLabel, FONT_SIZE } from '@stw/shared';
+import { FONT_SIZE } from '@stw/shared';
 import type { RatesDollar } from '../useRatesDollar';
-import { StatTile, SleeveSummary, TileGrid, SourceNote } from './macroVisuals';
+import { StatTile, TileGrid, SourceNote } from './macroVisuals';
 
 interface Props {
   data: RatesDollar | null;
@@ -19,13 +19,12 @@ export function RatesDollarCard({ data, loading, stressRising }: Props) {
   if (loading && !data) return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>Loading rates…</div>;
   if (!data) return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>Rates data unavailable (needs TwelveData key).</div>;
 
-  const { us10y, us10yDelta5, uup, uupAbove9, uupAbove21, subScores, sleeveScore } = data;
+  const { us10y, us10yDelta5, dollar, dollarAbove9, dollarAbove21, subScores } = data;
   const fallingFast = us10yDelta5 !== null && us10yDelta5 <= -0.10;
-  const uupTrend = uupAbove9 === null ? '' : (!uupAbove9 && !uupAbove21) ? 'below 9 & 21D' : (uupAbove9 && uupAbove21) ? 'above 9 & 21D' : 'mixed';
+  const dollarTrend = dollarAbove9 === null ? '' : (!dollarAbove9 && !dollarAbove21) ? 'below 9 & 21D' : (dollarAbove9 && dollarAbove21) ? 'above 9 & 21D' : 'mixed';
 
   return (
     <div>
-      <SleeveSummary score={sleeveScore} label={ratesDollarLabel(sleeveScore)} hint="for growth/speculation" />
       <TileGrid>
         <StatTile
           label="US 10Y Yield"
@@ -34,10 +33,10 @@ export function RatesDollarCard({ data, loading, stressRising }: Props) {
           score={subScores.us10y}
         />
         <StatTile
-          label="Dollar (UUP)"
-          value={uup !== null ? uup.toFixed(2) : '—'}
-          sub={uupTrend}
-          score={subScores.uup}
+          label="Dollar (broad)"
+          value={dollar !== null ? dollar.toFixed(2) : '—'}
+          sub={dollarTrend}
+          score={subScores.dollar}
         />
       </TileGrid>
       {fallingFast && stressRising && (
@@ -45,7 +44,7 @@ export function RatesDollarCard({ data, loading, stressRising }: Props) {
           ⚠ Yields falling fast while stress rises — flight to safety, not a growth tailwind.
         </div>
       )}
-      <SourceNote source="TwelveData daily (CBOE TNX, UUP)" asOf={data.asOf} />
+      <SourceNote source="FRED daily (DGS10, DTWEXBGS)" asOf={data.asOf} updatedAt={data.updatedAt} />
     </div>
   );
 }

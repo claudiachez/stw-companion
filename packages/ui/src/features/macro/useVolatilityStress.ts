@@ -1,28 +1,31 @@
 import { useState, useEffect } from 'react';
 import {
-  hv30, vixScore, vvixScore, ivPremiumScore, vixDirectionScore,
-  volatilityStressScore, percentileRank,
+  hv30, vixScore, ivPremiumScore, vixDirectionScore,
+  volatilityStressScore, percentileRank, FRED_SERIES,
 } from '@stw/shared';
-import { loadCloses, finnhubQuote, tdDailyCloses, loadLastDate } from './maCache';
+import { loadCloses, tdDailyCloses } from './maCache';
+import { fredCloses, loadFredLastDate } from './fredCache';
 
 // ── Module 5: Volatility / Stress ───────────────────────────────────
-// VIX/VVIX are index symbols Finnhub's free tier often won't serve, so we take
-// the live quote when available and fall back to the last TwelveData daily close.
-// Daily history (TwelveData) also drives the 1-yr percentile + 5D direction.
+// VIX daily closes come from FRED (VIXCLS) via the `fred` proxy — the free
+// Finnhub/TwelveData tiers throttled or wouldn't serve the index. The 1-yr
+// percentile + 5D direction read off that same FRED series; the IV-premium ratio
+// still uses SPY's 30D realized vol from the TwelveData daily cache.
+// (VVIX was removed 2026-07-08 — no free feed serves it; see macro.ts.)
 
 export interface VolatilityStress {
   vix: number | null;
   vixPercentile: number | null;   // trailing ~1yr
   vixDelta5: number | null;       // VIX points, 5 trading days
-  vvix: number | null;
   spyHv30: number | null;
   ivPremium: number | null;       // VIX ÷ 30D realized vol
-  subScores: { vix: number | null; vvix: number | null; ivPremium: number | null; direction: number | null };
+  subScores: { vix: number | null; ivPremium: number | null; direction: number | null };
   sleeveScore: number | null;
   asOf: string | null;            // latest daily-history bar date
+  updatedAt: string;              // when this was last refreshed (ISO)
 }
 
-export function useVolatilityStress(finnhubKey?: string, twelveDataKey?: string) {
+export function useVolatilityStress(twelveDataKey?: string) {
   const [data, setData] = useState<VolatilityStress | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -31,17 +34,9 @@ export function useVolatilityStress(finnhubKey?: string, twelveDataKey?: string)
     setLoading(true);
 
     async function compute() {
-      // VIX: live quote first, else last daily close. Daily series → percentile + direction.
-      const vixCloses = twelveDataKey ? await tdDailyCloses('VIX', twelveDataKey) : [];
-      let vix: number | null = finnhubKey ? await finnhubQuote('^VIX', finnhubKey) : null;
-      if (vix === null && vixCloses.length) vix = vixCloses[vixCloses.length - 1];
-
-      // VVIX: Finnhub first, else TwelveData daily (often unavailable on free tier → skip).
-      let vvix: number | null = finnhubKey ? await finnhubQuote('^VVIX', finnhubKey) : null;
-      if (vvix === null && twelveDataKey) {
-        const vvixCloses = await tdDailyCloses('VVIX', twelveDataKey, 30);
-        if (vvixCloses.length) vvix = vvixCloses[vvixCloses.length - 1];
-      }
+      // VIX from FRED (VIXCLS) — daily series drives value + percentile + 5D direction.
+      const vixCloses = await fredCloses(FRED_SERIES.vix);
+      const vix = vixCloses.length ? vixCloses[vixCloses.length - 1] : null;
 
       // IV premium = VIX ÷ 30D realized vol on SPY (reuse the trend hook's SPY cache).
       let spyCloses = loadCloses('SPY');
@@ -56,21 +51,20 @@ export function useVolatilityStress(finnhubKey?: string, twelveDataKey?: string)
 
       const subScores = {
         vix: vixScore(vix),
-        vvix: vvixScore(vvix),
         ivPremium: ivPremiumScore(ivPremium),
         direction: vixDirectionScore(vixDelta5),
       };
-      const sleeveScore = volatilityStressScore([subScores.vix, subScores.vvix, subScores.ivPremium, subScores.direction]);
+      const sleeveScore = volatilityStressScore([subScores.vix, subScores.ivPremium, subScores.direction]);
 
       if (!cancelled) {
-        setData({ vix, vixPercentile, vixDelta5, vvix, spyHv30, ivPremium, subScores, sleeveScore, asOf: loadLastDate('VIX') });
+        setData({ vix, vixPercentile, vixDelta5, spyHv30, ivPremium, subScores, sleeveScore, asOf: loadFredLastDate(FRED_SERIES.vix), updatedAt: new Date().toISOString() });
         setLoading(false);
       }
     }
 
     compute();
     return () => { cancelled = true; };
-  }, [finnhubKey, twelveDataKey]);
+  }, [twelveDataKey]);
 
   return { data, loading };
 }

@@ -145,7 +145,7 @@ export function MacroEventRiskCard({ read, loading, error, warning, qqqBucket, v
 function FxStreetLink() {
   return (
     <div style={{ marginTop: 8, fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>
-      Manual cross-check: <a href="https://www.fxstreet.com/economic-calendar" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--t2)' }}>FXStreet Economic Calendar ↗</a>
+      Source: FRED release calendar + FOMC schedule · cross-check: <a href="https://www.fxstreet.com/economic-calendar" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--t2)' }}>FXStreet ↗</a>
     </div>
   );
 }

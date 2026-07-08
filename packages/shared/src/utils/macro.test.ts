@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   trendBucket, trendSubScore, trendSleeveScore, trendSleeveLabel,
   environmentScore, regimeBand, hv30, SLEEVE_WEIGHTS,
-  vixScore, vvixScore, ivPremiumScore, vixDirectionScore,
+  vixScore, ivPremiumScore, vixDirectionScore,
   volatilityStressScore, stressLabel, percentileRank,
-  creditHygScore, creditLabel,
+  creditHygScore, creditOasScore, creditLabel,
   us10yScore, uupScore, ratesDollarScore, ratesDollarLabel,
   gexScore, gexBiasLabel, gexImplication,
   breadthScore, RISK_APPETITE_WEIGHTS, riskAppetiteScore,
@@ -95,6 +95,21 @@ describe('environmentScore', () => {
   it('all null → null', () => {
     expect(environmentScore([{ key: 'trend', score: null }])).toBeNull();
   });
+  it('accepts custom weights; percent scale == fraction scale (normalized)', () => {
+    const sleeves = [
+      { key: 'trend' as const, score: 60 },
+      { key: 'volatility' as const, score: null },
+      { key: 'credit' as const, score: null },
+      { key: 'rates_dollar' as const, score: null },
+      { key: 'gex' as const, score: 80 },
+    ];
+    const frac = environmentScore(sleeves, { trend: 0.30, volatility: 0.20, credit: 0.15, rates_dollar: 0.15, gex: 0.20 });
+    const pct = environmentScore(sleeves, { trend: 30, volatility: 20, credit: 15, rates_dollar: 15, gex: 20 });
+    expect(frac).toBe(68);
+    expect(pct).toBe(68);
+    // A heavier GEX weight pulls the blend toward gex's 80.
+    expect(environmentScore(sleeves, { trend: 10, volatility: 20, credit: 15, rates_dollar: 15, gex: 90 })!).toBeGreaterThan(68);
+  });
   it('sleeve weights total 1.0', () => {
     const total = Object.values(SLEEVE_WEIGHTS).reduce((a, b) => a + b, 0);
     expect(total).toBeCloseTo(1, 10);
@@ -129,11 +144,6 @@ describe('volatility / stress scorers', () => {
     expect(vixScore(30)).toBe(10);
     expect(vixScore(null)).toBeNull();
   });
-  it('vvixScore: bands by tail risk', () => {
-    expect(vvixScore(80)).toBe(85);
-    expect(vvixScore(92)).toBe(50);
-    expect(vvixScore(110)).toBe(20);
-  });
   it('ivPremiumScore: implied below realized = calm', () => {
     expect(ivPremiumScore(0.8)).toBe(85);
     expect(ivPremiumScore(1.1)).toBe(55);
@@ -167,6 +177,12 @@ describe('credit / liquidity scorers', () => {
     expect(creditHygScore(true, false)).toBe(60);
     expect(creditHygScore(false, true)).toBe(45);
     expect(creditHygScore(false, false)).toBe(20);
+  });
+  it('creditOasScore: spread below 50D + tightening = confirming (inverted vs HYG)', () => {
+    expect(creditOasScore(true, true)).toBe(80);   // tight & tightening
+    expect(creditOasScore(true, false)).toBe(60);  // tight but widening
+    expect(creditOasScore(false, true)).toBe(45);  // wide but tightening
+    expect(creditOasScore(false, false)).toBe(20); // wide & widening = warning
   });
   it('creditLabel maps scores', () => {
     expect(creditLabel(80)).toBe('Confirming');
@@ -239,7 +255,7 @@ describe('breadthScore', () => {
 });
 
 describe('riskAppetiteScore', () => {
-  it('weights are exactly the 7 gauge inputs and sum to 100%', () => {
+  it('weights are exactly the 6 gauge inputs and sum to 100%', () => {
     const total = Object.values(RISK_APPETITE_WEIGHTS).reduce((a, b) => a + b, 0);
     expect(total).toBeCloseTo(1, 10);
   });
@@ -260,11 +276,11 @@ describe('riskAppetiteScore', () => {
     expect(riskAppetiteScore({ momentum: 80, vix: null, ivPremium: undefined })).toBe(80);
   });
 
-  it('full set of 7 inputs averages with their published weights', () => {
+  it('full set of 6 inputs averages with their published weights', () => {
     const score = riskAppetiteScore({
-      momentum: 90, vix: 90, ivPremium: 85, vvix: 85, gex: 90, credit: 80, breadth: 80,
+      momentum: 90, vix: 90, ivPremium: 85, gex: 90, credit: 80, breadth: 80,
     });
-    expect(score).toBe(87); // weighted avg, rounded
+    expect(score).toBe(87); // weighted avg over active weight sum (0.88), rounded
   });
 });
 

@@ -59,7 +59,7 @@ interface RecapRequest {
   modules: { trend: RecapModule; volatility: RecapModule; credit: RecapModule; ratesDollar: RecapModule; gex: RecapModule };
   context?: {
     indicators?: { symbol: string; name: string; bucket: string | null; close: number | null; chgPct: number | null }[];
-    volatility?: { vix: number | null; vvix: number | null; ivPremium: number | null } | null;
+    volatility?: { vix: number | null; ivPremium: number | null } | null;
     riskAppetite?: { total: number | null; inputs: { label: string; score: number | null }[] } | null;
     gex?: { bias: string; biasNote: string; lastUpdated: string; spx?: LevelSet | null; qqq?: LevelSet | null } | null;
   };
@@ -98,7 +98,7 @@ function buildPrompt(body: RecapRequest, session: 'am' | 'pm' = 'pm'): string {
     .join('\n');
 
   const vol = ctx.volatility;
-  const volLine = vol ? `VIX ${vol.vix ?? 'n/a'}, VVIX ${vol.vvix ?? 'n/a'}, IV premium ${vol.ivPremium != null ? vol.ivPremium.toFixed(2) : 'n/a'}` : 'n/a';
+  const volLine = vol ? `VIX ${vol.vix ?? 'n/a'}, IV premium ${vol.ivPremium != null ? vol.ivPremium.toFixed(2) : 'n/a'}` : 'n/a';
 
   const breadth = ctx.riskAppetite?.inputs?.find((x) => x.label.toLowerCase().includes('breadth'));
   const breadthLine = breadth ? `Breadth (RSP/SPY) sub-score ${breadth.score ?? 'n/a'}/100` : '';

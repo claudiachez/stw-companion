@@ -1,9 +1,10 @@
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import {
   environmentScore, regimeBand, trendSleeveScore, trendSleeveLabel, trendSubScore, gexScore,
   gexBiasLabel, stressLabel, creditLabel, ratesDollarLabel, regimeDirectionLabel, FONT_SIZE,
 } from '@stw/shared';
 import { useCapabilities } from '../../context/AppCapabilities';
+import { useAppConfig } from '../../hooks/useAppConfig';
 import {
   useMacroIndicators, ALL_INDICATORS,
   DEFAULT_TREND_SYMBOLS, EXPERT_TREND_SYMBOLS,
@@ -22,9 +23,7 @@ import { RegimeBanner } from './components/RegimeBanner';
 import { ModuleScoreStrip } from './components/ModuleScoreStrip';
 import { MacroEventRiskCard } from './components/MacroEventRiskCard';
 import { TrendStructureTable } from './components/TrendStructureTable';
-import { VolatilityStressCard } from './components/VolatilityStressCard';
-import { CreditLiquidityCard } from './components/CreditLiquidityCard';
-import { RatesDollarCard } from './components/RatesDollarCard';
+import { MarketInternalsCard } from './components/MarketInternalsCard';
 import { GexPositioningCard } from './components/GexPositioningCard';
 import { SentimentGauge } from './components/SentimentGauge';
 import { MacroRecapCard } from './components/MacroRecapCard';
@@ -32,23 +31,78 @@ import { SectorRotationCard } from './components/SectorRotationCard';
 import { ModuleHeader } from './components/macroVisuals';
 
 // Concise "what is this / why it matters / how to read it" blurbs, shown via the
-// collapsible ⓘ on each module header (collapsed by default — no clutter).
+// collapsible ⓘ on each module header (collapsed by default — no clutter). Each
+// help blurb is structured into short lines (lead → detail → muted footer) via
+// <Help>, not a wall of text — same legibility pass as the Market Internals rows.
+function Help({ children }: { children: ReactNode }) {
+  return <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{children}</div>;
+}
+const dim = { color: 'var(--t3)' } as const;
+
 const HELP = {
-  regime: 'The overall market read, computed from weighted sleeve scores — Trend 30%, Volatility 20%, Credit 15%, Rates+Dollar 15%, GEX 20%. 75–100 = Risk-On, 60–74 = Constructive, 45–59 = Cautious, 30–44 = Defensive, 0–29 = Risk-Off. It answers: how aggressive should I be right now?',
-  strip: "Each sleeve's 0–100 score at a glance (higher = more risk-on). Shows what's actually driving the regime — whether it's trend, stress, credit, rates, or positioning.",
-  trend: 'Are risk assets technically intact? Each index vs its 9-, 21- and 200-day moving averages. Above all three = momentum; below the 200-day = risk-off; below the 200-day but bouncing above the short ones = a bear-market rally (not bullish). The heaviest sleeve (30%).',
-  volatility: 'Is fear rising? VIX = expected S&P volatility; VVIX = volatility-of-volatility (tail risk); IV Premium = VIX ÷ realized vol (how expensive hedges are vs how much the market is actually moving). Higher score = calmer.',
-  credit: 'Is credit confirming the equity move? HYG (high-yield bond ETF) vs its 50-day average — credit usually weakens before stocks do, so it acts as an early warning. A proxy for now; true high-yield spreads come later.',
-  rates: 'Are macro headwinds building? Rising 10-year yields and a strengthening dollar pressure growth and speculative stocks. Key nuance: yields falling while stress rises is a flight to safety, not a growth tailwind.',
-  gex: "STW Graddox's options-positioning read (dealer gamma exposure) — Bullish / Flat / Conflicted / Bearish, with key SPY and QQQ levels. A tactical overlay: it helps time entries and spot pivots, but doesn't set the whole macro picture on its own.",
-  riskAppetite: 'How much fear vs greed is priced right now (0 = extreme fear, 100 = extreme greed). A different question from the regime: the regime is what the environment IS; this is how emotional the tape is. Built from momentum, VIX, IV premium, tail risk, GEX, credit and breadth.',
-  recap: 'An AI note that turns all the module scores into a plain-English read plus a suggested trading mode. Auto-generates twice daily: a pre-market note at 8am ET and a post-market recap at 4:30pm ET.',
-  eventRisk: "What scheduled macro events (CPI, FOMC, jobs, etc.) could change the setup in the next 1-2 days. This is a temporary OVERLAY, not a permanent change to the regime score — it fades a few trading days after the print unless the structure actually shifted. MVP data source: MarketWatch's economic calendar; cross-check FXStreet for confirmation.",
-  sectorRotation: "Where money is rotating across the 11 SPDR sectors, ranked #1 (leading) to #11 (lagging) by structure + 1-month RS. Structure = the same 9/21/200-day trend bucketing used in the Trend module; the radar plots each sector's RS vs SPY (percentage points) across Week/1M/3M/6M/1Y. Leaders/Setting Up below each radar are names from that sector with confirmed bullish structure (Leaders) or turning positive on 1M RS (Setting Up) — useful context for understanding where the sector is headed.",
+  // regime help is built in the component (regimeHelp) so it shows the live,
+  // admin-configured weights (migration 061) rather than a hardcoded line.
+  strip: (
+    <Help>
+      <div>Each sleeve's 0–100 score at a glance — <strong>higher = more risk-on</strong>.</div>
+      <div style={dim}>Shows what's actually driving the regime: trend, stress, credit, rates or positioning.</div>
+    </Help>
+  ),
+  trend: (
+    <Help>
+      <div>Are risk assets technically intact? Each index vs its 9-, 21- and 200-day moving averages. The heaviest sleeve (30%).</div>
+      <div><strong>Above all three</strong> — momentum.</div>
+      <div><strong>Below the 200-day</strong> — risk-off.</div>
+      <div><strong>Below the 200-day but bouncing above the short ones</strong> — a bear-market rally, not bullish.</div>
+    </Help>
+  ),
+  internals: (
+    <Help>
+      <div><strong>Volatility / Stress</strong> — VIX (expected S&P volatility) + IV premium (VIX ÷ realized vol). Higher = calmer.</div>
+      <div><strong>Credit / Liquidity</strong> — HY OAS spread vs its 50-day average. A widening spread warns of credit stress before stocks.</div>
+      <div><strong>Rates + Dollar</strong> — 10-year yield + broad dollar. Both rising is a headwind for growth stocks (a yield drop during stress is flight-to-safety, not a tailwind).</div>
+      <div style={dim}>Each sleeve is scored 0–100 — higher = more risk-on.</div>
+    </Help>
+  ),
+  gex: (
+    <Help>
+      <div>STW Graddox's options-positioning read (dealer gamma exposure): <strong>Bullish / Flat / Conflicted / Bearish</strong>, with key SPY &amp; QQQ levels.</div>
+      <div style={dim}>A tactical overlay — helps time entries and spot pivots, but doesn't set the whole macro picture on its own.</div>
+    </Help>
+  ),
+  riskAppetite: (
+    <Help>
+      <div>How much <strong>fear vs greed</strong> is priced right now (0 = extreme fear, 100 = extreme greed).</div>
+      <div>Different from the regime: the regime is what the environment <em>is</em>; this is how emotional the tape is.</div>
+      <div style={dim}>Built from momentum, VIX, IV premium, GEX, credit and breadth.</div>
+    </Help>
+  ),
+  recap: (
+    <Help>
+      <div>An AI note that turns all the module scores into a plain-English read plus a suggested trading mode.</div>
+      <div style={dim}>Auto-generates twice each weekday: pre-market at 8am ET, post-market at 4:30pm ET.</div>
+    </Help>
+  ),
+  eventRisk: (
+    <Help>
+      <div>Scheduled macro events (CPI, PCE, jobs, FOMC, GDP, PPI) that could move the setup in the next day or two.</div>
+      <div>A temporary <strong>overlay</strong>, not a permanent regime change — it fades a few trading days after the print unless the structure actually shifted.</div>
+      <div style={dim}>Source: FRED economic-release calendar + the published FOMC schedule.</div>
+    </Help>
+  ),
+  sectorRotation: (
+    <Help>
+      <div>Where money is rotating across the 11 SPDR sectors, ranked #1 (leading) → #11 (lagging) by structure + 1-month relative strength.</div>
+      <div><strong>Structure</strong> — the same 9/21/200-day trend bucketing as the Trend module.</div>
+      <div><strong>Radar</strong> — each sector's RS vs SPY (percentage points) across Week/1M/3M/6M/1Y.</div>
+      <div><strong>Leaders / Setting Up</strong> — names from that sector with confirmed bullish structure (Leaders) or turning positive on 1M RS (Setting Up).</div>
+    </Help>
+  ),
 };
 
 export function MacroView() {
   const { finnhubKey, twelveDataKey, canEdit } = useCapabilities();
+  const { regimeWeights } = useAppConfig();
   const { prefs, toggle } = useMacroPrefs();
   const { data: graddox } = useGraddox();
 
@@ -63,13 +117,13 @@ export function MacroView() {
   }, [prefs.visibleIndicators, allSymbols]);
 
   const { indicators, loading: indLoading, asOf: trendAsOf } = useMacroIndicators(allSymbols, finnhubKey, twelveDataKey);
-  const { data: volatility, loading: volLoading } = useVolatilityStress(finnhubKey, twelveDataKey);
-  const { data: credit, loading: creditLoading } = useCreditLiquidity(twelveDataKey);
-  // Stress rising = VIX climbing or credit below its 50D — feeds the US10Y
-  // flight-to-safety cross-check so a fast yield drop in stress isn't read bullish.
-  const stressRising = (volatility?.vixDelta5 ?? 0) > 0.5 || credit?.aboveMa50 === false;
-  const { data: rates, loading: ratesLoading } = useRatesDollar(twelveDataKey, stressRising);
-  const { score, loading: sentLoading } = useSentimentGauge(finnhubKey, twelveDataKey);
+  const { data: volatility, loading: volLoading } = useVolatilityStress(twelveDataKey);
+  const { data: credit, loading: creditLoading } = useCreditLiquidity();
+  // Stress rising = VIX climbing or the HY spread wide vs its 50D — feeds the
+  // US10Y flight-to-safety cross-check so a fast yield drop in stress isn't read bullish.
+  const stressRising = (volatility?.vixDelta5 ?? 0) > 0.5 || credit?.belowMa50 === false;
+  const { data: rates, loading: ratesLoading } = useRatesDollar(stressRising);
+  const { score, loading: sentLoading } = useSentimentGauge(twelveDataKey);
   const { recap, recapDate, recapSession, loading: recapLoading, error: recapError, generate } = useDailyRecap();
   const { read: eventsRead, loading: eventsLoading, error: eventsError, warning: eventsWarning } = useMacroEvents();
   const { rows: sectorRows, loading: sectorLoading, asOf: sectorAsOf, constituents: sectorConstituents, constituentsLoading: sectorConstituentsLoading } = useSectorRotation(twelveDataKey);
@@ -92,9 +146,9 @@ export function MacroView() {
       { key: 'credit', score: credit?.sleeveScore ?? null },
       { key: 'rates_dollar', score: rates?.sleeveScore ?? null },
       { key: 'gex', score: gexSleeve },
-    ]);
+    ], regimeWeights);
     return env === null ? null : regimeBand(env);
-  }, [trendSleeve, volatility?.sleeveScore, credit?.sleeveScore, rates?.sleeveScore, gexSleeve]);
+  }, [trendSleeve, volatility?.sleeveScore, credit?.sleeveScore, rates?.sleeveScore, gexSleeve, regimeWeights]);
 
   // P2: 5D trend engine — one localStorage snapshot/day, read back as 5D/20D
   // deltas + a direction classification. Deltas stay null until ~5 trading
@@ -141,7 +195,7 @@ export function MacroView() {
       // story is grounded even when those rows are hidden in the table.
       context: {
         indicators: indicators.map((i) => ({ symbol: i.symbol, name: i.name, bucket: i.bucket, close: i.close, chgPct: i.chgPct })),
-        volatility: volatility ? { vix: volatility.vix, vvix: volatility.vvix, ivPremium: volatility.ivPremium } : null,
+        volatility: volatility ? { vix: volatility.vix, ivPremium: volatility.ivPremium } : null,
         riskAppetite: score ? { total: score.total, inputs: score.inputs.map((x) => ({ label: x.label, score: x.score })) } : null,
         gex: graddox ? { bias: graddox.bias, biasNote: graddox.bias_note, lastUpdated: graddox.last_updated, spx: graddox.spx, qqq: graddox.qqq } : null,
       },
@@ -162,7 +216,16 @@ export function MacroView() {
 
       {/* ── Module 1: Market Regime Banner ─────────────────────────── */}
       <section>
-        <ModuleHeader title="Market Regime" help={HELP.regime} />
+        <ModuleHeader
+          title="Market Regime"
+          help={(
+            <Help>
+              <div>The overall market read — <strong>how aggressive to be right now</strong> — from weighted sleeve scores.</div>
+              <div>75–100 <strong>Risk-On</strong> · 60–74 Constructive · 45–59 Cautious · 30–44 Defensive · 0–29 <strong>Risk-Off</strong>.</div>
+              <div style={dim}>Weights: Trend {regimeWeights.trend}% · Volatility {regimeWeights.volatility}% · Credit {regimeWeights.credit}% · Rates+Dollar {regimeWeights.rates_dollar}% · GEX {regimeWeights.gex}%.</div>
+            </Help>
+          )}
+        />
         <RegimeBanner regime={dataReady ? regime : null} updatedAt={updatedAt} direction={regimeDirection} />
       </section>
 
@@ -201,34 +264,17 @@ export function MacroView() {
               visibleSymbols={visibleSymbols}
               onToggle={toggle}
               asOf={trendAsOf}
+              updatedAt={updatedAt}
               indicatorDeltas={trendHistory.indicatorDeltas}
             />
           )}
         </div>
       </section>
 
-      {/* ── Module 5: Volatility / Stress ──────────────────────────── */}
+      {/* ── Modules 5–7: Market Internals (Volatility · Credit · Rates+Dollar) ── */}
       <section>
-        <ModuleHeader title="Volatility / Stress" help={HELP.volatility} />
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
-          <VolatilityStressCard data={volatility} loading={volLoading} />
-        </div>
-      </section>
-
-      {/* ── Module 6: Credit / Liquidity ───────────────────────────── */}
-      <section>
-        <ModuleHeader title="Credit / Liquidity" help={HELP.credit} />
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
-          <CreditLiquidityCard data={credit} loading={creditLoading} />
-        </div>
-      </section>
-
-      {/* ── Module 7: Rates + Dollar Headwinds ─────────────────────── */}
-      <section>
-        <ModuleHeader title="Rates + Dollar Headwinds" help={HELP.rates} />
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
-          <RatesDollarCard data={rates} loading={ratesLoading} stressRising={stressRising} />
-        </div>
+        <ModuleHeader title="Market Internals" help={HELP.internals} />
+        <MarketInternalsCard volatility={volatility} credit={credit} rates={rates} />
       </section>
 
       {/* ── Module 8: GEX / Positioning ────────────────────────────── */}
@@ -269,6 +315,7 @@ export function MacroView() {
             rows={sectorRows}
             loading={sectorLoading}
             asOf={sectorAsOf}
+            updatedAt={updatedAt}
             constituents={sectorConstituents}
             constituentsLoading={sectorConstituentsLoading}
           />

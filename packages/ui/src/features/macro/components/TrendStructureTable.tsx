@@ -13,6 +13,7 @@ interface Props {
   visibleSymbols: string[];
   onToggle: (symbol: string) => void;
   asOf: string | null;
+  updatedAt?: Date | string | null;
   /** Per-symbol 5D/20D deltas from the P2 trend engine; null entries until ~5 days of history accrue. */
   indicatorDeltas?: Record<string, TrendHistoryEntry>;
 }
@@ -90,7 +91,7 @@ function IndicatorRow({ ind, trendEntry }: { ind: MacroIndicator; trendEntry?: T
   );
 }
 
-export function TrendStructureTable({ indicators, visibleSymbols, onToggle, asOf, indicatorDeltas }: Props) {
+export function TrendStructureTable({ indicators, visibleSymbols, onToggle, asOf, updatedAt, indicatorDeltas }: Props) {
   const visSet = new Set(visibleSymbols);
   const visible = indicators.filter((i) => visSet.has(i.symbol));
 
@@ -150,7 +151,7 @@ export function TrendStructureTable({ indicators, visibleSymbols, onToggle, asOf
           </tbody>
         </table>
       </div>
-      <SourceNote source="Quotes: Finnhub (live, ≤15m) · MAs: TwelveData daily" asOf={asOf} />
+      <SourceNote source="Quotes: Finnhub (live, ≤15m) · MAs: TwelveData daily" asOf={asOf} updatedAt={updatedAt} />
     </div>
   );
 }
