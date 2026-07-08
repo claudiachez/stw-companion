@@ -63,20 +63,17 @@ export function MarketInternalsCard({ volatility, credit, rates }: Props) {
         <div
           key={r.key}
           style={{
-            display: 'flex', alignItems: 'baseline', gap: 12, padding: '12px 0',
+            display: 'flex', alignItems: 'baseline', gap: 10, padding: '11px 0', flexWrap: 'wrap',
             borderBottom: i < rows.length - 1 ? '1px solid var(--bsub)' : 'none',
           }}
         >
-          <span style={{ fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, color: scoreColor(r.score), width: 34, flexShrink: 0, textAlign: 'right' }}>
+          <span style={{ fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, color: scoreColor(r.score), width: 30, flexShrink: 0, textAlign: 'right' }}>
             {r.score ?? '—'}
           </span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>{r.name}</span>
-              <span style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: scoreColor(r.score) }}>{r.label}</span>
-            </div>
-            <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', marginTop: 2 }}>{r.reading}</div>
-          </div>
+          <span style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>{r.name}</span>
+          <span style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: scoreColor(r.score) }}>{r.label}</span>
+          {/* Readings pushed to the right, filling the horizontal space instead of a 2nd line. */}
+          <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', marginLeft: 'auto', textAlign: 'right' }}>{r.reading}</span>
         </div>
       ))}
       <SourceNote
