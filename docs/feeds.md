@@ -87,13 +87,37 @@ re-implementing pacing.
 
 ---
 
-## Consumers (where feeds surface)
+## Feed usage by page / module (rate-vs-need matrix)
 
-- **Macro tab** — Market Regime (weighted sleeves), Module Scores strip, Trend table, **Market
-  Internals** (Volatility/Credit/Rates consolidated), GEX, Risk Appetite gauge, Event Risk, Recap,
-  Sector Rotation. Index data ← FRED; equity ← TwelveData; GEX ← Supabase `signals`.
-- **Stock Picks / My Portfolio** — live quotes ← Finnhub; sector grouping / Risk concentration ←
-  `ticker_sector_map` (GICS); option marks ← IBKR proxy; subscriber positions ← IBKR Flex.
+Where each feed surfaces and whether its limit comfortably covers the need. Refresh rate = how often
+that surface pulls the feed (TanStack Query `staleTime` for live/on-load reads; cron cadence for
+scheduled writers). Post-re-platform, every row is within limits — the old TwelveData-index bottleneck
+is gone.
+
+| Page | Module | Feed (current) | Refresh rate | Limit | Status |
+|---|---|---|---|---|---|
+| **Stock Picks** | Overview — Heatmap (Today color) | Finnhub | live, 60s | 60/min | OK — ~53 tickers |
+| Stock Picks | Overview — Sector grouping | `ticker_sector_map` (GICS) | 1h | — | OK |
+| Stock Picks | List + detail — live price | Finnhub | 60s | 60/min | OK |
+| Stock Picks | Ticker detail — option leg marks | IBKR local proxy (admin) | on-demand | none | OK — admin-only |
+| Stock Picks | Ticker detail — regime badge | TwelveData daily closes | 1x/day cache | 8/min | OK (equity, paced) |
+| **Macro** | Summary / Recap | Anthropic | 2x/day (8am/4:30pm ET) | pay-per-token | OK |
+| Macro | Trend / Score Strip / Banner (equity ETFs) | TwelveData daily closes | 1x/day cache | 8/min | OK (equity, paced) |
+| Macro | Market Internals — Vol / Credit / Rates (indices) | **FRED** (VIXCLS/BAMLH0A0HYM2/DGS10/DTWEXBGS) | on load, daily | ~120/min | OK |
+| Macro | VIX value | **FRED** (VIXCLS) | on load | ~120/min | OK (Finnhub free won't serve indices) |
+| Macro | Sector Rotation | TwelveData daily (constituents) | 1x/day cache | 8/min | OK (paced) |
+| Macro | GEX / Positioning | Supabase `signals` | 1x/day | — | OK |
+| Macro | Event Risk | **FRED** release calendar + static FOMC | on load | ~120/min | OK (surprise/shock N/A — calendar has no values) |
+| Macro | 5D trend engine | `macro_daily_snapshots` (← writer: FRED + TwelveData) | 1x/day 4:30pm | — | OK on prod after promotion |
+| **My Portfolio** | Overview — Heatmap (Total only) | stored marks (Supabase) | on sync | — | OK (no live day-change feed) |
+| My Portfolio | Positions | IBKR Flex Web Service | manual sync | ~1/few-min/token | OK — open positions only |
+| My Portfolio | Risk — sector concentration | `ticker_sector_map` (GICS) | 1h | — | OK (ETF/Cash excluded) |
+| My Portfolio | Tailing | Supabase `holdings` | on load | — | OK |
+| **Signals** | GEX charts | Finnhub + TwelveData | 60s / daily | 60/min · 8/min | OK |
+| **Backend (scheduled)** | `macro-snapshot` | FRED (indices) + TwelveData (equity) | 1x/day wkdays | — | OK — prod deploy only |
+| Backend | `regime-daily` | FRED (VIX/VIX3M/US10Y) + TwelveData (IWM/SPY/QQQ) | **not scheduled yet** | — | pending cron + backfill |
+| Backend | `sector-map-sync` | Finnhub `profile2` | weekdays 22:00 UTC | 60/min | OK — prod deploy only |
+| Backend | `macro-recap-am/pm` | Anthropic | 2x/day wkdays | pay-per-token | OK — prod deploy only |
 
 ## Env vars (set on both Netlify sites unless noted)
 
