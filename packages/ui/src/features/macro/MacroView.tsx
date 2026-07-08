@@ -35,7 +35,14 @@ const HELP = {
   regime: 'The overall market read, computed from weighted sleeve scores — Trend 30%, Volatility 20%, Credit 15%, Rates+Dollar 15%, GEX 20%. 75–100 = Risk-On, 60–74 = Constructive, 45–59 = Cautious, 30–44 = Defensive, 0–29 = Risk-Off. It answers: how aggressive should I be right now?',
   strip: "Each sleeve's 0–100 score at a glance (higher = more risk-on). Shows what's actually driving the regime — whether it's trend, stress, credit, rates, or positioning.",
   trend: 'Are risk assets technically intact? Each index vs its 9-, 21- and 200-day moving averages. Above all three = momentum; below the 200-day = risk-off; below the 200-day but bouncing above the short ones = a bear-market rally (not bullish). The heaviest sleeve (30%).',
-  internals: 'Three cross-check sleeves in one place — tap a row to expand. Volatility/Stress: is fear rising? (VIX = expected S&P volatility; IV Premium = VIX ÷ realized vol). Credit/Liquidity: is credit confirming the equity move? (HYG vs its 50-day average — an early warning; a proxy until true HY spreads land). Rates+Dollar: are macro headwinds building? (rising 10-year yields + a strengthening dollar pressure growth stocks; yields falling while stress rises is a flight to safety, not a tailwind). Higher score = more risk-on.',
+  internals: (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div><strong>Volatility / Stress</strong> — VIX (expected S&P volatility) + IV premium (VIX ÷ realized vol). Higher = calmer.</div>
+      <div><strong>Credit / Liquidity</strong> — HY OAS spread vs its 50-day average. A widening spread warns of credit stress before stocks.</div>
+      <div><strong>Rates + Dollar</strong> — 10-year yield + broad dollar. Both rising is a headwind for growth stocks (a yield drop during stress is flight-to-safety, not a tailwind).</div>
+      <div style={{ color: 'var(--t3)' }}>Each sleeve is scored 0–100 — higher = more risk-on.</div>
+    </div>
+  ),
   gex: "STW Graddox's options-positioning read (dealer gamma exposure) — Bullish / Flat / Conflicted / Bearish, with key SPY and QQQ levels. A tactical overlay: it helps time entries and spot pivots, but doesn't set the whole macro picture on its own.",
   riskAppetite: 'How much fear vs greed is priced right now (0 = extreme fear, 100 = extreme greed). A different question from the regime: the regime is what the environment IS; this is how emotional the tape is. Built from momentum, VIX, IV premium, tail risk, GEX, credit and breadth.',
   recap: 'An AI note that turns all the module scores into a plain-English read plus a suggested trading mode. Auto-generates twice daily: a pre-market note at 8am ET and a post-market recap at 4:30pm ET.',
@@ -207,12 +214,7 @@ export function MacroView() {
       {/* ── Modules 5–7: Market Internals (Volatility · Credit · Rates+Dollar) ── */}
       <section>
         <ModuleHeader title="Market Internals" help={HELP.internals} />
-        <MarketInternalsCard
-          volatility={volatility} volLoading={volLoading}
-          credit={credit} creditLoading={creditLoading}
-          rates={rates} ratesLoading={ratesLoading}
-          stressRising={stressRising}
-        />
+        <MarketInternalsCard volatility={volatility} credit={credit} rates={rates} />
       </section>
 
       {/* ── Module 8: GEX / Positioning ────────────────────────────── */}
