@@ -4,6 +4,19 @@ Branch `claude/week1-integrity-guardrails` off `staging`. Source spec:
 [`plans/20260706_integrity-guardrails.md`](20260706_integrity-guardrails.md). All 7 items addressed; details,
 deviations, and open follow-ups below.
 
+> **⚠️ Current-state note (2026-07-10) — this is a historical week-1 report; parts are superseded.**
+> The **data-feeds re-platform** (PRs #78/#79) changed the ground under Items 0 and 3:
+> - **Item 0** (`macro-snapshot`): the writer is now **`macro-snapshot-2.0.0`** and reads macro indices
+>   from **FRED**, not TwelveData (the TwelveData-quota story below is moot for indices). After the
+>   pending `staging → main` promotion, verify a fresh `macro_daily_snapshots` row carries
+>   `engine_version = macro-snapshot-2.0.0` + non-null trend/vol/credit + a `run_log` row.
+> - **Item 3** (`regime-daily`): now **FRED-backed** (VIX/VIX3M/US10Y via `VXVCLS`/`DGS10` — `vol_state`
+>   resolves instead of `UNKNOWN`). It is **built but still NOT scheduled** (no `schedule()` wrapper) and
+>   `regime_daily` is still **0 rows on PROD** — wiring its cron + the backfill are the open items.
+> - New since: a **`sector-map-sync`** scheduled writer (add it to the live-cron verification).
+> Open follow-ups (a) live cron verification and (b) `regime_daily` backfill remain — see CLAUDE.md
+> Next Steps. Everything else below stands as the record of what shipped that week.
+
 ## Item 0 — macro-snapshot cron fix
 
 **Root cause (revised from the source spec's first theory):** `macro-snapshot` was never
@@ -167,9 +180,9 @@ editing their own thresholds freely, gated behind the **Premium** tier:
   the three spot-check dates (a 2022 double-RED day, a 2024 GREEN+GREEN day, an Aug-2024 vol-inversion
   day) from the acceptance criteria are **next-session work**.
 
-## Item 4 — REGIME_EXIT_v0.md
+## Item 4 — regime_exit_v0.md
 
-Created [`docs/REGIME_EXIT_v0.md`](docs/REGIME_EXIT_v0.md) — unsigned template, named blanks, version/
+Created [`docs/regime_exit_v0.md`](docs/regime_exit_v0.md) — unsigned template, named blanks, version/
 date-signed fields. No code.
 
 ## Item 5 — SKILL.md amendments (out-of-repo, not part of this PR's diff)

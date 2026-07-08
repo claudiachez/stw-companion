@@ -87,7 +87,7 @@ Single migration, additive only, nothing destructive. Components:
 
 ## Item 4 — REGIME_EXIT v0 (a document, not code)
 
-Create `docs/REGIME_EXIT_v0.md`: a one-rule advisory de-risking policy owned by the operator. Template with named blanks for the operator to fill and date: "When vol_state = RED: trim each open position to ___% of current size / tighten stops to ___. When double-RED: reduce gross to ___%." Include: version, date signed, and the rule that parameter changes require a version bump and may not occur mid-drawdown. No enforcement code, no UI beyond (optionally) linking the doc from the admin light panel.
+Create `docs/regime_exit_v0.md`: a one-rule advisory de-risking policy owned by the operator. Template with named blanks for the operator to fill and date: "When vol_state = RED: trim each open position to ___% of current size / tighten stops to ___. When double-RED: reduce gross to ___%." Include: version, date signed, and the rule that parameter changes require a version bump and may not occur mid-drawdown. No enforcement code, no UI beyond (optionally) linking the doc from the admin light panel.
 
 ## Item 5 — SKILL.md amendments (both ingestion instruction sets)
 
