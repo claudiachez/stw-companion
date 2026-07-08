@@ -6,6 +6,8 @@ import { TickerLink } from '../../../primitives/TickerLink';
 import { SourceLink } from './SourceLink';
 import { SectionHeader } from '../../../primitives/SectionHeader';
 import { KpiCard, type KpiStatus } from '../../../primitives/KpiCard';
+import { PortfolioHeatmap, type HeatmapCell } from '../../../components/PortfolioHeatmap';
+import { useSectorMap } from '../../limits/useRiskConfig';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 import { useCapabilities } from '../../../context/AppCapabilities';
 import type { Holding } from '../api';
@@ -107,6 +109,7 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
   // the "Re-run the sync." instruction is admin-only — the explanation still shows to everyone.
   const { canEdit } = useCapabilities();
   const cache = usePriceCacheStore((s) => s.cache);
+  const { data: sectorLookup } = useSectorMap(); // ticker→market sector (distinct from the local by-basket `sectorMap` below)
   const { data: changes } = useRecentChanges(1);
   const latestChange = changes?.[0] ?? null;
   const convBatch = useConvictionChanges(holdings);
@@ -189,6 +192,18 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
     return [{ ticker: h.ticker, label: `priced ${fmtDateTime(at)}: ${legs}` }];
   });
 
+  // Heatmap cells — box ∝ current weight; Today = Finnhub day change, Total = weighted
+  // leg P&L (shares on the live quote, options on their stored IBKR mark). Both color
+  // modes are available here because PicksView keeps the Finnhub cache populated.
+  const heatmapCells: HeatmapCell[] = active.map((h) => ({
+    ticker: h.ticker,
+    weight: h.current_weight ?? h.initial_weight ?? 0,
+    todayPct: cache[h.ticker]?.dp ?? null,
+    totalPct: holdingPnlPct(h.legs, cache[h.ticker]?.c ?? null),
+    basket: h.basket,
+    sector: sectorLookup?.[h.ticker] ?? null,
+  }));
+
   const pnlStatus: KpiStatus = avgPnl == null ? 'neutral' : avgPnl >= 0 ? 'positive' : 'negative';
 
   const tickerSet = new Set(holdings.map((h) => h.ticker.toUpperCase()));
@@ -211,6 +226,11 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
           primaryValue={equityPct ?? '—'}
           secondaryValue={`: ${optionsPct ?? '—'}`}
         />
+      </div>
+
+      {/* Portfolio Heatmap — box ∝ weight, color by day change / total return. */}
+      <div style={{ marginBottom: 24 }}>
+        <PortfolioHeatmap cells={heatmapCells} onSelectTicker={onSelectTicker} showToday />
       </div>
 
       {/* Two-column grid on desktop — sector breakdown beside the activity feed so the

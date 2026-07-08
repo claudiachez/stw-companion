@@ -46,15 +46,21 @@ export function FormRow({ label: labelText, children, prefix, suffix, hint, layo
       </div>
     );
   }
+  // Stacked: reserve the prefix slot even when this row has no prefix (matches the
+  // horizontal layout + this file's documented intent) so every input's left edge lines
+  // up down a column — otherwise a "$"-prefixed row's input sat ~16px right of the
+  // suffix-only rows, and its hint then read as misaligned against the others. The hint
+  // is indented by the same slot+gap so it sits directly under the input, not the prefix.
+  const hintIndent = SPACE[4] + SPACE[1.5];
   return (
     <div>
       <label style={{ ...label, display: 'block', marginBottom: SPACE[1.5] }}>{labelText}</label>
       <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[1.5] }}>
-        {prefix != null && <span style={prefixSlot}>{prefix}</span>}
+        <span style={prefixSlot}>{prefix ?? ''}</span>
         <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
         {suffix != null && <span style={suffixStyle}>{suffix}</span>}
       </div>
-      {hint && <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: SPACE[1] }}>{hint}</div>}
+      {hint && <div style={{ paddingLeft: hintIndent, fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: SPACE[1] }}>{hint}</div>}
     </div>
   );
 }
