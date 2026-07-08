@@ -6,11 +6,14 @@
  * @stw/shared (`classifyEventRisk`); this function only returns clean rows.
  *
  * Source (rebuilt 2026-07-08, retiring the fragile MarketWatch HTML scrape):
- *   - FRED `/fred/releases/dates` — authoritative U.S. economic-release schedule.
- *     We pull the full recent+scheduled list once (include_release_dates_with_no_data
- *     so future dates appear) and keep only the releases in TARGET_RELEASES, matched
- *     by NAME so no fragile release-id guessing is involved. FRED gives a DATE only,
- *     so each release is stamped with its conventional ET release time.
+ *   - FRED `/fred/release/dates` per target release — authoritative U.S. econ-release
+ *     schedule. Query each by release_id (verified live against /fred/releases:
+ *     CPI 10, Personal Income & Outlays/PCE 54, Employment Situation/NFP 50, GDP 53,
+ *     PPI 46) with include_release_dates_with_no_data so future scheduled dates
+ *     appear, then window-filter client-side. (The all-releases feed can't be used:
+ *     sort_order=desc surfaces the furthest-future dates first, so the near-term
+ *     ones fall outside any small limit — confirmed empirically.) FRED gives a DATE
+ *     only, so each release is stamped with its conventional ET release time.
  *   - FOMC rate decisions are Fed meetings, not a FRED release → a small static list
  *     (see FOMC_DECISION_DATES; VERIFY against the Fed's published schedule).
  *
@@ -24,6 +27,7 @@
  * REST fetch only; FRED_API_KEY is read server-side (no VITE_ prefix).
  */
 import type { Handler } from '@netlify/functions';
+import { runPaced, FEED_LIMITS } from '@stw/shared';
 
 export interface MacroEventRow {
   eventName: string;
@@ -39,15 +43,14 @@ export interface MacroEventRow {
 
 type Importance = MacroEventRow['importance'];
 
-// Releases we surface, matched against FRED's release_name, with each one's
-// conventional ET release time (FRED provides a date only). Everything else in
-// the feed is ignored.
-const TARGET_RELEASES: { match: RegExp; importance: Importance; timeEt: string }[] = [
-  { match: /consumer price index/i, importance: 'very_high', timeEt: '08:30' },   // CPI
-  { match: /personal income and outlays/i, importance: 'very_high', timeEt: '08:30' }, // PCE
-  { match: /employment situation/i, importance: 'very_high', timeEt: '08:30' },   // NFP + unemployment
-  { match: /gross domestic product/i, importance: 'high', timeEt: '08:30' },      // GDP
-  { match: /producer price index/i, importance: 'high', timeEt: '08:30' },        // PPI
+// Releases we surface, by FRED release_id (verified live against /fred/releases),
+// with each one's conventional ET release time (FRED provides a date only).
+const TARGET_RELEASES: { id: number; name: string; importance: Importance; timeEt: string }[] = [
+  { id: 10, name: 'Consumer Price Index (CPI)', importance: 'very_high', timeEt: '08:30' },
+  { id: 54, name: 'Personal Income & Outlays (PCE)', importance: 'very_high', timeEt: '08:30' },
+  { id: 50, name: 'Employment Situation (NFP)', importance: 'very_high', timeEt: '08:30' },
+  { id: 53, name: 'Gross Domestic Product (GDP)', importance: 'high', timeEt: '08:30' },
+  { id: 46, name: 'Producer Price Index (PPI)', importance: 'high', timeEt: '08:30' },
 ];
 
 // FOMC rate decisions — announced day 2 of each meeting at 2:00pm ET. NOT a FRED
@@ -79,7 +82,17 @@ function inWindow(date: string, now: Date): boolean {
   return d >= lo && d <= hi;
 }
 
-interface FredReleaseDate { release_name?: string; date: string }
+interface FredReleaseDate { date: string }
+
+/** Scheduled dates for one FRED release (most recent ~2yrs; desc, includes future). */
+async function releaseDates(id: number, key: string): Promise<string[]> {
+  const url = `https://api.stlouisfed.org/fred/release/dates?release_id=${id}&api_key=${key}`
+    + '&file_type=json&include_release_dates_with_no_data=true&sort_order=desc&limit=24';
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  const d = await res.json() as { release_dates?: FredReleaseDate[] };
+  return (d.release_dates ?? []).map((r) => r.date).filter(Boolean);
+}
 
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== 'GET') {
@@ -99,28 +112,27 @@ export const handler: Handler = async (event) => {
   if (!fredKey) return unavailable('FRED_API_KEY not configured.');
 
   try {
-    const url = `https://api.stlouisfed.org/fred/releases/dates?api_key=${fredKey}&file_type=json`
-      + '&include_release_dates_with_no_data=true&sort_order=desc&limit=2000';
-    const res = await fetch(url);
-    if (!res.ok) return unavailable(`FRED releases/dates HTTP ${res.status}`);
-    const data = await res.json() as { release_dates?: FredReleaseDate[] };
-    const releaseDates = Array.isArray(data.release_dates) ? data.release_dates : [];
-
     const events: MacroEventRow[] = [];
 
-    for (const rd of releaseDates) {
-      if (!rd?.date || !rd.release_name || !inWindow(rd.date, now)) continue;
-      const target = TARGET_RELEASES.find((t) => t.match.test(rd.release_name!));
-      if (!target) continue;
-      events.push({
-        eventName: rd.release_name,
-        releaseTimeEt: isoEt(rd.date, target.timeEt),
-        period: null,
-        actual: null, consensus: null, previous: null,
-        importance: target.importance,
-        source: 'FRED',
-        sourceTimestamp: nowIso,
-      });
+    // One FRED call per target release (5), paced through the shared limiter.
+    const perRelease = await runPaced(
+      TARGET_RELEASES,
+      async (t) => ({ t, dates: await releaseDates(t.id, fredKey) }),
+      FEED_LIMITS.fred,
+    );
+    for (const { t, dates } of perRelease) {
+      for (const date of dates) {
+        if (!inWindow(date, now)) continue;
+        events.push({
+          eventName: t.name,
+          releaseTimeEt: isoEt(date, t.timeEt),
+          period: null,
+          actual: null, consensus: null, previous: null,
+          importance: t.importance,
+          source: 'FRED',
+          sourceTimestamp: nowIso,
+        });
+      }
     }
 
     for (const date of FOMC_DECISION_DATES) {
