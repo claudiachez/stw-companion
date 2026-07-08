@@ -1,15 +1,19 @@
 # STW Companion — Claude Code Guide
 
 > **⚠️ START HERE — branch.** **`staging` is the active trunk** — all feature work happens here.
-> **`staging` is ~107 commits ahead of `main` as of 2026-07-10** (check `git log --oneline
-> origin/main..origin/staging | wc -l` for the exact count) (last promotion was PR #66 on
-> 2026-07-05) — none of this file's "Current Status" work below is on production yet. A
-> `staging → main` PR is a separate, approval-gated production deploy; **do not open one without
-> explicit host approval**, even if staging looks ready.
-> **No open PRs on `staging` right now** — this session's two both merged to `staging`: **PR #78**
-> (data-feeds re-platform onto FRED + Macro UI: VVIX removed, Market Internals table, tooltips,
-> admin-configurable regime weights) and **PR #79** (GICS sector taxonomy + `sector-map-sync`, plus
-> Event-Risk/Config cleanups). Branches cleaned up. Cut a normal feature branch from `staging` for new work.
+> **`staging` is ~112 commits ahead of `main` as of 2026-07-10** (check `git log --oneline
+> origin/main..origin/staging | wc -l` for the exact count) (last completed promotion was PR #66 on
+> 2026-07-05). A `staging → main` PR is a separate, approval-gated production deploy; **do not open one
+> without explicit host approval**, even if staging looks ready.
+> **⏳ A `staging → main` production-promotion PR ([#81](https://github.com/claudiachez/stw-companion/pull/81))
+> is OPEN and pending merge** (host-approved). If it has merged by your session, `staging`≈`main` and the
+> FRED/GICS work is LIVE — run the post-deploy verification in its PR body (esp. confirm `FRED_API_KEY`
+> is set on the Netlify **production** context, and that a fresh `macro_daily_snapshots` row carries
+> `engine_version=macro-snapshot-2.0.0`). If it's still open, the work below is staging-only.
+> **No other open PRs.** This session merged **PR #78** (FRED feeds re-platform + Macro UI), **PR #79**
+> (GICS taxonomy + `sector-map-sync`), and **PR #80** (docs refresh: new `docs/feeds.md`, rewritten
+> `docs/workflow.md`, FRED-updated macro guides, lowercase doc filenames). Branches cleaned up. Cut a
+> normal feature branch from `staging` for new work.
 > Migrations run to **062 on `staging`**, applied on **both PROD and sandbox** (058 is PROD-only —
 > sandbox has no `tiers`/`profiles` tables to apply it to; this is a known, permanent gap, not
 > pending work). This session added **061** (regime sleeve weights → `app_config`) and **062**
@@ -402,15 +406,15 @@ it, shipped it to production, then separately investigated + fixed a live data-i
 
 ## Next Steps
 
-0. **★ A `staging → main` production promotion is PENDING and approval-gated — and now overdue.**
-   `staging` is **~107 commits ahead of `main`** — everything since the 2026-07-05 promotion (PRs
-   #75/#76/#78/#79 and all prior unpromoted work) is on `staging` only, NOT production. Do **not** open
-   a `staging → main` PR without explicit host approval. **DB is ready for it** — migrations through 062
-   are already on PROD + sandbox. This promotion is what makes several items below actually take effect
-   (the scheduled `macro-snapshot`/`regime-daily`/`sector-map-sync` writers only fire on the `main`
-   deploy). After promoting, **verify**: a fresh `macro_daily_snapshots` row carries `engine_version =
-   macro-snapshot-2.0.0` + non-null trend/vol/credit scores + a `run_log` row; `sector-map-sync` mapped
-   CCXI; the Macro tab renders live FRED data.
+0. **★ Production promotion PR [#81](https://github.com/claudiachez/stw-companion/pull/81)
+   (`staging → main`, 112 commits) is OPEN and host-approved — likely merged by your session.**
+   **DB is ready** — migrations through 062 on PROD + sandbox. The scheduled writers
+   (`macro-snapshot` v2.0.0, `sector-map-sync`) only fire on the `main` deploy, so they go live on merge.
+   **If merged, VERIFY on production:** (a) `FRED_API_KEY` is set on the Netlify **production** context
+   of both sites (else FRED cells go `—`); (b) a fresh `macro_daily_snapshots` row carries
+   `engine_version = macro-snapshot-2.0.0` + non-null trend/vol/credit + a `run_log` row; (c)
+   `sector-map-sync` mapped CCXI (`run_log`); (d) the Macro tab renders live FRED data + the regime
+   badge shows on a held ticker. **If still open, don't merge without re-confirming host approval.**
 
 1. **✅ DONE — data feeds + sector taxonomy (PRs #78/#79, this session).** Macro indices re-platformed
    onto FRED, Event Risk on FRED's calendar, VVIX dropped, GICS-11 taxonomy + `sector-map-sync`,
