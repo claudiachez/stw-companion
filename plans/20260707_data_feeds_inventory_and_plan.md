@@ -165,7 +165,10 @@ the equity-EOD source, unburdened once indices move to FRED. **Tiingo dropped** 
    writers call FRED directly). Reassign the *index* reads: VIX→`VIXCLS`, **VIX3M→`VXVCLS`**,
    US10Y→`DGS10`, credit→`BAMLH0A0HYM2` (real HY OAS, an upgrade over the HYG proxy), dollar→`DTWEXBGS`.
    Touches `useVolatilityStress`, `useRatesDollar`, `useCreditLiquidity`, `macro-snapshot`, `regime-daily`.
-   **VVIX dropped** — pass `null`; `volatilityStressScore`/`riskAppetiteScore` already renormalize.
+   **VVIX removed entirely** (DONE 2026-07-08) — deleted from the scorers, the Volatility card, the
+   Risk-Appetite gauge, the snapshot writer, and the recap context (no free feed serves it; a forever-
+   `—` tile reads as broken per the "no permanently-empty field" convention). Remaining 6 gauge weights
+   rescaled to sum to 1.0, gauge value materially unchanged.
    **Bonus:** VIX3M via FRED fixes `regime-daily`'s current `vol_state='UNKNOWN'`.
 3. **Event Risk rebuild** — replace the MarketWatch scrape in `macro-events.ts` with FRED
    `releases/dates` (CPI/PCE/Employment/GDP) + a small static FOMC-date list. Anthropic may phrase

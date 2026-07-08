@@ -118,7 +118,7 @@ export function SentimentGauge({ score, loading, fiveDayDelta }: Props) {
           })}
         </div>
         <div style={{ marginTop: 12, fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', lineHeight: 1.4 }}>
-          Source: Finnhub (VIX/VVIX) + TwelveData (SPY/RSP/HYG daily) + STW Graddox (GEX). Live quotes ≤15m; daily metrics refresh once per session.
+          Source: Finnhub (VIX) + TwelveData (SPY/RSP/HYG daily) + STW Graddox (GEX). Live quotes ≤15m; daily metrics refresh once per session.
         </div>
       </div>
     </div>

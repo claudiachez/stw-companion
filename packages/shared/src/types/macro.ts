@@ -184,7 +184,7 @@ export interface RecapLevelSet {
 /** Grounding context for a richer, non-fabricated narrative. */
 export interface MacroRecapContext {
   indicators?: { symbol: string; name: string; bucket: string | null; close: number | null; chgPct: number | null }[];
-  volatility?: { vix: number | null; vvix: number | null; ivPremium: number | null } | null;
+  volatility?: { vix: number | null; ivPremium: number | null } | null;
   riskAppetite?: { total: number | null; inputs: { label: string; score: number | null }[] } | null;
   gex?: {
     bias: string;

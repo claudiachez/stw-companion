@@ -37,7 +37,7 @@ const HELP = {
   regime: 'The overall market read, computed from weighted sleeve scores — Trend 30%, Volatility 20%, Credit 15%, Rates+Dollar 15%, GEX 20%. 75–100 = Risk-On, 60–74 = Constructive, 45–59 = Cautious, 30–44 = Defensive, 0–29 = Risk-Off. It answers: how aggressive should I be right now?',
   strip: "Each sleeve's 0–100 score at a glance (higher = more risk-on). Shows what's actually driving the regime — whether it's trend, stress, credit, rates, or positioning.",
   trend: 'Are risk assets technically intact? Each index vs its 9-, 21- and 200-day moving averages. Above all three = momentum; below the 200-day = risk-off; below the 200-day but bouncing above the short ones = a bear-market rally (not bullish). The heaviest sleeve (30%).',
-  volatility: 'Is fear rising? VIX = expected S&P volatility; VVIX = volatility-of-volatility (tail risk); IV Premium = VIX ÷ realized vol (how expensive hedges are vs how much the market is actually moving). Higher score = calmer.',
+  volatility: 'Is fear rising? VIX = expected S&P volatility; IV Premium = VIX ÷ realized vol (how expensive hedges are vs how much the market is actually moving). Higher score = calmer.',
   credit: 'Is credit confirming the equity move? HYG (high-yield bond ETF) vs its 50-day average — credit usually weakens before stocks do, so it acts as an early warning. A proxy for now; true high-yield spreads come later.',
   rates: 'Are macro headwinds building? Rising 10-year yields and a strengthening dollar pressure growth and speculative stocks. Key nuance: yields falling while stress rises is a flight to safety, not a growth tailwind.',
   gex: "STW Graddox's options-positioning read (dealer gamma exposure) — Bullish / Flat / Conflicted / Bearish, with key SPY and QQQ levels. A tactical overlay: it helps time entries and spot pivots, but doesn't set the whole macro picture on its own.",
@@ -141,7 +141,7 @@ export function MacroView() {
       // story is grounded even when those rows are hidden in the table.
       context: {
         indicators: indicators.map((i) => ({ symbol: i.symbol, name: i.name, bucket: i.bucket, close: i.close, chgPct: i.chgPct })),
-        volatility: volatility ? { vix: volatility.vix, vvix: volatility.vvix, ivPremium: volatility.ivPremium } : null,
+        volatility: volatility ? { vix: volatility.vix, ivPremium: volatility.ivPremium } : null,
         riskAppetite: score ? { total: score.total, inputs: score.inputs.map((x) => ({ label: x.label, score: x.score })) } : null,
         gex: graddox ? { bias: graddox.bias, biasNote: graddox.bias_note, lastUpdated: graddox.last_updated, spx: graddox.spx, qqq: graddox.qqq } : null,
       },

@@ -124,14 +124,6 @@ export function vixScore(vix: number | null): number | null {
   return 10;
 }
 
-/** VVIX (vol-of-vol / tail risk) → calm score. <85 calm, 85–100 elevated, >100 fear. */
-export function vvixScore(vvix: number | null): number | null {
-  if (vvix === null) return null;
-  if (vvix < 85) return 85;
-  if (vvix < 100) return 50;
-  return 20;
-}
-
 /** IV-premium ratio (VIX ÷ 30D realized vol) → score. <0.90 calm, 0.90–1.25 normal, >1.25 fear. */
 export function ivPremiumScore(ratio: number | null): number | null {
   if (ratio === null) return null;
@@ -279,19 +271,22 @@ export function breadthScore(aboveMa: boolean, rising: boolean): number {
 }
 
 /**
- * Risk Appetite gauge weights (sum to 100%) — the single source of truth
- * shared by the live gauge (useSentimentGauge) and the daily snapshot writer
- * (macro-snapshot.ts), so the persisted 5D/20D trend tracks the same number
- * the gauge displays instead of drifting out of sync.
+ * Risk Appetite gauge weights (sum to 100%) — the single source of truth shared
+ * by the live gauge (useSentimentGauge) and the daily snapshot writer
+ * (macro-snapshot.ts), so the persisted 5D/20D trend tracks the same number the
+ * gauge displays. VVIX (was 0.12) was removed 2026-07-08 — no free feed serves
+ * it, so it was permanently null. The other six kept their prior RELATIVE weights
+ * (0.18/0.16/0.16/0.18/0.10/0.10) rescaled to sum to 1.0; since riskAppetiteScore
+ * normalizes by the active weight sum, the gauge value is materially unchanged
+ * from when VVIX was perpetually null.
  */
 export const RISK_APPETITE_WEIGHTS = {
-  momentum: 0.18,
-  vix: 0.16,
-  ivPremium: 0.16,
-  vvix: 0.12,
-  gex: 0.18,
-  credit: 0.10,
-  breadth: 0.10,
+  momentum: 0.21,
+  vix: 0.18,
+  ivPremium: 0.18,
+  gex: 0.21,
+  credit: 0.11,
+  breadth: 0.11,
 } as const;
 
 export type RiskAppetiteInputs = Partial<Record<keyof typeof RISK_APPETITE_WEIGHTS, number | null>>;

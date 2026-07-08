@@ -47,7 +47,7 @@ import type { Handler } from '@netlify/functions';
 import { schedule } from '@netlify/functions';
 import {
   trendBucket, trendSleeveScore, environmentScore,
-  vixScore, vvixScore, ivPremiumScore, vixDirectionScore, volatilityStressScore, percentileRank, hv30,
+  vixScore, ivPremiumScore, vixDirectionScore, volatilityStressScore, hv30,
   creditHygScore, us10yScore, uupScore, ratesDollarScore, gexScore, breadthScore,
   classifyEventRisk, riskAppetiteScore,
 } from '@stw/shared';
@@ -180,7 +180,7 @@ const handlerImpl: Handler = async () => {
   // One paced batch (≤8 symbols/chunk, ~65s apart) for ALL daily series any
   // module needs, so no module's fetch 429s the next one's. SPY/RSP closes are
   // then reused across Modules 4 and 9 instead of re-fetched.
-  const TD_SYMBOLS = [...TREND_SYMBOLS, 'VIX', 'VVIX', 'HYG', 'TNX', 'UUP'];
+  const TD_SYMBOLS = [...TREND_SYMBOLS, 'VIX', 'HYG', 'TNX', 'UUP'];
   const closesBySymbol = await pacedDailyCloses(TD_SYMBOLS, twelveDataKey);
 
   // ── Module 4: Trend / Market Structure ──────────────────────────────
@@ -205,26 +205,12 @@ const handlerImpl: Handler = async () => {
   if (vix === null && vixCloses.length) vix = vixCloses[vixCloses.length - 1];
   const vixDelta5 = vixCloses.length >= 6 ? vixCloses[vixCloses.length - 1] - vixCloses[vixCloses.length - 6] : null;
 
-  let vvix = finnhubKey ? await finnhubQuote('^VVIX', finnhubKey) : null;
-  const vvixCloses = closesBySymbol.VVIX ?? [];
-  if (vvix === null && vvixCloses.length) vvix = vvixCloses[vvixCloses.length - 1];
-
   const spyHv = hv30(spyCloses);
   const ivRatio = vix !== null && spyHv !== null && spyHv > 0 ? vix / spyHv : null;
 
-  let vvixPctScore: number | null = null;
-  if (vvix !== null) {
-    if (vvixCloses.length >= 60) {
-      const pct = percentileRank(vvix, vvixCloses.slice(-252));
-      vvixPctScore = pct === null ? vvixScore(vvix) : 100 - pct;
-    } else {
-      vvixPctScore = vvixScore(vvix);
-    }
-  }
-
   const vixSc = vixScore(vix);
   const ivSc = ivPremiumScore(ivRatio);
-  const volatilityScore = volatilityStressScore([vixSc, ivSc, vvixPctScore, vixDirectionScore(vixDelta5)]);
+  const volatilityScore = volatilityStressScore([vixSc, ivSc, vixDirectionScore(vixDelta5)]);
   const stressRising = vixDelta5 !== null && vixDelta5 > 0;
 
   // ── Module 6: Credit / Liquidity ─────────────────────────────────────
@@ -282,7 +268,7 @@ const handlerImpl: Handler = async () => {
   }
 
   const riskAppetiteSc = riskAppetiteScore({
-    momentum: momentumScore, vix: vixSc, ivPremium: ivSc, vvix: vvixPctScore,
+    momentum: momentumScore, vix: vixSc, ivPremium: ivSc,
     gex: gexSc, credit: creditScore, breadth,
   });
 

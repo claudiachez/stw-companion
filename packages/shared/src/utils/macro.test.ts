@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   trendBucket, trendSubScore, trendSleeveScore, trendSleeveLabel,
   environmentScore, regimeBand, hv30, SLEEVE_WEIGHTS,
-  vixScore, vvixScore, ivPremiumScore, vixDirectionScore,
+  vixScore, ivPremiumScore, vixDirectionScore,
   volatilityStressScore, stressLabel, percentileRank,
   creditHygScore, creditLabel,
   us10yScore, uupScore, ratesDollarScore, ratesDollarLabel,
@@ -129,11 +129,6 @@ describe('volatility / stress scorers', () => {
     expect(vixScore(30)).toBe(10);
     expect(vixScore(null)).toBeNull();
   });
-  it('vvixScore: bands by tail risk', () => {
-    expect(vvixScore(80)).toBe(85);
-    expect(vvixScore(92)).toBe(50);
-    expect(vvixScore(110)).toBe(20);
-  });
   it('ivPremiumScore: implied below realized = calm', () => {
     expect(ivPremiumScore(0.8)).toBe(85);
     expect(ivPremiumScore(1.1)).toBe(55);
@@ -239,7 +234,7 @@ describe('breadthScore', () => {
 });
 
 describe('riskAppetiteScore', () => {
-  it('weights are exactly the 7 gauge inputs and sum to 100%', () => {
+  it('weights are exactly the 6 gauge inputs and sum to 100%', () => {
     const total = Object.values(RISK_APPETITE_WEIGHTS).reduce((a, b) => a + b, 0);
     expect(total).toBeCloseTo(1, 10);
   });
@@ -260,11 +255,11 @@ describe('riskAppetiteScore', () => {
     expect(riskAppetiteScore({ momentum: 80, vix: null, ivPremium: undefined })).toBe(80);
   });
 
-  it('full set of 7 inputs averages with their published weights', () => {
+  it('full set of 6 inputs averages with their published weights', () => {
     const score = riskAppetiteScore({
-      momentum: 90, vix: 90, ivPremium: 85, vvix: 85, gex: 90, credit: 80, breadth: 80,
+      momentum: 90, vix: 90, ivPremium: 85, gex: 90, credit: 80, breadth: 80,
     });
-    expect(score).toBe(87); // weighted avg, rounded
+    expect(score).toBe(87); // weighted avg over active weight sum (0.88), rounded
   });
 });
 
