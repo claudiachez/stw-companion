@@ -13,6 +13,10 @@ export interface RiskConfigRow {
   account_equity: number;
   /** Trigger-maintained high-water mark of account_equity — never decreases (migration 059). */
   equity_peak: number | null;
+  /** Per-user REGIME_EXIT rule (advisory, migration 063): single-RED → trim to this % / tighten stops to regime_stop_pct; double-RED → reduce gross to regime_doublered_gross_pct. Display-only. */
+  regime_trim_to_pct: number;
+  regime_stop_pct: number;
+  regime_doublered_gross_pct: number;
   updated_at: string;
 }
 
@@ -51,6 +55,9 @@ export const DEFAULT_RISK_CONFIG = {
   max_gross_pct: 100,
   ladder: [{ drawdownPct: -10, targetGrossPct: 70 }, { drawdownPct: -15, targetGrossPct: 50 }],
   account_equity: 100000,
+  regime_trim_to_pct: 70,
+  regime_stop_pct: 5,
+  regime_doublered_gross_pct: 30,
 };
 
 /** Creates a default risk_config row for a user who doesn't have one yet. No-op if one exists. */
@@ -69,7 +76,7 @@ export async function ensureRiskConfig(userId: string): Promise<RiskConfigRow> {
 
 export async function saveRiskConfig(
   userId: string,
-  patch: Partial<Pick<RiskConfigRow, 'max_position_pct' | 'max_option_position_pct' | 'max_sector_pct' | 'max_gross_pct' | 'ladder' | 'account_equity'>>,
+  patch: Partial<Pick<RiskConfigRow, 'max_position_pct' | 'max_option_position_pct' | 'max_sector_pct' | 'max_gross_pct' | 'ladder' | 'account_equity' | 'regime_trim_to_pct' | 'regime_stop_pct' | 'regime_doublered_gross_pct'>>,
 ): Promise<void> {
   const { error } = await getSupabase()
     .from('risk_config')

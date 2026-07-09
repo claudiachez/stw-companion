@@ -58,6 +58,7 @@ export function RiskConfigForm({ userId, config }: { userId: string; config: Ris
   const [draft, setDraft] = useState<{
     maxPositionPct?: number; maxOptionPositionPct?: number; maxSectorPct?: number; maxGrossPct?: number;
     accountEquity?: number; ladder?: DrawdownStep[];
+    regimeTrimToPct?: number; regimeStopPct?: number; regimeDoubleRedGrossPct?: number;
   }>({});
 
   const maxPositionPct = draft.maxPositionPct ?? config.max_position_pct;
@@ -66,6 +67,9 @@ export function RiskConfigForm({ userId, config }: { userId: string; config: Ris
   const maxGrossPct = draft.maxGrossPct ?? config.max_gross_pct;
   const accountEquity = draft.accountEquity ?? config.account_equity;
   const ladder = draft.ladder ?? config.ladder;
+  const regimeTrimToPct = draft.regimeTrimToPct ?? config.regime_trim_to_pct;
+  const regimeStopPct = draft.regimeStopPct ?? config.regime_stop_pct;
+  const regimeDoubleRedGrossPct = draft.regimeDoubleRedGrossPct ?? config.regime_doublered_gross_pct;
   const dirty = Object.keys(draft).length > 0;
   const warnings = [...thresholdWarnings(maxPositionPct, maxOptionPositionPct, maxSectorPct, maxGrossPct), ...ladderWarnings(ladder)];
 
@@ -91,6 +95,9 @@ export function RiskConfigForm({ userId, config }: { userId: string; config: Ris
       max_gross_pct: maxGrossPct,
       account_equity: accountEquity,
       ladder,
+      regime_trim_to_pct: regimeTrimToPct,
+      regime_stop_pct: regimeStopPct,
+      regime_doublered_gross_pct: regimeDoubleRedGrossPct,
     });
     setDraft({});
   }
@@ -185,6 +192,32 @@ export function RiskConfigForm({ userId, config }: { userId: string; config: Ris
           >
             + Add rung
           </button>
+        </div>
+
+        <div>
+          <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: FONT_WEIGHT.semibold, marginBottom: SPACE[2] }}>
+            Regime de-risking rule (advisory)
+          </div>
+          <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginBottom: SPACE[2.5] }}>
+            Your own playbook to apply when the market regime turns RED — shown on the Regime light. Advisory only; nothing here places or blocks a trade.
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE[3] }}>
+            <FormRow layout={rowLayout} label="Single-RED: trim positions to" suffix="%" hint="of current size, when trend OR volatility is RED">
+              <TextInput type="number" min={0} max={100} style={smallInput}
+                value={regimeTrimToPct}
+                onChange={(e) => setDraft((d) => ({ ...d, regimeTrimToPct: Number(e.target.value) }))} />
+            </FormRow>
+            <FormRow layout={rowLayout} label="…or tighten stops to" suffix="%" hint="the alternative single-RED action">
+              <TextInput type="number" min={0} max={100} style={smallInput}
+                value={regimeStopPct}
+                onChange={(e) => setDraft((d) => ({ ...d, regimeStopPct: Number(e.target.value) }))} />
+            </FormRow>
+            <FormRow layout={rowLayout} label="Double-RED: reduce gross to" suffix="%" hint="when both trend AND volatility are RED">
+              <TextInput type="number" min={0} max={100} style={smallInput}
+                value={regimeDoubleRedGrossPct}
+                onChange={(e) => setDraft((d) => ({ ...d, regimeDoubleRedGrossPct: Number(e.target.value) }))} />
+            </FormRow>
+          </div>
         </div>
 
         {warnings.length > 0 && (
