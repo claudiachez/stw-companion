@@ -17,6 +17,10 @@ export interface RiskConfigRow {
   regime_trim_to_pct: number;
   regime_stop_pct: number;
   regime_doublered_gross_pct: number;
+  /** Vol-targeted sizing config (advisory, migration 065): scalar = vol_target_pct / rv20_annualized, clamped to [floor, cap]. Display-only, consumed by nothing. */
+  vol_target_pct: number;
+  vol_target_cap: number;
+  vol_target_floor: number;
   updated_at: string;
 }
 
@@ -58,6 +62,9 @@ export const DEFAULT_RISK_CONFIG = {
   regime_trim_to_pct: 70,
   regime_stop_pct: 5,
   regime_doublered_gross_pct: 30,
+  vol_target_pct: 15,
+  vol_target_cap: 1.5,
+  vol_target_floor: 0.3,
 };
 
 /** Creates a default risk_config row for a user who doesn't have one yet. No-op if one exists. */

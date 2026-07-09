@@ -12,5 +12,6 @@ export * from './utils/limits';
 export * from './utils/regime';
 export * from './utils/treemap';
 export * from './utils/sizing';
+export * from './utils/voltarget';
 export * from './utils/pacing';
 export * from './utils/fred';
