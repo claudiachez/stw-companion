@@ -16,6 +16,23 @@ import { useSaveRiskConfig } from './useRiskConfig';
 
 const smallInput = { width: 64 };
 
+/** Compact numeric row: label, then a narrow input with the unit + descriptor inline
+ * to its right — the same shape as the drawdown-ladder rows, so every field lines up. */
+function NumRow({ label, value, onChange, suffix, note, min, max, layout }: {
+  label: string; value: number; onChange: (v: number) => void;
+  suffix: string; note?: string; min?: number; max?: number; layout: FormRowProps['layout'];
+}) {
+  return (
+    <FormRow layout={layout} label={label}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[1.5], flexWrap: 'wrap' }}>
+        <TextInput type="number" min={min} max={max} style={smallInput}
+          value={value} onChange={(e) => onChange(Number(e.target.value))} />
+        <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>{suffix}{note ? ` ${note}` : ''}</span>
+      </div>
+    </FormRow>
+  );
+}
+
 function rungLabel(i: number): string {
   return `Rung ${i + 1}`;
 }
@@ -117,41 +134,29 @@ export function RiskConfigForm({ userId, config }: { userId: string; config: Ris
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE[3] }}>
-        <FormRow layout={rowLayout} label="Account equity" prefix="$" hint={
-          config.is_placeholder
-            ? 'Default placeholder — set your real account equity for accurate limits.'
-            : config.equity_peak && config.equity_peak > accountEquity
-              ? `Peak: $${config.equity_peak.toLocaleString()} · ${(((accountEquity - config.equity_peak) / config.equity_peak) * 100).toFixed(1)}% off peak`
-              : 'At peak.'
-        }>
-          <TextInput type="number" min={0} placeholder="e.g. 50000"
-            value={accountEquity}
-            onChange={(e) => setDraft((d) => ({ ...d, accountEquity: e.target.value === '' ? undefined : Number(e.target.value) }))} />
+        <FormRow layout={rowLayout} label="Account equity">
+          <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[1.5], flexWrap: 'wrap' }}>
+            <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>$</span>
+            <TextInput type="number" min={0} placeholder="e.g. 50000" style={{ width: 120 }}
+              value={accountEquity}
+              onChange={(e) => setDraft((d) => ({ ...d, accountEquity: e.target.value === '' ? undefined : Number(e.target.value) }))} />
+            {config.is_placeholder && (
+              <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>default placeholder — set your real account equity</span>
+            )}
+          </div>
         </FormRow>
 
-        <FormRow layout={rowLayout} label="Max position" suffix="%" hint="of book, per underlying">
-          <TextInput type="number" min={0} max={100}
-            value={maxPositionPct}
-            onChange={(e) => setDraft((d) => ({ ...d, maxPositionPct: Number(e.target.value) }))} />
-        </FormRow>
+        <NumRow layout={rowLayout} label="Max position" suffix="%" note="of book, per underlying" min={0} max={100}
+          value={maxPositionPct} onChange={(v) => setDraft((d) => ({ ...d, maxPositionPct: v }))} />
 
-        <FormRow layout={rowLayout} label="Max option position" suffix="%" hint="of book, per underlying — options only (usually tighter)">
-          <TextInput type="number" min={0} max={100}
-            value={maxOptionPositionPct}
-            onChange={(e) => setDraft((d) => ({ ...d, maxOptionPositionPct: Number(e.target.value) }))} />
-        </FormRow>
+        <NumRow layout={rowLayout} label="Max option position" suffix="%" note="of book, per underlying — options only (usually tighter)" min={0} max={100}
+          value={maxOptionPositionPct} onChange={(v) => setDraft((d) => ({ ...d, maxOptionPositionPct: v }))} />
 
-        <FormRow layout={rowLayout} label="Max sector" suffix="%" hint="of book, per sector">
-          <TextInput type="number" min={0} max={100}
-            value={maxSectorPct}
-            onChange={(e) => setDraft((d) => ({ ...d, maxSectorPct: Number(e.target.value) }))} />
-        </FormRow>
+        <NumRow layout={rowLayout} label="Max sector" suffix="%" note="of book, per sector" min={0} max={100}
+          value={maxSectorPct} onChange={(v) => setDraft((d) => ({ ...d, maxSectorPct: v }))} />
 
-        <FormRow layout={rowLayout} label="Max gross" suffix="%" hint="of book, whole book">
-          <TextInput type="number" min={0}
-            value={maxGrossPct}
-            onChange={(e) => setDraft((d) => ({ ...d, maxGrossPct: Number(e.target.value) }))} />
-        </FormRow>
+        <NumRow layout={rowLayout} label="Max gross" suffix="%" note="of book, whole book" min={0}
+          value={maxGrossPct} onChange={(v) => setDraft((d) => ({ ...d, maxGrossPct: v }))} />
 
         <div>
           <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: FONT_WEIGHT.semibold, marginBottom: SPACE[2] }}>
@@ -202,21 +207,12 @@ export function RiskConfigForm({ userId, config }: { userId: string; config: Ris
             Your own playbook to apply when the market regime turns RED — shown on the Regime light. Advisory only; nothing here places or blocks a trade.
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE[3] }}>
-            <FormRow layout={rowLayout} label="Single-RED: trim positions to" suffix="%" hint="of current size, when trend OR volatility is RED">
-              <TextInput type="number" min={0} max={100} style={smallInput}
-                value={regimeTrimToPct}
-                onChange={(e) => setDraft((d) => ({ ...d, regimeTrimToPct: Number(e.target.value) }))} />
-            </FormRow>
-            <FormRow layout={rowLayout} label="…or tighten stops to" suffix="%" hint="the alternative single-RED action">
-              <TextInput type="number" min={0} max={100} style={smallInput}
-                value={regimeStopPct}
-                onChange={(e) => setDraft((d) => ({ ...d, regimeStopPct: Number(e.target.value) }))} />
-            </FormRow>
-            <FormRow layout={rowLayout} label="Double-RED: reduce gross to" suffix="%" hint="when both trend AND volatility are RED">
-              <TextInput type="number" min={0} max={100} style={smallInput}
-                value={regimeDoubleRedGrossPct}
-                onChange={(e) => setDraft((d) => ({ ...d, regimeDoubleRedGrossPct: Number(e.target.value) }))} />
-            </FormRow>
+            <NumRow layout={rowLayout} label="Single-RED: trim positions to" suffix="%" note="of current size, when trend OR volatility is RED" min={0} max={100}
+              value={regimeTrimToPct} onChange={(v) => setDraft((d) => ({ ...d, regimeTrimToPct: v }))} />
+            <NumRow layout={rowLayout} label="…or tighten stops to" suffix="%" note="the alternative single-RED action" min={0} max={100}
+              value={regimeStopPct} onChange={(v) => setDraft((d) => ({ ...d, regimeStopPct: v }))} />
+            <NumRow layout={rowLayout} label="Double-RED: reduce gross to" suffix="%" note="when both trend AND volatility are RED" min={0} max={100}
+              value={regimeDoubleRedGrossPct} onChange={(v) => setDraft((d) => ({ ...d, regimeDoubleRedGrossPct: v }))} />
           </div>
         </div>
 
