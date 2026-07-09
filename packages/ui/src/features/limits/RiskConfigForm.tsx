@@ -16,15 +16,22 @@ import { useSaveRiskConfig } from './useRiskConfig';
 
 const smallInput = { width: 64 };
 
+// Fixed-width, right-aligned prefix slot rendered on EVERY row (empty or filled) so the
+// input after it always starts at the same x — whether the row leads with "$", "At", or
+// nothing. Same convention as ConfigPage.tsx's `rowPrefix`; keeps one clean left edge.
+const prefixSlot: React.CSSProperties = { width: 22, flexShrink: 0, textAlign: 'right', fontSize: FONT_SIZE.sm, color: 'var(--t2)' };
+
 /** Compact numeric row: label, then a narrow input with the unit + descriptor inline
- * to its right — the same shape as the drawdown-ladder rows, so every field lines up. */
-function NumRow({ label, value, onChange, suffix, note, min, max, layout }: {
+ * to its right — the same shape as the drawdown-ladder rows, so every field lines up.
+ * A leading `prefix` (e.g. "$") sits in the fixed-width slot; empty keeps the input aligned. */
+function NumRow({ label, value, onChange, suffix, note, prefix, min, max, layout }: {
   label: string; value: number; onChange: (v: number) => void;
-  suffix: string; note?: string; min?: number; max?: number; layout: FormRowProps['layout'];
+  suffix: string; note?: string; prefix?: string; min?: number; max?: number; layout: FormRowProps['layout'];
 }) {
   return (
     <FormRow layout={layout} label={label}>
       <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[1.5], flexWrap: 'wrap' }}>
+        <span style={prefixSlot}>{prefix ?? ''}</span>
         <TextInput type="number" min={min} max={max} style={smallInput}
           value={value} onChange={(e) => onChange(Number(e.target.value))} />
         <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>{suffix}{note ? ` ${note}` : ''}</span>
@@ -136,7 +143,7 @@ export function RiskConfigForm({ userId, config }: { userId: string; config: Ris
       <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE[3] }}>
         <FormRow layout={rowLayout} label="Account equity">
           <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[1.5], flexWrap: 'wrap' }}>
-            <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>$</span>
+            <span style={prefixSlot}>$</span>
             <TextInput type="number" min={0} placeholder="e.g. 50000" style={{ width: 120 }}
               value={accountEquity}
               onChange={(e) => setDraft((d) => ({ ...d, accountEquity: e.target.value === '' ? undefined : Number(e.target.value) }))} />
@@ -166,7 +173,7 @@ export function RiskConfigForm({ userId, config }: { userId: string; config: Ris
             {ladder.map((rung, i) => (
               <FormRow key={i} layout={rowLayout} label={rungLabel(i)}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[1.5], flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>At</span>
+                  <span style={prefixSlot}>At</span>
                   <TextInput type="number" min={0} max={100} style={smallInput}
                     value={Math.abs(rung.drawdownPct)}
                     onChange={(e) => updateRung(i, { drawdownPct: -Math.abs(Number(e.target.value)) })} />
