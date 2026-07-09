@@ -1,15 +1,18 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { TIERS, displayInitialWeight, fmtLegInstrument, legIsOpen, FONT_SIZE, FONT_WEIGHT, type Leg } from '@stw/shared';
+import { TIERS, displayInitialWeight, fmtLegInstrument, legIsOpen, GICS_SECTORS, NON_EQUITY_BUCKETS, FONT_SIZE, FONT_WEIGHT, type Leg } from '@stw/shared';
 import type { Holding } from '../api';
 import { getSupabase } from '../../../lib/supabase';
 import { useCategories } from '../useCategories';
+import { useSectorMap } from '../../limits/useRiskConfig';
 import { errMsg } from '../../../lib/errMsg';
 import { Modal } from '../../../primitives/Modal';
 import { Button } from '../../../primitives/Button';
 
 const CONVICTIONS = [5, 4, 3, 2, 1, 0];
 const ACTIONS = ['New', 'Upsized', 'Trimmed', 'Hold', 'Closed'];
+// Market sector options: canonical GICS-11 + the non-equity buckets (ETF / Cash).
+const SECTOR_OPTIONS = [...GICS_SECTORS, ...NON_EQUITY_BUCKETS];
 
 const label: React.CSSProperties = { fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3, display: 'block' };
 const field: React.CSSProperties = { width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 5, padding: '6px 8px', fontSize: FONT_SIZE.base, color: 'var(--text)', boxSizing: 'border-box' };
@@ -22,11 +25,17 @@ interface Props { holding: Holding; onDone: () => void; }
 export function PositionEditor({ holding: h, onDone }: Props) {
   const queryClient = useQueryClient();
   const { data: categories = [] } = useCategories();
+  const { data: sectorMap = {} } = useSectorMap();
   const [conviction, setConviction] = useState(String(h.conviction ?? 3));
   const [lastAction, setLastAction] = useState(h.last_action ?? 'Hold');
   const [actionDate, setActionDate] = useState(h.action_date ?? '');
   const [categoryId, setCategoryId] = useState(h.category_id ?? '');
   const [equityPct, setEquityPct] = useState(h.equity_pct != null ? String(Math.round(h.equity_pct * 100)) : '');
+  // Sector lives in ticker_sector_map (not on holdings), loaded async — a null draft
+  // means "unchanged", so the select reflects the map value until the admin overrides it.
+  const originalSector = sectorMap[h.ticker] ?? '';
+  const [sectorDraft, setSectorDraft] = useState<string | null>(null);
+  const sector = sectorDraft ?? originalSector;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -55,6 +64,21 @@ export function PositionEditor({ holding: h, onDone }: Props) {
         ...(isClosing ? { current_weight: 0 } : {}),
       }).eq('ticker', h.ticker);
       if (hErr) throw hErr;
+
+      // Sector → ticker_sector_map (separate table, admin-write RLS). Only touch it when
+      // it actually changed: set → upsert; cleared → delete the row (back to unmapped).
+      if (sector !== originalSector) {
+        if (sector) {
+          const { error: sErr } = await sb.from('ticker_sector_map')
+            .upsert({ ticker: h.ticker, sector, updated_at: new Date().toISOString() }, { onConflict: 'ticker' });
+          if (sErr) throw sErr;
+        } else {
+          const { error: sErr } = await sb.from('ticker_sector_map').delete().eq('ticker', h.ticker);
+          if (sErr) throw sErr;
+        }
+        await queryClient.invalidateQueries({ queryKey: ['ticker-sector-map'] });
+      }
+
       await queryClient.invalidateQueries({ queryKey: ['holdings'] });
       onDone();
     } catch (e) {
@@ -72,8 +96,10 @@ export function PositionEditor({ holding: h, onDone }: Props) {
             <select style={field} value={conviction} onChange={(e) => setConviction(e.target.value)}>{CONVICTIONS.map((v) => <option key={v} value={v}>{v} — {TIERS[v].short}</option>)}</select></div>
           <div><label style={label}>Status</label>
             <select style={field} value={lastAction} onChange={(e) => setLastAction(e.target.value)}>{ACTIONS.map((a) => <option key={a} value={a}>{a}</option>)}</select></div>
-          <div><label style={label}>Category</label>
+          <div><label style={label}>Basket</label>
             <select style={field} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}><option value="">— Uncategorized —</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+          <div><label style={label}>Sector</label>
+            <select style={field} value={sector} onChange={(e) => setSectorDraft(e.target.value)}><option value="">— Unmapped —</option>{SECTOR_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
           <div><label style={label}>Last Action Date</label>
             <input style={field} type="date" value={actionDate} onChange={(e) => setActionDate(e.target.value)} /></div>
           <div><label style={label}>Initial Position Weight %</label>
