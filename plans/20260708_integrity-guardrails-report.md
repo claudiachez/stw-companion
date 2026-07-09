@@ -100,15 +100,17 @@ only — see "Deployment note" below).
 
 11. **CCXI unresolved (adjacent, from PR #79's `sector-map-sync`).** `sector-map-sync` can't
     auto-classify CCXI (the Agility Robotics SPAC shell — Finnhub returns no industry). It correctly
-    leaves it `unevaluated` (never a breach). Fix pending: a `CCXI: 'Industrials'` `TICKER_GICS`
-    override.
+    leaves it `unevaluated` (never a breach). Fix: set it to `Industrials` via the **admin editor
+    Sector dropdown** (a `ticker_sector_map` data write). The earlier idea of a `CCXI: 'Industrials'`
+    `TICKER_GICS` code override is **dropped** — the dropdown supersedes it (no code change for a
+    one-off SPAC shell).
 
 ## Not yet live / outstanding
 
 - **Promote `staging → main`** (approval-gated) — activates the `regime-daily` cron and ships the
   per-user REGIME_EXIT feature + the mounted RegimeLight to production.
 - **In-browser verification** of the REGIME_EXIT feature on `staging` before promotion.
-- **CCXI → Industrials** GICS override.
+- **CCXI → Industrials** via the admin editor Sector dropdown (data write; the code-override idea is dropped).
 - Optional: sandbox `regime_daily` backfill (dev-only); a second-account DB multi-tenancy proof for
   Item 2; deeper `regime_daily` history.
 

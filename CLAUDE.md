@@ -1,16 +1,17 @@
 # STW Companion — Claude Code Guide
 
 > **⚠️ START HERE — branch.** **`staging` is the active trunk** — all feature work happens here.
-> **`staging` is 13 commits ahead of `main`** (check `git log --oneline origin/main..origin/staging | wc -l`).
+> **`staging` is ~14 commits ahead of `main`** (check `git log --oneline origin/main..origin/staging | wc -l`).
 > A `staging → main` PR is a separate, approval-gated production deploy; **do not open one without
 > explicit host approval**, even if staging looks ready.
 > **⏳ PRODUCTION PROMOTION PR [#87](https://github.com/claudiachez/stw-companion/pull/87)
-> (`staging → main`) is OPEN and host-approved — likely merged by your session.** It ships this
-> session's work: the **`regime-daily` cron** (#82 — starts firing only on the `main` deploy), the
-> **per-user REGIME_EXIT rule + mounted RegimeLight** (#83), the admin editor **Basket rename + Sector
-> dropdown** (#84), and the **Settings risk-config layout/alignment** (#85/#86). If merged, run the
-> post-deploy verification in #87's body (esp. confirm the `regime-daily` cron fired: a `run_log`
-> `regime-daily` ok row + a fresh `regime_daily` row after the next 23:00 UTC weekday). No new env vars.
+> (`staging → main`) is STILL OPEN and host-approved — NOT yet merged (as of 2026-07-09).** Do NOT
+> merge it without re-confirming approval in-session. It ships the Week-1 work: the **`regime-daily`
+> cron** (#82 — starts firing only on the `main` deploy), the **per-user REGIME_EXIT rule + mounted
+> RegimeLight** (#83), the admin editor **Basket rename + Sector dropdown** (#84), and the **Settings
+> risk-config layout/alignment** (#85/#86). If/when merged, run the post-deploy verification in #87's
+> body (esp. confirm the `regime-daily` cron fired: a `run_log` `regime-daily` ok row + a fresh
+> `regime_daily` row after the next 23:00 UTC weekday). No new env vars.
 > **The prior FRED re-platform + GICS taxonomy is already LIVE on production** (PR #81, merged
 > 2026-07-08, post-deploy-verified: `FRED_API_KEY` works on prod, `macro-snapshot-2.0.0` writes real
 > FRED scores, `sector-map-sync` instrumented).
@@ -22,8 +23,8 @@
 > locally. **Sandbox `regime_daily` is still 0 rows** (dev-only; needs a sandbox service-role key — the
 > local `.env.local` only has the anon key). **CCXI (Agility Robotics SPAC) is unmapped in
 > `ticker_sector_map`** (Finnhub has no industry for the SPAC shell) — it shows as `unevaluated` (never
-> a breach). Fix: set it via the **new admin editor Sector dropdown** (→ Industrials), which supersedes
-> the old `TICKER_GICS` code-override idea.
+> a breach). Fix: set it via the **admin editor Sector dropdown** (→ Industrials, a data write). The old
+> `TICKER_GICS` code-override idea is **dropped** (2026-07-09) — the dropdown is the sole sanctioned fix.
 > `app_config.ibkr_live_trading_enabled` = **`0` on both PROD and sandbox** (last confirmed 2026-07-05).
 > **`FRED_API_KEY`** (server-side, no `VITE_` prefix) is set on both sites incl. the prod context
 > (verified live). If migrations stop well short of 063 you are on a stale checkout, re-sync.
@@ -56,10 +57,42 @@
 
 ---
 
-## Current Status — regime engine scheduled + per-user REGIME_EXIT (handoff 2026-07-08)
+## Current Status — cleanup + cloud-routines assessment; Week 2 plan ready (handoff 2026-07-09)
 
-**This session's work is all on `staging`, merged via PRs #82–#86, and bundled into the OPEN
-production-promotion PR #87 (`staging → main`, pending merge).** Four things:
+**This was a short, no-code session — cleanup, an assessment, and staging the next block of work.
+No app/package/migration changes; the only repo edits are docs (this CLAUDE.md + a one-line CCXI
+correction in the Week-1 report + the new Week-2 plan doc).** What happened:
+
+1. **Cleanup.** Deleted the 5 merged local feature branches (PRs #82–#86, remotes already gone) — only
+   `staging` remains locally. **Dropped the CCXI `TICKER_GICS` code-override task** (no task chip/cron
+   ever existed for it — it was a TODO in the docs); the admin editor Sector dropdown is now the sole
+   sanctioned fix. CCXI is still `unevaluated` (a data write, not a code task — do it via the dropdown).
+2. **Assessed cloud/off-machine routines** (host question, no build). Finding: ~90% of the platform is
+   already cloud (both Netlify apps + all scheduled functions + Supabase). The one machine-bound piece
+   is the **Discord ingestion** (`stw-*` routines at `~/Documents/Claude/Scheduled/`, out-of-repo): they
+   read Discord via **Claude in Chrome using the operator's own logged-in browser session** (member, not
+   admin, not a bot) and write Supabase via `curl` REST (that half is cloud-portable). Because the
+   operator is a channel *member* not the server *owner*, there's no clean bot path. Options ranked:
+   (a) host-provided official feed (bot/webhook/export) — cleanest + ToS-safe, needs the STW owner's
+   cooperation; (b) always-on cloud VM running the same real-browser setup — the only self-serve route,
+   costs a monthly VM + session upkeep; (c) headless self-bot with the operator's Discord token —
+   **DO NOT** (Discord ToS violation, account-ban risk kills the whole product). Host chose "just the
+   assessment for now" — parked, no decision taken. (Aligns with the v2 plan's DEAD list: "custom
+   Discord API client" is dead.)
+3. **Week-1 (integrity guardrails) is COMPLETE; the Week-2 → Autonomy plan is written and is the next
+   work.** New standing plan doc: [`plans/20260709_integrity-guardrailsv2.md`](plans/20260709_integrity-guardrailsv2.md)
+   — Week 2 is paste-ready; weeks 3–4 + the trigger-driven back half are specced. **Next session starts
+   Week 2** (see Next Steps #1). No work started on it this session.
+
+**PR #87 (`staging → main`) is STILL OPEN, unmerged** — not touched this session. Do not merge without
+re-confirming approval. Its post-deploy checks stay moot until it merges.
+
+---
+
+### Prior session — regime engine scheduled + per-user REGIME_EXIT (Week 1, 2026-07-08)
+
+**All on `staging`, merged via PRs #82–#86, and bundled into the OPEN production-promotion PR #87
+(`staging → main`, pending merge).** Four things:
 
 1. **Verified the prior PR #81 promotion live on production** (`macro-snapshot-2.0.0` wrote real
    FRED scores at 21:32 UTC → `FRED_API_KEY` confirmed on the prod context; `sector-map-sync` fired +
@@ -460,37 +493,53 @@ it, shipped it to production, then separately investigated + fixed a live data-i
 ## Next Steps
 
 0. **⏳ PRODUCTION PROMOTION PR [#87](https://github.com/claudiachez/stw-companion/pull/87)
-   (`staging → main`, 13 commits) is OPEN + host-approved — likely merged by your session.** Ships the
-   regime-daily cron, per-user REGIME_EXIT, editor Basket/Sector, Settings layout. **No migration/env
-   action needed** (063 already on PROD+sandbox; no new env vars). **If merged, VERIFY on PROD:**
-   (a) the **regime-daily cron fired** — a `run_log` row (`run_type='regime-daily'`, ok) + a fresh
-   `regime_daily` row after the next **23:00 UTC weekday** (the cron only runs on `main`); (b) Settings
-   renders the regime-rule section + aligned fields, Save writes the 3 `regime_*` cols; (c) My Portfolio
-   → Risk shows the RegimeLight with the user's rule; (d) admin editor has the Basket label + Sector
-   dropdown. **If still open, don't merge without re-confirming approval.** (Prior promotion #81 —
-   FRED/GICS — is already live + verified.)
+   (`staging → main`, ~14 commits) is STILL OPEN + host-approved — NOT merged (as of 2026-07-09).**
+   Ships the regime-daily cron, per-user REGIME_EXIT, editor Basket/Sector, Settings layout. **No
+   migration/env action needed** (063 already on PROD+sandbox; no new env vars). **If merged, VERIFY on
+   PROD:** (a) the **regime-daily cron fired** — a `run_log` row (`run_type='regime-daily'`, ok) + a
+   fresh `regime_daily` row after the next **23:00 UTC weekday** (the cron only runs on `main`);
+   (b) Settings renders the regime-rule section + aligned fields, Save writes the 3 `regime_*` cols;
+   (c) My Portfolio → Risk shows the RegimeLight with the user's rule; (d) admin editor has the Basket
+   label + Sector dropdown. **Don't merge without re-confirming approval in-session.** (Prior promotion
+   #81 — FRED/GICS — is already live + verified.)
 
-1. **✅ DONE — data feeds + sector taxonomy + integrity guardrails.** All live or in promotion #87.
-   Week 1 integrity-guardrails plan is **complete** — see
-   [`plans/20260708_integrity-guardrails-report.md`](plans/20260708_integrity-guardrails-report.md) for
-   the final state + all 11 deviations from the original spec.
+1. **★ WEEK 2 — the primary next task.** Week 1 (integrity guardrails) is **complete**; the standing
+   Week-2 → Autonomy plan is written: [`plans/20260709_integrity-guardrailsv2.md`](plans/20260709_integrity-guardrailsv2.md)
+   (Week 2 is paste-ready; weeks 3–4 + a trigger-driven back half are specced). **Read it first, then
+   cut a `claude/<feature>` branch off staging and build to spec.** Week 2 items:
+   - **Item 1 — Executions sync (TIME-SENSITIVE, do first).** New `user_executions` table (append-only,
+     idempotent on IBKR execution ID), ingesting the IBKR Flex **Trades/executions** section via the
+     existing `ibkr-flex` path. Its ~1-year lookback window **slides daily and pre-window history is
+     unrecoverable** — so enabling the Trades section on the operator's Flex template (manual, outside
+     repo) is the first action. New migration expected (RLS per user, same pattern as `user_positions`).
+   - **Item 2 — TCA v1** (admin/CLI only, no subscriber surface): join `user_executions` to the host's
+     `leg_transactions` — fill slippage, discretionary-overlay ledger (the pullback-waiting question),
+     exit divergence. Descriptive tables, honestly labeled counts; re-runs monthly.
+   - **Item 3 — Vol-targeted sizing:** pure `volTargetScalar()` in `@stw/shared` + `risk_config` config
+     fields; **display-only** in the admin Risk panel (consumed by nothing). Validate via backtest
+     before display — depends on Item 4.
+   - **Item 4 — `regime_daily` depth extension:** extend equity bars (IWM/SPY/QQQ) to ~2000-present
+     (IBKR or public daily source; TwelveData's 5000-bar cap is why); FRED fields backfill to inception.
+   - **Item 0 housekeeping (small, this week):** `docs/lower_snake_case` — write `docs/launch_gates.md`
+     (0a, blocking pre-first-external-user checklist), a REGIME_EXIT change-audit trail (0b — audit row
+     on every `regime_*` edit; visibility only, no blocking), and verify/record the 36-row timestamp
+     stamping provenance (0c).
+   - **Standing prohibitions** (carry through every block): regime multiplier stays advisory/display-only
+     until Phase B; the two-component gate and Macro composite never blend; gate params frozen at
+     `engine_version 1.1.0`; no new regime indicators enter the gate. See the plan's top section.
 
-2. **Integrity-guardrails — remaining loose ends** (spec:
-   [`plans/20260706_integrity-guardrails.md`](plans/20260706_integrity-guardrails.md)):
-   - **Post-#87 cron verification** (see #0a) — the one real check, gated on the promotion firing.
-   - **CCXI sector** — set it to `Industrials` via the **admin editor Sector dropdown** (the preferred
-     fix now that the dropdown exists; supersedes the old `TICKER_GICS` code-override idea). Shows
+2. **Loose ends (small, only if asked) —** integrity-guardrails leftovers:
+   - **CCXI sector** — set it to `Industrials` via the **admin editor Sector dropdown** (a
+     `ticker_sector_map` data write; the `TICKER_GICS` code-override idea is **dropped**). Shows
      `unevaluated` until then (never a breach).
-   - **Deeper `regime_daily` history** (optional) — backfill stopped at ~2020-12; walk back with more
-     `?before=` chunks via the local esbuild-bundle harness if ever wanted.
+   - **Deeper `regime_daily` history** (optional; superseded by Week-2 Item 4 which does this properly).
    - **Sandbox `regime_daily`** (optional, dev-only) — still 0 rows; needs a sandbox service-role key.
-   - Item 2's second-account DB multi-tenancy proof (minor); Item 4's `docs/regime_exit_v0.md` sign-off
-     is moot now (REGIME_EXIT is per-user).
-
-2.5. **★ Week 2 scope — host will provide next session.** No Week 2 plan exists in the repo yet; the
-   Week 1 plan's "Out of scope this week" list earmarked candidates (historical snapshot reconstruction,
-   Trades/executions Flex sync, vol-targeted sizing, TCA, expectancy analyzer, …) but that's a
-   do-not-build list, not a spec. **Wait for the host's Week 2 scope; do not start these unprompted.**
+   - **Off-machine routines** (parked, host said "just the assessment for now" 2026-07-09): the Discord
+     ingestion is the one machine-bound piece (Claude in Chrome + operator's own Discord session). No
+     clean bot path (operator is a member, not the server owner). Self-serve route = always-on cloud VM
+     running the same real-browser setup; cleanest = a host-provided official feed (bot/webhook/export).
+     **Headless self-bot with the operator's token is off the table** (Discord ToS / account-ban risk).
+     Don't start without a host decision.
 
 3. **Visually confirm the regime badge + FRED Macro tab + RegimeLight in-browser** (not re-checked —
    needs the admin OAuth password-swap recipe below). Server-side FRED path is proven; if a cell is
