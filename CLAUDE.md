@@ -1,17 +1,18 @@
 # STW Companion — Claude Code Guide
 
 > **⚠️ START HERE — branch.** **`staging` is the active trunk** — all feature work happens here.
-> **`staging` is ~14 commits ahead of `main`** (check `git log --oneline origin/main..origin/staging | wc -l`).
-> A `staging → main` PR is a separate, approval-gated production deploy; **do not open one without
-> explicit host approval**, even if staging looks ready.
-> **⏳ PRODUCTION PROMOTION PR [#87](https://github.com/claudiachez/stw-companion/pull/87)
-> (`staging → main`) is STILL OPEN and host-approved — NOT yet merged (as of 2026-07-09).** Do NOT
-> merge it without re-confirming approval in-session. It ships the Week-1 work: the **`regime-daily`
-> cron** (#82 — starts firing only on the `main` deploy), the **per-user REGIME_EXIT rule + mounted
+> **`staging` is ~1 commit ahead of `main`** (this doc-only handoff; check `git log --oneline
+> origin/main..origin/staging | wc -l`). A `staging → main` PR is a separate, approval-gated production
+> deploy; **do not open one without explicit host approval**, even if staging looks ready.
+> **✅ PRODUCTION PROMOTION PR [#87](https://github.com/claudiachez/stw-companion/pull/87)
+> (`staging → main`) MERGED 2026-07-09 11:59 UTC — the Week-1 work is now LIVE on production:** the
+> **`regime-daily` cron** (#82 — now fires on `main`), the **per-user REGIME_EXIT rule + mounted
 > RegimeLight** (#83), the admin editor **Basket rename + Sector dropdown** (#84), and the **Settings
-> risk-config layout/alignment** (#85/#86). If/when merged, run the post-deploy verification in #87's
-> body (esp. confirm the `regime-daily` cron fired: a `run_log` `regime-daily` ok row + a fresh
-> `regime_daily` row after the next 23:00 UTC weekday). No new env vars.
+> risk-config layout/alignment** (#85/#86). No new env vars. **⏳ POST-DEPLOY VERIFICATION STILL PENDING
+> (do this next session):** confirm the `regime-daily` cron fired — a `run_log` row
+> (`run_type='regime-daily'`, ok) + a fresh `regime_daily` row after the next **23:00 UTC weekday** tick
+> (the cron only runs on `main`, which it now is); plus in-browser spot-checks (Settings regime-rule
+> section, My Portfolio → Risk RegimeLight, admin editor Basket/Sector). See Next Steps #0.
 > **The prior FRED re-platform + GICS taxonomy is already LIVE on production** (PR #81, merged
 > 2026-07-08, post-deploy-verified: `FRED_API_KEY` works on prod, `macro-snapshot-2.0.0` writes real
 > FRED scores, `sector-map-sync` instrumented).
@@ -84,8 +85,10 @@ correction in the Week-1 report + the new Week-2 plan doc).** What happened:
    — Week 2 is paste-ready; weeks 3–4 + the trigger-driven back half are specced. **Next session starts
    Week 2** (see Next Steps #1). No work started on it this session.
 
-**PR #87 (`staging → main`) is STILL OPEN, unmerged** — not touched this session. Do not merge without
-re-confirming approval. Its post-deploy checks stay moot until it merges.
+**PR #87 (`staging → main`) MERGED mid-session (2026-07-09 11:59 UTC)** — Week-1 work is now on
+production. staging is back to ~1 commit ahead of main (this doc-only handoff). **Post-deploy
+verification is now the pending item** (regime-daily cron first tick + in-browser spot-checks — see
+Next Steps #0).
 
 ---
 
@@ -492,16 +495,16 @@ it, shipped it to production, then separately investigated + fixed a live data-i
 
 ## Next Steps
 
-0. **⏳ PRODUCTION PROMOTION PR [#87](https://github.com/claudiachez/stw-companion/pull/87)
-   (`staging → main`, ~14 commits) is STILL OPEN + host-approved — NOT merged (as of 2026-07-09).**
-   Ships the regime-daily cron, per-user REGIME_EXIT, editor Basket/Sector, Settings layout. **No
-   migration/env action needed** (063 already on PROD+sandbox; no new env vars). **If merged, VERIFY on
-   PROD:** (a) the **regime-daily cron fired** — a `run_log` row (`run_type='regime-daily'`, ok) + a
-   fresh `regime_daily` row after the next **23:00 UTC weekday** (the cron only runs on `main`);
-   (b) Settings renders the regime-rule section + aligned fields, Save writes the 3 `regime_*` cols;
-   (c) My Portfolio → Risk shows the RegimeLight with the user's rule; (d) admin editor has the Basket
-   label + Sector dropdown. **Don't merge without re-confirming approval in-session.** (Prior promotion
-   #81 — FRED/GICS — is already live + verified.)
+0. **⏳ POST-DEPLOY VERIFICATION of PR [#87](https://github.com/claudiachez/stw-companion/pull/87)
+   (MERGED to `main` 2026-07-09 11:59 UTC — now live on production).** No migration/env action needed
+   (063 already on PROD+sandbox; no new env vars). **VERIFY on PROD (`usmqbohcjcyszjxxvnqu`):**
+   (a) the **regime-daily cron fired** — `select * from run_log where run_type='regime-daily' order by
+   ran_at desc limit 3;` should show an `ok` row + a fresh `regime_daily` row after the next **23:00 UTC
+   weekday** tick (the cron only runs on `main`, which it now is — so this proves out on the first tick
+   post-merge); (b) Settings renders the regime-rule section + aligned fields, Save writes the 3
+   `regime_*` cols; (c) My Portfolio → Risk shows the RegimeLight with the user's rule; (d) admin editor
+   has the Basket label + Sector dropdown. In-browser checks (b)–(d) need the OAuth password-swap recipe
+   (see the FRED/GICS handoff section below). (Prior promotion #81 — FRED/GICS — is already live + verified.)
 
 1. **★ WEEK 2 — the primary next task.** Week 1 (integrity guardrails) is **complete**; the standing
    Week-2 → Autonomy plan is written: [`plans/20260709_integrity-guardrailsv2.md`](plans/20260709_integrity-guardrailsv2.md)
