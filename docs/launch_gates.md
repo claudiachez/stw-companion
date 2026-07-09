@@ -48,13 +48,23 @@ bugs **cannot manifest in a single-user system** — so "never observed" is not 
 **Before the first external user, prove isolation through the live database with a second real
 auth account:**
 
-- [ ] RLS isolation verified on **every** per-user table: `risk_config`, `user_positions`,
+- [x] RLS isolation verified on **every** per-user table: `risk_config`, `user_positions`,
       **`user_executions`** (Week-2 Item 1), `risk_violation_acks`, `regime_exit_audit`
       (Week-2 Item 0b), and the REGIME_EXIT columns on `risk_config`.
-- [ ] **Independent limits evaluation** — account B's limits/violations reflect account B's
-      positions only, never account A's.
-- [ ] **No cross-read / cross-write under adversarial queries** — account B cannot select or
-      mutate account A's rows by forging ids.
+      ✅ **DB-layer proof passed 2026-07-09** (PROD, two throwaway tenants; `ops_log` id 12).
+      As tenant B: zero of A's rows *and* zero of the real operator's rows visible in every
+      table, while B still saw its own — RLS is filtering, not blanket-blocking.
+- [x] **Independent limits evaluation** — account B's limits/violations reflect account B's
+      positions only, never account A's. ✅ Follows from the proven `user_positions` +
+      `risk_config` isolation (the pure limits scorer reads only the caller's own rows).
+- [x] **No cross-read / cross-write under adversarial queries** — account B cannot select or
+      mutate account A's rows by forging ids. ✅ B's UPDATE/DELETE against A affected 0 rows;
+      a forged INSERT (user_id=A) was rejected by `WITH CHECK` (42501); a direct authenticated
+      INSERT into `regime_exit_audit` was rejected (no INSERT policy — trigger-only).
+
+**DB layer: DONE.** One piece remains for onboarding — the **end-to-end app-layer proof**: a real
+second login exercising the serverless functions (e.g. `ibkr-flex`'s JWT → stored-token path), which
+a simulated DB session can't cover. Cheap to do when the first real second account is created.
 
 A throwaway second account costs about an hour and is recommended **opportunistically earlier**
 (it de-risks every per-user feature). It is **mandatory here.**
