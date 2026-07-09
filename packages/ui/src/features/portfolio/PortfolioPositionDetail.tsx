@@ -1,4 +1,4 @@
-import { regimeGate, classifySeverity, formatDate, sizingTone, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, SPACE, RADIUS, type ViolationSeverity } from '@stw/shared';
+import { regimeGate, regimeExitAdvice, classifySeverity, formatDate, sizingTone, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, SPACE, RADIUS, type ViolationSeverity } from '@stw/shared';
 import { useAuthStore } from '../../store/auth';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { DetailPane, DetailPaneMetricLabel } from '../../primitives/DetailPane';
@@ -85,6 +85,9 @@ export function PortfolioPositionDetail({
     { close: regime.close, sma200: regime.sma200 },
     { vixClose: regime.vix_close, vix3mClose: regime.vix3m_close },
   ) : null;
+  const regimeAdvice = gate && config ? regimeExitAdvice(gate, {
+    trimToPct: config.regime_trim_to_pct, stopPct: config.regime_stop_pct, doubleRedGrossPct: config.regime_doublered_gross_pct,
+  }) : null;
 
   const legCount = group.positions.length;
   const composition = group.hasStock && group.hasOption ? 'Shares + options' : group.hasOption ? 'Options only' : 'Shares only';
@@ -232,6 +235,11 @@ export function PortfolioPositionDetail({
             </div>
           ) : (
             <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)' }}>No market regime data yet.</div>
+          )}
+          {regimeAdvice && (
+            <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', marginTop: SPACE[1.5], borderLeft: '2px solid var(--status-warning-text)', paddingLeft: SPACE[2] }}>
+              Your rule: {regimeAdvice}
+            </div>
           )}
           <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[2], fontStyle: 'italic' }}>
             Advisory — under forward validation. Not a trade signal.

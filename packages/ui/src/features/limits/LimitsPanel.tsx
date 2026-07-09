@@ -4,6 +4,7 @@ import { LoadingSpinner } from '../../primitives/LoadingSpinner';
 import { useRiskConfig, useEnsureRiskConfig } from './useRiskConfig';
 import { RiskConfigForm } from './RiskConfigForm';
 import { ViolationsSummary } from './ViolationsSummary';
+import { RegimeLight } from '../regime/RegimeLight';
 
 // apps/admin's composite of the split Limits feature (host decision,
 // 2026-07-06) — admin has no separate "My Portfolio" page, so it keeps both
@@ -22,6 +23,7 @@ export function LimitsPanel() {
 
   return (
     <div className={`${isMobile ? '' : 'max-w-2xl mx-auto'} flex flex-col gap-4`}>
+      <RegimeLight instrument="IWM" exitRule={{ trimToPct: config.regime_trim_to_pct, stopPct: config.regime_stop_pct, doubleRedGrossPct: config.regime_doublered_gross_pct }} />
       <ViolationsSummary showSyncButton />
       <RiskConfigForm userId={userId!} config={config} />
     </div>
