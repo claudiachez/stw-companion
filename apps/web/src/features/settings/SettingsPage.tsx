@@ -135,6 +135,7 @@ export function SettingsPage() {
         <AlertStrip severity="positive">
           Verified ✓ — {lastResult.accountId ? `account ${lastResult.accountId} · ` : ''}
           synced {lastResult.count} position{lastResult.count !== 1 ? 's' : ''}
+          {lastResult.executions > 0 ? ` · ${lastResult.executions} execution${lastResult.executions !== 1 ? 's' : ''}` : ''}
         </AlertStrip>
       )}
 
