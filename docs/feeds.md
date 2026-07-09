@@ -67,7 +67,9 @@ re-implementing pacing.
 - `ticker_sector_map.sector` holds a GICS value; `resolveSector(ticker, finnhubLabel?)` = `TICKER_GICS`
   override → `FINNHUB_GICS` fold (Finnhub industries roll up to GICS along the real hierarchy) → null.
 - **`sector-map-sync`** (`apps/web/netlify/functions/sector-map-sync.ts`, weekdays 22:00 UTC + manual)
-  maps newly-opened `holdings` tickers via Finnhub `profile2`; unresolved names left for review. ETF /
+  maps newly-opened `holdings` tickers via Finnhub `profile2`; unresolved names left for review. The
+  **admin Ticker-detail editor's Sector dropdown** sets a ticker's sector by hand (writes
+  `ticker_sector_map`) — the fix for names Finnhub can't resolve (e.g. CCXI / SPAC shells). ETF /
   Cash are excluded from Risk sector-concentration.
 
 ---
@@ -77,13 +79,15 @@ re-implementing pacing.
 | Function | Site | Cadence | Feeds | Writes |
 |---|---|---|---|---|
 | `macro-snapshot` | web | weekdays 21:30 UTC | FRED (indices) + TwelveData (equity) | `macro_daily_snapshots` (5D engine) |
-| `regime-daily` | admin | **built, NOT yet scheduled** | FRED (VIX/VIX3M/US10Y) + TwelveData (IWM/SPY/QQQ) | `regime_daily` |
+| `regime-daily` | admin | weekdays 23:00 UTC | FRED (VIX/VIX3M/US10Y) + TwelveData (IWM/SPY/QQQ) | `regime_daily` (PROD backfilled 4,200 rows; cron fires on the `main` deploy — promotion #87) |
 | `sector-map-sync` | web | weekdays 22:00 UTC | Finnhub `profile2` | `ticker_sector_map` |
 | `macro-recap-am/pm` | web | weekdays 12:00 / 21:30 UTC | Anthropic | `macro_daily_recaps` |
 
 > Netlify fires scheduled functions **only on a site's production (`main`) deploy** — not on branch/
-> `staging` deploys. So these self-populate on prod only; on staging, invoke a function's URL directly
-> to test it. All are `run_log`-instrumented (`run_type` = the function name).
+> `staging` deploys. So these self-populate on prod only. Note a `schedule()`-wrapped function is
+> **cron-only over HTTP** — it can't be tested by hitting its URL (even on staging); run it locally via
+> `netlify functions:invoke --querystring` or the esbuild-bundle harness (see CLAUDE.md → Conventions →
+> Netlify Functions). All are `run_log`-instrumented (`run_type` = the function name).
 
 ---
 
@@ -115,7 +119,7 @@ is gone.
 | My Portfolio | Tailing | Supabase `holdings` | on load | — | OK |
 | **Signals** | GEX charts | Finnhub + TwelveData | 60s / daily | 60/min · 8/min | OK |
 | **Backend (scheduled)** | `macro-snapshot` | FRED (indices) + TwelveData (equity) | 1x/day wkdays | — | OK — prod deploy only |
-| Backend | `regime-daily` | FRED (VIX/VIX3M/US10Y) + TwelveData (IWM/SPY/QQQ) | **not scheduled yet** | — | pending cron + backfill |
+| Backend | `regime-daily` | FRED (VIX/VIX3M/US10Y) + TwelveData (IWM/SPY/QQQ) | 1x/day wkdays 23:00 UTC | — | scheduled; PROD backfilled; cron live after promotion #87 |
 | Backend | `sector-map-sync` | Finnhub `profile2` | weekdays 22:00 UTC | 60/min | OK — prod deploy only |
 | Backend | `macro-recap-am/pm` | Anthropic | 2x/day wkdays | pay-per-token | OK — prod deploy only |
 

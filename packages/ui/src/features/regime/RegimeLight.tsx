@@ -1,5 +1,4 @@
-import { regimeGate, formatDate } from '@stw/shared';
-import { useCapabilities } from '../../context/AppCapabilities';
+import { regimeGate, regimeExitAdvice, formatDate, type RegimeExitRule } from '@stw/shared';
 import { useLatestRegime } from './useLatestRegime';
 
 const STATE_COLOR: Record<'GREEN' | 'RED' | 'UNKNOWN', string> = {
@@ -9,23 +8,23 @@ const STATE_COLOR: Record<'GREEN' | 'RED' | 'UNKNOWN', string> = {
 };
 
 /**
- * Advisory regime light — plans/integrity-guardrails.md Item 3. Admin-only
- * (`isAdmin` capability gate, matching the repo convention for admin-only
- * action hints). Shows STW's own proxy instrument (traders.regime_proxy) by
- * default. Purely informational: nothing here places, blocks, or adjusts an
- * order — see docs/regime_exit_v0.md for the operator's own manual playbook.
+ * Advisory regime light — plans/integrity-guardrails.md Item 3. Presentational:
+ * visibility is decided by the mount site (My Portfolio → Risk tab for subscribers,
+ * apps/admin's LimitsPanel for the operator), NOT a gate in here. Shows STW's proxy
+ * instrument (traders.regime_proxy) by default, and — when `exitRule` is supplied
+ * and the regime is RED — the viewer's OWN REGIME_EXIT de-risking rule (per-user,
+ * migration 063). Purely informational: nothing here places, blocks, or adjusts an
+ * order (the standing regime prohibition).
  */
-export function RegimeLight({ instrument = 'IWM' }: { instrument?: string }) {
-  const { isAdmin } = useCapabilities();
+export function RegimeLight({ instrument = 'IWM', exitRule }: { instrument?: string; exitRule?: RegimeExitRule }) {
   const { data: row, isLoading } = useLatestRegime(instrument);
 
-  if (!isAdmin) return null;
   if (isLoading) return null;
 
   if (!row) {
     return (
       <div className="bg-surface border border-border rounded-xl p-4 text-t3 text-xs">
-        No regime_daily data yet for {instrument} — run the backfill (Item 3) first.
+        No market regime data yet.
       </div>
     );
   }
@@ -34,6 +33,7 @@ export function RegimeLight({ instrument = 'IWM' }: { instrument?: string }) {
     { close: row.close, sma200: row.sma200 },
     { vixClose: row.vix_close, vix3mClose: row.vix3m_close },
   );
+  const advice = exitRule ? regimeExitAdvice(gate, exitRule) : null;
 
   return (
     <div className="bg-surface border border-border rounded-xl p-4 flex flex-col gap-3">
@@ -60,6 +60,15 @@ export function RegimeLight({ instrument = 'IWM' }: { instrument?: string }) {
         close {row.close?.toFixed(2) ?? '—'} vs 200SMA {row.sma200?.toFixed(2) ?? '—'}
         {' · '}VIX {row.vix_close?.toFixed(2) ?? '—'} vs VIX3M {row.vix3m_close?.toFixed(2) ?? '—'}
       </div>
+
+      {advice && (
+        <div
+          className="text-t2 text-xs"
+          style={{ borderLeft: '2px solid var(--status-warning-text)', paddingLeft: 8 }}
+        >
+          Your rule: {advice}
+        </div>
+      )}
 
       <div className="text-[10px] uppercase tracking-wide font-semibold text-[var(--status-warning-text)]">
         Advisory — under forward validation. Not a trade signal.

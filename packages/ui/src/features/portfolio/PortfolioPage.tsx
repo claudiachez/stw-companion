@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { TIERS, fmtDateTime, sizingTone, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, SPACE, regimeGate } from '@stw/shared';
+import { TIERS, fmtDateTime, sizingTone, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, SPACE, regimeGate, regimeExitAdvice } from '@stw/shared';
 import { useUserPositions, useIbkrSettings } from './useUserPositions';
 import { useSyncPortfolio } from './useSyncPortfolio';
 import { useHoldings } from '../picks/useHoldings';
@@ -18,8 +18,11 @@ import { SubNav } from '../../primitives/SubNav';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useCapabilities } from '../../context/AppCapabilities';
 import { ViolationsSummary } from '../limits/ViolationsSummary';
-import { useSectorMap } from '../limits/useRiskConfig';
+import { useSectorMap, useRiskConfig } from '../limits/useRiskConfig';
+import { DEFAULT_RISK_CONFIG } from '../limits/api';
 import { useLatestRegime } from '../regime/useLatestRegime';
+import { RegimeLight } from '../regime/RegimeLight';
+import { useAuthStore } from '../../store/auth';
 import { PortfolioPositionDetail, type DetailGroup } from './PortfolioPositionDetail';
 import {
   PortfolioFilterBar,
@@ -286,9 +289,10 @@ function SummaryChip({ severity, onClick, children }: { severity: 'info' | 'warn
   );
 }
 
-function PortfolioSummary({ groups, showPnl, regimeAdvisory, onOpenTailing }: {
+function PortfolioSummary({ groups, showPnl, regimeAdvisory, regimeAdviceText, onOpenTailing }: {
   groups: PortfolioGroup[]; showPnl: boolean;
   regimeAdvisory: ReturnType<typeof regimeGate> | null;
+  regimeAdviceText: string | null;
   onOpenTailing: () => void;
 }) {
   const t = useMemo(() => {
@@ -355,7 +359,7 @@ function PortfolioSummary({ groups, showPnl, regimeAdvisory, onOpenTailing }: {
               style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[1.5], fontStyle: 'italic' }}
               title="Advisory — under forward validation. Not a trade signal."
             >
-              Regime: {regimeAdvisory.trend_state}{regimeAdvisory.trend_state === 'RED' ? " · STW's playbook favors reducing options exposure here" : ''}
+              Regime: {regimeAdvisory.trend_state}{regimeAdviceText ? ` · ${regimeAdviceText}` : ''}
             </div>
           )}
         </div>
@@ -635,6 +639,16 @@ export function PortfolioPage() {
     { close: regimeRow.close, sma200: regimeRow.sma200 },
     { vixClose: regimeRow.vix_close, vix3mClose: regimeRow.vix3m_close },
   ) : null;
+  // The viewer's own REGIME_EXIT rule (per-user, migration 063) — falls back to the
+  // shared defaults for a user without a config row yet. Advisory / display-only.
+  const regimeUserId = useAuthStore((s) => s.user?.id);
+  const { data: regimeRiskConfig } = useRiskConfig(regimeUserId);
+  const regimeExitRule = {
+    trimToPct: regimeRiskConfig?.regime_trim_to_pct ?? DEFAULT_RISK_CONFIG.regime_trim_to_pct,
+    stopPct: regimeRiskConfig?.regime_stop_pct ?? DEFAULT_RISK_CONFIG.regime_stop_pct,
+    doubleRedGrossPct: regimeRiskConfig?.regime_doublered_gross_pct ?? DEFAULT_RISK_CONFIG.regime_doublered_gross_pct,
+  };
+  const regimeAdviceText = regimeAdvisory ? regimeExitAdvice(regimeAdvisory, regimeExitRule) : null;
 
   const allGroups = useMemo<PortfolioGroup[]>(() => {
     const map = new Map<string, UserPosition[]>();
@@ -889,7 +903,7 @@ export function PortfolioPage() {
           ⚠ {decliningTailed.length} tailed position{decliningTailed.length !== 1 ? 's have' : ' has'} declining STW conviction: {decliningTailed.map((c) => c.ticker).join(', ')}
         </div>
       )}
-      <PortfolioSummary groups={allGroups} showPnl={showPnl} regimeAdvisory={regimeAdvisory} onOpenTailing={() => changeTab('tailing')} />
+      <PortfolioSummary groups={allGroups} showPnl={showPnl} regimeAdvisory={regimeAdvisory} regimeAdviceText={regimeAdviceText} onOpenTailing={() => changeTab('tailing')} />
       {showPnl && <TopMovers groups={allGroups} onOpenPosition={openPosition} />}
       {/* Heatmap colors by return, so it follows the P&L-visibility toggle like Top Movers. */}
       {showPnl && heatmapCells.length > 0 && (
@@ -902,6 +916,11 @@ export function PortfolioPage() {
 
   const riskBody = (
     <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)', padding: pad }}>
+      {/* Advisory regime light — shown to every portfolio user (defaults until they set
+          their own rule in Settings), above the Premium-gated limits below. */}
+      <div style={{ marginBottom: SPACE[4] }}>
+        <RegimeLight instrument="IWM" exitRule={regimeExitRule} />
+      </div>
       {capabilities.canUseLimits ? (
         <ViolationsSummary />
       ) : (

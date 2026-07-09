@@ -143,3 +143,37 @@ export function regimeGate(
 
   return { trend_state, vol_state, risk_multiplier };
 }
+
+/**
+ * A user's REGIME_EXIT rule — the per-user advisory de-risking policy (host
+ * decision 2026-07-08, replacing the single operator-owned docs/regime_exit_v0.md).
+ * Values are magnitudes (percent). Stored on risk_config (migration 063).
+ */
+export interface RegimeExitRule {
+  /** On a single-RED regime, trim each open position to this % of current size. */
+  trimToPct: number;
+  /** On a single-RED regime, the alternative action — tighten stops to this %. */
+  stopPct: number;
+  /** On a double-RED regime, reduce gross exposure to this %. */
+  doubleRedGrossPct: number;
+}
+
+/**
+ * The advisory de-risking guidance to show for a given regime gate result + the
+ * user's own rule. Display-only — NEVER enforced on any order/sizing path (the
+ * standing regime prohibition). Escalates with the gate:
+ *   - all-clear (multiplier 1.0) or UNKNOWN → null (nothing to advise)
+ *   - single RED (multiplier 0.5) → trim OR tighten-stops guidance
+ *   - double RED (multiplier 0.0) → reduce-gross guidance (with the trim/stop fallback)
+ * The caller renders this next to the mandatory "Advisory — not a trade signal" label.
+ */
+export function regimeExitAdvice(gate: RegimeGateResult, rule: RegimeExitRule): string | null {
+  if (gate.risk_multiplier === null) return null;
+  if (gate.trend_state === 'RED' && gate.vol_state === 'RED') {
+    return `Reduce gross exposure to ${rule.doubleRedGrossPct}% — or trim each open position to ${rule.trimToPct}% / tighten stops to ${rule.stopPct}%.`;
+  }
+  if (gate.trend_state === 'RED' || gate.vol_state === 'RED') {
+    return `Trim each open position to ${rule.trimToPct}% of current size, or tighten stops to ${rule.stopPct}%.`;
+  }
+  return null;
+}

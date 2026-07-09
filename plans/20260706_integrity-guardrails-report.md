@@ -10,12 +10,17 @@ deviations, and open follow-ups below.
 >   from **FRED**, not TwelveData (the TwelveData-quota story below is moot for indices). After the
 >   pending `staging → main` promotion, verify a fresh `macro_daily_snapshots` row carries
 >   `engine_version = macro-snapshot-2.0.0` + non-null trend/vol/credit + a `run_log` row.
-> - **Item 3** (`regime-daily`): now **FRED-backed** (VIX/VIX3M/US10Y via `VXVCLS`/`DGS10` — `vol_state`
->   resolves instead of `UNKNOWN`). It is **built but still NOT scheduled** (no `schedule()` wrapper) and
->   `regime_daily` is still **0 rows on PROD** — wiring its cron + the backfill are the open items.
+ - **Item 3** (`regime-daily`): now **FRED-backed** (VIX/VIX3M/US10Y via `VXVCLS`/`DGS10` — `vol_state`
+>   resolves instead of `UNKNOWN`). **✅ Scheduled + backfilled (2026-07-08).** The daily-append cron
+>   was wired via a `schedule('0 23 * * 1-5', …)` wrapper (PR #82 → `staging`), and `regime_daily` was
+>   backfilled on **PROD** to **4,200 rows** (IWM/SPY/QQQ each 2020-12-08 → 2026-07-08). See the Item 3
+>   section below for the run detail + the four-ladder-cell spot-check. (Sandbox `regime_daily` left
+>   empty — dev-only, needs a sandbox service key; documented gap, not blocking.)
 > - New since: a **`sector-map-sync`** scheduled writer (add it to the live-cron verification).
-> Open follow-ups (a) live cron verification and (b) `regime_daily` backfill remain — see CLAUDE.md
-> Next Steps. Everything else below stands as the record of what shipped that week.
+> Open follow-up: (a) **live cron verification** of the four scheduled writers (`macro-snapshot`,
+> `macro-recap-am/pm`, `sector-map-sync`, and — once PR #82 promotes — `regime-daily`) via their
+> `run_log` rows on the next production cycle. See CLAUDE.md Next Steps. Everything else below stands
+> as the record of what shipped that week.
 
 ## Item 0 — macro-snapshot cron fix
 
@@ -172,13 +177,32 @@ editing their own thresholds freely, gated behind the **Premium** tier:
   signal." label. Wired into the new Limits tab. **Verified in-browser**: renders the correct
   "no data yet" state (since no backfill has run) with no console errors, at both desktop and mobile
   width.
-- **Not done this session — the backfill itself.** TwelveData's outputsize cap (5000) limits one call to
-  roughly the trailing ~19-20 years, short of the spec's ~2000-present ask, and today's quota was already
-  exhausted before this item was reached. The function is built and typechecked but has **not been
-  invoked** — no `regime_daily` rows exist yet on either environment. Per the host-approved plan, running
-  the backfill (via `?backfill=1&days=N`, walking back with `?before=` across multiple quota cycles) and
-  the three spot-check dates (a 2022 double-RED day, a 2024 GREEN+GREEN day, an Aug-2024 vol-inversion
-  day) from the acceptance criteria are **next-session work**.
+- **✅ Scheduled + backfilled (2026-07-08 session).**
+  - **Scheduled:** `regime-daily.ts` handler wrapped with `schedule('0 23 * * 1-5', handlerImpl)` — the
+    repo's in-code pattern (matching `macro-snapshot` / `sector-map-sync`), run after the equity close and
+    after the other two writers so FRED/TwelveData have posted and none contend. PR #82 → `staging`. The
+    cron only begins firing once #82 promotes to `main` (Netlify fires scheduled functions on the prod
+    deploy only). Because a scheduled fn is cron-only over HTTP, the backfill `?backfill=` path is now
+    invoked via `netlify functions:invoke --querystring` / a local harness (documented in the file header).
+  - **Backfilled PROD:** ran the **esbuild-bundled handler** (the exact deploy artifact — no logic drift
+    vs. the deployed function) locally in backfill mode across chunked cycles (`days=500` + `?before=`
+    walk-back, TwelveData ~8/min-paced by hand between chunks). `regime_daily` now holds **4,200 rows —
+    IWM/SPY/QQQ each 2020-12-08 → 2026-07-08 (1,400 days)**. `vix3mAvailable=true` throughout, so
+    `vol_state` resolves via FRED `VXVCLS` (the only UNKNOWN is today's row, where FRED hadn't posted the
+    day's index values yet — the correct "write UNKNOWN, never guess" behavior). Each run logged an `ok`
+    `run_log` row with its row count (instrumentation acceptance ✓).
+  - **Spot-check — all four `regimeGate` ladder cells confirmed against real, hand-verifiable dates:**
+    2024-03-28 GREEN+GREEN → **1.0** (calm bull: SPY 523 > 460 SMA, VIX 13.0 < VIX3M 15.2); 2024-08-05
+    GREEN+RED → **0.5** (yen-carry spike: SPY 517 > 500 SMA, VIX 38.6 > VIX3M 33.7); 2022-09-30 RED+GREEN
+    → **0.5** (bear grind: SPY 357 < 420 SMA, VIX 31.6 fractionally < VIX3M 31.9 — term structure *not*
+    inverted that close, so vol GREEN, not the double-RED originally assumed); 2022-02-24 RED+RED → **0.0**
+    (Ukraine-invasion double-RED: IWM 198 < 220.7 SMA, VIX 30.3 > VIX3M 30.1).
+  - **Sandbox `regime_daily` left empty** — the deployed admin site reads PROD, so PROD is what the
+    advisory light needs; a sandbox data backfill needs a sandbox service-role key (only the anon key is
+    local) and is dev-convenience only. Documented gap, consistent with other PROD-only data backfills.
+  - **Depth:** stopped at ~2020-12 (all acceptance spot-checks + a full 2021 bull / 2022 bear base).
+    Walking back toward the spec's ~2000 is more `?before=` chunks if ever wanted — FRED has no row cap;
+    TwelveData's 5000-bar cap is the limiter for the equity instruments.
 
 ## Item 4 — regime_exit_v0.md
 

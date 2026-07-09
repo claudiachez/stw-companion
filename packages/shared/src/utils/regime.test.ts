@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   regimeGate, trendStateFromClose, volStateFromVix, REGIME_GATE_CONFIG,
   sma, rocPositive, smaSlopePositive, realizedVolAnnualized, percentileRankOf,
+  regimeExitAdvice, type RegimeExitRule,
 } from './regime';
 
 describe('trendStateFromClose / volStateFromVix', () => {
@@ -89,6 +90,36 @@ describe('stats helpers', () => {
     expect(percentileRankOf(5, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10])).toBe(50);
     expect(percentileRankOf(10, [1, 2, 3])).toBe(100);
     expect(percentileRankOf(1, [])).toBeNull();
+  });
+});
+
+describe('regimeExitAdvice', () => {
+  const rule: RegimeExitRule = { trimToPct: 70, stopPct: 5, doubleRedGrossPct: 30 };
+
+  it('returns null when all-clear (GREEN+GREEN → multiplier 1.0)', () => {
+    const gate = regimeGate({ close: 110, sma200: 100 }, { vixClose: 15, vix3mClose: 18 });
+    expect(regimeExitAdvice(gate, rule)).toBeNull();
+  });
+  it('returns null when the regime is UNKNOWN (missing data)', () => {
+    const gate = regimeGate({ close: null, sma200: 100 }, { vixClose: 15, vix3mClose: 18 });
+    expect(regimeExitAdvice(gate, rule)).toBeNull();
+  });
+  it('gives trim/stop guidance on a single RED (trend RED, vol GREEN)', () => {
+    const gate = regimeGate({ close: 95, sma200: 100 }, { vixClose: 15, vix3mClose: 18 });
+    expect(regimeExitAdvice(gate, rule)).toBe('Trim each open position to 70% of current size, or tighten stops to 5%.');
+  });
+  it('gives trim/stop guidance on a single RED (vol RED, trend GREEN)', () => {
+    const gate = regimeGate({ close: 110, sma200: 100 }, { vixClose: 20, vix3mClose: 18 });
+    expect(regimeExitAdvice(gate, rule)).toBe('Trim each open position to 70% of current size, or tighten stops to 5%.');
+  });
+  it('gives reduce-gross guidance on a double RED', () => {
+    const gate = regimeGate({ close: 95, sma200: 100 }, { vixClose: 20, vix3mClose: 18 });
+    expect(regimeExitAdvice(gate, rule)).toBe('Reduce gross exposure to 30% — or trim each open position to 70% / tighten stops to 5%.');
+  });
+  it('uses the supplied per-user numbers', () => {
+    const gate = regimeGate({ close: 95, sma200: 100 }, { vixClose: 15, vix3mClose: 18 });
+    expect(regimeExitAdvice(gate, { trimToPct: 50, stopPct: 8, doubleRedGrossPct: 20 }))
+      .toBe('Trim each open position to 50% of current size, or tighten stops to 8%.');
   });
 });
 

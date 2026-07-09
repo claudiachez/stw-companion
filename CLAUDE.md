@@ -1,29 +1,34 @@
 # STW Companion — Claude Code Guide
 
 > **⚠️ START HERE — branch.** **`staging` is the active trunk** — all feature work happens here.
-> **`staging` is ~112 commits ahead of `main` as of 2026-07-10** (check `git log --oneline
-> origin/main..origin/staging | wc -l` for the exact count) (last completed promotion was PR #66 on
-> 2026-07-05). A `staging → main` PR is a separate, approval-gated production deploy; **do not open one
-> without explicit host approval**, even if staging looks ready.
-> **⏳ A `staging → main` production-promotion PR ([#81](https://github.com/claudiachez/stw-companion/pull/81))
-> is OPEN and pending merge** (host-approved). If it has merged by your session, `staging`≈`main` and the
-> FRED/GICS work is LIVE — run the post-deploy verification in its PR body (esp. confirm `FRED_API_KEY`
-> is set on the Netlify **production** context, and that a fresh `macro_daily_snapshots` row carries
-> `engine_version=macro-snapshot-2.0.0`). If it's still open, the work below is staging-only.
-> **No other open PRs.** This session merged **PR #78** (FRED feeds re-platform + Macro UI), **PR #79**
-> (GICS taxonomy + `sector-map-sync`), and **PR #80** (docs refresh: new `docs/feeds.md`, rewritten
-> `docs/workflow.md`, FRED-updated macro guides, lowercase doc filenames). Branches cleaned up. Cut a
-> normal feature branch from `staging` for new work.
-> Migrations run to **062 on `staging`**, applied on **both PROD and sandbox** (058 is PROD-only —
-> sandbox has no `tiers`/`profiles` tables to apply it to; this is a known, permanent gap, not
-> pending work). This session added **061** (regime sleeve weights → `app_config`) and **062**
-> (`ticker_sector_map` re-seeded Finnhub-label → **GICS-11 + ETF/Cash**) — **both applied to PROD +
-> sandbox, verified identical**.
+> **`staging` is 13 commits ahead of `main`** (check `git log --oneline origin/main..origin/staging | wc -l`).
+> A `staging → main` PR is a separate, approval-gated production deploy; **do not open one without
+> explicit host approval**, even if staging looks ready.
+> **⏳ PRODUCTION PROMOTION PR [#87](https://github.com/claudiachez/stw-companion/pull/87)
+> (`staging → main`) is OPEN and host-approved — likely merged by your session.** It ships this
+> session's work: the **`regime-daily` cron** (#82 — starts firing only on the `main` deploy), the
+> **per-user REGIME_EXIT rule + mounted RegimeLight** (#83), the admin editor **Basket rename + Sector
+> dropdown** (#84), and the **Settings risk-config layout/alignment** (#85/#86). If merged, run the
+> post-deploy verification in #87's body (esp. confirm the `regime-daily` cron fired: a `run_log`
+> `regime-daily` ok row + a fresh `regime_daily` row after the next 23:00 UTC weekday). No new env vars.
+> **The prior FRED re-platform + GICS taxonomy is already LIVE on production** (PR #81, merged
+> 2026-07-08, post-deploy-verified: `FRED_API_KEY` works on prod, `macro-snapshot-2.0.0` writes real
+> FRED scores, `sector-map-sync` instrumented).
+> Migrations run to **063**, applied on **both PROD and sandbox** (058 is PROD-only — sandbox has no
+> `tiers`/`profiles` tables; known permanent gap). This session added **063** (per-user REGIME_EXIT
+> columns on `risk_config`) — **applied to PROD + sandbox, verified**.
+> **DATA backfill (prior in this session, not a migration): `regime_daily` backfilled on PROD to 4,200
+> rows** (IWM/SPY/QQQ each 2020-12-08 → present) via the esbuild-bundled `regime-daily` handler run
+> locally. **Sandbox `regime_daily` is still 0 rows** (dev-only; needs a sandbox service-role key — the
+> local `.env.local` only has the anon key). **CCXI (Agility Robotics SPAC) is unmapped in
+> `ticker_sector_map`** (Finnhub has no industry for the SPAC shell) — it shows as `unevaluated` (never
+> a breach). Fix: set it via the **new admin editor Sector dropdown** (→ Industrials), which supersedes
+> the old `TICKER_GICS` code-override idea.
 > `app_config.ibkr_live_trading_enabled` = **`0` on both PROD and sandbox** (last confirmed 2026-07-05).
-> **New Netlify env var this session: `FRED_API_KEY`** (server-side, no `VITE_` prefix) — set on both
-> sites; the macro index feeds + Event Risk depend on it. If migrations stop well short of 062 you are on a stale checkout, re-sync.
+> **`FRED_API_KEY`** (server-side, no `VITE_` prefix) is set on both sites incl. the prod context
+> (verified live). If migrations stop well short of 063 you are on a stale checkout, re-sync.
 > **First commands every session:** `git fetch origin && git checkout staging && git pull --ff-only`.
-> Sanity check: `supabase/migrations/` should go up to `062_ticker_sector_map_gics.sql`,
+> Sanity check: `supabase/migrations/` should go up to `063_risk_config_regime_exit.sql`,
 > `packages/shared/src/constants/sectors.ts` and `packages/shared/src/utils/fred.ts` should exist, and
 > `plans/` files are **date-prefixed** (`YYYYMMDD_<name>`) — if any is missing, you're on a stale
 > checkout. Then **cut a feature branch** before making any change:
@@ -51,12 +56,43 @@
 
 ---
 
-## Current Status — Data-feeds re-platform (FRED) + GICS sector taxonomy (handoff 2026-07-10)
+## Current Status — regime engine scheduled + per-user REGIME_EXIT (handoff 2026-07-08)
 
-**Everything this session is on `staging` only, NOT production** (`staging` ~107 ahead of `main`). Two
-PRs merged to `staging`, both branches cleaned up: **PR #78** (feeds re-platform + Macro UI) and
-**PR #79** (GICS taxonomy + sync). Migrations **061 + 062 applied to PROD + sandbox** (verified). The
-detailed inventory + rationale live in [`plans/20260707_data_feeds_inventory_and_plan.md`](plans/20260707_data_feeds_inventory_and_plan.md).
+**This session's work is all on `staging`, merged via PRs #82–#86, and bundled into the OPEN
+production-promotion PR #87 (`staging → main`, pending merge).** Four things:
+
+1. **Verified the prior PR #81 promotion live on production** (`macro-snapshot-2.0.0` wrote real
+   FRED scores at 21:32 UTC → `FRED_API_KEY` confirmed on the prod context; `sector-map-sync` fired +
+   instrumented). *(Not re-confirmed in-browser: the Macro tab / per-ticker regime badge — needs the
+   OAuth password-swap recipe.)*
+2. **Scheduled + backfilled the advisory regime engine** (integrity-guardrails item 3). Wrapped
+   `regime-daily.ts` with `schedule('0 23 * * 1-5', …)` (**PR #82**, merged). Backfilled `regime_daily`
+   on **PROD to 4,200 rows** (IWM/SPY/QQQ, 2020-12 → present) via the **esbuild-bundled handler** run
+   locally (exact deploy artifact — see Conventions → Netlify Functions). All four `regimeGate` cells
+   spot-checked against real dates. **Sandbox `regime_daily` still empty** (dev-only). **The cron only
+   FIRES once #87 promotes to `main`.**
+3. **Turned REGIME_EXIT into a per-user, Settings-configurable rule** (host decision — see Decisions
+   locked below) — **PR #83**. Migration **063** (`risk_config` += `regime_trim_to_pct` 70 /
+   `regime_stop_pct` 5 / `regime_doublered_gross_pct` 30, applied PROD + sandbox). Pure
+   `regimeExitAdvice(gate, rule)` in `@stw/shared`; a section in `RiskConfigForm` (Settings, Premium to
+   edit); and the **`RegimeLight` is now actually mounted** (was exported-but-unmounted) on My Portfolio
+   → Risk (all portfolio users) + the admin Limits tab, showing the viewer's own rule when RED.
+4. **Admin editor + Settings polish** — **PR #84**: Ticker-detail editor "Category" → **"Basket"** + a
+   **Sector dropdown** writing `ticker_sector_map` (the manual escape hatch for tickers `sector-map-sync`
+   can't resolve, e.g. CCXI/SPACs). **PRs #85/#86**: `RiskConfigForm` compact inline fields + removed the
+   confusing account-equity peak text + one aligned input column (the `rowPrefix` fixed-slot convention).
+
+Full completion record + all deviations from the original 7-item plan:
+[`plans/20260708_integrity-guardrails-report.md`](plans/20260708_integrity-guardrails-report.md).
+
+---
+
+### Prior handoff — Data-feeds re-platform (FRED) + GICS sector taxonomy (2026-07-10, now LIVE)
+
+**Now on production** (was staging-only at the 2026-07-10 handoff; promoted via PR #81 on 2026-07-08).
+Merged over prior sessions: **PR #78** (feeds re-platform + Macro UI), **PR #79** (GICS taxonomy + sync),
+**PR #80** (docs refresh). Migrations **061 + 062 applied to PROD + sandbox** (verified). The detailed
+inventory + rationale live in [`plans/20260707_data_feeds_inventory_and_plan.md`](plans/20260707_data_feeds_inventory_and_plan.md).
 
 > ⚠️ The older TwelveData-centric macro narratives further down this file (2026-07-05 regime-badge /
 > rate-limit story) are **superseded** by the FRED re-platform — macro *indices* no longer use
@@ -317,6 +353,23 @@ evaluated** — that was the exact tautology bug found and fixed (gross exposure
   option / sector) carries a one-line what-and-why explanation. Exceptions-first is the resting view
   (breach + near + unevaluated shown; "Show all" reveals the OK rows).
 
+**Decisions locked — REGIME_EXIT is a per-user rule, not a signed document (host 2026-07-08):**
+- The advisory de-risking policy (integrity-guardrails Item 4) is a **per-user setting**, not the
+  single operator-owned `docs/regime_exit_v0.md` the original spec described. Values live on
+  `risk_config` (migration 063): `regime_trim_to_pct` (default **70**), `regime_stop_pct` (**5**),
+  `regime_doublered_gross_pct` (**30**) — same seed-a-placeholder-default pattern as the other
+  `risk_config` fields. Edited in **Settings** (`RiskConfigForm`, Premium-gated to edit); **displayed to
+  all portfolio users** (defaults until overridden). The operator-only governance the spec named
+  ("version bump required, no change mid-drawdown") is **dropped** for the per-user model.
+- **Advisory / display-only — never enforced** (the standing regime prohibition). One source of truth:
+  `regimeExitAdvice(gate, rule)` in `@stw/shared` — single-RED → trim/stop text, double-RED →
+  reduce-gross text, GREEN/UNKNOWN → nothing. Used by the RegimeLight, the My-Portfolio Overview regime
+  line, and the position detail pane; don't re-derive the text per surface.
+- **The RegimeLight is presentational** — the mount site gates visibility (My Portfolio → Risk for
+  subscribers, admin Limits tab for the operator), NOT a hard `isAdmin` return inside the component.
+  It belongs with the *live* risk data (the Risk tab), never in Settings (same split as the limits
+  engine: Settings = config, the data page = live evaluation).
+
 **Event-sourcing plan docs (`plans/`, now date-prefixed):** `20260618_legs_event_sourcing_redesign.md`
 (spec) · `20260618_import_open_positions.sql` (clean open-position import) ·
 `20260618_post_import_holdings_fix.sql` (post-import seed) · `20260618_revert_legacy_category.sql`
@@ -406,35 +459,42 @@ it, shipped it to production, then separately investigated + fixed a live data-i
 
 ## Next Steps
 
-0. **★ Production promotion PR [#81](https://github.com/claudiachez/stw-companion/pull/81)
-   (`staging → main`, 112 commits) is OPEN and host-approved — likely merged by your session.**
-   **DB is ready** — migrations through 062 on PROD + sandbox. The scheduled writers
-   (`macro-snapshot` v2.0.0, `sector-map-sync`) only fire on the `main` deploy, so they go live on merge.
-   **If merged, VERIFY on production:** (a) `FRED_API_KEY` is set on the Netlify **production** context
-   of both sites (else FRED cells go `—`); (b) a fresh `macro_daily_snapshots` row carries
-   `engine_version = macro-snapshot-2.0.0` + non-null trend/vol/credit + a `run_log` row; (c)
-   `sector-map-sync` mapped CCXI (`run_log`); (d) the Macro tab renders live FRED data + the regime
-   badge shows on a held ticker. **If still open, don't merge without re-confirming host approval.**
+0. **⏳ PRODUCTION PROMOTION PR [#87](https://github.com/claudiachez/stw-companion/pull/87)
+   (`staging → main`, 13 commits) is OPEN + host-approved — likely merged by your session.** Ships the
+   regime-daily cron, per-user REGIME_EXIT, editor Basket/Sector, Settings layout. **No migration/env
+   action needed** (063 already on PROD+sandbox; no new env vars). **If merged, VERIFY on PROD:**
+   (a) the **regime-daily cron fired** — a `run_log` row (`run_type='regime-daily'`, ok) + a fresh
+   `regime_daily` row after the next **23:00 UTC weekday** (the cron only runs on `main`); (b) Settings
+   renders the regime-rule section + aligned fields, Save writes the 3 `regime_*` cols; (c) My Portfolio
+   → Risk shows the RegimeLight with the user's rule; (d) admin editor has the Basket label + Sector
+   dropdown. **If still open, don't merge without re-confirming approval.** (Prior promotion #81 —
+   FRED/GICS — is already live + verified.)
 
-1. **✅ DONE — data feeds + sector taxonomy (PRs #78/#79, this session).** Macro indices re-platformed
-   onto FRED, Event Risk on FRED's calendar, VVIX dropped, GICS-11 taxonomy + `sector-map-sync`,
-   admin-configurable regime weights. Migrations 061 + 062 applied to both environments. See Current
-   Status + Conventions → Macro data sources / Sector taxonomy. Nothing left here — it just needs the
-   promotion (#0) to run live on production.
+1. **✅ DONE — data feeds + sector taxonomy + integrity guardrails.** All live or in promotion #87.
+   Week 1 integrity-guardrails plan is **complete** — see
+   [`plans/20260708_integrity-guardrails-report.md`](plans/20260708_integrity-guardrails-report.md) for
+   the final state + all 11 deviations from the original spec.
 
-2. **★ ROADMAP — integrity guardrails.** Spec:
-   [`plans/20260706_integrity-guardrails.md`](plans/20260706_integrity-guardrails.md); status report:
-   [`plans/20260706_integrity-guardrails-report.md`](plans/20260706_integrity-guardrails-report.md).
-   Two items still open: **(a)** live cron verification (now includes the new `sector-map-sync` +
-   `regime-daily` writers) and **(b)** the `regime_daily` backfill via `?backfill=1&days=N` (the
-   `regime-daily` fn is on `staging` but **not yet scheduled** — it has no `schedule()` wrapper; wiring
-   its cron + running the backfill is part of this). `regime_daily` is still **0 rows** on PROD.
+2. **Integrity-guardrails — remaining loose ends** (spec:
+   [`plans/20260706_integrity-guardrails.md`](plans/20260706_integrity-guardrails.md)):
+   - **Post-#87 cron verification** (see #0a) — the one real check, gated on the promotion firing.
+   - **CCXI sector** — set it to `Industrials` via the **admin editor Sector dropdown** (the preferred
+     fix now that the dropdown exists; supersedes the old `TICKER_GICS` code-override idea). Shows
+     `unevaluated` until then (never a breach).
+   - **Deeper `regime_daily` history** (optional) — backfill stopped at ~2020-12; walk back with more
+     `?before=` chunks via the local esbuild-bundle harness if ever wanted.
+   - **Sandbox `regime_daily`** (optional, dev-only) — still 0 rows; needs a sandbox service-role key.
+   - Item 2's second-account DB multi-tenancy proof (minor); Item 4's `docs/regime_exit_v0.md` sign-off
+     is moot now (REGIME_EXIT is per-user).
 
-3. **Visually confirm the regime badge + the FRED-backed Macro tab render** after the promotion. Open a
-   held ticker's detail page (regime chip) and the Macro tab (Market Internals values populated, Event
-   Risk showing the upcoming calendar). FRED is 120/min so cold loads should be fast now; equity closes
-   still pace on TwelveData. If a cell is blank after a full cycle, check the `fred` proxy / `FRED_API_KEY`
-   before assuming a deeper bug.
+2.5. **★ Week 2 scope — host will provide next session.** No Week 2 plan exists in the repo yet; the
+   Week 1 plan's "Out of scope this week" list earmarked candidates (historical snapshot reconstruction,
+   Trades/executions Flex sync, vol-targeted sizing, TCA, expectancy analyzer, …) but that's a
+   do-not-build list, not a spec. **Wait for the host's Week 2 scope; do not start these unprompted.**
+
+3. **Visually confirm the regime badge + FRED Macro tab + RegimeLight in-browser** (not re-checked —
+   needs the admin OAuth password-swap recipe below). Server-side FRED path is proven; if a cell is
+   blank after a full cycle, check the `fred` proxy / `FRED_API_KEY` before assuming a deeper bug.
 
 4. **Live-test the admin IBKR order flow against a real IB Gateway** — cannot be done from this
    environment. In order: (1) `IB_PORT=4002 python3 ibkr_proxy.py` against Gateway in **paper** mode,
@@ -449,14 +509,11 @@ it, shipped it to production, then separately investigated + fixed a live data-i
    recommended — only 2 seeded, FK'd everywhere, high-risk/low-value to make editable). No migrations
    expected.
 
-6. **`macro_daily_snapshots` is populating but the PROD writer is a STALE build; the good fix is on
-   staging, not main.** PROD had 2 rows at handoff (up from 0/1), but the currently-DEPLOYED (main)
-   `macro-snapshot` writes rows with **null `engine_version` and no `run_log` row** — i.e. it's a
-   pre-instrumentation build, and its trend/vol/credit scores are still null (the unpaced-TwelveData
-   429 bug). PR #73's fix (Supabase-read hook + ≤8/65s pacing + run_log/engine_version) is on
-   **`staging` only** — it won't take effect on PROD until the promotion in #0. After promotion,
-   confirm a fresh snapshot row carries a non-null `engine_version` + real trend/vol scores AND a
-   `run_log` row (`run_type='macro-snapshot'`) before trusting the 5D engine.
+6. **✅ RESOLVED — `macro_daily_snapshots` PROD writer is now the good build.** The pre-instrumentation
+   build described in prior handoffs is gone; after PR #81, the 2026-07-08 21:32 UTC run wrote a row
+   with `engine_version = macro-snapshot-2.0.0`, non-null trend/vol/credit, and a `run_log` `ok` row.
+   The 5D engine (`useMacroTrendHistory`) is now backed by real scores going forward (deltas legitimately
+   null until ≥~6 fresh rows accrue).
 
 7. **Macro Dashboard — COMPLETE.** All 11 modules + the Portfolio Heatmap (shipped this session on
    both Stock Picks Overview and My Portfolio) are done. Nothing left from
@@ -762,6 +819,8 @@ subscriber's own account, read-only. Do not conflate them.
 - **Supabase — NO `@supabase/supabase-js` in Netlify Functions.** `createClient` from supabase-js 2.100+ throws on Node 20 because the Realtime client tries to open a WebSocket at import time and crashes the function. Use **direct REST `fetch()`** for all Supabase reads/writes in functions — `GET /rest/v1/<table>?...` with `apikey` + `Authorization: Bearer <key>` headers. See `apps/web/netlify/_lib/recap-core.ts` for the pattern. This replaces the old guidance about `createClient` options.
 - **Env var whitespace:** always call `.trim()` on env vars read in functions — pasted keys/URLs sometimes carry a trailing newline that causes "Invalid API key" from Supabase even when the value looks correct in the Netlify UI.
 - **Both web and admin deploy functions.** Both `apps/web/netlify/functions/` and `apps/admin/netlify/functions/` are deployed by their respective Netlify sites. Functions that must work on both sites (e.g. `macro-recap.ts`) need a copy in each app — Netlify functions are site-scoped, not cross-domain callable.
+- **Scheduled functions are cron-only over HTTP.** Once a function is wrapped with `schedule('<cron>', handlerImpl)` (the repo's pattern — `macro-snapshot`, `sector-map-sync`, `regime-daily`; `schedule` is an *identity* pass-through at runtime, so `handler === handlerImpl`), Netlify **no longer serves it over public HTTP** in production — it fires only on its cron. The UI "Run now" button sends no querystring, so it can only trigger the default (no-param) path. A function that ALSO has a param-driven mode (e.g. `regime-daily`'s `?backfill=1&days=N&before=`) can't reach that mode via the deployed URL — run it via `netlify functions:invoke --name <fn> --querystring "…"` against Netlify Dev, **or** the local esbuild-bundle harness below.
+- **Running/backfilling a function locally with no site URL (the zero-drift way).** To execute a function's real code from this environment (e.g. the `regime_daily` PROD backfill): esbuild-**bundle** the handler exactly like Netlify does — `./node_modules/.pnpm/node_modules/.bin/esbuild <fn>.ts --bundle --platform=node --target=node20 --format=cjs --outfile=bundle.cjs` (inlines `@stw/shared` — this is the deploy artifact, no logic drift) — then a tiny CJS runner sets env from `apps/web/.env.local` + `apps/web/.env` (TwelveData key lives in `.env`, empty in `.env.local`) + the prod service-role key file, and calls `require('./bundle.cjs').handler({ queryStringParameters: {…} })`. **Do NOT use `tsx` to import the handler directly** — tsx's per-file transpile can't statically link `@stw/shared`'s `export *` barrel (a static `import { FRED_SERIES }` fails with "does not provide an export named" even though dynamic `import()` sees it); the esbuild bundle sidesteps it entirely.
 
 ### Macro data sources & module structure (FRED re-platform, 2026-07-10)
 Feed responsibilities, post-re-platform (full inventory: [`plans/20260707_data_feeds_inventory_and_plan.md`](plans/20260707_data_feeds_inventory_and_plan.md)):
@@ -804,10 +863,9 @@ Feed responsibilities, post-re-platform (full inventory: [`plans/20260707_data_f
   `public.macro_daily_recaps` (migration 051). Hook: `useDailyRecap.ts`.
 - **5D trend engine** (`useMacroTrendHistory.ts`): reads `public.macro_daily_snapshots` (migration 048),
   written by the `macro-snapshot` scheduled fn (4:30pm ET weekdays), folding today's live scores in.
-  Supabase-backed (not localStorage). The **v2.0.0 writer (FRED indices + HY-OAS + paced equity) is on
-  `staging`**; it self-populates only on the **production (`main`) deploy** (Netlify fires scheduled
-  functions only there), so PROD snapshot rows won't carry real trend/vol/credit scores until the
-  pending `staging → main` promotion — see Next Steps. Deltas are legitimately null until ≥~6 rows accrue.
+  Supabase-backed (not localStorage). The **v2.0.0 writer (FRED indices + HY-OAS + paced equity) is LIVE
+  on production** (verified 2026-07-08: a fresh row carries `engine_version = macro-snapshot-2.0.0` +
+  real trend/vol/credit scores + a `run_log` row). Deltas are legitimately null until ≥~6 fresh rows accrue.
 - **Sector Rotation** (Module 11): per-sector radar cards + constituent chips, fetched via
   `fetchClosesChunked` (TwelveData, paced).
 
@@ -838,8 +896,14 @@ active filter (closed hidden by default). The FilterBar count shows `N of {total
   `GicsSector`/`SectorBucket`). `ticker_sector_map.sector` holds one of these values — never a raw
   Finnhub industry label. Resolve with `resolveSector(ticker, finnhubLabel?)` (TICKER_GICS override →
   Finnhub→GICS fold → null); never re-implement the mapping. A new ticker is auto-mapped by the
-  `sector-map-sync` scheduled fn; add a `TICKER_GICS` entry only to correct a mis-folded name or a
-  non-equity holding (ETF/Cash).
+  `sector-map-sync` scheduled fn. For a ticker it can't resolve (no Finnhub industry — e.g. a SPAC
+  shell like CCXI), the **admin Ticker-detail editor's Sector dropdown** sets it directly (writes
+  `ticker_sector_map`, admin-write RLS) — the preferred manual fix. A `TICKER_GICS` code override is
+  the alternative, for a mis-folded name or a permanent non-equity holding (ETF/Cash).
+- **"Basket" (thematic grouping, `categories`/`category_id`) and "Sector" (market/GICS,
+  `ticker_sector_map`) are distinct** and both user-facing. "Basket" is the canonical UI label
+  everywhere (filter bars, editor, heatmap "By Basket") — never "Category" in visible text (the DB
+  column stays `category_id`; `Badge kind="category"` is an internal prop, not shown).
 - **`ETF` and `Cash` are excluded from sector-concentration** (`isNonEquityBucket`) — they're not an
   equity sector, so they never form a bucket and never show as `unevaluated`. A genuinely unmapped
   ticker (no override, no Finnhub industry) stays `unevaluated`, never a breach.

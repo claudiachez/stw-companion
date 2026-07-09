@@ -1,39 +1,37 @@
-# REGIME_EXIT v0 — Advisory De-Risking Policy
+# REGIME_EXIT — Advisory De-Risking Policy
 
-**Status:** template — not yet signed. Fill every blank and set the version/date before this
-policy is considered active.
+**Status:** now a **per-user setting**, not a single signed document (host decision, 2026-07-08).
+Each user's own values live on `risk_config` (migration 063) and are edited in **Settings → risk
+config** (`RiskConfigForm`, Premium-gated to edit). The regime advisory surfaces the *viewer's own*
+rule — see the Regime light on **My Portfolio → Risk**, the Overview regime line, and each position's
+detail pane. This file now just documents the concept + the shipped **default** values below.
 
-**Version:** v0 (unsigned)
-**Date signed:** ___________
-**Owner:** the operator (this is not an engineering decision)
+**Owner:** each user (the operator's book uses the same defaults until changed).
 
 ## Scope
 
-This document defines what the operator does, by hand, when the advisory regime light (Item 3,
-`regimeGate()`) turns amber or red. **It is advisory only.** Nothing in this repo reads this
-document or enforces it automatically — there is no code path that trims a position, adjusts a
-stop, or reduces gross exposure on your behalf. The regime light and the limits engine (Item 2)
-both flag; neither blocks.
+Advisory only. Nothing in this repo reads this file or enforces the rule automatically — no code path
+trims a position, adjusts a stop, or reduces gross exposure on anyone's behalf. The regime light and
+the limits engine both **flag**; neither blocks (standing regime prohibition). The rule is surfaced
+via `regimeExitAdvice()` in `packages/shared` from the frozen `regimeGate()` result + the user's stored values.
 
-Parameter changes require a version bump (v0 → v1, etc.) and a new signed date. **Parameters may
-not change mid-drawdown** — decide the rule when calm, follow it when it matters.
+## The rule (shipped defaults)
 
-## The rule
+These are the DB defaults (migration 063, `NOT NULL DEFAULT`); any user can override them in Settings.
 
-**When `vol_state = RED`** (VIX ≥ VIX3M — the term structure has inverted):
+**When single-RED** (exactly one of `trend_state` / `vol_state` is RED):
 
-- Trim each open position to **______%** of its current size, OR
-- Tighten stops to **______**
+- Trim each open position to **70%** of its current size, OR
+- Tighten stops to **5%**
 
-**When double-RED** (`trend_state = RED` AND `vol_state = RED` — both the proxy trend check and
-the volatility term structure have flipped):
+**When double-RED** (`trend_state = RED` AND `vol_state = RED` — both the proxy trend check and the
+volatility term structure have flipped):
 
-- Reduce gross exposure to **______%**
+- Reduce gross exposure to **30%**
 
 ## Notes
 
-- This is a single, frozen, pre-registered rule under forward test (per `regimeGate()`,
-  `engine_version` in `packages/shared`) — not a validated signal. Treat a red light as a prompt
-  to review, not an automatic trigger.
-- If the rule proves wrong in practice, that's a v1 conversation for calm markets — not a reason
-  to override it live.
+- The gate itself is a single, frozen, pre-registered rule under forward test (`regimeGate()`,
+  `engine_version` in `packages/shared`) — not a validated signal. Treat a red light as a prompt to
+  review, not an automatic trigger.
+- Only the *response* values (trim / stop / gross) are per-user now; the gate logic stays frozen.
