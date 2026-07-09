@@ -84,22 +84,26 @@ Typecheck + 250 tests + lint all green.** What shipped this session:
 - **Item 2 — TCA v1 (DONE, code).** `scripts/tca.mjs` — admin/CLI report joining `user_executions`
   to the host's `leg_transactions` (fill slippage · pre-registered pullback-waiting overlay · exit
   divergence). Runnable once executions data exists (Item 1 dependency).
-- **Item 0c — provenance record (SQL authored).** `plans/20260709_36row_stamping_provenance.sql`
-  (idempotent ops_log record for the Week-1 36-row stamping). Pending application/verification.
+- **Item 0c — provenance ALREADY recorded (verified, no action).** The Week-1 36-row stamping is
+  already in `ops_log` (row 11, `affected_scope='36 leg_transactions rows'`, with prior value
+  bare-midnight-UTC / new value 16:00 ET close / host-confirmed date / honest "assumed placeholder"
+  caveat). Item 0c is satisfied — no new record needed.
 - **Item 4 — regime_daily depth extension (DEFERRED, spec-ready).** The one item not built —
   `plans/20260709_regime_daily_depth_extension.md` (Stooq source behind regime-daily.ts's single
-  code path). Blocked on stable service-role DB access + deep fetch.
+  code path). Blocked on a deep public-source fetch (execution deferred, not a code gap).
 
-**⚠️⚠️ PENDING DB APPLICATION — migrations 064/065/066 are NOT applied yet.** The Supabase MCP was
-chronically unstable this session (approval prompts not granted while the session auto-resumed), so
-**no migration was applied and no DB verification ran.** A merged PR does NOT migrate the DB. **Next
-session / host, apply to BOTH PROD (`usmqbohcjcyszjxxvnqu`) + sandbox (`uolabcgbnrkhzpwuvzlk`) and
-verify:** `064_user_executions.sql`, `065_risk_config_vol_target.sql`, `066_regime_exit_audit.sql`,
-then run `plans/20260709_36row_stamping_provenance.sql` (Item 0c). The `ensureRiskConfig` insert
-includes the new `vol_target_*` columns, so **065 must be applied before the branch deploys** or new
-subscriber rows will fail. Also still pending from PR #87: the `regime-daily` cron's first tick (a
-`run_log` row is expected after a 23:00 UTC weekday tick — latest `regime_daily` was 2026-07-08 as of
-this session, cron not yet ticked post-merge) and the in-browser #87 spot-checks.
+**✅ MIGRATIONS 064/065/066 APPLIED + VERIFIED on BOTH PROD (`usmqbohcjcyszjxxvnqu`) + sandbox
+(`uolabcgbnrkhzpwuvzlk`)** (2026-07-09, after the host fixed Supabase permissions): `user_executions`
+(24 cols, RLS on), `risk_config` vol_target defaults (15/1.5/0.3, backfilled onto the operator's
+existing row), `regime_exit_audit` + trigger. The 066 trigger was functionally tested on sandbox
+(real change logs, no-op skips, `changed_by` null for service-role writes; test rows cleaned up).
+**Still pending from PR #87** (unrelated to this branch): the `regime-daily` cron's first tick (a
+`run_log` row expected after a 23:00 UTC weekday tick — latest `regime_daily` was 2026-07-08, cron
+not yet ticked post-merge) and the in-browser #87 spot-checks.
+
+**⚠️ Still TIME-SENSITIVE (host, outside repo):** enable the **Trades** section on the operator's IBKR
+Flex template so `user_executions` starts filling — its ~1-year lookback slides daily and pre-window
+history is unrecoverable. No fills flow (and TCA has nothing to analyze) until this is done.
 
 ---
 
