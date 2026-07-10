@@ -354,14 +354,6 @@ function PortfolioSummary({ groups, showPnl, regimeAdvisory, regimeAdviceText, o
             primaryValue={t.equityPct !== null ? `${t.equityPct}%` : '—'}
             secondaryValue={t.optionsPct !== null ? `/ ${t.optionsPct}%` : undefined}
           />
-          {regimeAdvisory && regimeAdvisory.trend_state !== 'UNKNOWN' && (
-            <div
-              style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[1.5], fontStyle: 'italic' }}
-              title="Advisory — under forward validation. Not a trade signal."
-            >
-              Regime: {regimeAdvisory.trend_state}{regimeAdviceText ? ` · ${regimeAdviceText}` : ''}
-            </div>
-          )}
         </div>
         {showPnl && (
           <div
@@ -376,6 +368,18 @@ function PortfolioSummary({ groups, showPnl, regimeAdvisory, regimeAdviceText, o
           </div>
         )}
       </div>
+
+      {/* Advisory regime line — its own full-width strip, NOT crammed into a KPI card
+          (keeps the KPI row uniform). Compact echo of the Risk tab's RegimeLight. */}
+      {regimeAdvisory && regimeAdvisory.trend_state !== 'UNKNOWN' && (
+        <div
+          style={{ display: 'flex', alignItems: 'center', gap: SPACE[1.5], marginTop: 10, fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}
+          title="Advisory — under forward validation. Not a trade signal."
+        >
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: regimeAdvisory.trend_state === 'GREEN' ? 'var(--acc)' : 'var(--status-negative-text)' }} />
+          <span>Regime: <span style={{ color: 'var(--t2)', fontWeight: FONT_WEIGHT.semibold }}>{regimeAdvisory.trend_state}</span>{regimeAdviceText ? ` · ${regimeAdviceText}` : ''} <span style={{ fontStyle: 'italic' }}>(advisory)</span></span>
+        </div>
+      )}
 
       {positionCount > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>

@@ -58,7 +58,56 @@
 
 ---
 
-## Current Status — cleanup + cloud-routines assessment; Week 2 plan ready (handoff 2026-07-09)
+## Current Status — Week 2 built on a feature branch (handoff 2026-07-09)
+
+**Week 2 (`plans/20260709_integrity-guardrailsv2.md`) is built on branch
+`claude/week-2-integrity-guardrails-ivfp3s` (pushed; PR to `staging` not yet opened — host reviews).
+Typecheck + 250 tests + lint all green.** What shipped this session:
+
+- **Item 1 — Executions sync (DONE, code).** New `user_executions` table (migration **064**,
+  append-only, idempotent on IBKR `ibExecID`, RLS per user like `user_positions`). `ibkr-flex.ts`
+  now parses the optional `<Trades>` section alongside `<OpenPositions>` from the one Flex report and
+  **upserts** executions (ignoreDuplicates) while positions stay delete-and-reinsert; exact fill
+  instant parsed ET-wall-clock→UTC, raw string preserved. Sync result + Settings line show an
+  executions count. **⚠️ TIME-SENSITIVE MANUAL ACTION (host, outside repo):** enable the **Trades**
+  section on the operator's Flex template — its ~1-year lookback slides daily and pre-window history
+  is unrecoverable. No fills flow until this is done.
+- **Item 3 — Vol-targeted sizing (DONE, code, display-only).** Pure `volTargetScalar()` in
+  `@stw/shared` (+10 tests); per-user `vol_target_pct`/`_cap`/`_floor` on `risk_config` (migration
+  **065**); `VolTargetPanel` in the admin Risk panel beside the RegimeLight. Consumed by nothing
+  (standing prohibition). Validation backtest labeled pending Item 4.
+- **Item 0a — `docs/launch_gates.md` (DONE).** Blocking pre-first-external-user checklist
+  (unvalidated-signal display decision; DB-layer multi-tenancy proof).
+- **Item 0b — REGIME_EXIT audit trail (DONE, code).** Migration **066**: `regime_exit_audit` +
+  SECURITY DEFINER trigger logs every change to the 3 `regime_*` fields (old/new/actor/ts).
+  Visibility only.
+- **Item 2 — TCA v1 (DONE, code).** `scripts/tca.mjs` — admin/CLI report joining `user_executions`
+  to the host's `leg_transactions` (fill slippage · pre-registered pullback-waiting overlay · exit
+  divergence). Runnable once executions data exists (Item 1 dependency).
+- **Item 0c — provenance ALREADY recorded (verified, no action).** The Week-1 36-row stamping is
+  already in `ops_log` (row 11, `affected_scope='36 leg_transactions rows'`, with prior value
+  bare-midnight-UTC / new value 16:00 ET close / host-confirmed date / honest "assumed placeholder"
+  caveat). Item 0c is satisfied — no new record needed.
+- **Item 4 — regime_daily depth extension (DEFERRED, spec-ready).** The one item not built —
+  `plans/20260709_regime_daily_depth_extension.md` (Stooq source behind regime-daily.ts's single
+  code path). Blocked on a deep public-source fetch (execution deferred, not a code gap).
+
+**✅ MIGRATIONS 064/065/066 APPLIED + VERIFIED on BOTH PROD (`usmqbohcjcyszjxxvnqu`) + sandbox
+(`uolabcgbnrkhzpwuvzlk`)** (2026-07-09, after the host fixed Supabase permissions): `user_executions`
+(24 cols, RLS on), `risk_config` vol_target defaults (15/1.5/0.3, backfilled onto the operator's
+existing row), `regime_exit_audit` + trigger. The 066 trigger was functionally tested on sandbox
+(real change logs, no-op skips, `changed_by` null for service-role writes; test rows cleaned up).
+**Still pending from PR #87** (unrelated to this branch): the `regime-daily` cron's first tick (a
+`run_log` row expected after a 23:00 UTC weekday tick — latest `regime_daily` was 2026-07-08, cron
+not yet ticked post-merge) and the in-browser #87 spot-checks.
+
+**⚠️ Still TIME-SENSITIVE (host, outside repo):** enable the **Trades** section on the operator's IBKR
+Flex template so `user_executions` starts filling — its ~1-year lookback slides daily and pre-window
+history is unrecoverable. No fills flow (and TCA has nothing to analyze) until this is done.
+
+---
+
+### Prior session — cleanup + cloud-routines assessment; Week 2 plan ready (handoff 2026-07-09)
 
 **This was a short, no-code session — cleanup, an assessment, and staging the next block of work.
 No app/package/migration changes; the only repo edits are docs (this CLAUDE.md + a one-line CCXI

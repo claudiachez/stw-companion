@@ -9,6 +9,7 @@ export interface RegimeDailyRow {
   vix_close: number | null;
   vix3m_close: number | null;
   vol_state: 'GREEN' | 'RED' | 'UNKNOWN';
+  rv20_annualized: number | null;
   engine_version: string;
 }
 
@@ -16,7 +17,7 @@ export interface RegimeDailyRow {
 export async function fetchLatestRegime(instrument: string): Promise<RegimeDailyRow | null> {
   const { data, error } = await getSupabase()
     .from('regime_daily')
-    .select('trading_date, instrument, close, sma200, trend_state, vix_close, vix3m_close, vol_state, engine_version')
+    .select('trading_date, instrument, close, sma200, trend_state, vix_close, vix3m_close, vol_state, rv20_annualized, engine_version')
     .eq('instrument', instrument)
     .order('trading_date', { ascending: false })
     .limit(1)

@@ -34,6 +34,9 @@ export function KpiCard({ label, primaryValue, secondaryValue, delta, status = '
     <div
       style={{
         flex: 1,
+        // Fill the (stretched) flex/grid cell so a card without a delta row is the
+        // same height as its siblings — KPI rows must read as one uniform strip.
+        height: '100%',
         padding: `${SPACE[3.5]}px ${SPACE[4]}px`,
         borderRadius: RADIUS.lg,
         background: 'var(--s2)',

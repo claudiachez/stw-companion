@@ -110,6 +110,150 @@ function normalise(raw: RawPosition): NormalisedPosition | null {
   };
 }
 
+// ── Executions (Flex "Trades / executions" section) ──────────────────────────
+// Append-only fills, keyed on ibExecID. Unlike positions (a mutable snapshot),
+// these are an immutable log — the Flex lookback window slides daily so a fill
+// that ages out is unrecoverable; every one we've ever seen must be kept.
+interface RawTrade {
+  ibExecID:         string;
+  ibOrderID:        string;
+  tradeID:          string;
+  transactionID:    string;
+  symbol:           string;
+  underlyingSymbol: string;
+  assetCategory:    string;
+  buySell:          string;
+  quantity:         string;
+  tradePrice:       string;
+  ibCommission:     string;
+  proceeds:         string;
+  currency:         string;
+  putCall:          string;
+  strike:           string;
+  expiry:           string;
+  multiplier:       string;
+  dateTime:         string;
+  tradeDate:        string;
+  tradeTime:        string;
+  accountId:        string;
+  levelOfDetail:    string;
+}
+
+interface NormalisedExecution {
+  ibkr_exec_id:      string;
+  order_id:          string | null;
+  trade_id:          string | null;
+  transaction_id:    string | null;
+  underlying:        string;
+  symbol:            string | null;
+  asset_class:       string;
+  side:              'BUY' | 'SELL' | null;
+  quantity:          number | null;
+  price:             number | null;
+  commission:        number | null;
+  proceeds:          number | null;
+  currency:          string | null;
+  strike:            number | null;
+  put_call:          string | null;
+  expiry:            string | null;
+  multiplier:        number;
+  executed_at:       string;      // ISO instant
+  exec_datetime_raw: string | null;
+  account:           string | null;
+}
+
+// ET wall-clock offset (minutes) for a given UTC instant, via Intl (no tz lib).
+function etOffsetMinutes(utcMs: number): number {
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  });
+  const p: Record<string, number> = {};
+  for (const part of dtf.formatToParts(new Date(utcMs))) {
+    if (part.type !== 'literal') p[part.type] = parseInt(part.value, 10);
+  }
+  // 24:xx can appear for midnight in some environments — normalise to 0.
+  const hour = p.hour === 24 ? 0 : p.hour;
+  const asUtc = Date.UTC(p.year, p.month - 1, p.day, hour, p.minute, p.second);
+  return (asUtc - utcMs) / 60000;
+}
+
+// Parse an IBKR Flex dateTime into an ISO instant. Flex default format is
+// "yyyyMMdd;HHmmss" (sometimes space-separated, sometimes with a trailing tz
+// token). The naive wall-clock is interpreted as America/New_York (the default
+// report tz for a US account); the raw string is preserved by the caller so the
+// assumption stays auditable. Falls back to tradeDate/tradeTime.
+function parseFlexDateTime(dt: string | undefined, tradeDate?: string, tradeTime?: string): string | null {
+  let dateStr = '';
+  let timeStr = '000000';
+  const src = (dt ?? '').trim();
+  if (src) {
+    // Strip a trailing timezone token (e.g. "20250115;103005 US/Eastern").
+    const noTz = src.replace(/\s+[A-Za-z][A-Za-z0-9/_+-]*$/, '').trim();
+    const m = noTz.match(/^(\d{8})[;\sT]?(\d{6})?/);
+    if (m) {
+      dateStr = m[1];
+      if (m[2]) timeStr = m[2];
+    }
+  }
+  if (!dateStr && tradeDate) {
+    dateStr = tradeDate.trim().replace(/-/g, '');
+    if (tradeTime) timeStr = tradeTime.trim().replace(/:/g, '').padEnd(6, '0').slice(0, 6);
+  }
+  if (!/^\d{8}$/.test(dateStr)) return null;
+  const y = parseInt(dateStr.slice(0, 4), 10);
+  const mo = parseInt(dateStr.slice(4, 6), 10);
+  const d = parseInt(dateStr.slice(6, 8), 10);
+  const h = parseInt(timeStr.slice(0, 2), 10) || 0;
+  const mi = parseInt(timeStr.slice(2, 4), 10) || 0;
+  const s = parseInt(timeStr.slice(4, 6), 10) || 0;
+  // Convert ET wall-clock → UTC instant (two passes for DST-boundary safety).
+  const guess = Date.UTC(y, mo - 1, d, h, mi, s);
+  let utc = guess - etOffsetMinutes(guess) * 60000;
+  utc = guess - etOffsetMinutes(utc) * 60000;
+  return new Date(utc).toISOString();
+}
+
+function normaliseExecution(raw: RawTrade): NormalisedExecution | null {
+  const execId = (raw.ibExecID ?? '').trim();
+  if (!execId) return null;                       // require an execution-level row
+  const cat = (raw.assetCategory ?? '').toUpperCase();
+  if (cat !== 'STK' && cat !== 'OPT') return null;
+
+  const executedAt = parseFlexDateTime(raw.dateTime, raw.tradeDate, raw.tradeTime);
+  if (!executedAt) return null;                   // no usable timestamp → skip (never fabricate a date)
+
+  const occTicker = (raw.symbol ?? '').trim().split(/\s+/)[0].replace(/\d.*$/, '');
+  const underlying = cat === 'OPT'
+    ? (raw.underlyingSymbol?.trim() || occTicker)
+    : (raw.symbol?.trim() || occTicker);
+  const bs = (raw.buySell ?? '').toUpperCase();
+
+  return {
+    ibkr_exec_id:      execId,
+    order_id:          raw.ibOrderID?.trim() || null,
+    trade_id:          raw.tradeID?.trim() || null,
+    transaction_id:    raw.transactionID?.trim() || null,
+    underlying,
+    symbol:            raw.symbol?.trim() || null,
+    asset_class:       cat,
+    side:              bs === 'BUY' ? 'BUY' : bs === 'SELL' ? 'SELL' : null,
+    quantity:          parseNum(raw.quantity),
+    price:             parseNum(raw.tradePrice),
+    commission:        parseNum(raw.ibCommission),
+    proceeds:          parseNum(raw.proceeds),
+    currency:          raw.currency?.trim() || null,
+    strike:            cat === 'OPT' ? parseNum(raw.strike) : null,
+    put_call:          cat === 'OPT' ? (raw.putCall || null) : null,
+    expiry:            cat === 'OPT' ? (raw.expiry || null) : null,
+    multiplier:        parseNum(raw.multiplier) ?? 1,
+    executed_at:       executedAt,
+    exec_datetime_raw: (raw.dateTime ?? '').trim() || null,
+    account:           raw.accountId?.trim() || null,
+  };
+}
+
 export const handler: Handler = async (event) => {
   try {
     return await run(event);
@@ -191,14 +335,15 @@ async function run(event: Parameters<Handler>[0]) {
 
   if (!xmlData) return err(504, 'IBKR report timed out. Try again in a few seconds.');
 
-  // ── Parse positions ──────────────────────────────────────────
+  // ── Parse positions + executions (both from the one Flex report) ──────────
   let positions: NormalisedPosition[];
+  let executions: NormalisedExecution[];
   let accountId: string | null = null;
   try {
     const parser = new XMLParser({
       ignoreAttributes: false,
       attributeNamePrefix: '',
-      isArray: (name) => name === 'OpenPosition',
+      isArray: (name) => name === 'OpenPosition' || name === 'Trade',
     });
     const doc = parser.parse(xmlData);
     const statement = doc?.FlexQueryResponse?.FlexStatements?.FlexStatement;
@@ -206,33 +351,54 @@ async function run(event: Parameters<Handler>[0]) {
     // the client so a save-time verification can echo a concrete "resolved to account
     // Uxxxxxxx" fact, rather than only a bare position count.
     accountId = statement?.accountId ? String(statement.accountId) : null;
-    const raw: RawPosition[] = statement?.OpenPositions?.OpenPosition ?? [];
-    positions = (Array.isArray(raw) ? raw : [raw])
+    const rawPos: RawPosition[] = statement?.OpenPositions?.OpenPosition ?? [];
+    positions = (Array.isArray(rawPos) ? rawPos : [rawPos])
       .map(normalise)
       .filter((p): p is NormalisedPosition => p !== null);
+    // The Trades section is optional — absent until the operator enables it on the
+    // Flex template. When absent we simply write zero executions (never an error).
+    const rawTrades: RawTrade[] = statement?.Trades?.Trade ?? [];
+    executions = (Array.isArray(rawTrades) ? rawTrades : [rawTrades])
+      .filter((t): t is RawTrade => t != null)
+      .map(normaliseExecution)
+      .filter((e): e is NormalisedExecution => e !== null);
   } catch {
     return err(502, 'Failed to parse IBKR response');
   }
 
-  if (positions.length === 0) {
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ ok: true, count: 0, accountId, message: 'No open positions found in the Flex report.' }),
-    };
+  const syncTime = new Date().toISOString();
+
+  // ── Refresh user_positions (mutable snapshot: delete-all-then-insert) ─────
+  // Positions can legitimately be empty (fully-cash account) — that is not an
+  // error, and executions may still be present, so we no longer early-return.
+  if (positions.length > 0) {
+    const posRows = positions.map((p) => ({ ...p, user_id: user.id, last_synced_at: syncTime }));
+    await admin.from('user_positions').delete().eq('user_id', user.id);
+    const { error: insertErr } = await admin.from('user_positions').insert(posRows);
+    if (insertErr) return err(500, `DB write failed (positions): ${insertErr.message}`);
   }
 
-  // ── Upsert into user_positions ───────────────────────────────
-  const syncTime = new Date().toISOString();
-  const rows = positions.map((p) => ({ ...p, user_id: user.id, last_synced_at: syncTime }));
-
-  // Delete stale positions (ones no longer in IBKR) then insert fresh
-  await admin.from('user_positions').delete().eq('user_id', user.id);
-  const { error: insertErr } = await admin.from('user_positions').insert(rows);
-  if (insertErr) return err(500, `DB write failed: ${insertErr.message}`);
+  // ── Append user_executions (immutable log: idempotent upsert, never delete) ─
+  let executionsWritten = 0;
+  if (executions.length > 0) {
+    const execRows = executions.map((e) => ({ ...e, user_id: user.id, synced_at: syncTime }));
+    const { error: execErr } = await admin
+      .from('user_executions')
+      .upsert(execRows, { onConflict: 'user_id,ibkr_exec_id', ignoreDuplicates: true });
+    if (execErr) return err(500, `DB write failed (executions): ${execErr.message}`);
+    executionsWritten = execRows.length;
+  }
 
   return {
     statusCode: 200,
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ok: true, count: positions.length, accountId, lastSyncedAt: syncTime }),
+    body: JSON.stringify({
+      ok: true,
+      count: positions.length,
+      executions: executionsWritten,
+      accountId,
+      lastSyncedAt: syncTime,
+      ...(positions.length === 0 ? { message: 'No open positions found in the Flex report.' } : {}),
+    }),
   };
 }
