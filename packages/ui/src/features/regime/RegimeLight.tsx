@@ -1,4 +1,5 @@
 import { regimeGate, regimeExitAdvice, formatDate, type RegimeExitRule } from '@stw/shared';
+import { HelpToggle } from '../../primitives/HelpToggle';
 import { useLatestRegime } from './useLatestRegime';
 
 const STATE_COLOR: Record<'GREEN' | 'RED' | 'UNKNOWN', string> = {
@@ -38,7 +39,14 @@ export function RegimeLight({ instrument = 'IWM', exitRule }: { instrument?: str
   return (
     <div className="bg-surface border border-border rounded-xl p-4 flex flex-col gap-3">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <span className="text-text font-semibold text-sm">Regime light — {instrument}</span>
+        <span className="text-text font-semibold text-sm flex items-center gap-1.5">
+          Regime light — {instrument}
+          <HelpToggle ariaLabel="About the regime light">
+            <span className="block">A two-part read of the broad backdrop from {instrument}: trend (price vs its 200-day average) and volatility (VIX vs 3-month VIX).</span>
+            <span className="block text-t3 mt-1">GREEN = supportive, RED = fragile. The multiplier is a suggested size scale.</span>
+            <span className="block text-t3 mt-1">Advisory only — nothing here places or blocks a trade. When RED, your own REGIME_EXIT rule (set in Settings) suggests how to de-risk.</span>
+          </HelpToggle>
+        </span>
         <span className="text-t3 text-[10px]">{formatDate(row.trading_date)}</span>
       </div>
 

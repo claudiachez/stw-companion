@@ -1,4 +1,5 @@
 import { volTargetScalar, formatDate } from '@stw/shared';
+import { HelpToggle } from '../../primitives/HelpToggle';
 import { useLatestRegime } from '../regime/useLatestRegime';
 import type { RiskConfigRow } from './api';
 
@@ -25,7 +26,14 @@ export function VolTargetPanel({ config, instrument = 'IWM' }: { config: RiskCon
   return (
     <div className="bg-surface border border-border rounded-xl p-4 flex flex-col gap-3">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <span className="text-text font-semibold text-sm">Vol-targeted sizing — {instrument}</span>
+        <span className="text-text font-semibold text-sm flex items-center gap-1.5">
+          Vol-targeted sizing — {instrument}
+          <HelpToggle ariaLabel="About vol-targeted sizing">
+            <span className="block">A suggested size scale that targets a constant volatility: target vol ÷ recent realized vol, clamped between a floor and a cap.</span>
+            <span className="block text-t3 mt-1">Above 1× when markets are calm (size up), below 1× when they're choppy (size down).</span>
+            <span className="block text-t3 mt-1">Advisory candidate — display-only, applied to nothing. Validation backtest is pending.</span>
+          </HelpToggle>
+        </span>
         {row && <span className="text-t3 text-[10px]">{formatDate(row.trading_date)}</span>}
       </div>
 
