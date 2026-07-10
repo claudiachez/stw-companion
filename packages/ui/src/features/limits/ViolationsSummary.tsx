@@ -6,6 +6,7 @@ import {
 } from '@stw/shared';
 import { useAuthStore } from '../../store/auth';
 import { LoadingSpinner } from '../../primitives/LoadingSpinner';
+import { HelpToggle } from '../../primitives/HelpToggle';
 import { StatusPill, type StatusPillVariant } from '../../primitives/StatusPill';
 import { useUserPositions } from '../portfolio/useUserPositions';
 import { useSyncPortfolio } from '../portfolio/useSyncPortfolio';
@@ -178,10 +179,12 @@ function sectionSummary(violations: ConcentrationViolation[]): string {
 }
 
 function BreachOnlyList({
-  title, description, violations, ackFor, onAcknowledge, unmappedNote, ackable = true, ackType = 'position',
+  title, description, help, violations, ackFor, onAcknowledge, unmappedNote, ackable = true, ackType = 'position',
 }: {
   title: string;
   description: ReactNode;
+  /** Optional deeper "what / why / how" shown behind an ⓘ next to the title. */
+  help?: ReactNode;
   violations: ConcentrationViolation[];
   ackFor?: (scope: string, type: ViolationType) => { status: AckStatus; glide_path_note: string | null } | undefined;
   onAcknowledge?: (scope: string, status: AckStatus, note?: string) => void;
@@ -200,7 +203,10 @@ function BreachOnlyList({
 
   return (
     <div className="bg-surface border border-border rounded-xl p-5">
-      <div className="text-text font-semibold text-sm">{title}</div>
+      <div className="text-text font-semibold text-sm flex items-center gap-1.5">
+        {title}
+        {help && <HelpToggle ariaLabel={`About ${title}`}>{help}</HelpToggle>}
+      </div>
       <div className="text-t3 text-xs mt-0.5" style={{ lineHeight: 1.5 }}>{description}</div>
       {violations.length > 0 && <div className="text-t3 text-xs mt-2 mb-2" style={{ color: 'var(--t2)' }}>{sectionSummary(violations)}</div>}
       {violations.length === 0 && <div className="text-t3 text-xs">No positions.</div>}
@@ -326,7 +332,14 @@ export function ViolationsSummary({ showSyncButton = false, settingsTo }: { show
       )}
 
       <div className="bg-surface border border-border rounded-xl p-5">
-        <div className="text-text font-semibold text-sm">Gross exposure</div>
+        <div className="text-text font-semibold text-sm flex items-center gap-1.5">
+          Gross exposure
+          <HelpToggle ariaLabel="About gross exposure">
+            <span className="block">Your total market value ÷ your account equity.</span>
+            <span className="block text-t3 mt-1">Above 100% means you're using leverage/margin, so a market drop hits your equity harder.</span>
+            <span className="block text-t3 mt-1">Keep it near or under your gross cap; as you draw down, the ladder auto-tightens the target.</span>
+          </HelpToggle>
+        </div>
         <div className="text-t3 text-xs mt-0.5 mb-3" style={{ lineHeight: 1.5 }}>
           Total market value of every position vs your account equity. Above 100% means you're
           using leverage/margin; the drawdown ladder can trim this target as you draw down.
@@ -346,6 +359,11 @@ export function ViolationsSummary({ showSyncButton = false, settingsTo }: { show
       <BreachOnlyList
         title="Position concentration"
         description="Each ticker's share of your book vs your single-name cap — limits how much any one position can hurt you."
+        help={<>
+          <span className="block">Each ticker's market value as a % of your whole book, vs your single-name cap.</span>
+          <span className="block text-t3 mt-1">Caps how much any one position can hurt you if it gaps against you.</span>
+          <span className="block text-t3 mt-1">Over the line? Trim it, or set a glide path (a dated plan to reduce).</span>
+        </>}
         violations={result.positionViolations}
         ackType="position"
         ackFor={ackFor}
@@ -355,6 +373,11 @@ export function ViolationsSummary({ showSyncButton = false, settingsTo }: { show
       <BreachOnlyList
         title="Option concentration"
         description={<>Each ticker's OPTIONS exposure vs your option cap — options carry more risk per dollar (leverage, time decay), so this cap is usually tighter than the overall position cap. Set it under {settingsRef} → thresholds.</>}
+        help={<>
+          <span className="block">Each underlying's OPTIONS exposure as a % of your book, vs your option cap.</span>
+          <span className="block text-t3 mt-1">Options carry more risk per dollar (leverage + time decay), so this cap is usually tighter than the overall position cap.</span>
+          <span className="block text-t3 mt-1">Set the cap under Settings → thresholds.</span>
+        </>}
         violations={result.optionViolations}
         ackable={false}
       />
@@ -362,6 +385,11 @@ export function ViolationsSummary({ showSyncButton = false, settingsTo }: { show
       <BreachOnlyList
         title="Sector concentration"
         description="Each sector's share of your book vs your sector cap — limits thematic (correlated) risk when several names move together."
+        help={<>
+          <span className="block">Each sector's combined market value as a % of your book, vs your sector cap.</span>
+          <span className="block text-t3 mt-1">Limits correlated risk — when a whole theme sells off, names in it tend to move together.</span>
+          <span className="block text-t3 mt-1">Diversify or trim the heaviest sector to bring it back in line.</span>
+        </>}
         violations={result.sectorViolations}
         ackType="sector"
         ackFor={ackFor}

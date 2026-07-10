@@ -20,8 +20,7 @@ import { useMacroTrendHistory } from './useMacroTrendHistory';
 import { useGexExposure } from './useGexExposure';
 import { useMacroEvents } from './useMacroEvents';
 import { useGraddox } from '../signals/useGraddox';
-import { RegimeBanner } from './components/RegimeBanner';
-import { RegimeTrajectory } from './components/RegimeTrajectory';
+import { RegimeCard } from './components/RegimeCard';
 import { ModuleScoreStrip } from './components/ModuleScoreStrip';
 import { MacroEventRiskCard } from './components/MacroEventRiskCard';
 import { TrendStructureTable } from './components/TrendStructureTable';
@@ -174,7 +173,6 @@ export function MacroView() {
     riskAppetite: score?.total ?? null,
     indicators: indicators.map((i) => ({ symbol: i.symbol, score: trendSubScore(i.bucket) })),
   });
-  const regimeDirection = dataReady ? trendHistory.deltas.regime.direction : null;
 
   // Module 2: per-sleeve score strip. GEX uses a 3D delta (it moves fast); the
   // rest use the standard 5D delta.
@@ -242,16 +240,7 @@ export function MacroView() {
             </Help>
           )}
         />
-        {/* Banner left, the 10-day trajectory alongside it on the right — wraps
-            below on narrow screens. */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
-          <div style={{ flex: '1 1 300px', minWidth: 0 }}>
-            <RegimeBanner regime={dataReady ? regime : null} updatedAt={updatedAt} direction={regimeDirection} />
-          </div>
-          <div style={{ flex: '0 0 auto', paddingTop: 8 }}>
-            <RegimeTrajectory series={trendHistory.regimeSeries} />
-          </div>
-        </div>
+        <RegimeCard regime={dataReady ? regime : null} updatedAt={updatedAt} series={trendHistory.regimeSeries} />
       </section>
 
       {/* ── Module 2: Module Score Strip ───────────────────────────── */}
