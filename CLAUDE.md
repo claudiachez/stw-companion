@@ -1,41 +1,37 @@
 # STW Companion — Claude Code Guide
 
 > **⚠️ START HERE — branch.** **`staging` is the active trunk** — all feature work happens here.
-> **`staging` is ~1 commit ahead of `main`** (this doc-only handoff; check `git log --oneline
+> **`staging` is ~13 commits ahead of `main`** (the whole Week-2 batch below; check `git log --oneline
 > origin/main..origin/staging | wc -l`). A `staging → main` PR is a separate, approval-gated production
 > deploy; **do not open one without explicit host approval**, even if staging looks ready.
-> **✅ PRODUCTION PROMOTION PR [#87](https://github.com/claudiachez/stw-companion/pull/87)
-> (`staging → main`) MERGED 2026-07-09 11:59 UTC — the Week-1 work is now LIVE on production:** the
-> **`regime-daily` cron** (#82 — now fires on `main`), the **per-user REGIME_EXIT rule + mounted
-> RegimeLight** (#83), the admin editor **Basket rename + Sector dropdown** (#84), and the **Settings
-> risk-config layout/alignment** (#85/#86). No new env vars. **⏳ POST-DEPLOY VERIFICATION STILL PENDING
-> (do this next session):** confirm the `regime-daily` cron fired — a `run_log` row
-> (`run_type='regime-daily'`, ok) + a fresh `regime_daily` row after the next **23:00 UTC weekday** tick
-> (the cron only runs on `main`, which it now is); plus in-browser spot-checks (Settings regime-rule
-> section, My Portfolio → Risk RegimeLight, admin editor Basket/Sector). See Next Steps #0.
-> **The prior FRED re-platform + GICS taxonomy is already LIVE on production** (PR #81, merged
-> 2026-07-08, post-deploy-verified: `FRED_API_KEY` works on prod, `macro-snapshot-2.0.0` writes real
-> FRED scores, `sector-map-sync` instrumented).
-> Migrations run to **063**, applied on **both PROD and sandbox** (058 is PROD-only — sandbox has no
-> `tiers`/`profiles` tables; known permanent gap). This session added **063** (per-user REGIME_EXIT
-> columns on `risk_config`) — **applied to PROD + sandbox, verified**.
-> **DATA backfill (prior in this session, not a migration): `regime_daily` backfilled on PROD to 4,200
-> rows** (IWM/SPY/QQQ each 2020-12-08 → present) via the esbuild-bundled `regime-daily` handler run
-> locally. **Sandbox `regime_daily` is still 0 rows** (dev-only; needs a sandbox service-role key — the
-> local `.env.local` only has the anon key). **CCXI (Agility Robotics SPAC) is unmapped in
-> `ticker_sector_map`** (Finnhub has no industry for the SPAC shell) — it shows as `unevaluated` (never
-> a breach). Fix: set it via the **admin editor Sector dropdown** (→ Industrials, a data write). The old
-> `TICKER_GICS` code-override idea is **dropped** (2026-07-09) — the dropdown is the sole sanctioned fix.
-> `app_config.ibkr_live_trading_enabled` = **`0` on both PROD and sandbox** (last confirmed 2026-07-05).
-> **`FRED_API_KEY`** (server-side, no `VITE_` prefix) is set on both sites incl. the prod context
-> (verified live). If migrations stop well short of 063 you are on a stale checkout, re-sync.
+> **✅ WEEK 2 MERGED to `staging` (PR [#88](https://github.com/claudiachez/stw-companion/pull/88),
+> 2026-07-10) — NOT yet on production (`main`).** What's on staging: **executions sync** (`user_executions`,
+> migration 064 — Flex `<Trades>` ingestion via `ibkr-flex.ts`), **TCA v1** (`scripts/tca.mjs`, admin/CLI),
+> **vol-targeted sizing** (`volTargetScalar` + `risk_config` cols, migration 065, display-only),
+> **REGIME_EXIT audit trail** (`regime_exit_audit`, migration 066), **`docs/launch_gates.md`**, and My-Portfolio
+> Overview polish (uniform KpiCard height + regime line moved out of the KPI card). No new env vars.
+> **The Week-1 batch (regime-daily cron, per-user REGIME_EXIT + RegimeLight, admin Basket/Sector, Settings
+> layout) is LIVE on production** (PR #87, merged 2026-07-09) — and the **`regime-daily` cron's first
+> post-merge tick is CONFIRMED** (`run_log` `regime-daily` ok at 2026-07-09 23:05 UTC; a fresh 2026-07-09
+> `regime_daily` row per IWM/SPY/QQQ). The FRED re-platform + GICS taxonomy is also live (PR #81).
+> Migrations run to **066**, applied + verified on **both PROD and sandbox** (058 is PROD-only — sandbox has
+> no `tiers`/`profiles` tables; known permanent gap). **Launch Gate 2 DB-layer multi-tenancy proof PASSED**
+> on PROD (adversarial RLS test, two throwaway tenants; `ops_log` row 12) — see `docs/launch_gates.md`.
+> **CCXI is now mapped → Industrials** in `ticker_sector_map` (verified 2026-07-10; the `TICKER_GICS`
+> code-override idea stays dropped — the admin Sector dropdown is the sole sanctioned fix).
+> **PROD `regime_daily` = 4,203 rows (IWM/SPY/QQQ, 2020-12-08 → present); sandbox still 0 rows** (dev-only;
+> needs a sandbox service-role key — depth extension to ~2000 is a queued task, see Next Steps #1).
+> **`user_executions` is 0 rows on PROD** — expected until the operator enables the Flex **Trades** section
+> AND the executions code deploys (currently on staging, not the site the operator syncs against). No fills
+> flow until both are true. `app_config.ibkr_live_trading_enabled` = **`0` on both** (last confirmed 2026-07-05).
+> **`FRED_API_KEY`** (server-side, no `VITE_`) is set on both sites incl. prod. If migrations stop short of
+> 066 you are on a stale checkout, re-sync.
 > **First commands every session:** `git fetch origin && git checkout staging && git pull --ff-only`.
-> Sanity check: `supabase/migrations/` should go up to `063_risk_config_regime_exit.sql`,
-> `packages/shared/src/constants/sectors.ts` and `packages/shared/src/utils/fred.ts` should exist, and
-> `plans/` files are **date-prefixed** (`YYYYMMDD_<name>`) — if any is missing, you're on a stale
-> checkout. Then **cut a feature branch** before making any change:
-> `git checkout -b claude/<short-feature-name>`. **Never commit directly to `staging`** — work on
-> the branch, push it, open a PR back to `staging` (host merges/approves).
+> Sanity check: `supabase/migrations/` should go up to `066_regime_exit_audit.sql`,
+> `packages/shared/src/utils/voltarget.ts` and `scripts/tca.mjs` should exist, and `plans/` files are
+> **date-prefixed** (`YYYYMMDD_<name>`) — if any is missing, you're on a stale checkout. Then **cut a
+> feature branch** before making any change: `git checkout -b claude/<short-feature-name>`. **Never commit
+> directly to `staging`** — work on the branch, push it, open a PR back to `staging` (host merges/approves).
 > (Note: `memory/` lives in local `~/.claude/`, NOT in the repo — never reference it in a prompt meant
 > for a remote session; put anything a future session needs into the repo.)
 
@@ -58,11 +54,11 @@
 
 ---
 
-## Current Status — Week 2 built on a feature branch (handoff 2026-07-09)
+## Current Status — Week 2 MERGED to staging (handoff 2026-07-10)
 
-**Week 2 (`plans/20260709_integrity-guardrailsv2.md`) is built on branch
-`claude/week-2-integrity-guardrails-ivfp3s` (pushed; PR to `staging` not yet opened — host reviews).
-Typecheck + 250 tests + lint all green.** What shipped this session:
+**Week 2 (`plans/20260709_integrity-guardrailsv2.md`) is MERGED to `staging` via PR
+[#88](https://github.com/claudiachez/stw-companion/pull/88) — live on the staging sites, NOT yet on
+production (`main`). Typecheck + 250 tests + lint all green.** What shipped:
 
 - **Item 1 — Executions sync (DONE, code).** New `user_executions` table (migration **064**,
   append-only, idempotent on IBKR `ibExecID`, RLS per user like `user_positions`). `ibkr-flex.ts`
@@ -93,17 +89,23 @@ Typecheck + 250 tests + lint all green.** What shipped this session:
   code path). Blocked on a deep public-source fetch (execution deferred, not a code gap).
 
 **✅ MIGRATIONS 064/065/066 APPLIED + VERIFIED on BOTH PROD (`usmqbohcjcyszjxxvnqu`) + sandbox
-(`uolabcgbnrkhzpwuvzlk`)** (2026-07-09, after the host fixed Supabase permissions): `user_executions`
-(24 cols, RLS on), `risk_config` vol_target defaults (15/1.5/0.3, backfilled onto the operator's
-existing row), `regime_exit_audit` + trigger. The 066 trigger was functionally tested on sandbox
-(real change logs, no-op skips, `changed_by` null for service-role writes; test rows cleaned up).
-**Still pending from PR #87** (unrelated to this branch): the `regime-daily` cron's first tick (a
-`run_log` row expected after a 23:00 UTC weekday tick — latest `regime_daily` was 2026-07-08, cron
-not yet ticked post-merge) and the in-browser #87 spot-checks.
+(`uolabcgbnrkhzpwuvzlk`):** `user_executions` (24 cols, RLS on), `risk_config` vol_target defaults
+(15/1.5/0.3, backfilled onto the operator's row), `regime_exit_audit` + trigger (functionally tested —
+real change logs, no-op skips, `changed_by` null for service-role writes; test rows cleaned up).
 
-**⚠️ Still TIME-SENSITIVE (host, outside repo):** enable the **Trades** section on the operator's IBKR
-Flex template so `user_executions` starts filling — its ~1-year lookback slides daily and pre-window
-history is unrecoverable. No fills flow (and TCA has nothing to analyze) until this is done.
+**Also verified this session:** (a) **Launch Gate 2 DB-layer multi-tenancy proof PASSED** on PROD —
+adversarial RLS test with two throwaway tenants across `user_executions`/`risk_config`/`user_positions`/
+`regime_exit_audit`/`risk_violation_acks`: read+write isolation, forged inserts rejected by `WITH CHECK`,
+audit table insert-locked to the trigger; all test data cascade-deleted (`ops_log` row 12; boxes checked
+in `docs/launch_gates.md`). (b) **`regime-daily` cron confirmed** (`run_log` ok 2026-07-09 23:05 UTC).
+(c) **CCXI → Industrials** confirmed mapped. Plus UI polish (uniform KpiCard height + regime line moved
+out of the Overview KPI card) and the Settings connect-walkthrough now covers the Flex Trades section.
+
+**⚠️ TIME-SENSITIVE + DEPLOY-GATED (host):** `user_executions` stays 0 until BOTH (1) the operator enables
+the Flex **Trades** section (manual, outside repo — its ~1-year lookback slides daily, pre-window history
+unrecoverable) AND (2) the executions code reaches the site the operator syncs against. It's on `staging`
+now; the operator's live sync hits whichever site their app points at — confirm that's the staging web
+site, or promote to `main`. Once both are true, a sync populates `user_executions` and TCA can run.
 
 ---
 
@@ -544,54 +546,57 @@ it, shipped it to production, then separately investigated + fixed a live data-i
 
 ## Next Steps
 
-0. **⏳ POST-DEPLOY VERIFICATION of PR [#87](https://github.com/claudiachez/stw-companion/pull/87)
-   (MERGED to `main` 2026-07-09 11:59 UTC — now live on production).** No migration/env action needed
-   (063 already on PROD+sandbox; no new env vars). **VERIFY on PROD (`usmqbohcjcyszjxxvnqu`):**
-   (a) the **regime-daily cron fired** — `select * from run_log where run_type='regime-daily' order by
-   ran_at desc limit 3;` should show an `ok` row + a fresh `regime_daily` row after the next **23:00 UTC
-   weekday** tick (the cron only runs on `main`, which it now is — so this proves out on the first tick
-   post-merge); (b) Settings renders the regime-rule section + aligned fields, Save writes the 3
-   `regime_*` cols; (c) My Portfolio → Risk shows the RegimeLight with the user's rule; (d) admin editor
-   has the Basket label + Sector dropdown. In-browser checks (b)–(d) need the OAuth password-swap recipe
-   (see the FRED/GICS handoff section below). (Prior promotion #81 — FRED/GICS — is already live + verified.)
+0. **★ WEEK-2 ITEM 4 — `regime_daily` depth extension (host is running this in a DEDICATED PARALLEL
+   session).** Spec is execution-ready: [`plans/20260709_regime_daily_depth_extension.md`](plans/20260709_regime_daily_depth_extension.md).
+   Extend IWM/SPY/QQQ daily bars to ~2000-present via **Stooq** (free, no key, one bulk CSV per symbol —
+   NOT TwelveData, whose 5000-bar cap + 1-credit/symbol tier is exactly why we switch) wired behind
+   `regime-daily.ts`'s single computation path (`?source=stooq`, no drifting backfill script; engine
+   frozen at 1.1.0); FRED indices already have no cap. **Pacing is a non-issue with Stooq/FRED** — the
+   whole backfill is ~6 HTTP requests, run once via the esbuild-bundle harness with the PROD service-role
+   key. Writes ~19k rows to PROD `regime_daily`. Unblocks Item 3's vol-target backtest + Phase 0c.
+   **If NOT already claimed by the parallel session, coordinate before touching `regime_daily`.**
 
-1. **★ WEEK 2 — the primary next task.** Week 1 (integrity guardrails) is **complete**; the standing
-   Week-2 → Autonomy plan is written: [`plans/20260709_integrity-guardrailsv2.md`](plans/20260709_integrity-guardrailsv2.md)
-   (Week 2 is paste-ready; weeks 3–4 + a trigger-driven back half are specced). **Read it first, then
-   cut a `claude/<feature>` branch off staging and build to spec.** Week 2 items:
-   - **Item 1 — Executions sync (TIME-SENSITIVE, do first).** New `user_executions` table (append-only,
-     idempotent on IBKR execution ID), ingesting the IBKR Flex **Trades/executions** section via the
-     existing `ibkr-flex` path. Its ~1-year lookback window **slides daily and pre-window history is
-     unrecoverable** — so enabling the Trades section on the operator's Flex template (manual, outside
-     repo) is the first action. New migration expected (RLS per user, same pattern as `user_positions`).
-   - **Item 2 — TCA v1** (admin/CLI only, no subscriber surface): join `user_executions` to the host's
-     `leg_transactions` — fill slippage, discretionary-overlay ledger (the pullback-waiting question),
-     exit divergence. Descriptive tables, honestly labeled counts; re-runs monthly.
-   - **Item 3 — Vol-targeted sizing:** pure `volTargetScalar()` in `@stw/shared` + `risk_config` config
-     fields; **display-only** in the admin Risk panel (consumed by nothing). Validate via backtest
-     before display — depends on Item 4.
-   - **Item 4 — `regime_daily` depth extension:** extend equity bars (IWM/SPY/QQQ) to ~2000-present
-     (IBKR or public daily source; TwelveData's 5000-bar cap is why); FRED fields backfill to inception.
-   - **Item 0 housekeeping (small, this week):** `docs/lower_snake_case` — write `docs/launch_gates.md`
-     (0a, blocking pre-first-external-user checklist), a REGIME_EXIT change-audit trail (0b — audit row
-     on every `regime_*` edit; visibility only, no blocking), and verify/record the 36-row timestamp
-     stamping provenance (0c).
+1. **★ MACRO TAB improvements (host-requested, next build).** Two threads — read
+   `packages/ui/src/features/macro/` (esp. `RegimeBanner.tsx`, `ModuleScoreStrip.tsx`,
+   `useMacroTrendHistory.ts`, `GexPositioningCard.tsx`) and `docs/macro_dashboard_guide.md` first:
+   - **(a) Trend comparison / traffic-light.** The Market Regime and module scores show no day-over-day
+     or week-over-week direction — the user can't tell if things are improving or deteriorating (this is
+     what the 5D trend engine was meant to surface). Wire the existing `useMacroTrendHistory` deltas into
+     the banner + score strip, and add a **traffic-light row `( )( )( )( )( )`** with green/amber/red
+     lamps per module/day so regime direction reads at a glance. `macro_daily_snapshots` now has real
+     v2.0.0 scores accruing, so deltas populate as rows accumulate (≥~6 rows).
+   - **(b) GEX / positioning source — the Graddox signal is too stale for this tab.** Today's
+     `GexPositioningCard` reads the Discord-sourced Graddox signal (once/day, often citing yesterday's
+     levels); gamma moves intraday so it's old news. Evaluate replacing it with a fresher gamma source.
+     Two candidates researched 2026-07-10: **FlashAlpha GEX API** (`https://lab.flashalpha.com/v1/exposure/gex/<sym>`,
+     `X-Api-Key`; returns net GEX / gamma flip / call wall / put wall / per-strike; **free tier = 5
+     req/day, SPX index needs a paid Basic plan** — SPY as a proxy works on free) and **SPX Gamma Edge**
+     substack (pre-market + end-of-session reports: gamma flip, OI support/resistance, call/put walls,
+     plain-English regime read — replicating it ourselves needs a full SPX options chain w/ OI+greeks,
+     which no current free feed gives, so it's a *buy not build*). **Recommendation to discuss with host:
+     the API, likely SPY-proxy on the free tier or a cheap paid tier for SPX; get the host's plan/budget
+     call before building.** Do NOT fold gamma into the frozen two-component regime gate (standing
+     prohibition) — this is the Macro *composite*, a separate surface.
    - **Standing prohibitions** (carry through every block): regime multiplier stays advisory/display-only
-     until Phase B; the two-component gate and Macro composite never blend; gate params frozen at
-     `engine_version 1.1.0`; no new regime indicators enter the gate. See the plan's top section.
+     until Phase B; the two-component gate and the Macro composite never blend; gate params frozen at
+     `engine_version 1.1.0`; no new regime indicators enter the *gate*. See `plans/20260709_integrity-guardrailsv2.md`.
 
-2. **Loose ends (small, only if asked) —** integrity-guardrails leftovers:
-   - **CCXI sector** — set it to `Industrials` via the **admin editor Sector dropdown** (a
-     `ticker_sector_map` data write; the `TICKER_GICS` code-override idea is **dropped**). Shows
-     `unevaluated` until then (never a breach).
-   - **Deeper `regime_daily` history** (optional; superseded by Week-2 Item 4 which does this properly).
+2. **Production promotion + executions verification (host-gated).** Week 2 is on `staging`, NOT `main`.
+   A `staging → main` PR is **approval-gated — do not open without explicit host approval.** Once Week 2
+   deploys to whichever site the operator syncs against AND the Flex **Trades** section is enabled,
+   re-run a sync and verify `user_executions` (full-lookback lands, zero dupes on re-run, one fill vs the
+   IBKR statement), then run `node scripts/tca.mjs --user-id=<operator> --json` for the first TCA report.
+
+3. **Loose ends (small, only if asked):**
+   - **CCXI sector — DONE** (mapped → Industrials in `ticker_sector_map`, verified 2026-07-10).
    - **Sandbox `regime_daily`** (optional, dev-only) — still 0 rows; needs a sandbox service-role key.
+   - **Launch Gate 2 app-layer proof** — the DB-layer RLS proof passed; the end-to-end app-layer proof (a
+     real second login exercising the Netlify functions' JWT path) remains for onboarding. See `docs/launch_gates.md`.
    - **Off-machine routines** (parked, host said "just the assessment for now" 2026-07-09): the Discord
      ingestion is the one machine-bound piece (Claude in Chrome + operator's own Discord session). No
-     clean bot path (operator is a member, not the server owner). Self-serve route = always-on cloud VM
-     running the same real-browser setup; cleanest = a host-provided official feed (bot/webhook/export).
-     **Headless self-bot with the operator's token is off the table** (Discord ToS / account-ban risk).
-     Don't start without a host decision.
+     clean bot path (operator is a member, not the server owner). Self-serve route = always-on cloud VM;
+     cleanest = a host-provided official feed. **Headless self-bot with the operator's token is off the
+     table** (Discord ToS / account-ban risk). Don't start without a host decision.
 
 3. **Visually confirm the regime badge + FRED Macro tab + RegimeLight in-browser** (not re-checked —
    needs the admin OAuth password-swap recipe below). Server-side FRED path is proven; if a cell is
@@ -779,10 +784,13 @@ OAuth on web does a full-page redirect).
   affected tables before any destructive migration (column/table drop). The Supabase MCP has no
   `pg_dump`; pull tables via the REST API with the service key, or `select json_agg(...)`.
 - Tables: `holdings`, `signals`, `profiles`, `tiers`, `run_log`,
-  `user_positions`, `holding_transactions`, `conviction_comments`, plus the event-sourced
-  `legs` / `leg_transactions`, `categories`, `traders`, `app_config`.
-  RLS on `holdings`/`signals` restricts writes to `cc@claudiachez.com`. `user_positions`
-  uses user-owned RLS — each subscriber reads and writes only their own rows.
+  `user_positions`, `user_executions`, `holding_transactions`, `conviction_comments`, plus the
+  event-sourced `legs` / `leg_transactions`, `categories`, `traders`, `app_config`, `risk_config`,
+  `regime_exit_audit`, `regime_daily`, `ticker_sector_map`, `ops_log`.
+  RLS on `holdings`/`signals` restricts writes to `cc@claudiachez.com`. `user_positions`,
+  `user_executions`, `risk_config`, and `regime_exit_audit` use user-owned RLS — each subscriber reads
+  (and, where applicable, writes) only their own rows. **DB-layer multi-tenancy across these was proven
+  on PROD 2026-07-10** (adversarial RLS test; `ops_log` row 12; `docs/launch_gates.md`).
   The admin IBKR proxy now prices STW's option legs and writes **`legs.mark_price`** (the old
   `last_pnl_*` / `ibkr_legs` columns on `holdings` were dropped in 034).
 - **Transaction History is auto-logged by a DB trigger** (`stw_log_holding_transaction`,
@@ -902,6 +910,19 @@ calls IBKR's cloud Flex Web Service API to fetch a subscriber's **own** portfoli
 Security model: client sends its Supabase JWT → function verifies it, reads
 `ibkr_flex_token` + `ibkr_query_id` from `profiles` via service key → calls IBKR →
 writes positions to `user_positions`. The raw token never reaches the browser.
+
+**The one Flex report carries TWO sections, written with OPPOSITE semantics** (Week 2, migration 064):
+- `<OpenPositions>` → `user_positions` — a **mutable snapshot**, delete-all-then-insert every sync.
+- `<Trades>` → `user_executions` — an **append-only immutable log**, idempotent upsert on
+  `(user_id, ibkr_exec_id)` (`ibExecID`), **never deleted**. The Flex Trades lookback (~1 year) slides
+  daily and pre-window history is unrecoverable, so every fill ever seen is kept. The Trades section is
+  optional (absent → 0 executions, never an error) and must be enabled on the operator's Flex template
+  (manual, outside repo). Fill instant parsed ET-wall-clock→UTC, raw string preserved (`exec_datetime_raw`).
+  Consumed by TCA v1 (`scripts/tca.mjs`, admin/CLI). Same per-user RLS as `user_positions`.
+  The Settings connect-walkthrough (`SettingsPage.tsx` `CONNECT_STEPS`) documents the exact Flex field
+  labels + the lookalike traps (IB vs External Execution ID; Trade Price vs Orig Trade Price; Currency
+  vs IB Commission Currency) and the General-Config defaults the parser depends on (yyyyMMdd/HHmmss,
+  Breakout by Day = No — Breakout=Yes splits into per-day FlexStatement blocks the parser won't read).
 
 Required Netlify env vars on the **web** site:
 - `VITE_SUPABASE_URL` — already present (shared with the Vite client build)
@@ -1148,6 +1169,12 @@ active filter (closed hidden by default). The FilterBar count shows `N of {total
 - **KPI cards read uniformly: hero number · qualifier (delta) · uppercase label** — always, via the
   `KpiCard` primitive (`primaryValue` = the number, `delta` = the qualifier, `secondaryValue` = a
   ratio's second half like `/ 9%`). Don't put the % on top in one card and below in the next.
+  **A KPI row is one uniform strip: all cards are equal height** — `KpiCard` fills its (stretched)
+  flex/grid cell via `height:100%`, so a card without a delta line matches its siblings. **Never hang
+  an extra line (a regime note, a caption) off the bottom of a single KPI card** — it distorts that
+  card's height and reads as out of place; put such a line in its own full-width element below the KPI
+  row (the My-Portfolio Overview regime line is the reference: its own strip with a state-colored dot,
+  not crammed into the Equity/Options card).
 - **A permanently-empty column/field reads as broken, not pending — remove it until its data exists.**
   My Portfolio's Positions table dropped the Return column (100% em-dashes: `unrealized_pnl_pct` isn't
   in the subscriber Flex feed) rather than ship a dead column. Show a column only when it can carry

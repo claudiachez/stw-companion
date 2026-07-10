@@ -130,11 +130,14 @@ Event-sourced positions: **`leg_transactions`** (the diary — the only hand-wri
 | `macro_daily_snapshots` / `macro_daily_recaps` / `regime_daily` | scheduled Netlify fns | Macro 5D engine / recap / regime gate |
 | `risk_config` / `risk_violation_acks` | subscriber Settings | My Portfolio Risk tab |
 | `user_positions` | web `ibkr-flex.ts` (user-owned RLS) | My Portfolio |
+| `user_executions` | web `ibkr-flex.ts` `<Trades>` (append-only, user-owned RLS) | TCA (`scripts/tca.mjs`, admin/CLI) |
+| `regime_exit_audit` | `risk_config` trigger (user-owned RLS) | audit trail of REGIME_EXIT edits |
 | `profiles` / `tiers` | auth + Settings | AccessGate paywall, Settings |
 | `app_config` | admin Config page | sizing/capital defaults, IBKR kill switch, regime sleeve weights |
 
 **RLS:** `holdings`/`signals` writes restricted to `cc@claudiachez.com` (routines bypass via
-service-role key). `user_positions` / `risk_config` are user-owned.
+service-role key). `user_positions` / `user_executions` / `risk_config` / `regime_exit_audit` are
+user-owned (DB-layer multi-tenancy proven on PROD 2026-07-10 — see `docs/launch_gates.md`).
 
 ---
 

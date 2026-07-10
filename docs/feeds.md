@@ -19,7 +19,7 @@ Session-Close doc-maintenance step.
 | **TwelveData** | `VITE_TWELVEDATA_KEY` | Free, **8 credits/min, 800/day, 1 credit/symbol** | **Equity daily closes only** — trend ETFs (SPY/QQQ/IWM/RSP/VEA) + Sector-Rotation constituents | CORS OK (client-direct) |
 | **Finnhub** | `VITE_FINNHUB_KEY` | Free, ~60/min | Live **stock** quotes; `profile2` (industry, for `sector-map-sync`) | CORS OK; free tier serves neither index symbols nor daily candles |
 | **IBKR — local proxy** | none (localhost) | Gateway pacing only | Admin option-leg marks (`legs.mark_price`) + real order placement | `apps/admin/ibkr_proxy.py`; never deployed |
-| **IBKR — Flex Web Service** | per-subscriber token in `profiles` | ~1 req / few-min per token | Subscriber's own **open** positions → `user_positions` | via `apps/web/netlify/functions/ibkr-flex.ts` |
+| **IBKR — Flex Web Service** | per-subscriber token in `profiles` | ~1 req / few-min per token | Subscriber's own **open positions** (`<OpenPositions>`) → `user_positions` (snapshot, delete+reinsert) **and fills** (`<Trades>`, optional) → `user_executions` (append-only, idempotent on `ibExecID`) | via `apps/web/netlify/functions/ibkr-flex.ts`; `user_executions` consumed by `scripts/tca.mjs` |
 | **Anthropic** | `ANTHROPIC_API_KEY` (server-side) | Pay per token | Macro daily recap (AM/PM) | functions only |
 
 > Retired 2026-07-10: the **MarketWatch** economic-calendar scrape (`cheerio`) — replaced by FRED's
