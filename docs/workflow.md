@@ -124,7 +124,8 @@ Event-sourced positions: **`leg_transactions`** (the diary — the only hand-wri
 | `leg_transactions` / `legs` | routines + admin ledger (write only `leg_transactions`; `legs` is trigger-derived) | Transaction History ledger, per-leg P&L split (shares vs options) |
 | `holding_transactions` | **DB trigger** (migration 033) — never written directly | audit trail |
 | `conviction_comments` | routines + `stw-transcripts` (explicit appends; `source` = `discord`/`streaming`); users can add notes | Ticker Details — Commentary |
-| `signals` | **morning routine** (Graddox step) | GEX signals panel + Macro GEX module |
+| `signals` | **morning routine** (Graddox step) | GEX Signals panel (Signals tab) |
+| `gex_snapshots` | **`gex-snapshot`** scheduled fn (web, FlashAlpha SPY, migration 067) | Macro GEX / Positioning module (replaced Graddox there 2026-07-10) |
 | `run_log` | routines + scheduled Netlify writers | "Latest Portfolio Changes"; ingestion audit |
 | `ticker_sector_map` | **`sector-map-sync`** fn + one-off migration | GICS sector (Risk concentration, heatmap, detail pane) |
 | `macro_daily_snapshots` / `macro_daily_recaps` / `regime_daily` | scheduled Netlify fns | Macro 5D engine / recap / regime gate |
@@ -145,7 +146,8 @@ user-owned (DB-layer multi-tenancy proven on PROD 2026-07-10 — see `docs/launc
 
 A weighted **Market Regime** read (Trend 30% · Volatility 20% · Credit 15% · Rates+Dollar 15% · GEX 20%,
 admin-configurable) plus supporting modules. Macro **index** indicators come from **FRED** (VIX, VIX3M,
-US10Y, HY-OAS credit, dollar) via a server-side proxy; equity closes from TwelveData; GEX from `signals`.
+US10Y, HY-OAS credit, dollar) via a server-side proxy; equity closes from TwelveData; GEX from
+`gex_snapshots` (FlashAlpha SPY, written by the `gex-snapshot` scheduled fn — replaced Graddox 2026-07-10).
 Event Risk uses FRED's release calendar + a static FOMC list. Full feed detail:
 [`docs/feeds.md`](feeds.md); subscriber help: `docs/macro_dashboard_guide.md`.
 

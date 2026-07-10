@@ -15,8 +15,10 @@
 > layout) is LIVE on production** (PR #87, merged 2026-07-09) — and the **`regime-daily` cron's first
 > post-merge tick is CONFIRMED** (`run_log` `regime-daily` ok at 2026-07-09 23:05 UTC; a fresh 2026-07-09
 > `regime_daily` row per IWM/SPY/QQQ). The FRED re-platform + GICS taxonomy is also live (PR #81).
-> Migrations run to **066**, applied + verified on **both PROD and sandbox** (058 is PROD-only — sandbox has
-> no `tiers`/`profiles` tables; known permanent gap). **Launch Gate 2 DB-layer multi-tenancy proof PASSED**
+> Migrations run to **067**, applied + verified on **both PROD and sandbox** (058 is PROD-only — sandbox has
+> no `tiers`/`profiles` tables; known permanent gap). **067 = `gex_snapshots`** (FlashAlpha GEX writer;
+> applied + verified both envs 2026-07-10, 0 rows until the `gex-snapshot` cron first fires).
+> **Launch Gate 2 DB-layer multi-tenancy proof PASSED**
 > on PROD (adversarial RLS test, two throwaway tenants; `ops_log` row 12) — see `docs/launch_gates.md`.
 > **CCXI is now mapped → Industrials** in `ticker_sector_map` (verified 2026-07-10; the `TICKER_GICS`
 > code-override idea stays dropped — the admin Sector dropdown is the sole sanctioned fix).
@@ -26,10 +28,10 @@
 > **`user_executions` is 0 rows on PROD** — expected until the operator enables the Flex **Trades** section
 > AND the executions code deploys (currently on staging, not the site the operator syncs against). No fills
 > flow until both are true. `app_config.ibkr_live_trading_enabled` = **`0` on both** (last confirmed 2026-07-05).
-> **`FRED_API_KEY`** (server-side, no `VITE_`) is set on both sites incl. prod. If migrations stop short of
-> 066 you are on a stale checkout, re-sync.
+> **`FRED_API_KEY`** + **`FLASHALPHA_API_KEY`** (both server-side, no `VITE_`) are set on both sites incl.
+> prod (host confirmed 2026-07-10). If migrations stop short of 067 you are on a stale checkout, re-sync.
 > **First commands every session:** `git fetch origin && git checkout staging && git pull --ff-only`.
-> Sanity check: `supabase/migrations/` should go up to `066_regime_exit_audit.sql`,
+> Sanity check: `supabase/migrations/` should go up to `067_gex_snapshots.sql`,
 > `packages/shared/src/utils/voltarget.ts` and `scripts/tca.mjs` should exist, and `plans/` files are
 > **date-prefixed** (`YYYYMMDD_<name>`) — if any is missing, you're on a stale checkout. Then **cut a
 > feature branch** before making any change: `git checkout -b claude/<short-feature-name>`. **Never commit
@@ -53,6 +55,38 @@
   be useful (an RLS policy's email, an org/task UUID) — those aren't narrative attribution and are fine
   as-is.
 - **After ~10 commits in a chat**, run the Session Close routine (see section below)
+
+---
+
+## Current Status — Macro traffic-light + GEX→FlashAlpha + Risk polish (handoff 2026-07-10)
+
+**This session shipped the two host-requested Macro-tab threads plus a round of Macro/Risk UI polish —
+four PRs, all merged to `staging` (#90–#93), NONE on `main`.** `staging` is **25 commits ahead of
+`main`** (a `staging → main` promotion is separate + approval-gated — do not open without explicit host
+approval). Typecheck clean · 260 tests · 0 lint errors throughout.
+
+- **Macro (a) — trend direction surfaced (PR #90):** score-strip deltas are colored by sign with arrows
+  (and show a muted `5D —` while history accrues); the Market Regime is now a `RegimeCard` — one plain
+  card with **Current status** (left; `▲ +5 vs yesterday` trend chip replacing the old `→ Mixed` arrow)
+  and a **9-day regime trajectory** of green/amber/red lamps (right-aligned; hover a lamp for a popover
+  with that day's date · regime · score). Old `RegimeBanner` removed.
+- **Macro (b) — GEX source Discord Graddox → FlashAlpha (PR #90):** full pipeline — `@stw/shared/utils/gex.ts`
+  (+10 tests), migration **067** `gex_snapshots`, the `gex-snapshot` scheduled writer (web only, SPY,
+  ~8:30am/4:30pm ET), `useGexExposure`, a rewritten `GexPositioningCard`, the regime composite GEX
+  sleeve, and `macro-snapshot` persistence. See Conventions → Macro data sources for the durable rules.
+- **Macro/Risk polish (PR #91):** trajectory placement + 9-slot padding; **empty Vol/VIX/Multiplier in
+  the RegimeLight fixed** (`fetchLatestRegime` now picks the latest *complete* `regime_daily` row — FRED
+  VIX lags a day); risk-summary de-duplicated (counts-only header vs the Gross exposure card); friendlier
+  copy; **"Settings" hyperlinked**; **My-Portfolio Overview regime line moved above the KPI cards**.
+- **Regime card v2 + Risk tooltips (PRs #92/#93):** the two-panel→final `RegimeCard` layout; new shared
+  **`HelpToggle` primitive** (collapsible ⓘ "what/why/how" popover) added to the Risk page's Regime
+  light / Gross exposure / Position / Option / Sector sections + admin Vol-targeting panel.
+
+**⚠️ PENDING VERIFICATION (next session):** `gex_snapshots` was **0 rows** with **no `gex-snapshot`
+`run_log` row** at handoff — the cron hadn't fired since deploy. Confirm it writes on its next tick
+(check `run_log where run_type='gex-snapshot'`); if it errors, verify `FLASHALPHA_API_KEY` is on the
+**web** site. **DEFERRED:** the AI recap's GEX grounding still cites Graddox — see Next Steps #1 +
+`plans/20260710_gex_flashalpha_replatform.md`.
 
 ---
 
@@ -304,7 +338,7 @@ US10Y in Rates+Dollar. Pure scorers + 94 unit tests in `packages/shared/src/util
 - **Module 5 Volatility / Stress** (`VolatilityStressCard.tsx`) — VIX, VVIX, IV Premium; percentile + 5D direction.
 - **Module 6 Credit / Liquidity** (`CreditLiquidityCard.tsx`) — HYG proxy (labeled; HY OAS later).
 - **Module 7 Rates + Dollar** (`RatesDollarCard.tsx`) — US10Y yield + UUP; flight-to-safety cross-check (falling yields during stress ≠ bullish).
-- **Module 8 GEX / Positioning** (`GexPositioningCard.tsx`) — Graddox bias score + **SPY (SPX÷10) and QQQ** levels + trigger/implication.
+- **Module 8 GEX / Positioning** (`GexPositioningCard.tsx`) — **FlashAlpha SPY gamma** (gamma flip · call wall · put wall · net GEX) + positioning read (as of 2026-07-10, PR #90; replaced the Discord Graddox signal). Feeds the regime composite's GEX sleeve.
 - **Module 9 Risk Appetite** (`SentimentGauge.tsx`) — renamed from Sentiment; **`react-gauge-component`** library gauge; two-column (gauge ┃ breakdown); 7 inputs (Dollar dropped, Breadth added, percentile VVIX); each row shows its fear/greed word.
 - **Module 10 Recap** (`MacroRecapCard.tsx` + `macro-recap.ts`) — **daily market note**, updated twice per weekday: pre-market AM (8am ET, `macro-recap-am.ts`) and post-market PM (4:30pm ET, `macro-recap-pm.ts`). Headline · verdict · big story · bull/base/bear · playbook · watching levels · final word. Grounded ONLY in passed data (no fabricated figures), Sonnet→Haiku fallback. **Persisted cross-device in Supabase** (`macro_daily_recaps`, migration 051, keyed by `date + session`). Written only by the scheduled functions or the admin Regenerate button (editor-only gate, hard 403); subscribers only ever read. Admin site has a session selector (AM/PM) on the Regenerate button. Both web and admin have their own `macro-recap.ts` function (site-scoped). The old `macro_weekly_recaps` table (migration 049) remains in the DB but nothing writes to it — can be dropped later.
 - **Module 11 Sector Rotation** (`SectorRotationCard.tsx` + `useSectorRotation.ts`) — 11 SPDR sectors as per-sector cards, ranked leader-to-laggard by structure + 1M RS; each card has a `recharts` radar (RS vs SPY across Week/1M/3M/6M/1Y) plus "Leaders"/"Setting Up" chip rows (that sector's own constituents, not STW holdings). Built on `claude/sector-rotation-tooltips`, merged via **PR #61**.
@@ -587,30 +621,27 @@ it, shipped it to production, then separately investigated + fixed a live data-i
    The regime history now spans dot-com / GFC 2008 / 2011 / 2018 / COVID. `plans/20260709_regime_daily_depth_extension.md`
    carries the DONE status + the Stooq→Yahoo deviation note.
 
-1. **★ MACRO TAB improvements (host-requested, next build).** Two threads — read
-   `packages/ui/src/features/macro/` (esp. `RegimeBanner.tsx`, `ModuleScoreStrip.tsx`,
-   `useMacroTrendHistory.ts`, `GexPositioningCard.tsx`) and `docs/macro_dashboard_guide.md` first:
-   - **(a) Trend comparison / traffic-light.** The Market Regime and module scores show no day-over-day
-     or week-over-week direction — the user can't tell if things are improving or deteriorating (this is
-     what the 5D trend engine was meant to surface). Wire the existing `useMacroTrendHistory` deltas into
-     the banner + score strip, and add a **traffic-light row `( )( )( )( )( )`** with green/amber/red
-     lamps per module/day so regime direction reads at a glance. `macro_daily_snapshots` now has real
-     v2.0.0 scores accruing, so deltas populate as rows accumulate (≥~6 rows).
-   - **(b) GEX / positioning source — the Graddox signal is too stale for this tab.** Today's
-     `GexPositioningCard` reads the Discord-sourced Graddox signal (once/day, often citing yesterday's
-     levels); gamma moves intraday so it's old news. Evaluate replacing it with a fresher gamma source.
-     Two candidates researched 2026-07-10: **FlashAlpha GEX API** (`https://lab.flashalpha.com/v1/exposure/gex/<sym>`,
-     `X-Api-Key`; returns net GEX / gamma flip / call wall / put wall / per-strike; **free tier = 5
-     req/day, SPX index needs a paid Basic plan** — SPY as a proxy works on free) and **SPX Gamma Edge**
-     substack (pre-market + end-of-session reports: gamma flip, OI support/resistance, call/put walls,
-     plain-English regime read — replicating it ourselves needs a full SPX options chain w/ OI+greeks,
-     which no current free feed gives, so it's a *buy not build*). **Recommendation to discuss with host:
-     the API, likely SPY-proxy on the free tier or a cheap paid tier for SPX; get the host's plan/budget
-     call before building.** Do NOT fold gamma into the frozen two-component regime gate (standing
-     prohibition) — this is the Macro *composite*, a separate surface.
+1. **★ MACRO TAB improvements — the two host-requested threads are DONE (PRs #90–#93, on `staging`).**
+   What shipped: **(a)** the 5D trend engine is now surfaced — colored score-strip deltas, a Regime
+   trend chip (`▲ +5 vs yesterday`), and the 9-day regime trajectory lamps in the new `RegimeCard`
+   (`packages/ui/src/features/macro/components/RegimeCard.tsx` + `RegimeTrajectory.tsx`). **(b)** the GEX
+   module moved off Discord Graddox onto **FlashAlpha** (see Conventions → Macro data sources).
+   **Two follow-ons remain:**
+   - **Verify the FlashAlpha GEX pipeline actually produces data.** `gex_snapshots` was **0 rows** and
+     had **no `gex-snapshot` `run_log` row** at handoff — the cron (`30 12,20 * * 1-5` UTC) hadn't fired
+     since deploy. Next session: query `run_log where run_type='gex-snapshot'` and `gex_snapshots`; if
+     still empty/erroring, confirm **`FLASHALPHA_API_KEY` is on the WEB Netlify site** (host says it's on
+     both sites — verify the web one specifically), then check the writer's error summary. Once a row
+     lands, spot-check the GEX card + the regime GEX sleeve in-browser.
+   - **Recap GEX grounding still cites Graddox (deferred).** `recap-core.ts` (scheduled AM/PM),
+     `macro-recap.ts` (manual), and the shared `MacroRecapRequest` type still ground the AI recap's GEX
+     block on the Graddox `signals` row, not FlashAlpha. Runtime-JSON-coupled + unverifiable without a
+     live key, so it was split out. Plan + exact touch points: `plans/20260710_gex_flashalpha_replatform.md`.
    - **Standing prohibitions** (carry through every block): regime multiplier stays advisory/display-only
      until Phase B; the two-component gate and the Macro composite never blend; gate params frozen at
      `engine_version 1.1.0`; no new regime indicators enter the *gate*. See `plans/20260709_integrity-guardrailsv2.md`.
+   - **Also newly unblocked:** wiring the score-strip 5D deltas + trajectory fully populate once
+     `macro_daily_snapshots` has ≥~6/9 rows (only 4 at handoff: Jul 6–9). No action — accrues one row/weekday.
 
 2. **Production promotion + executions verification (host-gated).** Week 2 is on `staging`, NOT `main`.
    A `staging → main` PR is **approval-gated — do not open without explicit host approval.** Once Week 2
@@ -847,7 +878,8 @@ repo**. Know who writes what before you reason about freshness or "why is this r
 | Table | Primary writer | Notes |
 |---|---|---|
 | `holdings` | **the routines** (see next section) | core position rows (`last_action`/`action_date`/`current_weight`/thesis/conviction/`category_id`); admin Edit form also writes. Per-leg sizing + prices live on `legs`/`leg_transactions`, not here |
-| `signals` | **morning routine** (Graddox step) | GEX signal bias + levels |
+| `signals` | **morning routine** (Graddox step) | GEX signal bias + levels — powers the **Signals tab** (the Macro GEX module moved to FlashAlpha 2026-07-10) |
+| `gex_snapshots` | **`gex-snapshot`** Netlify scheduled fn (web, ~8:30am/4:30pm ET) | SPY gamma from FlashAlpha (flip · call/put walls · net GEX · sleeve score); read by `useGexExposure` (Macro GEX module) + `macro-snapshot`. Migration 067; RLS read-only for authenticated |
 | `conviction_comments` | **the routines** + `stw-transcripts` | explicit appends; `source` = `discord` or `streaming`; admin/users can also add notes |
 | `holding_transactions` | **DB trigger** (no client) | auto-logged from any `holdings` write; never written directly by app or routine |
 | `run_log` | **the routines** | ingestion audit + high-water mark; newest `digest` → "Latest Portfolio Changes" |
@@ -992,6 +1024,17 @@ Feed responsibilities, post-re-platform (full inventory: [`plans/20260707_data_f
   TwelveData now; do not add index series back to it.
 - **Finnhub** (`VITE_FINNHUB_KEY`): live stock quotes only (free tier serves neither index symbols nor
   daily candles), plus `profile2` for `sector-map-sync`'s GICS resolution.
+- **FlashAlpha** (`FLASHALPHA_API_KEY`, server-side, no `VITE_`): the Macro GEX / Positioning module's
+  source (net GEX · gamma flip · call/put walls) — `GET https://lab.flashalpha.com/v1/exposure/gex/SPY`
+  with an `X-Api-Key` header. **Free tier = 5 requests/DAY, SPY-only, single expiry** (nearest Friday;
+  full chain needs the Growth plan). Because 5/day rules out any per-browser proxy, the **`gex-snapshot`
+  scheduled Netlify fn (web only, ~8:30am/4:30pm ET) is the ONLY caller** → derives levels via
+  `deriveGexLevels`/`gexSleeveScore` (`@stw/shared/utils/gex.ts`) → upserts `gex_snapshots` (migration
+  067); every client + `macro-snapshot.ts` read that table, never FlashAlpha. **GEX sleeve score =
+  spot-vs-gamma-flip cushion × `GEX_SLEEVE_SLOPE` (20; host-signed-off 2026-07-10)** — feeds the Macro
+  **composite** only, never the frozen regime **gate** (engine 1.1.0). A paid key later unlocks real SPX
+  with no code change. (The Discord Graddox `signals` row still powers the separate **Signals tab** —
+  only the Macro GEX module moved.)
 - **VVIX is dropped** — no free feed serves it; don't re-add a perpetually-null input.
 - **Generic pacing helper**: `runPaced` + `FEED_LIMITS` in `@stw/shared` (`utils/pacing.ts`) is the one
   chunk-and-pause throttle every feed routes through (FRED/Finnhub/TwelveData). Reuse it for new feeds.
@@ -1021,6 +1064,12 @@ Feed responsibilities, post-re-platform (full inventory: [`plans/20260707_data_f
   real trend/vol/credit scores + a `run_log` row). Deltas are legitimately null until ≥~6 fresh rows accrue.
 - **Sector Rotation** (Module 11): per-sector radar cards + constituent chips, fetched via
   `fetchClosesChunked` (TwelveData, paced).
+- **`regime_daily` reads pick the latest COMPLETE row, not the newest** (`fetchLatestRegime`,
+  `useLatestRegime` — powers the My-Portfolio Risk-tab RegimeLight + admin VolTargetPanel). FRED
+  publishes VIX/VIX3M with a ~1-day lag, so the *current* day's `regime_daily` row lands with price +
+  rv20 but null `vix_close`/`vix3m_close`; querying the raw newest row blanked Vol / Multiplier / VIX /
+  VIX3M. The query filters `vix_close`/`vix3m_close` not-null so it shows the latest full reading (fixed
+  2026-07-10). Apply the same "latest complete row" instinct to any panel that needs the vol inputs.
 
 ### Timestamps
 All UI timestamps use `fmtDateTime(val: Date | string | null)` from `@stw/shared`.
@@ -1203,9 +1252,20 @@ active filter (closed hidden by default). The FilterBar count shows `N of {total
   **A KPI row is one uniform strip: all cards are equal height** — `KpiCard` fills its (stretched)
   flex/grid cell via `height:100%`, so a card without a delta line matches its siblings. **Never hang
   an extra line (a regime note, a caption) off the bottom of a single KPI card** — it distorts that
-  card's height and reads as out of place; put such a line in its own full-width element below the KPI
-  row (the My-Portfolio Overview regime line is the reference: its own strip with a state-colored dot,
-  not crammed into the Equity/Options card).
+  card's height and reads as out of place; put such a line in its own full-width strip **above** the
+  KPI row (the My-Portfolio Overview regime line is the reference: its own strip with a state-colored
+  dot, sitting above the cards — host moved it above 2026-07-10 — not crammed into the Equity/Options card).
+- **When body copy names another page, link it** (host 2026-07-10). Any prose that references a
+  destination ("set in Settings", "under Settings → thresholds") renders that name as a real hyperlink,
+  not plain text. For a shared component that renders in more than one app, thread the destination in
+  via a prop (e.g. `ViolationsSummary`'s `settingsTo`) and fall back to plain text when the host app
+  has no such route (admin has `/config`, not `/settings`) — don't hardcode a route that only exists in
+  one app.
+- **Hover-detail uses a real popover, never the native `title` attribute** (host 2026-07-10). The
+  browser's `title` shows an ugly `?`/help cursor and delayed, unstyled text; use a small custom
+  tooltip (state-driven, absolutely positioned, `pointer-events:none`) anchored so it can't overflow
+  its card — see `RegimeTrajectory`'s lamp tooltip. Also never park per-item detail in a *persistent*
+  caption line that repeats what's already on screen or resizes on hover (both were bugs fixed here).
 - **A permanently-empty column/field reads as broken, not pending — remove it until its data exists.**
   My Portfolio's Positions table dropped the Return column (100% em-dashes: `unrealized_pnl_pct` isn't
   in the subscriber Flex feed) rather than ship a dead column. Show a column only when it can carry
@@ -1253,7 +1313,11 @@ instead, the same way every page since has.
   grid — combine `layout="horizontal"` with `hint` freely, a real wrapping bug there was found and
   fixed 2026-07-08), `TextInput`, `AlertStrip` (info/positive/warning/negative), `StatusPill`,
   `Badge`, `KpiCard`, `Modal`, `AccordionList`, `DetailPane`/`ListDetailSplit`, `SectionHeader`,
-  `DataTable`. Reach for one of these before writing a new inline-styled control.
+  `DataTable`, `HelpToggle`. Reach for one of these before writing a new inline-styled control.
+  `HelpToggle` (added 2026-07-10) is the shared collapsible **ⓘ "what / why / how"** popover — the
+  same help pattern the Macro modules use (`macroVisuals`' `ModuleHeader`), promoted to a primitive so
+  any surface (e.g. the Risk page) reuses it without importing across features. Author its content with
+  block **spans** (`<span className="block">…</span>`), not `<div>` — the popover is a span.
 
 ---
 

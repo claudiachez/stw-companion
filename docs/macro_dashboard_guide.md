@@ -280,26 +280,27 @@ magnets and pivot levels? This module is explicitly a **tactical overlay** — u
 entries and spotting pivots, but it doesn't define the whole macro picture by itself.
 
 "GEX" stands for gamma exposure — a measure of how options dealers are positioned that can act
-as a magnet or a headwind around certain price levels. STW's own proprietary signal, called
-"Graddox," reads the current GEX setup and classifies it into one of four biases:
+as a magnet or a headwind around certain price levels. The card reads live SPY gamma and shows:
+**Spot**, the **gamma flip** (the pivot where positioning turns from stabilizing to amplifying),
+the **call wall** (the strike with the most call gamma — an upside magnet / resistance), the
+**put wall** (the most put gamma — downside support), and **net GEX**. From spot vs the flip it
+gives a one-line positioning read:
 
-| Bias | Score | What it implies |
-|---|---|---|
-| Bullish | 90 | Breakouts acceptable; dips into support can be bought |
-| Flat / Neutral | 55 | Range-bound; fade extremes into the marked levels |
-| Conflicted / Mixed | 35 | Two-sided tape — wait for a level to break before committing |
-| Bearish | 10 | Avoid chasing longs until a reclaim above the GEX pivot |
+| Reading | What it implies |
+|---|---|
+| Positive γ (spot above the flip) | Dealers dampen moves — dips into support tend to hold; expect a grind, not a chase |
+| At flip | Right at the pivot — a decisive break either side sets the tone; wait for confirmation |
+| Negative γ (spot below the flip) | Dealers amplify moves — breaks accelerate; keep size down until spot reclaims the flip |
 
-The card also shows three key price levels for both SPY and QQQ: **Resistance**, **GEX1** (the
-main positioning pivot), and **Put Support**. A short delta shows how the bias score has changed
-over the last 3 days — shorter than the 5-day window used elsewhere, because dealer positioning
-can shift quickly.
+A short delta shows how the positioning score has changed over the last 3 days — shorter than the
+5-day window used elsewhere, because dealer positioning can shift quickly.
 
 **Why it matters:** this sleeve is 20% of the regime score, and the levels it surfaces are useful
 reference points regardless of your overall view.
 
-**Source/cadence:** STW's own Graddox signal, refreshed once per weekday morning (around 9am ET)
-and read from the app's database; the card displays exactly when it was last updated.
+**Source/cadence:** the **FlashAlpha** GEX API (SPY as the index proxy), refreshed twice each
+weekday by a scheduled job and read from the app's database; the card displays exactly when it was
+last updated. (Before 2026-07-10 this used STW's Graddox signal.)
 
 [↑ Back to top](#table-of-contents)
 
@@ -328,7 +329,7 @@ It's built from six weighted inputs:
 | Market Momentum | SPY's price vs. its 125-day moving average |
 | Volatility (VIX) | Same VIX scoring as Module 5 |
 | IV Premium | Same VIX-vs-realized-volatility scoring as Module 5 |
-| GEX Bias | Same Graddox bias scoring as Module 8 |
+| GEX Bias | Same GEX positioning score as Module 8 (FlashAlpha) |
 | Credit | The high-yield credit spread vs. its 50-day average (as in Module 6) |
 | Breadth | The equal-weight S&P 500 (RSP) vs. the cap-weighted S&P 500 (SPY) — is the *average* stock confirming the rally, or is it narrow? |
 
@@ -341,7 +342,7 @@ informative — a "Constructive" regime read paired with "Extreme Greed" sentime
 situation than the same regime read paired with "Fear."
 
 **Source/cadence:** FRED for the VIX and the high-yield credit spread, plus TwelveData daily
-closes for SPY/RSP (momentum and breadth), plus STW's Graddox signal for GEX. Daily metrics
+closes for SPY/RSP (momentum and breadth), plus the FlashAlpha GEX read. Daily metrics
 refresh once per browser session.
 
 [↑ Back to top](#table-of-contents)
@@ -501,9 +502,9 @@ easing inflation, even though the yield chart looks identical either way.
 - **FRED:** Federal Reserve Economic Data — the free, authoritative public data service run by
   the St. Louis Fed. This dashboard sources its VIX, 10-year Treasury yield, high-yield credit
   spread, dollar index, and economic-release calendar from FRED.
-- **GEX (gamma exposure):** a measure of how options dealers are positioned, used here via STW's
-  proprietary "Graddox" signal to classify dealer bias as Bullish/Flat/Conflicted/Bearish and to
-  surface key price levels.
+- **GEX (gamma exposure):** a measure of how options dealers are positioned, sourced here from the
+  FlashAlpha GEX API (SPY proxy) to read the gamma flip, call/put walls, and net GEX, and give a
+  positive-γ / at-flip / negative-γ positioning read.
 - **ISO week:** a standardized way of numbering calendar weeks (Monday–Sunday) used to schedule
   when the weekly Market Recap refreshes.
 - **IV Premium:** the VIX divided by an asset's own realized (actual) volatility — a measure of
@@ -537,8 +538,8 @@ easing inflation, even though the yield chart looks identical either way.
 | Volatility / Stress | FRED (VIX close + history) + TwelveData (SPY closes for realized vol) | Once/day |
 | Credit / Liquidity | FRED (ICE BofA HY OAS daily) | Once/day |
 | Rates + Dollar Headwinds | FRED (10-year yield + broad dollar index, daily) | Once/day |
-| GEX / Positioning | STW's Graddox signal | Once/weekday morning (~9am ET) |
-| Risk Appetite (gauge) | FRED (VIX + credit spread) + TwelveData (SPY/RSP daily closes) + Graddox | Daily once/session |
+| GEX / Positioning | FlashAlpha GEX API (SPY proxy) | Twice/weekday (~8:30am & 4:30pm ET) |
+| Risk Appetite (gauge) | FRED (VIX + credit spread) + TwelveData (SPY/RSP daily closes) + FlashAlpha GEX | Daily once/session |
 | Market Recap | Server-side AI process (Claude Sonnet, fallback Haiku), grounded in Modules 1–9 | Once/calendar week |
 | Sector Rotation | TwelveData (sector ETFs + constituent stocks) | Once/day |
 

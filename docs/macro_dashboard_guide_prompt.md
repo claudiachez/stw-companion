@@ -300,28 +300,27 @@ and pivots? This is explicitly a **tactical overlay** — it helps time entries 
 but doesn't define the whole macro picture on its own.
 
 "GEX" = gamma exposure, a measure of how options dealers are positioned that can act as a magnet or
-headwind around certain price levels. STW's own proprietary "Graddox" signal classifies the current
-GEX read into one of four biases, each carrying a 0–100 score and a one-line trading implication:
+headwind around certain price levels. The card reads live **SPY** gamma and surfaces the **gamma flip**
+(the pivot where dealer positioning turns from stabilizing to amplifying), the **call wall** (most call
+gamma — an upside magnet / resistance), the **put wall** (most put gamma — support), and **net GEX**.
+From spot vs the flip it gives a one-line positioning read:
 
-| Bias | Score | Implication (verbatim) |
-|---|---|---|
-| Bullish | 90 | "Breakouts acceptable; dips into support can be bought." |
-| Flat / neutral / unrecognized | 55 | "Range-bound; fade extremes into the marked levels." |
-| Conflicted / mixed | 35 | "Two-sided tape — wait for a level to break before committing." |
-| Bearish | 10 | "Avoid chasing longs until a reclaim above the GEX pivot." |
+| Reading | Implication |
+|---|---|
+| Positive γ (spot above the flip) | Dealers dampen moves — dips into support tend to hold; a grind, not a chase. |
+| At flip | Right at the pivot — a decisive break either side sets the tone; wait for confirmation. |
+| Negative γ (spot below the flip) | Dealers amplify moves — breaks accelerate; keep size down until spot reclaims the flip. |
 
-The card also shows three key price levels for both **SPY** and **QQQ**: Resistance, "GEX1" (the main
-positioning pivot), and Put Support. (SPX-denominated levels are divided by 10 to display on the
-SPY price scale, matching the convention used elsewhere in the app.) A short delta shows the bias
-score's change over the **last 3 days** (not 5) — GEX positioning can shift faster than the other
-sleeves.
+A short delta shows the positioning score's change over the **last 3 days** (not 5) — GEX positioning
+can shift faster than the other sleeves.
 
-**In-app explanation (verbatim):** "STW's options-positioning read (dealer gamma exposure) — Bullish /
-Flat / Conflicted / Bearish, with key SPY and QQQ levels. A tactical overlay: it helps time entries and
-spot pivots, but doesn't set the whole macro picture on its own."
+**In-app explanation (verbatim):** "Options-positioning read (dealer gamma exposure) for SPY, with the
+gamma flip, call wall and put wall. Above the flip = positive gamma (dealers dampen moves); below =
+negative gamma (dealers amplify moves). A tactical overlay: it helps time entries and spot pivots, but
+doesn't set the whole macro picture on its own."
 
-**Source/cadence:** STW's own "Graddox" signal, written once per weekday morning (~9am ET) by an
-internal ingestion process and read from the app's database; the card shows exactly when that signal
+**Source/cadence:** the **FlashAlpha** GEX API (SPY as the index proxy), written twice per weekday
+(~8:30am & 4:30pm ET) by a scheduled process and read from the app's database; the card shows when that
 was last updated.
 
 ---
