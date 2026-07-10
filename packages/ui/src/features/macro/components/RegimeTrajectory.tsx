@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { regimeBand, FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
 import type { RegimeSeriesPoint } from '../useMacroTrendHistory';
 
@@ -13,8 +14,9 @@ interface Props {
 // left→right to see whether the backdrop is improving or deteriorating into
 // today. Collapses the 5 regime bands to 3 lamp colors (green/amber/red). The
 // window is always `days` wide: days with no snapshot yet render as hollow lamps
-// so it reads as "history still accruing", never a fabricated color. Each lamp
-// carries a native mouseover tooltip with that day's date · regime · score.
+// so it reads as "history still accruing", never a fabricated color. Hovering a
+// lamp shows that day's date · regime · score in a small popover (a real tooltip,
+// not the browser's title-attribute "?" cursor).
 const WEEKDAY = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const SLOT_W = 20; // fixed slot width so lamps never shift on hover
 
@@ -39,13 +41,15 @@ function weekdayLetter(dateStr: string): string {
   return WEEKDAY[new Date(y, m - 1, d).getDay()];
 }
 
-function dotTitle(slot: Slot): string {
-  if (slot.placeholder) return 'No snapshot for this day yet — history is still accruing.';
+function tipText(slot: Slot): string {
+  if (slot.placeholder) return 'No snapshot for this day yet';
   const band = slot.score === null ? 'No reading' : regimeBand(slot.score).label;
   return `${slot.date} · ${band}${slot.score === null ? '' : ` · ${slot.score}`}`;
 }
 
 export function RegimeTrajectory({ series, days = 9 }: Props) {
+  const [hovered, setHovered] = useState<number | null>(null);
+
   if (series.length < 2) {
     return (
       <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>
@@ -58,9 +62,12 @@ export function RegimeTrajectory({ series, days = 9 }: Props) {
   const real: Slot[] = series.slice(-days).map((p) => ({ date: p.date, score: p.score, placeholder: false }));
   const pad = Math.max(0, days - real.length);
   const slots: Slot[] = [...Array.from({ length: pad }, (): Slot => ({ date: '', score: null, placeholder: true })), ...real];
+  const active = hovered !== null ? slots[hovered] : null;
 
   return (
-    <div style={{ display: 'flex', gap: 4 }}>
+    // inline-flex so the box hugs the lamps; the tooltip anchors to the right edge
+    // (the row is right-aligned by the parent) so it never overflows the card.
+    <div style={{ position: 'relative', display: 'inline-flex', gap: 4 }} onMouseLeave={() => setHovered(null)}>
       {slots.map((slot, i) => {
         const isNow = !slot.placeholder && slot.date === today;
         const label = slot.placeholder ? '·' : isNow ? 'Now' : weekdayLetter(slot.date);
@@ -68,8 +75,8 @@ export function RegimeTrajectory({ series, days = 9 }: Props) {
         return (
           <div
             key={slot.placeholder ? `pad-${i}` : `${slot.date}-${i}`}
-            title={dotTitle(slot)}
-            style={{ width: SLOT_W, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, cursor: slot.placeholder ? 'default' : 'help' }}
+            onMouseEnter={() => setHovered(i)}
+            style={{ width: SLOT_W, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}
           >
             <span style={{
               width: 12, height: 12, borderRadius: '50%',
@@ -87,6 +94,17 @@ export function RegimeTrajectory({ series, days = 9 }: Props) {
           </div>
         );
       })}
+      {active && (
+        <div style={{
+          position: 'absolute', bottom: 'calc(100% + 8px)', right: 0, zIndex: 30,
+          whiteSpace: 'nowrap', pointerEvents: 'none',
+          fontSize: FONT_SIZE.xs, color: 'var(--t2)',
+          background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6,
+          padding: '5px 9px', boxShadow: 'var(--shadow)',
+        }}>
+          {tipText(active)}
+        </div>
+      )}
     </div>
   );
 }
