@@ -67,6 +67,10 @@ only — see "Deployment note" below).
    `?before=` chunks if ever wanted; TwelveData's 5000-bar cap is the limiter, FRED has none).
    **Sandbox `regime_daily` left empty** (dev-only; the local env has only the sandbox anon key, which
    can't write past RLS).
+   > **SUPERSEDED 2026-07-10 (Week-2 Item 4, PR #89):** the ~2020-12 depth limit no longer holds —
+   > `regime_daily` was extended to **19,500 rows, IWM/SPY/QQQ 2000-09-01→present** via a new
+   > **Yahoo Finance** source (`?source=yahoo`, not TwelveData/Stooq — Stooq had walled off behind a
+   > proof-of-work challenge). Sandbox still empty. See `plans/20260709_regime_daily_depth_extension.md`.
 
 8. **Item 3 advisory light was never actually mounted in week-1.** The first report claimed
    `RegimeLight` was "wired into the Limits tab," but it was exported and mounted **nowhere**. This

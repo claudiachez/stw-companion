@@ -16,6 +16,9 @@ deviations, and open follow-ups below.
 >   backfilled on **PROD** to **4,200 rows** (IWM/SPY/QQQ each 2020-12-08 → 2026-07-08). See the Item 3
 >   section below for the run detail + the four-ladder-cell spot-check. (Sandbox `regime_daily` left
 >   empty — dev-only, needs a sandbox service key; documented gap, not blocking.)
+>   **SUPERSEDED 2026-07-10 (PR #89):** depth was later extended to **19,500 rows, 2000-09-01→present**
+>   via a Yahoo Finance source; the 2020-12 figures throughout this historical report are stale. See
+>   `plans/20260709_regime_daily_depth_extension.md`.
 > - New since: a **`sector-map-sync`** scheduled writer (add it to the live-cron verification).
 > Open follow-up: (a) **live cron verification** of the four scheduled writers (`macro-snapshot`,
 > `macro-recap-am/pm`, `sector-map-sync`, and — once PR #82 promotes — `regime-daily`) via their

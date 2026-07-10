@@ -16,7 +16,8 @@ Session-Close doc-maintenance step.
 | Feed | Key (env) | Tier / limit | Serves (current) | CORS / access |
 |---|---|---|---|---|
 | **FRED** | `FRED_API_KEY` (server-side, no `VITE_`) | Free, ~120 req/min, no daily cap | Macro **index** indicators (VIX, VIX3M, US10Y, HY-OAS credit, dollar) **+ the Event Risk release calendar** | **No CORS** → browser reads via the `fred` Netlify proxy; writers call FRED directly |
-| **TwelveData** | `VITE_TWELVEDATA_KEY` | Free, **8 credits/min, 800/day, 1 credit/symbol** | **Equity daily closes only** — trend ETFs (SPY/QQQ/IWM/RSP/VEA) + Sector-Rotation constituents | CORS OK (client-direct) |
+| **TwelveData** | `VITE_TWELVEDATA_KEY` | Free, **8 credits/min, 800/day, 1 credit/symbol** | **Equity daily closes only** — trend ETFs (SPY/QQQ/IWM/RSP/VEA) + Sector-Rotation constituents; `regime-daily`'s **daily** IWM/SPY/QQQ append | CORS OK (client-direct) |
+| **Yahoo Finance (chart API)** | none (keyless) | Free, no key, deep history in one call | **`regime-daily` depth backfill only** (`?source=yahoo`) — IWM/SPY/QQQ daily closes back to ~2000 (SPY 1996) | server-side (writer only), sends a `User-Agent` |
 | **Finnhub** | `VITE_FINNHUB_KEY` | Free, ~60/min | Live **stock** quotes; `profile2` (industry, for `sector-map-sync`) | CORS OK; free tier serves neither index symbols nor daily candles |
 | **IBKR — local proxy** | none (localhost) | Gateway pacing only | Admin option-leg marks (`legs.mark_price`) + real order placement | `apps/admin/ibkr_proxy.py`; never deployed |
 | **IBKR — Flex Web Service** | per-subscriber token in `profiles` | ~1 req / few-min per token | Subscriber's own **open positions** (`<OpenPositions>`) → `user_positions` (snapshot, delete+reinsert) **and fills** (`<Trades>`, optional) → `user_executions` (append-only, idempotent on `ibExecID`) | via `apps/web/netlify/functions/ibkr-flex.ts`; `user_executions` consumed by `scripts/tca.mjs` |
@@ -55,6 +56,22 @@ Session-Close doc-maintenance step.
   through `tdBatchCloses` / `fetchClosesChunked` (≤8 symbols, ~65s pacing) — never one big unchunked
   call. **Indices are OFF TwelveData now — do not add index series back to it.**
 
+## Yahoo Finance (regime_daily depth backfill only)
+
+- Endpoint: `https://query1.finance.yahoo.com/v8/finance/chart/<SYM>?range=30y&interval=1d` — keyless,
+  no cap, decades of daily bars in ONE call (SPY 1996, QQQ 1999, IWM 2000). Reader: `yahooSeries()` in
+  `apps/admin/netlify/functions/regime-daily.ts` (send a `User-Agent`).
+- **Use the UNADJUSTED close** — `indicators.quote[].close`, **not** `adjclose`. The unadjusted value
+  matches TwelveData's basis to the cent, so re-writing the existing 2020-present `regime_daily` rows via
+  `on_conflict` is a no-op (verified before the backfill). `adjclose` (dividend-adjusted) does NOT
+  reconcile — never use it here.
+- **Scope: the depth backfill only** (`?backfill=1&source=yahoo`). The daily cron append stays on
+  TwelveData. Depth-backfilled rows are tagged `source='yahoo+fred'`; daily rows `twelvedata+fred`.
+- **Why Yahoo, not Stooq (the plan's original pick):** Stooq now serves a **JavaScript proof-of-work
+  anti-bot wall** that a serverless `fetch()` can't clear (UA header + `.pl` domain both fail). Yahoo
+  meets every requirement Stooq was chosen for — free, keyless, deep, one call, not TwelveData. If Yahoo
+  ever walls off similarly, the next candidate is a FRED equity series or a keyed provider, NOT Stooq.
+
 ## Shared pacing
 
 `runPaced` + `FEED_LIMITS` in `packages/shared/src/utils/pacing.ts` is the one chunk-and-pause throttle
@@ -79,7 +96,7 @@ re-implementing pacing.
 | Function | Site | Cadence | Feeds | Writes |
 |---|---|---|---|---|
 | `macro-snapshot` | web | weekdays 21:30 UTC | FRED (indices) + TwelveData (equity) | `macro_daily_snapshots` (5D engine) |
-| `regime-daily` | admin | weekdays 23:00 UTC | FRED (VIX/VIX3M/US10Y) + TwelveData (IWM/SPY/QQQ) | `regime_daily` (PROD backfilled 4,200 rows; cron fires on the `main` deploy — promotion #87) |
+| `regime-daily` | admin | weekdays 23:00 UTC (daily); backfill on demand | daily: FRED (VIX/VIX3M/US10Y) + TwelveData (IWM/SPY/QQQ). depth backfill (`?source=yahoo`): FRED + Yahoo Finance | `regime_daily` (**PROD = 19,500 rows, IWM/SPY/QQQ 2000-09-01→present, `source=yahoo+fred`**; daily cron live since promotion #87) |
 | `sector-map-sync` | web | weekdays 22:00 UTC | Finnhub `profile2` | `ticker_sector_map` |
 | `macro-recap-am/pm` | web | weekdays 12:00 / 21:30 UTC | Anthropic | `macro_daily_recaps` |
 

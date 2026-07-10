@@ -1,9 +1,10 @@
 # STW Companion — Claude Code Guide
 
 > **⚠️ START HERE — branch.** **`staging` is the active trunk** — all feature work happens here.
-> **`staging` is ~13 commits ahead of `main`** (the whole Week-2 batch below; check `git log --oneline
-> origin/main..origin/staging | wc -l`). A `staging → main` PR is a separate, approval-gated production
-> deploy; **do not open one without explicit host approval**, even if staging looks ready.
+> **`staging` is ~16 commits ahead of `main`** (the whole Week-2 batch below + the regime_daily depth
+> extension; check `git log --oneline origin/main..origin/staging | wc -l`). A `staging → main` PR is a
+> separate, approval-gated production deploy; **do not open one without explicit host approval**, even if
+> staging looks ready.
 > **✅ WEEK 2 MERGED to `staging` (PR [#88](https://github.com/claudiachez/stw-companion/pull/88),
 > 2026-07-10) — NOT yet on production (`main`).** What's on staging: **executions sync** (`user_executions`,
 > migration 064 — Flex `<Trades>` ingestion via `ibkr-flex.ts`), **TCA v1** (`scripts/tca.mjs`, admin/CLI),
@@ -19,8 +20,9 @@
 > on PROD (adversarial RLS test, two throwaway tenants; `ops_log` row 12) — see `docs/launch_gates.md`.
 > **CCXI is now mapped → Industrials** in `ticker_sector_map` (verified 2026-07-10; the `TICKER_GICS`
 > code-override idea stays dropped — the admin Sector dropdown is the sole sanctioned fix).
-> **PROD `regime_daily` = 4,203 rows (IWM/SPY/QQQ, 2020-12-08 → present); sandbox still 0 rows** (dev-only;
-> needs a sandbox service-role key — depth extension to ~2000 is a queued task, see Next Steps #1).
+> **PROD `regime_daily` = 19,500 rows (IWM/SPY/QQQ, 2000-09-01 → present, `source=yahoo+fred`)** — the
+> depth extension is DONE (PR #89, merged to `staging` 2026-07-10; the backfill wrote directly to PROD, so
+> it is live regardless of promotion). **Sandbox still 0 rows** (dev-only; needs a sandbox service-role key).
 > **`user_executions` is 0 rows on PROD** — expected until the operator enables the Flex **Trades** section
 > AND the executions code deploys (currently on staging, not the site the operator syncs against). No fills
 > flow until both are true. `app_config.ibkr_live_trading_enabled` = **`0` on both** (last confirmed 2026-07-05).
@@ -54,6 +56,37 @@
 
 ---
 
+## Current Status — regime_daily depth extension DONE (handoff 2026-07-10)
+
+**This session executed Week-2 Item 4 — the `regime_daily` depth extension — end to end. Merged to
+`staging` via PR [#89](https://github.com/claudiachez/stw-companion/pull/89) (branch deleted). One code
+change + a data backfill; no migration, no env var, no shared-package change.**
+
+- **What shipped:** `regime-daily.ts` gained an alternate equity source `?source=yahoo` behind its ONE
+  existing computation path — `yahooSeries()` pulls decades of daily bars from Yahoo Finance's chart API
+  in one keyless call, mapped to the same `Bar` shape as `tdSeries()` and fed through the existing
+  compute loop + `sbUpsertMany` **verbatim**. Rows tagged `source='yahoo+fred'`; FRED index fields
+  pulled deep enough to align (`fredLimit` uncapped on the Yahoo path). **Engine stays frozen at 1.1.0 —
+  only the SOURCE of the equity bars changed, never the regime math. The daily-cron path (default source
+  = TwelveData) is untouched.**
+- **Source deviation — Stooq → Yahoo (standing, now in `docs/feeds.md`).** The plan named **Stooq**, but
+  Stooq has since deployed a **JavaScript proof-of-work anti-bot wall** a serverless `fetch()` can't
+  clear (UA header + `.pl` domain both tried). **Yahoo Finance** is the substitute: free/keyless/deep/
+  one-call, and — critically — its **unadjusted** close (`indicators.quote[].close`, NOT `adjclose`)
+  matches TwelveData's basis **to the cent**, so the `on_conflict` merge over the existing 2020-present
+  rows is a no-op. Verified against stored SPY rows before writing.
+- **Executed against PROD** (`usmqbohcjcyszjxxvnqu`) via the esbuild-bundle harness (exact deploy
+  artifact). **19,500 rows**, IWM/SPY/QQQ each **2000-09-01 → present**, all `source=yahoo+fred`
+  (`run_log` id 75). **This is live on PROD regardless of promotion** — the backfill wrote to the PROD
+  DB directly, not through a `main` deploy. Sandbox `regime_daily` still 0 (dev-only).
+- **Acceptance — all pass:** 3 reconcile dates unchanged to the cent (751.71/366.65/468.53, trend
+  GREEN/RED/GREEN); 2008-10-15 double-RED (trend RED + vol RED → `risk_multiplier` 0.0); 2013-05-01
+  GREEN+GREEN (→ 1.0); `vol_state` honestly `UNKNOWN` for 2000-09-01→2007-12-03 (pre-VXVCLS inception),
+  never guessed. **Minor/self-healing:** today's fresh bar can carry `vol_state UNKNOWN` if FRED's VIX3M
+  hasn't posted yet — the daily cron overwrites it that night with the settled close.
+
+---
+
 ## Current Status — Week 2 MERGED to staging (handoff 2026-07-10)
 
 **Week 2 (`plans/20260709_integrity-guardrailsv2.md`) is MERGED to `staging` via PR
@@ -84,9 +117,9 @@ production (`main`). Typecheck + 250 tests + lint all green.** What shipped:
   already in `ops_log` (row 11, `affected_scope='36 leg_transactions rows'`, with prior value
   bare-midnight-UTC / new value 16:00 ET close / host-confirmed date / honest "assumed placeholder"
   caveat). Item 0c is satisfied — no new record needed.
-- **Item 4 — regime_daily depth extension (DEFERRED, spec-ready).** The one item not built —
-  `plans/20260709_regime_daily_depth_extension.md` (Stooq source behind regime-daily.ts's single
-  code path). Blocked on a deep public-source fetch (execution deferred, not a code gap).
+- **Item 4 — regime_daily depth extension (DONE, PR #89, 2026-07-10).** `regime_daily` extended from
+  4,203 rows (2020-12-08→) to **19,500 rows (IWM/SPY/QQQ, 2000-09-01→present)** on PROD, unblocking
+  Item 3's vol-target backtest + Phase 0c. See the dedicated session subsection directly below.
 
 **✅ MIGRATIONS 064/065/066 APPLIED + VERIFIED on BOTH PROD (`usmqbohcjcyszjxxvnqu`) + sandbox
 (`uolabcgbnrkhzpwuvzlk`):** `user_executions` (24 cols, RLS on), `risk_config` vol_target defaults
@@ -546,15 +579,13 @@ it, shipped it to production, then separately investigated + fixed a live data-i
 
 ## Next Steps
 
-0. **★ WEEK-2 ITEM 4 — `regime_daily` depth extension (host is running this in a DEDICATED PARALLEL
-   session).** Spec is execution-ready: [`plans/20260709_regime_daily_depth_extension.md`](plans/20260709_regime_daily_depth_extension.md).
-   Extend IWM/SPY/QQQ daily bars to ~2000-present via **Stooq** (free, no key, one bulk CSV per symbol —
-   NOT TwelveData, whose 5000-bar cap + 1-credit/symbol tier is exactly why we switch) wired behind
-   `regime-daily.ts`'s single computation path (`?source=stooq`, no drifting backfill script; engine
-   frozen at 1.1.0); FRED indices already have no cap. **Pacing is a non-issue with Stooq/FRED** — the
-   whole backfill is ~6 HTTP requests, run once via the esbuild-bundle harness with the PROD service-role
-   key. Writes ~19k rows to PROD `regime_daily`. Unblocks Item 3's vol-target backtest + Phase 0c.
-   **If NOT already claimed by the parallel session, coordinate before touching `regime_daily`.**
+0. **✅ WEEK-2 ITEM 4 — `regime_daily` depth extension DONE (PR #89, 2026-07-10).** PROD `regime_daily`
+   is now **19,500 rows, IWM/SPY/QQQ 2000-09-01→present** (`source=yahoo+fred`) — see the Current Status
+   subsection at the top. **Newly unblocked:** Item 3's **vol-target validation backtest** (the
+   `VolTargetPanel` still labels it "pending the regime history depth extension" — that label can now be
+   flipped and the backtest run against the deep history) and **Phase 0c**'s composite-vs-gate backtest.
+   The regime history now spans dot-com / GFC 2008 / 2011 / 2018 / COVID. `plans/20260709_regime_daily_depth_extension.md`
+   carries the DONE status + the Stooq→Yahoo deviation note.
 
 1. **★ MACRO TAB improvements (host-requested, next build).** Two threads — read
    `packages/ui/src/features/macro/` (esp. `RegimeBanner.tsx`, `ModuleScoreStrip.tsx`,
