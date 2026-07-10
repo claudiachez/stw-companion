@@ -48,7 +48,7 @@ import { schedule } from '@netlify/functions';
 import {
   trendBucket, trendSleeveScore, environmentScore,
   vixScore, ivPremiumScore, vixDirectionScore, volatilityStressScore, hv30,
-  creditOasScore, us10yScore, uupScore, ratesDollarScore, gexScore, breadthScore,
+  creditOasScore, us10yScore, uupScore, ratesDollarScore, breadthScore,
   classifyEventRisk, riskAppetiteScore, SLEEVE_WEIGHTS,
   buildFredUrl, parseFredObservations, runPaced, FEED_LIMITS, FRED_SERIES,
 } from '@stw/shared';
@@ -266,16 +266,14 @@ const handlerImpl: Handler = async () => {
     dollarAbove9 !== null && dollarAbove21 !== null ? uupScore(dollarAbove9, dollarAbove21) : null,
   ]);
 
-  // ── Module 8: GEX (from Supabase signals, written by the morning routine) ──
-  let gexBias: string | null = null;
-  try {
-    const trader = await sbGet<{ id: string }>(supabaseUrl, serviceKey, 'traders', 'select=id&name=eq.Graddox');
-    if (trader?.id) {
-      const signal = await sbGet<{ bias: string }>(supabaseUrl, serviceKey, 'signals', `select=bias&trader_id=eq.${trader.id}&order=date.desc`);
-      gexBias = signal?.bias ?? null;
-    }
-  } catch { /* ignore — gexScore(null) below */ }
-  const gexSc = gexScore(gexBias);
+  // ── Module 8: GEX (from gex_snapshots, written by the gex-snapshot fn from
+  //    FlashAlpha) — read the persisted sleeve score so this stored history and
+  //    the live UI agree on the same number. ──
+  const gexRow = await sbGet<{ sleeve_score: number | null }>(
+    supabaseUrl, serviceKey, 'gex_snapshots',
+    'select=sleeve_score&symbol=eq.SPY&order=snapshot_date.desc,session.desc',
+  );
+  const gexSc = gexRow?.sleeve_score ?? null;
 
   // ── Module 9: Risk Appetite gauge — same weighted inputs as
   //    useSentimentGauge.ts, via the shared riskAppetiteScore() so the

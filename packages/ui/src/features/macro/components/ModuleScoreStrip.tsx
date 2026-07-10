@@ -16,9 +16,14 @@ interface Props {
   items: ModuleStripItem[];
 }
 
-function deltaText(d: number | null | undefined, label: '3D' | '5D' = '5D'): string | null {
+// A signed delta reads as improving (green ↑), deteriorating (red ↓) or flat
+// (muted →) at a glance — the whole point of the strip is to show direction.
+function deltaChip(d: number | null | undefined, label: '3D' | '5D' = '5D'): { text: string; color: string } | null {
   if (d === null || d === undefined) return null;
-  return `${label} ${d >= 0 ? '+' : ''}${Math.round(d)}`;
+  const n = Math.round(d);
+  const arrow = n > 0 ? '↑' : n < 0 ? '↓' : '→';
+  const color = n > 0 ? 'var(--c5)' : n < 0 ? 'var(--c1)' : 'var(--t3)';
+  return { text: `${label} ${arrow} ${n >= 0 ? '+' : ''}${n}`, color };
 }
 
 export function ModuleScoreStrip({ items }: Props) {
@@ -27,7 +32,7 @@ export function ModuleScoreStrip({ items }: Props) {
     <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4 }}>
       {items.map((it) => {
         const color = scoreColor(it.score);
-        const delta = deltaText(it.fiveDayDelta, it.deltaLabel);
+        const delta = deltaChip(it.fiveDayDelta, it.deltaLabel);
         return (
           <div
             key={it.key}
@@ -48,7 +53,7 @@ export function ModuleScoreStrip({ items }: Props) {
               <span style={{ fontSize: FONT_SIZE.display, fontWeight: FONT_WEIGHT.bold, color }}>{it.score ?? '—'}</span>
               <span style={{ fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold, color }}>{it.detail}</span>
             </div>
-            {delta && <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 1 }}>{delta}</div>}
+            {delta && <div style={{ fontSize: FONT_SIZE['2xs'], color: delta.color, marginTop: 1 }}>{delta.text}</div>}
           </div>
         );
       })}

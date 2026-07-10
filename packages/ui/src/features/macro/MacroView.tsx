@@ -1,7 +1,7 @@
 import { useMemo, type ReactNode } from 'react';
 import {
-  environmentScore, regimeBand, trendSleeveScore, trendSleeveLabel, trendSubScore, gexScore,
-  gexBiasLabel, stressLabel, creditLabel, ratesDollarLabel, regimeDirectionLabel, FONT_SIZE,
+  environmentScore, regimeBand, trendSleeveScore, trendSleeveLabel, trendSubScore,
+  gexPositioningLabel, stressLabel, creditLabel, ratesDollarLabel, FONT_SIZE,
 } from '@stw/shared';
 import { useCapabilities } from '../../context/AppCapabilities';
 import { useAppConfig } from '../../hooks/useAppConfig';
@@ -17,9 +17,11 @@ import { useDailyRecap } from './useDailyRecap';
 import { useSectorRotation } from './useSectorRotation';
 import { useMacroPrefs } from './useMacroPrefs';
 import { useMacroTrendHistory } from './useMacroTrendHistory';
+import { useGexExposure } from './useGexExposure';
 import { useMacroEvents } from './useMacroEvents';
 import { useGraddox } from '../signals/useGraddox';
 import { RegimeBanner } from './components/RegimeBanner';
+import { RegimeTrajectory } from './components/RegimeTrajectory';
 import { ModuleScoreStrip } from './components/ModuleScoreStrip';
 import { MacroEventRiskCard } from './components/MacroEventRiskCard';
 import { TrendStructureTable } from './components/TrendStructureTable';
@@ -66,8 +68,10 @@ const HELP = {
   ),
   gex: (
     <Help>
-      <div>STW Graddox's options-positioning read (dealer gamma exposure): <strong>Bullish / Flat / Conflicted / Bearish</strong>, with key SPY &amp; QQQ levels.</div>
-      <div style={dim}>A tactical overlay — helps time entries and spot pivots, but doesn't set the whole macro picture on its own.</div>
+      <div>Options-positioning read (dealer gamma exposure) for SPY, with the <strong>gamma flip</strong>, <strong>call wall</strong> and <strong>put wall</strong>.</div>
+      <div><strong>Above the flip</strong> — positive gamma: dealers dampen moves, dips tend to hold (a grind, not a chase).</div>
+      <div><strong>Below the flip</strong> — negative gamma: dealers amplify moves, breaks accelerate; keep size down.</div>
+      <div style={dim}>A tactical overlay — helps time entries and spot pivots. Source: FlashAlpha (SPY as the index proxy).</div>
     </Help>
   ),
   riskAppetite: (
@@ -104,7 +108,11 @@ export function MacroView() {
   const { finnhubKey, twelveDataKey, canEdit } = useCapabilities();
   const { regimeWeights } = useAppConfig();
   const { prefs, toggle } = useMacroPrefs();
+  // Graddox is retained only to ground the AI recap (a follow-on swaps that too);
+  // the visible GEX card, the regime GEX sleeve and the score strip now read the
+  // FlashAlpha snapshot via useGexExposure.
   const { data: graddox } = useGraddox();
+  const { data: gex, loading: gexLoading } = useGexExposure();
 
   // Fetch the FULL trend set always (so the recap can speak to small-caps/
   // equal-weight rotation even when those rows are toggled off); the table and the
@@ -137,7 +145,8 @@ export function MacroView() {
     () => trendSleeveScore(visibleIndicators.map((i) => i.bucket)),
     [visibleIndicators],
   );
-  const gexSleeve = gexScore(graddox?.bias);
+  const gexSleeve = gex?.sleeveScore ?? null;
+  const gexPositioning = gexPositioningLabel({ spot: gex?.spot ?? null, gammaFlip: gex?.gammaFlip ?? null });
 
   const regime = useMemo(() => {
     const env = environmentScore([
@@ -165,7 +174,7 @@ export function MacroView() {
     riskAppetite: score?.total ?? null,
     indicators: indicators.map((i) => ({ symbol: i.symbol, score: trendSubScore(i.bucket) })),
   });
-  const regimeDirection = dataReady ? regimeDirectionLabel(trendHistory.deltas.regime.direction) : null;
+  const regimeDirection = dataReady ? trendHistory.deltas.regime.direction : null;
 
   // Module 2: per-sleeve score strip. GEX uses a 3D delta (it moves fast); the
   // rest use the standard 5D delta.
@@ -174,7 +183,7 @@ export function MacroView() {
     { key: 'volatility',  title: 'Volatility', score: volatility?.sleeveScore ?? null, detail: stressLabel(volatility?.sleeveScore ?? null), fiveDayDelta: trendHistory.deltas.volatility.fiveDayDelta },
     { key: 'credit',      title: 'Credit',    score: credit?.sleeveScore ?? null,  detail: creditLabel(credit?.sleeveScore ?? null), fiveDayDelta: trendHistory.deltas.credit.fiveDayDelta },
     { key: 'rates',       title: 'Rates/USD', score: rates?.sleeveScore ?? null,   detail: ratesDollarLabel(rates?.sleeveScore ?? null), fiveDayDelta: trendHistory.deltas.rates_dollar.fiveDayDelta },
-    { key: 'gex',         title: 'GEX',       score: gexSleeve,                    detail: gexBiasLabel(graddox?.bias), fiveDayDelta: trendHistory.deltas.gex.threeDayDelta, deltaLabel: '3D' as const },
+    { key: 'gex',         title: 'GEX',       score: gexSleeve,                    detail: gexPositioning, fiveDayDelta: trendHistory.deltas.gex.threeDayDelta, deltaLabel: '3D' as const },
   ];
 
   const updatedAt = useMemo(() => (indLoading ? null : new Date()), [indLoading]);
@@ -188,7 +197,7 @@ export function MacroView() {
         volatility:  { score: volatility?.sleeveScore ?? null, label: stressLabel(volatility?.sleeveScore ?? null), fiveDayDelta: trendHistory.deltas.volatility.fiveDayDelta },
         credit:      { score: credit?.sleeveScore ?? null, label: creditLabel(credit?.sleeveScore ?? null), fiveDayDelta: trendHistory.deltas.credit.fiveDayDelta },
         ratesDollar: { score: rates?.sleeveScore ?? null, label: ratesDollarLabel(rates?.sleeveScore ?? null), fiveDayDelta: trendHistory.deltas.rates_dollar.fiveDayDelta },
-        gex:         { score: gexSleeve, label: gexBiasLabel(graddox?.bias), fiveDayDelta: trendHistory.deltas.gex.threeDayDelta },
+        gex:         { score: gexSleeve, label: gexPositioning, fiveDayDelta: trendHistory.deltas.gex.threeDayDelta },
       },
       // Grounding context for a richer, non-fabricated weekly narrative.
       // Always pass the full trend set (incl. IWM/RSP/VEA) so the rotation/breadth
@@ -223,10 +232,18 @@ export function MacroView() {
               <div>The overall market read — <strong>how aggressive to be right now</strong> — from weighted sleeve scores.</div>
               <div>75–100 <strong>Risk-On</strong> · 60–74 Constructive · 45–59 Cautious · 30–44 Defensive · 0–29 <strong>Risk-Off</strong>.</div>
               <div style={dim}>Weights: Trend {regimeWeights.trend}% · Volatility {regimeWeights.volatility}% · Credit {regimeWeights.credit}% · Rates+Dollar {regimeWeights.rates_dollar}% · GEX {regimeWeights.gex}%.</div>
+              <div>The <strong>arrow</strong> shows the 5-day direction — whether the regime is improving, deteriorating or mixed.</div>
+              <div>
+                The <strong>dots</strong> track the last 10 trading days (oldest → today):{' '}
+                <span style={{ color: 'var(--c5)' }}>green</span> risk-on ·{' '}
+                <span style={{ color: 'var(--c3)' }}>amber</span> neutral ·{' '}
+                <span style={{ color: 'var(--c1)' }}>red</span> risk-off. Read left → right to see if the backdrop is getting better or worse.
+              </div>
             </Help>
           )}
         />
         <RegimeBanner regime={dataReady ? regime : null} updatedAt={updatedAt} direction={regimeDirection} />
+        <RegimeTrajectory series={trendHistory.regimeSeries} />
       </section>
 
       {/* ── Module 2: Module Score Strip ───────────────────────────── */}
@@ -281,7 +298,7 @@ export function MacroView() {
       <section>
         <ModuleHeader title="GEX / Positioning" help={HELP.gex} />
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
-          <GexPositioningCard graddox={graddox} loading={!graddox} threeDayDelta={trendHistory.deltas.gex.threeDayDelta} />
+          <GexPositioningCard data={gex} loading={gexLoading} threeDayDelta={trendHistory.deltas.gex.threeDayDelta} />
         </div>
       </section>
 
