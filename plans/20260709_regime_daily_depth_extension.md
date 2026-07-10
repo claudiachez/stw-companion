@@ -1,8 +1,25 @@
 # Week-2 Item 4 — `regime_daily` depth extension to ~2000-present
 
-**Status:** SPEC READY — execution deferred (needs stable Supabase service-role access + a
-network fetch of a deep public daily-bar source; neither was available in the authoring session).
-Everything else in Week 2 is built; this is the one item that is a data operation, not code.
+**Status:** DONE (2026-07-10). Executed via the esbuild-bundle harness against PROD. **Source is
+Yahoo Finance, not Stooq** — see the deviation note below.
+
+> **⚠️ SOURCE DEVIATION (2026-07-10): Stooq → Yahoo Finance.** The spec named Stooq, but by
+> execution time Stooq had deployed a **JavaScript proof-of-work anti-bot wall** — a plain
+> serverless `fetch()` (UA header and the `.pl` domain both tried) now returns a challenge page,
+> not the CSV, so the daily cron could never clear it. **Yahoo Finance's chart API**
+> (`https://query1.finance.yahoo.com/v8/finance/chart/<SYM>?range=30y&interval=1d`) is the
+> substitute: free, keyless, decades of daily bars in ONE call (SPY 1996, QQQ 1999, IWM 2000), and
+> — critically — its **unadjusted** close (`indicators.quote[].close`, NOT `adjclose`) matches
+> TwelveData's basis **to the cent** (verified against the stored SPY rows on 2026-07-09 / 2022-06-16
+> / 2021-11-05 before writing), so the `on_conflict` merge over the existing 2020-present rows is a
+> no-op. It meets every functional requirement the spec set (free / keyless / deep / one call / NOT
+> TwelveData) and reconciles exactly. Wired as `?source=yahoo`; rows tagged `source='yahoo+fred'`.
+> The engine stays frozen at 1.1.0 — this changed only the *source of the equity bars*, never the math.
+
+**Original status (authoring session):** SPEC READY — execution deferred (needs stable Supabase
+service-role access + a network fetch of a deep public daily-bar source; neither was available in
+the authoring session). Everything else in Week 2 is built; this is the one item that is a data
+operation, not code.
 
 **Why it matters:** current history is 2020-12-08 → present — exactly one bear market (2022),
 COVID excluded. That is insufficient for the vol-targeting validation backtest (Week-2 Item 3) and

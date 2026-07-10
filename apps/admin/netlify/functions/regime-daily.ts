@@ -1,21 +1,31 @@
 /**
  * regime_daily writer — plans/integrity-guardrails.md Item 3.
  *
- * Two modes, same function (shares the same TwelveData fetch + rolling-stat
- * computation so there is exactly one code path, not a backfill script that
- * silently drifts from the daily-append logic):
+ * Two modes, same function (shares the same fetch + rolling-stat computation so
+ * there is exactly one code path, not a backfill script that silently drifts
+ * from the daily-append logic):
  *
  *   - Daily mode (default, no query params): computes + upserts just the most
  *     recent trading day for every tracked instrument. Runs on the cron below
  *     (`schedule('0 23 * * 1-5', …)`) after market close.
  *   - Backfill mode (`?backfill=1&days=N`): computes + upserts the last N
- *     trading days from whatever history TwelveData returns in one call.
- *     TwelveData's outputsize cap (5000) limits a single call to roughly the
- *     trailing ~19-20 years, short of the spec's ~2000-present ask — walking
- *     further back needs `?before=YYYY-MM-DD` across additional invocations
- *     (each one is its own TwelveData credits, subject to the free tier's
- *     rate limit — see maCache.ts's header comment on that limit). This is
- *     the "spread over multiple quota cycles" approach the operator approved.
+ *     trading days from whatever history the equity source returns in one call.
+ *     Two equity sources, selected by `?source=`:
+ *       · TwelveData (default) — the daily-cron source. `outputsize` caps at
+ *         5000 (~19-20 years), short of the spec's ~2000-present ask; walking
+ *         further back needs `?before=YYYY-MM-DD` across additional invocations
+ *         (each its own TwelveData credits — see maCache.ts's rate-limit note).
+ *       · Yahoo (`?source=yahoo`) — free, no key, decades of daily bars in ONE
+ *         call (SPY 1996, QQQ 1999, IWM 2000). This is the depth backfill to
+ *         ~2000-present (plans/20260709_regime_daily_depth_extension.md); rows
+ *         get `source='yahoo+fred'`. Uses the UNADJUSTED close (matches
+ *         TwelveData's basis to the cent, so the on_conflict merge over existing
+ *         rows is a no-op). Changes only the SOURCE of the equity bars, never the
+ *         regime math (engine frozen at 1.1.0). FRED (VIX/VIX3M/US10Y) has no
+ *         cap, so its index fields are pulled deep enough to align.
+ *         (The plan named Stooq; it has since added a JS proof-of-work anti-bot
+ *          wall a serverless fetch can't clear — Yahoo meets every requirement
+ *          and reconciles exactly. See yahooSeries().)
  *
  * NOTE — once this is a scheduled function, Netlify no longer exposes it over
  * public HTTP (a scheduled fn only fires on its cron; the UI "Run now" button
@@ -73,6 +83,46 @@ async function tdSeries(symbol: string, key: string, outputsize: number, endDate
   return [];
 }
 
+// Yahoo Finance chart API — free, no API key, decades of daily history in ONE
+// call (SPY from 1996, QQQ from 1999, IWM from 2000). The depth backfill
+// (`?source=yahoo`) routes here instead of TwelveData because TwelveData's
+// 5000-bar cap + 1-credit/symbol tier is exactly what makes reaching ~2000
+// painful; FRED (VIX/VIX3M/US10Y) already has no cap. We read the UNADJUSTED
+// close (`indicators.quote[].close`, NOT adjclose) — that matches TwelveData's
+// basis to the cent, so the on_conflict merge over the existing 2020-present
+// rows reproduces identical closes → identical trend/vol classifications
+// (verified against stored SPY rows before the backfill). Returns the SAME Bar
+// shape as tdSeries so the compute loop and upsert are reused verbatim — this
+// changes only the SOURCE of the equity bars, never the regime math (engine 1.1.0).
+//
+// (The plan named Stooq; Stooq has since added a JS proof-of-work anti-bot wall
+//  a serverless fetch can't clear. Yahoo meets every functional requirement —
+//  free, keyless, deep, one call, not TwelveData — and reconciles exactly.)
+async function yahooSeries(symbol: string): Promise<Bar[]> {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=30y&interval=1d`;
+  try {
+    const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    if (!res.ok) return [];
+    const d = await res.json() as {
+      chart?: { result?: [{ timestamp?: number[]; indicators?: { quote?: [{ close?: (number | null)[] }] } }] };
+    };
+    const r = d.chart?.result?.[0];
+    const ts = r?.timestamp;
+    const closes = r?.indicators?.quote?.[0]?.close;
+    if (!ts || !closes || ts.length !== closes.length) return [];
+    const bars: Bar[] = [];
+    for (let i = 0; i < ts.length; i++) {
+      const close = closes[i];
+      if (close == null || Number.isNaN(close)) continue; // Yahoo nulls holidays/half-days
+      const date = new Date(ts[i] * 1000).toISOString().slice(0, 10);
+      bars.push({ date, close });
+    }
+    bars.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    return bars;
+  } catch { /* ignore — caller handles empty */ }
+  return [];
+}
+
 async function sbUpsertMany(url: string, key: string, table: string, rows: Record<string, unknown>[], onConflict: string): Promise<string | null> {
   if (!rows.length) return null;
   const res = await fetch(`${url.replace(/\/$/, '')}/rest/v1/${table}?on_conflict=${encodeURIComponent(onConflict)}`, {
@@ -104,24 +154,35 @@ const handlerImpl: Handler = async (event) => {
   const supabaseUrl = (process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? '').trim();
   const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim();
 
-  if (!supabaseUrl || !serviceKey || !twelveDataKey || !fredKey) {
-    return { statusCode: 500, body: JSON.stringify({ error: 'Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / TWELVEDATA_KEY / FRED_API_KEY' }) };
+  const qs = event.queryStringParameters ?? {};
+  // Equity source: Yahoo (deep, no cap, keyless) for the depth backfill; TwelveData
+  // (the daily-cron default) otherwise. FRED always supplies the index fields.
+  const isYahoo = qs.source === 'yahoo';
+
+  // TwelveData is only needed for the (default) TwelveData equity path — the
+  // Yahoo depth backfill needs no TwelveData key at all.
+  if (!supabaseUrl || !serviceKey || !fredKey || (!isYahoo && !twelveDataKey)) {
+    return { statusCode: 500, body: JSON.stringify({ error: 'Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / FRED_API_KEY' + (isYahoo ? '' : ' / TWELVEDATA_KEY') }) };
   }
 
-  const qs = event.queryStringParameters ?? {};
   const isBackfill = qs.backfill === '1';
   const daysRequested = isBackfill ? Math.max(1, parseInt(qs.days ?? '30', 10)) : 1;
   const beforeDate = qs.before; // optional cursor for walking further back across invocations
   // Need enough history for the 504-day percentile window + the days actually being written.
+  // TwelveData caps at 5000; FRED has no cap, so on the Yahoo deep backfill the
+  // FRED index fields must be pulled deep enough to align with the equity bars
+  // being written (else pre-2006 rows would get null VIX/US10Y). +600 covers the
+  // 504-day window plus slack ahead of the earliest written day.
   const outputsize = Math.min(5000, 504 + daysRequested + 5);
+  const fredLimit = isYahoo ? 504 + daysRequested + 600 : outputsize;
 
   const runLogBase = { run_type: 'regime-daily' };
 
   try {
     const [vixBars, vix3mBars, tnxBars] = await Promise.all([
-      fredBars(FRED_SERIES.vix, fredKey, outputsize, beforeDate),
-      fredBars(FRED_SERIES.vix3m, fredKey, outputsize, beforeDate),
-      fredBars(FRED_SERIES.us10y, fredKey, outputsize, beforeDate),
+      fredBars(FRED_SERIES.vix, fredKey, fredLimit, beforeDate),
+      fredBars(FRED_SERIES.vix3m, fredKey, fredLimit, beforeDate),
+      fredBars(FRED_SERIES.us10y, fredKey, fredLimit, beforeDate),
     ]);
     const vix3mAvailable = vix3mBars.length > 0;
 
@@ -134,7 +195,9 @@ const handlerImpl: Handler = async (event) => {
     let rowsWritten = 0;
 
     for (const instrument of TREND_INSTRUMENTS) {
-      const bars = await tdSeries(instrument, twelveDataKey, outputsize, beforeDate);
+      const bars = isYahoo
+        ? await yahooSeries(instrument)
+        : await tdSeries(instrument, twelveDataKey, outputsize, beforeDate);
       if (!bars.length) continue;
       const closesAll = bars.map((b) => b.close);
       const n = closesAll.length;
@@ -181,7 +244,7 @@ const handlerImpl: Handler = async (event) => {
           vol_state: vix3mAvailable ? vol_state : 'UNKNOWN',
           tnx_level: tnx,
           tnx_63d_change_positive: tnx !== null && tnx63Ago !== null ? tnx > tnx63Ago : null,
-          source: 'twelvedata+fred',
+          source: isYahoo ? 'yahoo+fred' : 'twelvedata+fred',
           engine_version: REGIME_GATE_CONFIG.engine_version,
         });
       }
@@ -200,8 +263,8 @@ const handlerImpl: Handler = async (event) => {
 
     await sbInsert(supabaseUrl, serviceKey, 'run_log', {
       ...runLogBase, status: 'ok', messages_processed: rowsWritten,
-      summary: `wrote ${rowsWritten} regime_daily rows (${isBackfill ? `backfill days=${daysRequested}` : 'daily'}, engine ${REGIME_GATE_CONFIG.engine_version})` +
-        (vix3mAvailable ? '' : ' — VIX3M unavailable from TwelveData this run; vol_state written as UNKNOWN, never guessed.'),
+      summary: `wrote ${rowsWritten} regime_daily rows (${isBackfill ? `backfill days=${daysRequested}` : 'daily'}, source=${isYahoo ? 'yahoo+fred' : 'twelvedata+fred'}, engine ${REGIME_GATE_CONFIG.engine_version})` +
+        (vix3mAvailable ? '' : ' — VIX3M unavailable this run; vol_state written as UNKNOWN, never guessed.'),
     });
 
     return { statusCode: 200, body: JSON.stringify({ rowsWritten, vix3mAvailable }) };
