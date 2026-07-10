@@ -18,8 +18,10 @@ interface Props {
 
 // A signed delta reads as improving (green ↑), deteriorating (red ↓) or flat
 // (muted →) at a glance — the whole point of the strip is to show direction.
-function deltaChip(d: number | null | undefined, label: '3D' | '5D' = '5D'): { text: string; color: string } | null {
-  if (d === null || d === undefined) return null;
+// Until enough daily history accrues the delta is null; show a muted "5D —" so it
+// reads as pending, not missing (a blank looked like a bug to the user).
+function deltaChip(d: number | null | undefined, label: '3D' | '5D' = '5D'): { text: string; color: string } {
+  if (d === null || d === undefined) return { text: `${label} —`, color: 'var(--t3)' };
   const n = Math.round(d);
   const arrow = n > 0 ? '↑' : n < 0 ? '↓' : '→';
   const color = n > 0 ? 'var(--c5)' : n < 0 ? 'var(--c1)' : 'var(--t3)';
