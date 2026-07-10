@@ -13,6 +13,7 @@ const CONNECT_STEPS = [
   <>Go to <b style={{ color: 'var(--t2)' }}>Reports → Flex Queries</b></>,
   <>Click <b style={{ color: 'var(--t2)' }}>Create → Activity Flex Query</b></>,
   <>Under <b style={{ color: 'var(--t2)' }}>Sections</b>, enable <b style={{ color: 'var(--t2)' }}>Open Positions</b> and tick: Symbol, Underlying Symbol, Asset Category, Quantity, Cost Basis Price, Mark Price, Unrealized P&amp;L, Put/Call, Strike, Expiry, Multiplier, Conid</>,
+  <>In the same query, also enable <b style={{ color: 'var(--t2)' }}>Trades</b>, set <b style={{ color: 'var(--t2)' }}>Options → Level of Detail = Execution</b>, and tick: <b style={{ color: 'var(--t2)' }}>IB Execution ID</b> (not <i>External</i> Execution ID), Asset Category, Date/Time, Symbol, Underlying Symbol, Buy/Sell, Quantity, <b style={{ color: 'var(--t2)' }}>Trade Price</b> (not <i>Orig</i> Trade Price), IB Commission, <b style={{ color: 'var(--t2)' }}>Currency</b> (not IB Commission Currency), Put/Call, Strike, Expiry, Multiplier, IB Order ID, Trade ID, Transaction ID</>,
   <>Save the query — note the <b style={{ color: 'var(--t2)' }}>Query ID</b> shown next to it</>,
   <>Back on Flex Queries, copy your <b style={{ color: 'var(--t2)' }}>Flex Token</b> (top of page, under "Generate Tokens")</>,
   <>Paste both below, click <b style={{ color: 'var(--t2)' }}>Save</b></>,
