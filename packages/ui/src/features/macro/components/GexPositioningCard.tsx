@@ -1,86 +1,72 @@
-import { gexScore, gexBiasLabel, gexImplication, fmtDateTime, FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
-import type { GraddoxData } from '@stw/shared';
+import {
+  gexSleeveScore, gexPositioningLabel, gexPositioningImplication, fmtDateTime, FONT_SIZE, FONT_WEIGHT,
+} from '@stw/shared';
+import type { GexExposureRead } from '../useGexExposure';
 import { SleeveSummary } from './macroVisuals';
 
 interface Props {
-  graddox: GraddoxData | null | undefined;
+  data: GexExposureRead | null;
   loading: boolean;
-  /** 3D bias-score delta from the P2 trend engine (GEX moves fast, so it uses 3D not 5D); null until ~3 days of history accrue. */
+  /** 3D sleeve-score delta from the P2 trend engine (GEX moves fast → 3D not 5D); null until history accrues. */
   threeDayDelta?: number | null;
 }
 
-// SPX levels render on the SPY scale (÷10), matching the Signals view convention.
-function spy(v: number | null | undefined): number | null {
-  return v === null || v === undefined ? null : v / 10;
-}
-
-// Not KpiCard: a small dense reference tile (18px value, 8px/12px padding) inside a
-// multi-tile grid, not a page-level hero stat — KpiCard's fixed 26px primaryValue would
-// look oversized here relative to its own compact card chrome.
-function LevelTile({ label, value }: { label: string; value: number | null }) {
+// A dense reference tile (not KpiCard — this sits in a compact multi-tile grid).
+function LevelTile({ label, value, hint }: { label: string; value: number | null; hint?: string }) {
   return (
     <div style={{ background: 'var(--s2)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 12px' }}>
       <div style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.semibold, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--t3)' }}>{label}</div>
       <div style={{ fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)', marginTop: 2 }}>
-        {value !== null ? value.toFixed(0) : '—'}
+        {value !== null ? value.toFixed(2) : '—'}
       </div>
+      {hint && <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 1 }}>{hint}</div>}
     </div>
   );
 }
 
-function LevelGroup({ name, resistance, gex1, putSupport }: { name: string; resistance: number | null; gex1: number | null; putSupport: number | null }) {
-  return (
-    <div>
-      <div style={{ fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold, color: 'var(--t2)', margin: '0 0 6px 2px' }}>{name}</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 8 }}>
-        <LevelTile label="Resistance" value={resistance} />
-        <LevelTile label="GEX1 (pivot)" value={gex1} />
-        <LevelTile label="Put Support" value={putSupport} />
-      </div>
-    </div>
-  );
+/** Compact aggregate-GEX label, e.g. "+$2.85B (positive γ)". */
+function netGexText(netGex: number | null, label: string | null): string {
+  if (netGex === null) return '—';
+  const sign = netGex >= 0 ? '+' : '−';
+  const abs = Math.abs(netGex);
+  const mag = abs >= 1e9 ? `$${(abs / 1e9).toFixed(2)}B` : abs >= 1e6 ? `$${(abs / 1e6).toFixed(0)}M` : `$${abs.toFixed(0)}`;
+  return `${sign}${mag}${label ? ` (${label} γ)` : ''}`;
 }
 
-export function GexPositioningCard({ graddox, loading, threeDayDelta }: Props) {
-  if (loading && !graddox) return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>Loading positioning…</div>;
-  if (!graddox) return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>No GEX signal available.</div>;
+export function GexPositioningCard({ data, loading, threeDayDelta }: Props) {
+  if (loading && !data) return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>Loading positioning…</div>;
+  if (!data) return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>No GEX snapshot available yet.</div>;
 
-  const score = gexScore(graddox.bias);
-  const label = gexBiasLabel(graddox.bias);
+  const score = gexSleeveScore(data.spot, data.gammaFlip);
+  const label = gexPositioningLabel({ spot: data.spot, gammaFlip: data.gammaFlip });
+  const implication = gexPositioningImplication({ spot: data.spot, gammaFlip: data.gammaFlip });
   const delta = threeDayDelta === null || threeDayDelta === undefined
     ? null
     : `3D ${threeDayDelta >= 0 ? '+' : ''}${Math.round(threeDayDelta)}`;
-  // SPY = SPX ÷ 10; QQQ levels are already in QQQ price terms (no scaling).
-  const spyGex1 = spy(graddox.spx?.gex1);
-  const spyPut = spy(graddox.spx?.put_support);
 
-  const trigger = label === 'Bearish' && spyGex1 !== null
-    ? `Reclaim above GEX1 (SPY ${spyGex1.toFixed(0)}) flips the read neutral.`
-    : label === 'Bullish' && spyPut !== null
-      ? `Hold above put support (SPY ${spyPut.toFixed(0)}) keeps the bid intact.`
-      : 'Watch the GEX pivot for a regime flip.';
+  // Cushion above/below the flip — the number that decides the positioning read.
+  const cushion = data.spot !== null && data.gammaFlip !== null ? data.spot - data.gammaFlip : null;
+  const cushionHint = cushion === null ? undefined : `${cushion >= 0 ? '+' : ''}${cushion.toFixed(2)} vs spot`;
 
   return (
     <div>
-      <SleeveSummary score={score} label={label} hint="tactical overlay" delta={delta} />
+      <SleeveSummary score={score} label={label} hint="SPY · tactical overlay" delta={delta} />
 
-      {/* Key levels — SPY (SPX ÷10) and QQQ */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
-        <LevelGroup name="SPY" resistance={spy(graddox.spx?.resistance)} gex1={spyGex1} putSupport={spyPut} />
-        <LevelGroup name="QQQ" resistance={graddox.qqq?.resistance ?? null} gex1={graddox.qqq?.gex1 ?? null} putSupport={graddox.qqq?.put_support ?? null} />
+      {/* Key levels — SPY (free tier is SPY-only; a paid key adds SPX) */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8 }}>
+        <LevelTile label="Spot" value={data.spot} />
+        <LevelTile label="Gamma Flip" value={data.gammaFlip} hint={cushionHint} />
+        <LevelTile label="Call Wall" value={data.callWall} hint="upside magnet" />
+        <LevelTile label="Put Wall" value={data.putWall} hint="downside support" />
       </div>
 
-      {/* Trigger + implication */}
       <div style={{ marginTop: 12, fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.5 }}>
-        <div><span style={{ color: 'var(--t3)', fontWeight: FONT_WEIGHT.semibold }}>Trigger:</span> {trigger}</div>
-        <div><span style={{ color: 'var(--t3)', fontWeight: FONT_WEIGHT.semibold }}>Implication:</span> {gexImplication(graddox.bias)}</div>
-        {graddox.bias_note && (
-          <div style={{ marginTop: 4, color: 'var(--t3)' }}>{graddox.bias_note}</div>
-        )}
+        <div><span style={{ color: 'var(--t3)', fontWeight: FONT_WEIGHT.semibold }}>Net GEX:</span> {netGexText(data.netGex, data.netGexLabel)}</div>
+        <div><span style={{ color: 'var(--t3)', fontWeight: FONT_WEIGHT.semibold }}>Read:</span> {implication}</div>
       </div>
 
       <div style={{ marginTop: 10, fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', lineHeight: 1.4 }}>
-        STW Graddox GEX signal{graddox.last_updated ? ` · updated ${fmtDateTime(graddox.last_updated)}` : ''}
+        Source: FlashAlpha · SPY (index proxy){data.asOf ? ` · Updated: ${fmtDateTime(data.asOf)}` : ''}
       </div>
     </div>
   );

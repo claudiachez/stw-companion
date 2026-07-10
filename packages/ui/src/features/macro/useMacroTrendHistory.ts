@@ -91,9 +91,17 @@ export interface MacroTrendHistoryInput {
   ready: boolean;
 }
 
+/** One trading day's overall regime score, oldest → newest (last = today's live point when settled). */
+export interface RegimeSeriesPoint {
+  date: string;
+  score: number | null;
+}
+
 export interface MacroTrendHistoryResult {
   deltas: Record<ModuleSleeveKey, TrendHistoryEntry>;
   indicatorDeltas: Record<string, TrendHistoryEntry>;
+  /** Per-day regime scores for the trajectory lamps — oldest → newest. Empty until snapshots accrue. */
+  regimeSeries: RegimeSeriesPoint[];
 }
 
 const SLEEVE_KEYS: ModuleSleeveKey[] = ['regime', 'trend', 'volatility', 'credit', 'rates_dollar', 'gex', 'risk_appetite'];
@@ -101,6 +109,7 @@ const SLEEVE_KEYS: ModuleSleeveKey[] = ['regime', 'trend', 'volatility', 'credit
 const EMPTY_RESULT: MacroTrendHistoryResult = {
   deltas: Object.fromEntries(SLEEVE_KEYS.map((k) => [k, NULL_ENTRY])) as Record<ModuleSleeveKey, TrendHistoryEntry>,
   indicatorDeltas: {},
+  regimeSeries: [],
 };
 
 export function useMacroTrendHistory(input: MacroTrendHistoryInput): MacroTrendHistoryResult {
@@ -153,7 +162,15 @@ export function useMacroTrendHistory(input: MacroTrendHistoryInput): MacroTrendH
       indicatorDeltas[ind.symbol] = buildEntry(history);
     });
 
-    return { deltas, indicatorDeltas };
+    // Per-day regime scores for the trajectory lamps (oldest → newest). Today's
+    // live regime becomes the last point once the sleeves settle.
+    const regimeSeries: RegimeSeriesPoint[] = rows.map((r) => ({
+      date: r.snapshot_date,
+      score: r.module_scores?.regime ?? null,
+    }));
+    if (ready) regimeSeries.push({ date: todayStr(), score: regime });
+
+    return { deltas, indicatorDeltas, regimeSeries };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, ready, regime, trend, volatility, credit, ratesDollar, gex, riskAppetite, indicatorsKey]);
 }

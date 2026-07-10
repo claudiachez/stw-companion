@@ -1,11 +1,25 @@
-import { fmtDateTime, FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
-import type { RegimeRead, RegimeLabel } from '@stw/shared';
+import { fmtDateTime, regimeDirectionLabel, trendDirectionArrow, FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
+import type { RegimeRead, RegimeLabel, TrendDirection } from '@stw/shared';
 
 interface Props {
   regime: RegimeRead | null;
   updatedAt: Date | null;
-  /** 5D acceleration/reversal phrase (P2 trend engine) — e.g. "reversing down after failed reclaim". */
-  direction?: string | null;
+  /** 5D direction of the regime score (P2 trend engine); null until enough history accrues. */
+  direction?: TrendDirection | null;
+}
+
+// Direction → color: improving reads green, deteriorating red, mixed/flat stays
+// neutral (never green/red on a non-move — that would overstate the signal).
+function directionColor(direction: TrendDirection): string {
+  switch (direction) {
+    case 'strong_improvement':
+    case 'improving':
+    case 'reversing_up': return 'var(--c5)';
+    case 'strong_deterioration':
+    case 'deteriorating':
+    case 'reversing_down': return 'var(--c1)';
+    default: return 'var(--t2)';
+  }
 }
 
 // Regime band → color. Five distinct bands; the orange (Defensive) matches the
@@ -40,7 +54,11 @@ export function RegimeBanner({ regime, updatedAt, direction }: Props) {
             {regime.label.toUpperCase()}
           </span>
           <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)', fontWeight: FONT_WEIGHT.semibold }}>{regime.score}</span>
-          {direction && <span style={{ fontSize: FONT_SIZE.base, color: 'var(--t2)' }}>— {direction}</span>}
+          {direction && (
+            <span style={{ fontSize: FONT_SIZE.base, color: directionColor(direction), fontWeight: FONT_WEIGHT.semibold }}>
+              {trendDirectionArrow(direction)} {regimeDirectionLabel(direction)}
+            </span>
+          )}
         </div>
         {updatedAt && (
           <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', whiteSpace: 'nowrap' }}>
