@@ -242,8 +242,16 @@ export function MacroView() {
             </Help>
           )}
         />
-        <RegimeBanner regime={dataReady ? regime : null} updatedAt={updatedAt} direction={regimeDirection} />
-        <RegimeTrajectory series={trendHistory.regimeSeries} />
+        {/* Banner left, the 10-day trajectory alongside it on the right — wraps
+            below on narrow screens. */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 300px', minWidth: 0 }}>
+            <RegimeBanner regime={dataReady ? regime : null} updatedAt={updatedAt} direction={regimeDirection} />
+          </div>
+          <div style={{ flex: '0 0 auto', paddingTop: 8 }}>
+            <RegimeTrajectory series={trendHistory.regimeSeries} />
+          </div>
+        </div>
       </section>
 
       {/* ── Module 2: Module Score Strip ───────────────────────────── */}

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import {
   evaluateRiskConfig,
   type PositionInput, type ConcentrationViolation, type ViolationSeverity,
@@ -180,7 +181,7 @@ function BreachOnlyList({
   title, description, violations, ackFor, onAcknowledge, unmappedNote, ackable = true, ackType = 'position',
 }: {
   title: string;
-  description: string;
+  description: ReactNode;
   violations: ConcentrationViolation[];
   ackFor?: (scope: string, type: ViolationType) => { status: AckStatus; glide_path_note: string | null } | undefined;
   onAcknowledge?: (scope: string, status: AckStatus, note?: string) => void;
@@ -230,8 +231,14 @@ function BreachOnlyList({
   );
 }
 
-export function ViolationsSummary({ showSyncButton = false }: { showSyncButton?: boolean }) {
+export function ViolationsSummary({ showSyncButton = false, settingsTo }: { showSyncButton?: boolean; settingsTo?: string }) {
   const userId = useAuthStore((s) => s.user?.id);
+
+  // "Settings" renders as a link when the host app provides a route (web → /settings);
+  // admin has no /settings route, so it falls back to plain text there.
+  const settingsRef: ReactNode = settingsTo
+    ? <Link to={settingsTo} style={{ color: 'var(--acc)', fontWeight: 600 }}>Settings</Link>
+    : 'Settings';
 
   const { data: positions, isLoading: positionsLoading } = useUserPositions();
   const { data: config, isLoading: configLoading } = useRiskConfig(userId);
@@ -276,10 +283,14 @@ export function ViolationsSummary({ showSyncButton = false }: { showSyncButton?:
   const allViolations = [...result.positionViolations, ...result.optionViolations, ...result.sectorViolations, result.grossViolation];
   const totalBreaches = allViolations.filter((v) => v.severity === 'breach').length;
   const totalNear = allViolations.filter((v) => v.severity === 'near').length;
-  const summaryLine = `Gross ${result.grossViolation.exposurePct.toFixed(0)}% of ${result.grossViolation.limitPct}%`
-    + (totalBreaches ? ` · ${totalBreaches} breach${totalBreaches === 1 ? '' : 'es'}` : '')
-    + (totalNear ? ` · ${totalNear} near` : '')
-    + (totalBreaches === 0 && totalNear === 0 ? ' · all within limit' : '');
+  // Counts-only roll-up — the gross % lives in the Gross exposure card below, so the
+  // header no longer repeats it (was "Gross 116%…" here AND "115.9%…" in the card).
+  const summaryLine = totalBreaches === 0 && totalNear === 0
+    ? 'All within limit'
+    : [
+      totalBreaches ? `${totalBreaches} breach${totalBreaches === 1 ? '' : 'es'}` : '',
+      totalNear ? `${totalNear} near` : '',
+    ].filter(Boolean).join(' · ');
 
   const sectorDataMissing = !sectorMap || Object.keys(sectorMap).length === 0;
 
@@ -303,8 +314,9 @@ export function ViolationsSummary({ showSyncButton = false }: { showSyncButton?:
       </div>
 
       <div className="text-t3 text-xs" style={{ marginTop: -8, lineHeight: 1.5 }}>
-        Evaluates YOUR OWN IBKR book (synced via Flex Query) against your thresholds — set in
-        Settings. Nothing here blocks an order; breaches are flagged for you to act on.
+        We compare your own IBKR positions (synced from your account) against the limits you
+        set in {settingsRef}. It's a heads-up only — nothing here places or blocks a trade; it
+        just flags where you're over the line so you can decide what to do.
         {lastResult && ` Synced ${lastResult.count} position${lastResult.count !== 1 ? 's' : ''}.`}
       </div>
       {syncError && (
@@ -342,7 +354,7 @@ export function ViolationsSummary({ showSyncButton = false }: { showSyncButton?:
 
       <BreachOnlyList
         title="Option concentration"
-        description="Each ticker's OPTIONS exposure vs your option cap — options carry more risk per dollar (leverage, time decay), so this cap is usually tighter than the overall position cap. Set it under Settings → thresholds."
+        description={<>Each ticker's OPTIONS exposure vs your option cap — options carry more risk per dollar (leverage, time decay), so this cap is usually tighter than the overall position cap. Set it under {settingsRef} → thresholds.</>}
         violations={result.optionViolations}
         ackable={false}
       />

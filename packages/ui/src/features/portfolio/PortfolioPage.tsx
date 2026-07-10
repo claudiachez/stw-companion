@@ -322,6 +322,19 @@ function PortfolioSummary({ groups, showPnl, regimeAdvisory, regimeAdviceText, o
 
   return (
     <>
+      {/* Advisory regime line — its own full-width strip above the KPI row (host
+          2026-07-10), NOT crammed into a KPI card (keeps the KPI row uniform).
+          Compact echo of the Risk tab's RegimeLight. */}
+      {regimeAdvisory && regimeAdvisory.trend_state !== 'UNKNOWN' && (
+        <div
+          style={{ display: 'flex', alignItems: 'center', gap: SPACE[1.5], marginBottom: 10, fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}
+          title="Advisory — under forward validation. Not a trade signal."
+        >
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: regimeAdvisory.trend_state === 'GREEN' ? 'var(--acc)' : 'var(--status-negative-text)' }} />
+          <span>Regime: <span style={{ color: 'var(--t2)', fontWeight: FONT_WEIGHT.semibold }}>{regimeAdvisory.trend_state}</span>{regimeAdviceText ? ` · ${regimeAdviceText}` : ''} <span style={{ fontStyle: 'italic' }}>(advisory)</span></span>
+        </div>
+      )}
+
       {/* Every card reads the same: hero number · qualifier (delta) · uppercase label. */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 104 }} title="Open positions, grouped by underlying">
@@ -368,18 +381,6 @@ function PortfolioSummary({ groups, showPnl, regimeAdvisory, regimeAdviceText, o
           </div>
         )}
       </div>
-
-      {/* Advisory regime line — its own full-width strip, NOT crammed into a KPI card
-          (keeps the KPI row uniform). Compact echo of the Risk tab's RegimeLight. */}
-      {regimeAdvisory && regimeAdvisory.trend_state !== 'UNKNOWN' && (
-        <div
-          style={{ display: 'flex', alignItems: 'center', gap: SPACE[1.5], marginTop: 10, fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}
-          title="Advisory — under forward validation. Not a trade signal."
-        >
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: regimeAdvisory.trend_state === 'GREEN' ? 'var(--acc)' : 'var(--status-negative-text)' }} />
-          <span>Regime: <span style={{ color: 'var(--t2)', fontWeight: FONT_WEIGHT.semibold }}>{regimeAdvisory.trend_state}</span>{regimeAdviceText ? ` · ${regimeAdviceText}` : ''} <span style={{ fontStyle: 'italic' }}>(advisory)</span></span>
-        </div>
-      )}
 
       {positionCount > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
@@ -926,7 +927,7 @@ export function PortfolioPage() {
         <RegimeLight instrument="IWM" exitRule={regimeExitRule} />
       </div>
       {capabilities.canUseLimits ? (
-        <ViolationsSummary />
+        <ViolationsSummary settingsTo="/settings" />
       ) : (
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '12px 16px', fontSize: FONT_SIZE.sm, color: 'var(--t3)' }}>
           <strong style={{ color: 'var(--text)' }}>Risk limits 🔒</strong> — flag concentration and
