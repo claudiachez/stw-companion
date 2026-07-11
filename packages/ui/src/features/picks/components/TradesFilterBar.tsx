@@ -1,6 +1,6 @@
 import type { Holding } from '../api';
 import { useTradesFiltersStore, type TradeOpenClosed, type TradeSort, type TradeType } from '../useTradesFilters';
-import { FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
+import { FONT_SIZE, FONT_WEIGHT, CONVICTION_BAND_OPTIONS, type ConvictionBand } from '@stw/shared';
 
 const SORT_OPTIONS: { value: TradeSort; label: string }[] = [
   { value: 'opened_desc', label: 'Sort: Opened newest' },
@@ -9,6 +9,7 @@ const SORT_OPTIONS: { value: TradeSort; label: string }[] = [
   { value: 'closed_asc',  label: 'Sort: Closed oldest' },
   { value: 'pnl_desc',    label: 'Sort: P&L ↓' },
   { value: 'pnl_asc',     label: 'Sort: P&L ↑' },
+  { value: 'conviction',  label: 'Sort: Conviction' },
   { value: 'az',          label: 'Sort: A → Z' },
   { value: 'za',          label: 'Sort: Z → A' },
 ];
@@ -32,6 +33,7 @@ const ctrlBorderClass = 'border border-[var(--border)] focus:outline-none focus:
 
 interface Props {
   holdings: Holding[];
+  sectors: string[];
   /** rows matching the current filter / total candidate rows — shown as "N of M". */
   count: number;
   total: number;
@@ -41,12 +43,13 @@ interface Props {
 // (full-bleed surface bar, same control style, "All Baskets" wording, horizontal scroll — no wrap)
 // so the two tabs stay visually consistent. The status axis is an Open/Closed/All toggle (the
 // leg's own state) and Type is Shares/Options only.
-export function TradesFilterBar({ holdings, count, total }: Props) {
-  const { search, basket, type, openClosed, sort, setSearch, setBasket, setType, setOpenClosed, setSort, reset } =
+export function TradesFilterBar({ holdings, sectors, count, total }: Props) {
+  const { search, basket, conviction, sector, type, openClosed, sort,
+    setSearch, setBasket, setConviction, setSector, setType, setOpenClosed, setSort, reset } =
     useTradesFiltersStore();
 
   const baskets = [...new Set(holdings.map((h) => h.basket).filter(Boolean))].sort();
-  const hasFilter = !!search || !!basket || !!type || openClosed !== 'all';
+  const hasFilter = !!search || !!basket || !!conviction || !!sector || !!type || openClosed !== 'all';
 
   return (
     <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' as never, flexShrink: 0 }}>
@@ -83,6 +86,18 @@ export function TradesFilterBar({ holdings, count, total }: Props) {
           <option value="">All Baskets</option>
           {baskets.map((b) => <option key={b} value={b}>{b}</option>)}
         </select>
+
+        <select value={conviction} onChange={(e) => setConviction(e.target.value as ConvictionBand)} className={ctrlBorderClass} style={ctrlStyle} title="Filter by the underlying's STW conviction tier">
+          <option value="">All Conviction</option>
+          {CONVICTION_BAND_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+
+        {sectors.length > 0 && (
+          <select value={sector} onChange={(e) => setSector(e.target.value)} className={ctrlBorderClass} style={ctrlStyle} title="Filter by GICS market sector">
+            <option value="">All Sectors</option>
+            {sectors.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        )}
 
         <select value={type} onChange={(e) => setType(e.target.value as TradeType)} className={ctrlBorderClass} style={ctrlStyle}>
           <option value="">All Types</option>

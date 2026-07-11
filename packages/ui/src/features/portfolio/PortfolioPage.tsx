@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { TIERS, fmtDateTime, sizingTone, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, SPACE } from '@stw/shared';
+import { TIERS, fmtDateTime, sizingTone, matchConvictionBand, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, SPACE } from '@stw/shared';
 import { useUserPositions, useIbkrSettings } from './useUserPositions';
 import { useSyncPortfolio } from './useSyncPortfolio';
 import { useHoldings } from '../picks/useHoldings';
@@ -731,24 +731,20 @@ export function PortfolioPage() {
     () => [...new Set(allGroups.filter((g) => g.isTailed && g.basket).map((g) => g.basket))].sort(),
     [allGroups],
   );
+  // GICS market sectors present in the held book (from the shared ticker_sector_map).
+  const sectors = useMemo(
+    () => [...new Set(allGroups.map((g) => sectorMap?.[g.underlying]).filter((s): s is string => !!s))].sort(),
+    [allGroups, sectorMap],
+  );
 
-  const convictionBand = (c: number | null): boolean => {
-    const cf = filters.conviction;
-    if (!cf) return true;
-    if (c == null) return false; // untailed / no conviction — excluded once a band is chosen
-    if (cf === 'high') return c >= 4;
-    if (cf === 'medium') return c === 3;
-    if (cf === 'low') return c === 1 || c === 2; // matches the Overview "low / declining" chip
-    if (cf === 'legacy') return c === 0;
-    return true;
-  };
   const matchFilters = (underlying: string, isTailed: boolean, basket: string, isOpt: boolean, conviction: number | null, regime: TickerRegime | undefined) => {
     const q = filters.search.trim().toUpperCase();
     if (filters.tailedOnly && !isTailed) return false;
     if (filters.type === 'stocks' && isOpt) return false;
     if (filters.type === 'options' && !isOpt) return false;
     if (filters.basket && basket !== filters.basket) return false;
-    if (!convictionBand(conviction)) return false;
+    if (!matchConvictionBand(conviction, filters.conviction)) return false;
+    if (filters.sector && (sectorMap?.[underlying] ?? '') !== filters.sector) return false;
     // Trend structure + sector-regime read from the per-ticker technical pass. When a
     // band is chosen and the regime is still loading/unknown, the row is excluded (it
     // genuinely isn't a match yet) — the count reflects only confirmed matches.
@@ -774,7 +770,7 @@ export function PortfolioPage() {
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allGroups, filters, regimes]);
+  }, [allGroups, filters, regimes, sectorMap]);
 
   // flat per-leg rows (default view)
   const visibleLegs = useMemo<LegRowData[]>(() => {
@@ -794,7 +790,7 @@ export function PortfolioPage() {
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [positions, pickMap, filters, regimes]);
+  }, [positions, pickMap, filters, regimes, sectorMap]);
 
   const lastSynced = useMemo(() => {
     if (lastResult) return lastResult.lastSyncedAt;
@@ -1012,7 +1008,7 @@ export function PortfolioPage() {
       {/* Filter toolbar — scoped to Positions only */}
       <div style={{ display: 'flex', alignItems: 'center', background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', flexShrink: 0, overflowX: 'auto', WebkitOverflowScrolling: 'touch' as never }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', minWidth: 'max-content' }}>
-          <PortfolioFilterBar filters={filters} onChange={setFilters} baskets={baskets} filtered={visibleCount} total={totalCount} />
+          <PortfolioFilterBar filters={filters} onChange={setFilters} baskets={baskets} sectors={sectors} filtered={visibleCount} total={totalCount} />
         </div>
       </div>
       <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)', padding: pad }}>
