@@ -41,11 +41,36 @@ dates (weekend-shifted holidays already resolved). Seeded 2025–2027.
   observed)=false, `07-13`(Mon)=true, `11-26`(Thanksgiving)=false.
 - All three writers typecheck + esbuild-bundle clean with the guard.
 
+## Extension — end-of-week weighting (migration 069)
+
+The weekly weighting run must fire on the **last trading day of the week** —
+normally Friday, but Thursday when Friday is a holiday. New RPC
+**`is_last_trading_day_of_week(date)`** (migration 069): true when `d` is a
+trading day and no later trading day exists in its Mon–Fri week. The
+`stw-friday-weighting` routine's STEP 0 now gates on it (was `is_trading_day`),
+and — crucially — the routine's **Cowork schedule must widen to Thursday + Friday
+5pm** (host action; the routines aren't in the repo scheduler). The gate then runs
+it exactly once, on the week's last open session. **Fail-safe:** if the RPC is
+unavailable the gate degrades to the original Friday-only behavior (`DOW=5`
+proceeds, else skip) — never a double-run.
+
+## Extension — auto-populating the calendar
+
+`nyseHolidays(year)` (`packages/shared/src/utils/nyse-calendar.ts`) computes NYSE
+closures in-house (nth-weekday + Good Friday via Easter + weekend-observance
+shifts) — no external feed. Validated to reproduce the 2025–2027 seed exactly.
+The **`market-calendar-sync`** scheduled fn (web, monthly `0 9 1 * *`) upserts the
+current year + next two into `market_holidays`, so the calendar extends forever.
+The migration-068 seed is now just the bootstrap. (The client mirror in
+`market-calendar.ts` — PR #96 — could later be replaced by a DB read, but stays
+as an offline mirror for now.)
+
 ## Pending
 
-- **Apply migration 068 to PROD** (sandbox done). The writers' guards are inert
-  (fail-open) until it's applied — no breakage in the meantime, they just keep
-  writing as before until the RPC exists.
-- **Routines**: add the `curl` guard to `stw-morning-run`, `stw-afternoon-run`,
-  `stw-friday-weighting` SKILL.md (transcripts is webinar-driven, not market-day
-  gated). Out-of-repo.
+- **Apply migrations 068 + 069 to PROD** (both verified on sandbox). All guards are
+  inert (fail-open / fail-safe) until applied — no breakage meanwhile.
+- **Cowork schedule change (host):** widen `stw-friday-weighting` to **Thu + Fri
+  5pm** so the end-of-week gate can pick the right day.
+- **Routines**: the `curl` guards are added to `stw-morning-run`,
+  `stw-afternoon-run` (trading-day gate) and `stw-friday-weighting` (end-of-week
+  gate). Out-of-repo; live once migrations 068/069 are on PROD (fail-open until then).
