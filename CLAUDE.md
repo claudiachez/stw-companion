@@ -1071,6 +1071,19 @@ Feed responsibilities, post-re-platform (full inventory: [`plans/20260707_data_f
   VIX3M. The query filters `vix_close`/`vix3m_close` not-null so it shows the latest full reading (fixed
   2026-07-10). Apply the same "latest complete row" instinct to any panel that needs the vol inputs.
 
+### One value, one source — no conflicting numbers, anywhere (host 2026-07-11)
+Once a metric's source is decided, that source is authoritative **everywhere it appears** —
+never a second pipeline for the same number, not even on a different page. Two blocks or two
+tabs must never display different values for the same underlying quantity. Decided sources so far:
+**account equity = IBKR NLV** (`risk_config.ibkr_nlv`, the Flex NAV sync; falls back to
+`account_equity` only pre-NAV) · **Macro GEX = SPX Gamma Edge** (`gex_snapshots`) · **live equity
+quotes = Finnhub via the `priceCache` store** · **the regime GATE = `regime_daily`** (frozen engine)
+while the finer index **structure = live TwelveData** (`useTickerRegime`) — the RegimeLight shows a
+single close (the live structure), never both. When two surfaces need the same value, route them
+through the one decided source; when consolidating, drop the duplicate rather than reconcile two
+numbers. (Known open item: the Signals tab's "Current Price" is the Graddox report spot while the
+Macro GEX card's Spot is a live SPY×10 quote — two different SPX reads; unify if it surfaces.)
+
 ### Timestamps
 All UI timestamps use `fmtDateTime(val: Date | string | null)` from `@stw/shared`.
 Output format: **`Mon D · H:MM AM ET`** (Eastern Time, year omitted).

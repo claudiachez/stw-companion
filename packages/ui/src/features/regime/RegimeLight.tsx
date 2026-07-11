@@ -81,10 +81,20 @@ export function RegimeLight({ instrument = 'IWM', exitRule, structure }: {
       </div>
 
       <div className="flex items-center gap-4 flex-wrap">
-        <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full" style={{ background: STATE_COLOR[gate.trend_state] }} />
-          <span className="text-t2 text-xs">Trend (200D): {gate.trend_state}</span>
-        </div>
+        {/* Trend read = the finer 9/21/200 structure bucket when available (host
+            2026-07-11 — replaces the coarse 200-day GREEN/RED gate line). The gate's
+            trend_state still drives the multiplier + REGIME_EXIT advice internally. */}
+        {hasStructure && structure?.bucket ? (
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full" style={{ background: BUCKET_COLOR[structure.bucket] }} />
+            <span className="text-t2 text-xs">Trend: <span className="font-semibold" style={{ color: BUCKET_COLOR[structure.bucket] }}>{TREND_BUCKET_META[structure.bucket].label}</span></span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full" style={{ background: STATE_COLOR[gate.trend_state] }} />
+            <span className="text-t2 text-xs">Trend (200D): {gate.trend_state}</span>
+          </div>
+        )}
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full" style={{ background: STATE_COLOR[gate.vol_state] }} />
           <span className="text-t2 text-xs">Volatility: {gate.vol_state}</span>
@@ -95,21 +105,13 @@ export function RegimeLight({ instrument = 'IWM', exitRule, structure }: {
       </div>
 
       {hasStructure && structure ? (
-        <>
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-t3">Structure:</span>
-            <span className="font-semibold" style={{ color: structure.bucket ? BUCKET_COLOR[structure.bucket] : 'var(--t3)' }}>
-              {structure.bucket ? TREND_BUCKET_META[structure.bucket].label : '—'}
-            </span>
-          </div>
-          <div className="text-t2 text-xs tabular-nums flex flex-wrap gap-x-3 gap-y-1">
-            <span>Close {structure.close?.toFixed(2) ?? '—'}</span>
-            {maCell('9MA', structure.ma9)}
-            {maCell('21MA', structure.ma21)}
-            {maCell('200MA', structure.ma200)}
-            <span className="text-t3">· VIX {row.vix_close?.toFixed(2) ?? '—'} vs VIX3M {row.vix3m_close?.toFixed(2) ?? '—'}</span>
-          </div>
-        </>
+        <div className="text-t2 text-xs tabular-nums flex flex-wrap gap-x-3 gap-y-1">
+          <span>Close {structure.close?.toFixed(2) ?? '—'}</span>
+          {maCell('9MA', structure.ma9)}
+          {maCell('21MA', structure.ma21)}
+          {maCell('200MA', structure.ma200)}
+          <span className="text-t3">· VIX {row.vix_close?.toFixed(2) ?? '—'} vs VIX3M {row.vix3m_close?.toFixed(2) ?? '—'}</span>
+        </div>
       ) : (
         <div className="text-t3 text-xs tabular-nums">
           close {row.close?.toFixed(2) ?? '—'} vs 200SMA {row.sma200?.toFixed(2) ?? '—'}
