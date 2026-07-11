@@ -20,12 +20,11 @@ function fmtLevel(v: number): string {
     : v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-/** Aggregate-GEX label, e.g. "+101,111 (positive γ)". The SPX Gamma Edge figure
- *  is a signed index-scaled aggregate (the newsletter's own units), not dollars. */
-function netGexText(netGex: number | null, label: string | null): string {
-  if (netGex === null) return '—';
-  const sign = netGex >= 0 ? '+' : '−';
-  return `${sign}${Math.abs(netGex).toLocaleString('en-US')}${label ? ` (${label} γ)` : ''}`;
+/** Signed aggregate-GEX value, e.g. "+101,111" (the newsletter's index-scaled
+ *  units, not dollars). Polarity already lives in the "Positive/Negative γ" label. */
+function netGexRaw(netGex: number | null): string | null {
+  if (netGex === null) return null;
+  return `${netGex >= 0 ? '+' : '−'}${Math.abs(netGex).toLocaleString('en-US')}`;
 }
 
 /** Compact intraday time tag, e.g. "@ 9:40 AM ET" (allowed non-fmtDateTime tag). */
@@ -47,7 +46,7 @@ function LevelLadder({ rows }: { rows: LadderRow[] }) {
         <div
           key={r.label}
           style={{
-            display: 'flex', alignItems: 'baseline', gap: 10, padding: '9px 0', flexWrap: 'wrap',
+            display: 'flex', alignItems: 'baseline', gap: 10, padding: '11px 0', flexWrap: 'wrap',
             borderBottom: i < rows.length - 1 ? '1px solid var(--bsub)' : 'none',
           }}
         >
@@ -99,14 +98,18 @@ export function GexPositioningCard({ data, loading, threeDayDelta }: Props) {
     data.putWall !== null ? { price: data.putWall, label: 'Put Wall', sub: 'downside support', color: 'var(--c5)' } : null,
   ].filter(Boolean) as LadderRow[]).sort((a, b) => b.price - a.price);
 
+  // Pair the raw aggregate-GEX value with the headline score so the number and its
+  // source read as one unit (no separate footer line repeating "Positive γ").
+  const raw = netGexRaw(data.netGex);
+  const hint = raw ? `net GEX ${raw}` : 'SPX · tactical overlay';
+
   return (
     <div>
-      <SleeveSummary score={score} label={label} hint="SPX · tactical overlay" delta={delta} />
+      <SleeveSummary score={score} label={label} hint={hint} delta={delta} />
 
       <LevelLadder rows={rows} />
 
       <div style={{ marginTop: 12, fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.5 }}>
-        <div><span style={{ color: 'var(--t3)', fontWeight: FONT_WEIGHT.semibold }}>Aggregate GEX:</span> {netGexText(data.netGex, data.netGexLabel)}</div>
         <div><span style={{ color: 'var(--t3)', fontWeight: FONT_WEIGHT.semibold }}>Read:</span> {implication}</div>
       </div>
 
