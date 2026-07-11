@@ -7,6 +7,8 @@ import { StatusPill } from '../../primitives/StatusPill';
 import { EmptyState } from '../../primitives/EmptyState';
 import { useRiskConfig, useSectorMap } from '../limits/useRiskConfig';
 import { useLatestRegime } from '../regime/useLatestRegime';
+import { RegimeBadge } from '../picks/components/RegimeBadge';
+import type { TickerRegime } from '../picks/useTickerRegime';
 import type { UserPosition } from './api';
 
 const STATE_COLOR: Record<'GREEN' | 'RED' | 'UNKNOWN', string> = {
@@ -64,7 +66,7 @@ function Section({ title, children }: { title: React.ReactNode; children: React.
  * STW's view is an explicit link inside the Tailing section.
  */
 export function PortfolioPositionDetail({
-  group, ownPortfolioPct, stwWeight, showPnl, onClose, onViewStwPosition,
+  group, ownPortfolioPct, stwWeight, showPnl, tickerRegime, onClose, onViewStwPosition,
 }: {
   group: DetailGroup;
   /** This position's share of the subscriber's own book, by market value. */
@@ -72,6 +74,8 @@ export function PortfolioPositionDetail({
   /** STW's own current_weight for this ticker, if tailed. */
   stwWeight: number | null;
   showPnl: boolean;
+  /** The ticker's own trend structure + sector-rotation standing (computed once at the page level). */
+  tickerRegime?: TickerRegime;
   onClose: () => void;
   onViewStwPosition: () => void;
 }) {
@@ -100,15 +104,21 @@ export function PortfolioPositionDetail({
 
   const sizeDelta = ownPortfolioPct !== null && stwWeight !== null ? ownPortfolioPct - stwWeight : null;
 
-  // Header badge = the ticker's market SECTOR (universal to the position). The tailed-pick
-  // info (trader / basket / conviction / sizing) is grouped together in the Tailing section
-  // below, not scattered across the header (host, 2026-07-08).
-  const badges = sector ? (
-    <span style={{
-      fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: LETTER_SPACING.label,
-      textTransform: 'uppercase', color: 'var(--t2)', background: 'var(--s2)',
-      border: '1px solid var(--border)', borderRadius: RADIUS.DEFAULT, padding: '2px 6px', whiteSpace: 'nowrap',
-    }}>{sector}</span>
+  // Header badges = the ticker's market SECTOR (universal to the position) + its own
+  // technical read: trend structure + sector-rotation standing (RegimeBadge), the same
+  // two chips the Stock Picks detail shows. The tailed-pick info (trader / basket /
+  // conviction / sizing) stays in the Tailing section, not the header (host, 2026-07-08).
+  const badges = (sector || tickerRegime) ? (
+    <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+      {sector && (
+        <span style={{
+          fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: LETTER_SPACING.label,
+          textTransform: 'uppercase', color: 'var(--t2)', background: 'var(--s2)',
+          border: '1px solid var(--border)', borderRadius: RADIUS.DEFAULT, padding: '2px 6px', whiteSpace: 'nowrap',
+        }}>{sector}</span>
+      )}
+      <RegimeBadge regime={tickerRegime} />
+    </span>
   ) : null;
 
   const tone = sizingTone(sizeDelta);

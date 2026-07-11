@@ -6,6 +6,8 @@ import { useSyncPortfolio } from './useSyncPortfolio';
 import { useHoldings } from '../picks/useHoldings';
 import { useConvictionChanges, type HoldingRef } from '../picks/useConvictionChanges';
 import { ConvictionBadge } from '../picks/components/ConvictionBadge';
+import { useTickerRegime, type TickerRegime } from '../picks/useTickerRegime';
+import { RegimeBadge } from '../picks/components/RegimeBadge';
 import { LoadingSpinner } from '../../primitives/LoadingSpinner';
 import { TickerLink } from '../../primitives/TickerLink';
 import { Badge } from '../../primitives/Badge';
@@ -138,16 +140,18 @@ interface LegRowData {
   conviction: number | null;
 }
 
-function FlatLegRow({ row, onSelectTicker, showPnl, isMobile, portfolioValue }: { row: LegRowData; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean; portfolioValue: number }) {
+function FlatLegRow({ row, onSelectTicker, showPnl, isMobile, portfolioValue, regime }: { row: LegRowData; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean; portfolioValue: number; regime?: TickerRegime }) {
   const { p, underlying, isTailed, traders } = row;
   const weightPct = portfolioValue > 0 ? (posMV(p) / portfolioValue) * 100 : null;
   return (
     <tr>
       <td style={td}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           {/* Every position opens its own detail pane, tailed or not (host, 2026-07-08). */}
           <TickerLink ticker={underlying} onSelect={onSelectTicker} />
           {isTailed && traders.map((t) => <Badge key={t} kind="source" trader={t} />)}
+          {/* Compact = trend-structure chip only (matches the Stock Picks list rows). */}
+          <RegimeBadge regime={regime} compact />
         </div>
         <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 1 }}>{instrumentLabel(p)}</div>
       </td>
@@ -161,7 +165,7 @@ function FlatLegRow({ row, onSelectTicker, showPnl, isMobile, portfolioValue }: 
   );
 }
 
-function FlatTable({ rows, onSelectTicker, showPnl, isMobile, portfolioValue }: { rows: LegRowData[]; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean; portfolioValue: number }) {
+function FlatTable({ rows, onSelectTicker, showPnl, isMobile, portfolioValue, regimes }: { rows: LegRowData[]; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean; portfolioValue: number; regimes: Record<string, TickerRegime> }) {
   return (
     <div style={{ overflowX: 'auto', paddingBottom: 9 }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: FONT_SIZE.xs }}>
@@ -177,7 +181,7 @@ function FlatTable({ rows, onSelectTicker, showPnl, isMobile, portfolioValue }: 
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => <FlatLegRow key={r.p.id} row={r} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} portfolioValue={portfolioValue} />)}
+          {rows.map((r) => <FlatLegRow key={r.p.id} row={r} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} portfolioValue={portfolioValue} regime={regimes[r.underlying]} />)}
         </tbody>
       </table>
     </div>
@@ -236,8 +240,8 @@ function PositionMetrics({ group, portfolioValue, showPnl }: { group: PortfolioG
 
 // header content for a group's accordion row (ticker/badges/composition + P&L columns) —
 // the AccordionList call site below supplies this as `renderHeader`.
-function GroupHeader({ group, onSelectTicker, showPnl, isMobile, portfolioValue }: {
-  group: PortfolioGroup; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean; portfolioValue: number;
+function GroupHeader({ group, onSelectTicker, showPnl, isMobile, portfolioValue, regime }: {
+  group: PortfolioGroup; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean; portfolioValue: number; regime?: TickerRegime;
 }) {
   const { underlying, netPnl, marketValue, isTailed, traders, conviction } = group;
   const weightPct = portfolioValue > 0 ? (marketValue / portfolioValue) * 100 : null;
@@ -251,6 +255,8 @@ function GroupHeader({ group, onSelectTicker, showPnl, isMobile, portfolioValue 
           </span>
           {isTailed && traders.map((t) => <Badge key={t} kind="source" trader={t} />)}
           {conviction !== null && <ConvictionBadge level={conviction} />}
+          {/* Compact = trend-structure chip only (matches the Stock Picks list rows). */}
+          <RegimeBadge regime={regime} compact />
         </div>
         <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{composition(group)}</div>
       </div>
@@ -689,6 +695,16 @@ export function PortfolioPage() {
 
   const portfolioValue = useMemo(() => allGroups.reduce((s, g) => s + g.marketValue, 0), [allGroups]);
 
+  // Per-ticker technical read (own 9/21/200 trend structure + sector-rotation
+  // standing) — the same RegimeBadge shown on the Stock Picks list/detail, now on
+  // the list rows (compact = trend chip) + the detail pane header. One batched
+  // TwelveData/Finnhub pass for the held underlyings (same pattern as PicksView).
+  const portfolioTickers = useMemo(
+    () => [...new Set(positions.map((p) => cleanUnderlying(p.underlying)))].filter((t) => t !== 'CASH'),
+    [positions],
+  );
+  const { regimes } = useTickerRegime(portfolioTickers, capabilities.finnhubKey, capabilities.twelveDataKey);
+
   // Heatmap cells — box ∝ market value, colored by total unrealized return. No "Today"
   // mode: the subscriber Flex feed carries no day-change field (positions render from the
   // stored sync, not a live quote). Untailed names group under "Other" in By-Basket view;
@@ -829,6 +845,7 @@ export function PortfolioPage() {
         ownPortfolioPct={portfolioValue > 0 ? (selectedGroup.marketValue / portfolioValue) * 100 : null}
         stwWeight={pickMap.get(selectedGroup.underlying)?.stwWeight ?? null}
         showPnl={showPnl}
+        tickerRegime={regimes[selectedGroup.underlying]}
         onClose={() => setSelected(null)}
         onViewStwPosition={onViewStwPosition}
       />
@@ -978,7 +995,7 @@ export function PortfolioPage() {
                 onToggle={toggleGroup}
                 accentColor={(g) => (g.conviction !== null ? (TIERS[g.conviction]?.color ?? 'var(--border)') : 'var(--border)')}
                 renderHeader={(g) => (
-                  <GroupHeader group={g} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} portfolioValue={portfolioValue} />
+                  <GroupHeader group={g} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} portfolioValue={portfolioValue} regime={regimes[g.underlying]} />
                 )}
                 renderExpanded={(g) => (
                   <>
@@ -989,7 +1006,7 @@ export function PortfolioPage() {
               />
             </>
           ) : (
-            <FlatTable rows={visibleLegs} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} portfolioValue={portfolioValue} />
+            <FlatTable rows={visibleLegs} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} portfolioValue={portfolioValue} regimes={regimes} />
           )}
         </div>
       </div>
