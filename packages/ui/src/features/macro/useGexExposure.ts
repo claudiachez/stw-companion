@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { getSupabase } from '../../lib/supabase';
 
-// Reads the latest GEX snapshot (SPY) from Supabase (`gex_snapshots`, migration
+// Reads the latest GEX snapshot (SPX) from Supabase (`gex_snapshots`, migration
 // 067), written twice each weekday by the `gex-snapshot` Netlify scheduled fn
-// from FlashAlpha. The browser never hits FlashAlpha directly — its free tier is
-// 5 req/day, so a scheduled writer + a Supabase read is the only viable shape.
+// from the SPX Gamma Edge newsletter's public RSS feed. The browser never hits
+// the feed — a scheduled writer + a Supabase read keeps one canonical row.
 
 export interface GexExposureRead {
   symbol: string;
@@ -41,7 +41,7 @@ export function useGexExposure(): { data: GexExposureRead | null; loading: boole
     getSupabase()
       .from('gex_snapshots')
       .select('symbol, underlying_price, gamma_flip, net_gex, net_gex_label, call_wall, put_wall, sleeve_score, as_of, session, snapshot_date')
-      .eq('symbol', 'SPY')
+      .eq('symbol', 'SPX')
       .order('snapshot_date', { ascending: false })
       .order('session', { ascending: false }) // 'pm' sorts after 'am' → latest session of the day
       .limit(1)
