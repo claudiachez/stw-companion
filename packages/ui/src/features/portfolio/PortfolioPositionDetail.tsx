@@ -7,6 +7,7 @@ import { StatusPill } from '../../primitives/StatusPill';
 import { EmptyState } from '../../primitives/EmptyState';
 import { useRiskConfig, useSectorMap } from '../limits/useRiskConfig';
 import { useLatestRegime } from '../regime/useLatestRegime';
+import { useRegimeInstrumentStore } from '../regime/useRegimeInstrument';
 import { RegimeBadge } from '../picks/components/RegimeBadge';
 import type { TickerRegime } from '../picks/useTickerRegime';
 import type { UserPosition } from './api';
@@ -83,7 +84,8 @@ export function PortfolioPositionDetail({
   const userId = useAuthStore((s) => s.user?.id);
   const { data: config } = useRiskConfig(userId);
   const { data: sectorMap } = useSectorMap();
-  const { data: regime, isLoading: regimeLoading } = useLatestRegime('IWM');
+  const regimeInstrument = useRegimeInstrumentStore((s) => s.instrument);
+  const { data: regime, isLoading: regimeLoading } = useLatestRegime(regimeInstrument);
 
   const gate = regime ? regimeGate(
     { close: regime.close, sma200: regime.sma200 },
@@ -235,11 +237,11 @@ export function PortfolioPositionDetail({
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: STATE_COLOR[gate.trend_state] }} />
-                Trend: {gate.trend_state}
+                Trend (200D): {gate.trend_state}
               </span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: STATE_COLOR[gate.vol_state] }} />
-                Vol: {gate.vol_state}
+                Volatility: {gate.vol_state}
               </span>
               {regime && <span style={{ color: 'var(--t3)' }}>as of {formatDate(regime.trading_date)}</span>}
             </div>

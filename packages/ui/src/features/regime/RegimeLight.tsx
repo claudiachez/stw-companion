@@ -44,6 +44,7 @@ export function RegimeLight({ instrument = 'IWM', exitRule }: { instrument?: str
           <HelpToggle ariaLabel="About the regime light">
             <span className="block">A two-part read of the broad backdrop from {instrument}: trend (price vs its 200-day average) and volatility (VIX vs 3-month VIX).</span>
             <span className="block text-t3 mt-1">GREEN = supportive, RED = fragile. The multiplier is a suggested size scale.</span>
+            <span className="block text-t3 mt-1">This coarse <strong>200-day</strong> read is separate from a ticker's finer 9/21/200 structure badge (e.g. "Healthy Pullback") — a name can be in a healthy pullback while the 200-day backdrop is still GREEN.</span>
             <span className="block text-t3 mt-1">Advisory only — nothing here places or blocks a trade. When RED, your own REGIME_EXIT rule (set in Settings) suggests how to de-risk.</span>
           </HelpToggle>
         </span>
@@ -53,11 +54,11 @@ export function RegimeLight({ instrument = 'IWM', exitRule }: { instrument?: str
       <div className="flex items-center gap-4 flex-wrap">
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full" style={{ background: STATE_COLOR[gate.trend_state] }} />
-          <span className="text-t2 text-xs">Trend: {gate.trend_state}</span>
+          <span className="text-t2 text-xs">Trend (200D): {gate.trend_state}</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full" style={{ background: STATE_COLOR[gate.vol_state] }} />
-          <span className="text-t2 text-xs">Vol: {gate.vol_state}</span>
+          <span className="text-t2 text-xs">Volatility: {gate.vol_state}</span>
         </div>
         <span className="text-text text-xs font-mono font-semibold">
           Multiplier: {gate.risk_multiplier === null ? '—' : gate.risk_multiplier.toFixed(1)}
