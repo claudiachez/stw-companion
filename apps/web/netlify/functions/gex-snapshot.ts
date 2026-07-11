@@ -79,6 +79,21 @@ async function sbInsert(url: string, key: string, table: string, row: Record<str
   } catch { /* run_log is best-effort — never let a logging failure mask the real result */ }
 }
 
+// Trading-day guard — shared market calendar (migration 068) via is_trading_day.
+// Weekends already excluded by the cron (`* 1-5`); this catches NYSE holidays.
+// Fails OPEN if the RPC is unavailable.
+async function isTradingDay(url: string, key: string, dateStr: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${url.replace(/\/$/, '')}/rest/v1/rpc/is_trading_day`, {
+      method: 'POST',
+      headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ d: dateStr }),
+    });
+    if (!res.ok) return true;
+    return (await res.json()) !== false;
+  } catch { return true; }
+}
+
 /** ET calendar date (yyyy-MM-dd) for a Date. */
 function etDate(d: Date): string {
   return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
@@ -91,6 +106,14 @@ const handlerImpl: Handler = async () => {
 
   if (!supabaseUrl || !serviceKey) {
     return { statusCode: 500, body: JSON.stringify({ error: 'Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY' }) };
+  }
+
+  // Don't ingest on a market holiday (a report-date-tagged upsert would just be a
+  // no-op re-write of the last trading day's row anyway — this skips the work).
+  const todayET = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  if (!(await isTradingDay(supabaseUrl, serviceKey, todayET))) {
+    await sbInsert(supabaseUrl, serviceKey, 'run_log', { ...runLogBase, status: 'ok', messages_processed: 0, summary: `skipped ${todayET} — not a trading day` });
+    return { statusCode: 200, body: JSON.stringify({ skipped: todayET, reason: 'not a trading day' }) };
   }
 
   // Session by UTC hour: 12:45 → am (premarket), 23:45 → pm (end-of-session).
