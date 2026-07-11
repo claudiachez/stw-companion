@@ -66,7 +66,7 @@ function ViolationRow({
         </span>
         <div className="flex items-center gap-2">
           {!unevaluated && (
-            <span className="text-xs font-mono" style={{ color: SEVERITY_TEXT_COLOR[v.severity] }}>
+            <span className="text-xs tabular-nums" style={{ color: SEVERITY_TEXT_COLOR[v.severity] }}>
               {v.exposurePct.toFixed(1)}% / {v.limitPct}%
             </span>
           )}
@@ -93,31 +93,36 @@ function ViolationRow({
               <button onClick={() => setEditingGlide(true)} className="text-t3 hover:text-t2">Edit</button>
             </div>
           ) : editingGlide || status !== 'glide_path' ? (
-            <div className="flex flex-wrap items-center gap-2">
-              {status === 'new' && (
+            <div className="flex flex-col gap-1">
+              <div className="flex flex-wrap items-center gap-2">
+                {status === 'new' && (
+                  <button
+                    onClick={() => onAcknowledge('acknowledged')}
+                    className="text-xs px-2 py-1 rounded bg-s2 border border-border text-text"
+                  >
+                    Acknowledge
+                  </button>
+                )}
+                {status === 'acknowledged' && (
+                  <span className="text-[10px] text-t3 uppercase tracking-wide">Acknowledged</span>
+                )}
+                <input
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="Glide path"
+                  className="flex-1 min-w-[220px] bg-s2 border border-border rounded px-2 py-1 text-xs text-text"
+                />
                 <button
-                  onClick={() => onAcknowledge('acknowledged')}
-                  className="text-xs px-2 py-1 rounded bg-s2 border border-border text-text"
+                  onClick={() => { onAcknowledge('glide_path', note); setEditingGlide(false); }}
+                  disabled={!note.trim()}
+                  className="text-xs px-2 py-1 rounded bg-acc text-white disabled:opacity-40"
                 >
-                  Acknowledge
+                  Set glide path
                 </button>
-              )}
-              {status === 'acknowledged' && (
-                <span className="text-[10px] text-t3 uppercase tracking-wide">Acknowledged</span>
-              )}
-              <input
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="Glide path — e.g. no adds; reduce to 10% by 2026-08-01"
-                className="flex-1 min-w-[220px] bg-s2 border border-border rounded px-2 py-1 text-xs text-text"
-              />
-              <button
-                onClick={() => { onAcknowledge('glide_path', note); setEditingGlide(false); }}
-                disabled={!note.trim()}
-                className="text-xs px-2 py-1 rounded bg-acc text-white disabled:opacity-40"
-              >
-                Set glide path
-              </button>
+              </div>
+              {/* Format example as persistent helper text, not a placeholder that
+                  vanishes the moment you start typing (when it's most useful). */}
+              <span className="text-[10px] text-t3">e.g. “no adds; reduce to 10% by 2026-08-01”</span>
             </div>
           ) : null}
         </div>
@@ -131,23 +136,30 @@ function GrossExposureBar({ v, ladderTargetPct }: { v: ConcentrationViolation; l
   const scaleMax = Math.max(limitPct, pct, 100) * 1.05;
   const fillPct = Math.min(100, (pct / scaleMax) * 100);
   const limitMarkerPct = Math.min(100, (limitPct / scaleMax) * 100);
+  const ladderMarkerPct = ladderTargetPct !== null ? Math.min(100, (ladderTargetPct / scaleMax) * 100) : null;
   // At-limit (100%/100%) is `near` → amber, never green: a full bar you're trained
   // to see as "fine" defeats the point.
   const fill = SEVERITY_TEXT_COLOR[v.severity];
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-end text-xs">
-        <span className="font-mono" style={{ color: fill }}>
+        <span className="tabular-nums" style={{ color: fill }}>
           {pct.toFixed(1)}% / {limitPct}%
         </span>
       </div>
+      {/* Ticks on the track make "how far over" legible: a solid mark at the cap
+          (so an overshoot reads as distance past it, not a full bar) + a lighter
+          mark at the drawdown-ladder target. */}
       <div className="relative h-2.5 rounded-full bg-s2 border border-border overflow-hidden">
         <div className="h-full rounded-full" style={{ width: `${fillPct}%`, background: fill }} />
-        <div
-          className="absolute top-0 bottom-0 w-px bg-t3"
-          style={{ left: `${limitMarkerPct}%` }}
-          title={`Limit: ${limitPct}%`}
-        />
+        {ladderMarkerPct !== null && (
+          <div className="absolute top-0 bottom-0" style={{ left: `${ladderMarkerPct}%`, width: 1, background: 'var(--status-warning-text)', opacity: 0.7 }} title={`Ladder target: ${ladderTargetPct}%`} />
+        )}
+        <div className="absolute top-0 bottom-0" style={{ left: `${limitMarkerPct}%`, width: 2, background: 'var(--text)' }} title={`Cap: ${limitPct}%`} />
+      </div>
+      <div className="flex items-center gap-3 text-[10px] text-t3">
+        <span><span style={{ color: 'var(--text)' }}>▏</span> cap {limitPct}%</span>
+        {ladderTargetPct !== null && <span><span style={{ color: 'var(--status-warning-text)' }}>▏</span> target {ladderTargetPct}%</span>}
       </div>
       {ladderTargetPct !== null && (
         <div className="text-xs text-[var(--status-warning-text)] bg-[var(--status-warning-bg)] border border-[var(--status-warning-border)] rounded px-3 py-2 mt-1">
@@ -304,7 +316,9 @@ export function ViolationsSummary({ showSyncButton = false, settingsTo }: { show
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0 flex-wrap">
-          <span className="text-text font-semibold text-sm shrink-0">Risk limits</span>
+          {/* Section header — larger/bolder than the card titles below so the
+              page reads as "one section governing four cards", not a flat stack. */}
+          <span className="text-text font-bold text-base shrink-0">Risk limits</span>
           <span className="text-t3 text-xs" style={{ color: totalBreaches > 0 ? 'var(--status-negative-text)' : totalNear > 0 ? 'var(--status-warning-text)' : 'var(--t3)' }}>{summaryLine}</span>
         </div>
         {showSyncButton && (
@@ -331,9 +345,13 @@ export function ViolationsSummary({ showSyncButton = false, settingsTo }: { show
         </div>
       )}
 
+      {/* The four limit cards are one group — a subtle tinted container sets them
+          apart from the standalone Regime light card (same card style) above. */}
+      <div className="rounded-2xl border border-border p-3 flex flex-col gap-4" style={{ background: 'var(--s2)' }}>
       <div className="bg-surface border border-border rounded-xl p-5">
         <div className="text-text font-semibold text-sm flex items-center gap-1.5">
           Gross exposure
+          <StatusPill variant={SEVERITY_PILL[result.grossViolation.severity].variant}>{SEVERITY_PILL[result.grossViolation.severity].label}</StatusPill>
           <HelpToggle ariaLabel="About gross exposure">
             <span className="block">Your total market value ÷ your account equity.</span>
             <span className="block text-t3 mt-1">Above 100% means you're using leverage/margin, so a market drop hits your equity harder.</span>
@@ -396,6 +414,7 @@ export function ViolationsSummary({ showSyncButton = false, settingsTo }: { show
         onAcknowledge={(scope, status, note) => acknowledge.mutate({ scope, violationType: 'sector', status, glidePathNote: note })}
         unmappedNote={sectorDataMissing ? '(no sector data yet)' : undefined}
       />
+      </div>
     </div>
   );
 }

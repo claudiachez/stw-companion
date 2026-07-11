@@ -60,12 +60,14 @@ export function RegimeLight({ instrument = 'IWM', exitRule }: { instrument?: str
           <span className="w-2.5 h-2.5 rounded-full" style={{ background: STATE_COLOR[gate.vol_state] }} />
           <span className="text-t2 text-xs">Volatility: {gate.vol_state}</span>
         </div>
-        <span className="text-text text-xs font-mono font-semibold">
+        <span className="text-text text-xs tabular-nums font-semibold">
           Multiplier: {gate.risk_multiplier === null ? '—' : gate.risk_multiplier.toFixed(1)}
         </span>
       </div>
 
-      <div className="text-t3 text-xs font-mono">
+      {/* tabular-nums (not monospace) — same numeric treatment as the % pairs on
+          the Risk tab, so the styling difference isn't just incidental. */}
+      <div className="text-t3 text-xs tabular-nums">
         close {row.close?.toFixed(2) ?? '—'} vs 200SMA {row.sma200?.toFixed(2) ?? '—'}
         {' · '}VIX {row.vix_close?.toFixed(2) ?? '—'} vs VIX3M {row.vix3m_close?.toFixed(2) ?? '—'}
       </div>
@@ -79,7 +81,9 @@ export function RegimeLight({ instrument = 'IWM', exitRule }: { instrument?: str
         </div>
       )}
 
-      <div className="text-[10px] uppercase tracking-wide font-semibold text-[var(--status-warning-text)]">
+      {/* Disclaimer, set apart with a divider + spacing so it reads as a different
+          kind of statement, not one more data line. */}
+      <div className="text-[10px] uppercase tracking-wide font-semibold text-[var(--status-warning-text)] mt-1 pt-3 border-t border-bsub">
         Advisory — under forward validation. Not a trade signal.
       </div>
     </div>

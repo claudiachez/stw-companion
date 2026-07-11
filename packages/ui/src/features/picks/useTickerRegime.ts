@@ -9,6 +9,11 @@ export interface TickerRegime {
   sectorSymbol: string | null;
   sectorName: string | null;
   standing: SectorStanding | null;
+  /** Latest close + the 9/21/200-day SMAs behind the bucket (for a detailed read). */
+  close: number | null;
+  ma9: number | null;
+  ma21: number | null;
+  ma200: number | null;
 }
 
 // Sector classification barely ever changes for a given ticker, so it's cached
@@ -92,7 +97,10 @@ export function useTickerRegime(tickers: string[], finnhubKey?: string, twelveDa
       for (const t of tickers) {
         const closes = closesMap[t] ?? [];
         const close = closes.length > 0 ? closes[closes.length - 1] : null;
-        const bucket = trendBucket(close, sma(closes, 9), sma(closes, 21), sma(closes, 200));
+        const ma9 = sma(closes, 9);
+        const ma21 = sma(closes, 21);
+        const ma200 = sma(closes, 200);
+        const bucket = trendBucket(close, ma9, ma21, ma200);
         const sectorSymbol = loadCachedSector(t) ?? null;
         const sectorRow = sectorSymbol ? sectorRowBySymbol[sectorSymbol] : undefined;
         result[t] = {
@@ -100,6 +108,7 @@ export function useTickerRegime(tickers: string[], finnhubKey?: string, twelveDa
           sectorSymbol,
           sectorName: sectorRow?.name ?? null,
           standing: sectorRow ? sectorStanding(sectorRow.bucket) : null,
+          close, ma9, ma21, ma200,
         };
       }
       if (!cancelled) { setRegimes(result); setLoading(false); }
