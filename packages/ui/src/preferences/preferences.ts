@@ -8,6 +8,8 @@ export interface UserPreferences {
   theme?: Theme;
   picksFilters?: Partial<PicksFilters>;
   picksDefaultTab?: PicksTab;
+  /** Which index drives the My Portfolio regime light (IWM/SPY/QQQ). */
+  regimeInstrument?: string;
 }
 
 export async function loadPreferences(userId: string): Promise<UserPreferences | null> {

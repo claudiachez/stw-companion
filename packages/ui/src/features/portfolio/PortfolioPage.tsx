@@ -24,6 +24,7 @@ import { useSectorMap, useRiskConfig } from '../limits/useRiskConfig';
 import { DEFAULT_RISK_CONFIG } from '../limits/api';
 import { useLatestRegime } from '../regime/useLatestRegime';
 import { RegimeLight } from '../regime/RegimeLight';
+import { useRegimeInstrumentStore, REGIME_INSTRUMENTS } from '../regime/useRegimeInstrument';
 import { useAuthStore } from '../../store/auth';
 import { PortfolioPositionDetail, type DetailGroup } from './PortfolioPositionDetail';
 import {
@@ -643,9 +644,11 @@ export function PortfolioPage() {
     [convictionBatch, pickMap, heldUnderlyings],
   );
 
-  // Advisory regime note (value-add) — same STW→IWM proxy + regimeGate() as the admin's
-  // RegimeLight, framed identically as advisory-only, never an instruction.
-  const { data: regimeRow } = useLatestRegime('IWM');
+  // Advisory regime note (value-add) — regimeGate() over the viewer's chosen index
+  // (default IWM = STW's proxy; user can prefer SPY/QQQ), framed advisory-only.
+  const regimeInstrument = useRegimeInstrumentStore((s) => s.instrument);
+  const setRegimeInstrument = useRegimeInstrumentStore((s) => s.setInstrument);
+  const { data: regimeRow } = useLatestRegime(regimeInstrument);
   const regimeAdvisory = regimeRow ? regimeGate(
     { close: regimeRow.close, sma200: regimeRow.sma200 },
     { vixClose: regimeRow.vix_close, vix3mClose: regimeRow.vix3m_close },
@@ -938,10 +941,21 @@ export function PortfolioPage() {
 
   const riskBody = (
     <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)', padding: pad }}>
-      {/* Advisory regime light — shown to every portfolio user (defaults until they set
-          their own rule in Settings), above the Premium-gated limits below. */}
+      {/* Advisory regime light — shown to every portfolio user, driven by their
+          chosen index (default IWM = STW's proxy; picker below persists per-user). */}
       <div style={{ marginBottom: SPACE[4] }}>
-        <RegimeLight instrument="IWM" exitRule={regimeExitRule} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: SPACE[2], flexWrap: 'wrap' }}>
+          <label htmlFor="regime-instrument" style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>Regime index</label>
+          <select
+            id="regime-instrument"
+            value={regimeInstrument}
+            onChange={(e) => setRegimeInstrument(e.target.value)}
+            style={{ fontSize: FONT_SIZE.xs, color: 'var(--text)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: '3px 8px' }}
+          >
+            {REGIME_INSTRUMENTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+        <RegimeLight instrument={regimeInstrument} exitRule={regimeExitRule} />
       </div>
       {capabilities.canUseLimits ? (
         <ViolationsSummary settingsTo="/settings" />
