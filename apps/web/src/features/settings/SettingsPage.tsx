@@ -8,16 +8,33 @@ import {
 import { FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, RADIUS, SPACE, fmtDateTime } from '@stw/shared';
 import { useTierAccess } from '../../shared/hooks/useTierAccess';
 
+const bold = { color: 'var(--t2)' } as const;
+// "→ what this feeds" note under each data section, so it's clear why each block
+// of fields is needed and which part of the app it powers.
+const feeds = (text: React.ReactNode) => (
+  <span style={{ display: 'block', marginTop: 3, color: 'var(--t3)', fontSize: 'inherit' }}>→ Feeds: {text}</span>
+);
+
 const CONNECT_STEPS = [
-  <>Log in to <b style={{ color: 'var(--t2)' }}>clientportal.ibkr.com</b> or <b style={{ color: 'var(--t2)' }}>account.ibkr.com</b></>,
-  <>Go to <b style={{ color: 'var(--t2)' }}>Reports → Flex Queries</b></>,
-  <>Click <b style={{ color: 'var(--t2)' }}>Create → Activity Flex Query</b></>,
-  <>Under <b style={{ color: 'var(--t2)' }}>Sections</b>, enable <b style={{ color: 'var(--t2)' }}>Open Positions</b> and tick: Symbol, Underlying Symbol, Asset Category, Quantity, Cost Basis Price, Mark Price, Unrealized P&amp;L, Put/Call, Strike, Expiry, Multiplier, Conid</>,
-  <>In the same query, also enable <b style={{ color: 'var(--t2)' }}>Trades</b>, set <b style={{ color: 'var(--t2)' }}>Options → Level of Detail = Execution</b>, and tick: <b style={{ color: 'var(--t2)' }}>IB Execution ID</b> (not <i>External</i> Execution ID), Asset Category, Date/Time, Symbol, Underlying Symbol, Buy/Sell, Quantity, <b style={{ color: 'var(--t2)' }}>Trade Price</b> (not <i>Orig</i> Trade Price), IB Commission, <b style={{ color: 'var(--t2)' }}>Currency</b> (not IB Commission Currency), Put/Call, Strike, Expiry, Multiplier, IB Order ID, Trade ID, Transaction ID</>,
-  <>Leave <b style={{ color: 'var(--t2)' }}>General Configuration</b> at its defaults — Date Format <b style={{ color: 'var(--t2)' }}>yyyyMMdd</b>, Time Format <b style={{ color: 'var(--t2)' }}>HHmmss</b>, and <b style={{ color: 'var(--t2)' }}>Breakout by Day = No</b>; set the query <b style={{ color: 'var(--t2)' }}>Period</b> to <b style={{ color: 'var(--t2)' }}>Year to Date</b> (or Last 365 Days) for the first sync</>,
-  <>Save the query — note the <b style={{ color: 'var(--t2)' }}>Query ID</b> shown next to it</>,
-  <>Back on Flex Queries, copy your <b style={{ color: 'var(--t2)' }}>Flex Token</b> (top of page, under "Generate Tokens")</>,
-  <>Paste both below, click <b style={{ color: 'var(--t2)' }}>Save</b></>,
+  <>Log in to <b style={bold}>clientportal.ibkr.com</b> or <b style={bold}>account.ibkr.com</b></>,
+  <>Go to <b style={bold}>Reports → Flex Queries</b></>,
+  <>Click <b style={bold}>Create → Activity Flex Query</b>. Under <b style={bold}>Sections</b>, enable the three below (one query carries all three).</>,
+  <>
+    <b style={bold}>Section 1 — Open Positions.</b> Tick: Symbol, Underlying Symbol, Asset Category, Quantity, Cost Basis Price, Mark Price, Unrealized P&amp;L, Put/Call, Strike, Expiry, Multiplier, Conid.
+    {feeds(<>your live positions on <b style={bold}>My Portfolio</b>, and the position / sector / gross concentration checks on the <b style={bold}>Risk</b> tab.</>)}
+  </>,
+  <>
+    <b style={bold}>Section 2 — Trades</b> (set <b style={bold}>Options → Level of Detail = Execution</b>). Tick: <b style={bold}>IB Execution ID</b> (not <i>External</i>), Asset Category, Date/Time, Symbol, Underlying Symbol, Buy/Sell, Quantity, <b style={bold}>Trade Price</b> (not <i>Orig</i>), IB Commission, <b style={bold}>Currency</b> (not IB Commission Currency), Put/Call, Strike, Expiry, Multiplier, IB Order ID, Trade ID, Transaction ID.
+    {feeds(<>your executions history + trade-cost analysis (your fills vs the mark).</>)}
+  </>,
+  <>
+    <b style={bold}>Section 3 — Net Asset Value (NAV) in Base.</b> Tick <b style={bold}>Total</b> (your Net Liquidation Value) and <b style={bold}>Report Date</b>.
+    {feeds(<>your <b style={bold}>live account equity</b> — the denominator for gross exposure — so the Risk tab measures against your <b style={bold}>current balance (incl. margin)</b>, not a stale deposit figure.</>)}
+  </>,
+  <>Leave <b style={bold}>General Configuration</b> at its defaults — Date Format <b style={bold}>yyyyMMdd</b>, Time Format <b style={bold}>HHmmss</b>, and <b style={bold}>Breakout by Day = No</b>; set the query <b style={bold}>Period</b> to <b style={bold}>Year to Date</b> (or Last 365 Days) for the first sync.</>,
+  <>Save the query — note the <b style={bold}>Query ID</b> shown next to it.</>,
+  <>Back on Flex Queries, copy your <b style={bold}>Flex Token</b> (top of page, under "Generate Tokens").</>,
+  <>Paste both below, click <b style={bold}>Save</b>.</>,
 ];
 
 export function SettingsPage() {
