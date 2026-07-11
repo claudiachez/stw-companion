@@ -142,15 +142,26 @@ export function RiskConfigForm({ userId, config }: { userId: string; config: Ris
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE[3] }}>
         <FormRow layout={rowLayout} label="Account equity">
-          <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[1.5], flexWrap: 'wrap' }}>
-            <span style={prefixSlot}>$</span>
-            <TextInput type="number" min={0} placeholder="e.g. 50000" style={{ width: 120 }}
-              value={accountEquity}
-              onChange={(e) => setDraft((d) => ({ ...d, accountEquity: e.target.value === '' ? undefined : Number(e.target.value) }))} />
-            {config.is_placeholder && (
-              <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>default placeholder — set your real account equity</span>
-            )}
-          </div>
+          {config.ibkr_nlv != null ? (
+            // Live from IBKR — read-only (the sync owns it), so the limits denominator
+            // tracks the current balance, not a stale hand-typed figure.
+            <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[1.5], flexWrap: 'wrap' }}>
+              <span style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
+                {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(config.ibkr_nlv)}
+              </span>
+              <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>Current account equity — live balance from IBKR, incl. margin (updates each sync)</span>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[1.5], flexWrap: 'wrap' }}>
+              <span style={prefixSlot}>$</span>
+              <TextInput type="number" min={0} placeholder="e.g. 50000" style={{ width: 120 }}
+                value={accountEquity}
+                onChange={(e) => setDraft((d) => ({ ...d, accountEquity: e.target.value === '' ? undefined : Number(e.target.value) }))} />
+              {config.is_placeholder && (
+                <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>default placeholder — set your real equity, or connect IBKR (NAV section) for a live figure</span>
+              )}
+            </div>
+          )}
         </FormRow>
 
         <NumRow layout={rowLayout} label="Max position" suffix="%" note="of book, per underlying" min={0} max={100}

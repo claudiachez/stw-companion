@@ -277,13 +277,14 @@ export function ViolationsSummary({ showSyncButton = false, settingsTo }: { show
     isOption: p.asset_class === 'OPT',
   }));
 
-  // Real account equity from RiskConfigForm (migration 059) — always set (DB defaults
-  // new rows to a $100,000 placeholder, flagged via config.is_placeholder below) rather
-  // than derived from the SAME positions being evaluated, which made gross exposure
-  // tautologically ~100% (numerator == denominator) before this fix.
-  const accountEquity = config.account_equity;
+  // Prefer the LIVE Net Liquidation Value from the IBKR NAV sync (migration 070) —
+  // the manual account_equity is only the fallback until the first NAV sync lands.
+  // A stale deposit figure is what made gross exposure read ~114% when the real
+  // number was far lower.
+  const accountEquity = config.ibkr_nlv ?? config.account_equity;
+  const usingLiveEquity = config.ibkr_nlv != null;
   const drawdownPct = config.equity_peak
-    ? ((config.account_equity - config.equity_peak) / config.equity_peak) * 100
+    ? ((accountEquity - config.equity_peak) / config.equity_peak) * 100
     : null;
 
   const result = evaluateRiskConfig(positionInputs, sectorMap ?? {}, accountEquity, {
@@ -362,10 +363,14 @@ export function ViolationsSummary({ showSyncButton = false, settingsTo }: { show
           Total market value of every position vs your account equity. Above 100% means you're
           using leverage/margin; the drawdown ladder can trim this target as you draw down.
         </div>
-        {config.is_placeholder && (
+        {usingLiveEquity ? (
+          <div className="text-t3 text-xs mb-2 tabular-nums">
+            vs live account equity {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(accountEquity)} — Net Liquidation Value from your last IBKR sync (incl. margin).
+          </div>
+        ) : config.is_placeholder && (
           <div className="text-t3 text-xs mb-2">
-            Using a default $100,000 account equity — set your real figure in Settings for
-            an accurate reading.
+            Using a default $100,000 account equity — connect IBKR (with the NAV section) so this reads
+            your live balance, or set a figure in Settings.
           </div>
         )}
         <GrossExposureBar

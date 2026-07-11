@@ -13,6 +13,9 @@ export interface RiskConfigRow {
   account_equity: number;
   /** Trigger-maintained high-water mark of account_equity — never decreases (migration 059). */
   equity_peak: number | null;
+  /** Live account equity (Net Liquidation Value, incl. margin) from the IBKR Flex NAV sync — the PREFERRED limits denominator (migration 070). Null until the first NAV sync lands. */
+  ibkr_nlv: number | null;
+  ibkr_nlv_at: string | null;
   /** Per-user REGIME_EXIT rule (advisory, migration 063): single-RED → trim to this % / tighten stops to regime_stop_pct; double-RED → reduce gross to regime_doublered_gross_pct. Display-only. */
   regime_trim_to_pct: number;
   regime_stop_pct: number;
