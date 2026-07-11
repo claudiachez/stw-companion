@@ -31,8 +31,25 @@ describe('deriveGexLevels', () => {
 
   it('derives the call wall (max call gamma) and put wall (max put gamma)', () => {
     const l = deriveGexLevels(sample);
-    expect(l.callWall).toBe(600); // greatest call_gex
-    expect(l.putWall).toBe(590);  // greatest put_gex
+    expect(l.callWall).toBe(600); // greatest |call_gex|
+    expect(l.putWall).toBe(590);  // greatest |put_gex|
+  });
+
+  it('selects walls by magnitude when put_gex is signed negative (real FlashAlpha convention)', () => {
+    // Live FlashAlpha data reports call_gex positive and put_gex NEGATIVE.
+    // The put wall must be the largest-magnitude (most-negative) put strike,
+    // not the one closest to zero (verified against NVDA 2026-07-11).
+    const signed: FlashAlphaGexResponse = {
+      ...sample,
+      strikes: [
+        { strike: 2.5, call_gex: 0, put_gex: 0, net_gex: 0 },              // dead deep-OTM padding
+        { strike: 590, call_gex: 5_000_000, put_gex: -20_000_000, net_gex: -15_000_000 },
+        { strike: 600, call_gex: 30_000_000, put_gex: -4_000_000, net_gex: 26_000_000 },
+      ],
+    };
+    const l = deriveGexLevels(signed);
+    expect(l.callWall).toBe(600); // greatest |call_gex|
+    expect(l.putWall).toBe(590);  // greatest |put_gex| — NOT strike 2.5 (put_gex 0)
   });
 
   it('handles a missing/empty strikes array', () => {

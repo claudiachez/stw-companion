@@ -55,8 +55,13 @@ function num(v: number | null | undefined): number | null {
 /**
  * Derive the card-level GEX levels from a raw FlashAlpha response. Net GEX and
  * the gamma-flip come native; the call/put walls are the strikes with the
- * greatest call / put gamma concentration (FlashAlpha reports both as positive
- * magnitudes — see its docs example).
+ * greatest call / put gamma CONCENTRATION — selected by absolute magnitude.
+ *
+ * FlashAlpha's live data signs the two legs oppositely: call_gex is reported
+ * positive (0…+N), put_gex NEGATIVE (−N…0) — verified against real NVDA data
+ * 2026-07-11. Selecting the put wall by raw `max(put_gex)` therefore picked the
+ * value closest to zero (a dead deep-OTM strike), not the real support level.
+ * Using |gex| is correct for both legs and robust to either sign convention.
  */
 export function deriveGexLevels(r: FlashAlphaGexResponse): GexLevels {
   const strikes = Array.isArray(r.strikes) ? r.strikes : [];
@@ -65,8 +70,8 @@ export function deriveGexLevels(r: FlashAlphaGexResponse): GexLevels {
   let maxCall = -Infinity;
   let maxPut = -Infinity;
   for (const s of strikes) {
-    if (typeof s.call_gex === 'number' && s.call_gex > maxCall) { maxCall = s.call_gex; callWall = s.strike; }
-    if (typeof s.put_gex === 'number' && s.put_gex > maxPut) { maxPut = s.put_gex; putWall = s.strike; }
+    if (typeof s.call_gex === 'number' && Math.abs(s.call_gex) > maxCall) { maxCall = Math.abs(s.call_gex); callWall = s.strike; }
+    if (typeof s.put_gex === 'number' && Math.abs(s.put_gex) > maxPut) { maxPut = Math.abs(s.put_gex); putWall = s.strike; }
   }
   const label = r.net_gex_label === 'positive' ? 'positive'
     : r.net_gex_label === 'negative' ? 'negative'
