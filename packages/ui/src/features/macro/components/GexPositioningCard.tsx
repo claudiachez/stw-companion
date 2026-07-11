@@ -78,7 +78,7 @@ export function GexPositioningCard({ data, loading, threeDayDelta }: Props) {
   // contribution (matching the persisted composite score + the 3D delta), not a
   // live-drifting number. The ladder's Spot row is the LIVE quote (host ask).
   const spot = live?.spx ?? data.spot;
-  const spotSub = live ? `live ${timeTag(live.at)}` : data.asOf ? 'as of report' : undefined;
+  const liveTag = live ? `live ${timeTag(live.at)}` : data.asOf ? 'as of report' : null;
 
   const score = gexSleeveScore(data.spot, data.gammaFlip);
   const label = gexPositioningLabel({ spot: data.spot, gammaFlip: data.gammaFlip });
@@ -87,16 +87,19 @@ export function GexPositioningCard({ data, loading, threeDayDelta }: Props) {
     ? null
     : `3D ${threeDayDelta >= 0 ? '+' : ''}${Math.round(threeDayDelta)}`;
 
-  // Cushion annotates the gamma-flip row against the live spot shown in the ladder.
+  // Cushion phrased from SPOT's perspective (spot is N above/below the flip), on
+  // the Spot row — not the flip row, where "+89 vs spot" read backwards.
   const cushion = spot !== null && data.gammaFlip !== null ? spot - data.gammaFlip : null;
-  const cushionHint = cushion === null ? undefined : `${cushion >= 0 ? '+' : '−'}${fmtLevel(Math.abs(cushion))} vs spot`;
+  const cushionText = cushion === null ? null
+    : cushion >= 0 ? `+${fmtLevel(cushion)} above flip` : `${fmtLevel(Math.abs(cushion))} below flip`;
+  const spotSub = [cushionText, liveTag].filter(Boolean).join(' · ') || undefined;
 
   // High → low so the call wall sits on top and the put wall at the bottom; spot
   // slots into its live position between them.
   const rows: LadderRow[] = ([
     data.callWall !== null ? { icon: '🔴', price: data.callWall, label: 'Call Wall', sub: 'upside magnet' } : null,
     spot !== null ? { icon: '💲', price: spot, label: 'Spot', sub: spotSub, current: true } : null,
-    data.gammaFlip !== null ? { icon: '🟡', price: data.gammaFlip, label: 'Gamma Flip', sub: cushionHint } : null,
+    data.gammaFlip !== null ? { icon: '🟡', price: data.gammaFlip, label: 'Gamma Flip', sub: 'positive/negative-γ pivot' } : null,
     data.putWall !== null ? { icon: '🟢', price: data.putWall, label: 'Put Wall', sub: 'downside support' } : null,
   ].filter(Boolean) as LadderRow[]).sort((a, b) => b.price - a.price);
 
