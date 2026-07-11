@@ -1,4 +1,4 @@
-import { fmtDateTime, FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
+import { fmtDateTime, formatDate, isTradingDay, lastTradingDay, FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
 import type { RegimeRead, RegimeLabel } from '@stw/shared';
 import type { RegimeSeriesPoint } from '../useMacroTrendHistory';
 import { RegimeTrajectory } from './RegimeTrajectory';
@@ -18,8 +18,9 @@ const REGIME_COLOR: Record<RegimeLabel, string> = {
   'Risk-Off':                 'var(--c1)',
 };
 
-/** Today − yesterday, from the last two days that actually have a score. */
-function deltaVsYesterday(series: RegimeSeriesPoint[]): number | null {
+/** Latest scored session − the prior scored session (the series holds only actual
+ *  trading days), so on a weekend/holiday this is Friday vs Thursday, not "today". */
+function deltaVsPriorSession(series: RegimeSeriesPoint[]): number | null {
   const scored = series.filter((p) => p.score !== null);
   if (scored.length < 2) return null;
   return (scored[scored.length - 1].score as number) - (scored[scored.length - 2].score as number);
@@ -42,11 +43,17 @@ export function RegimeCard({ regime, updatedAt, series }: Props) {
   }
 
   const color = REGIME_COLOR[regime.label];
-  const delta = deltaVsYesterday(series);
+  const delta = deltaVsPriorSession(series);
   const n = delta === null ? null : Math.round(delta);
   const chipArrow = n === null ? '' : n > 0 ? '▲ ' : n < 0 ? '▼ ' : '';
   const chipColor = n === null || n === 0 ? 'var(--t3)' : n > 0 ? 'var(--c5)' : 'var(--c1)';
-  const chipText = n === null ? '— vs yesterday' : `${chipArrow}${n >= 0 ? '+' : ''}${n} vs yesterday`;
+  const chipText = n === null ? '— vs prior session' : `${chipArrow}${n >= 0 ? '+' : ''}${n} vs prior session`;
+
+  // On a non-trading day the read reflects the last close, not "now" — date it
+  // honestly (e.g. Saturday shows "As of Jul 10 · market closed"), rather than
+  // stamping the current wall-clock as if the market were live.
+  const todayET = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const marketOpen = isTradingDay(todayET);
 
   return (
     <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '14px 16px' }}>
@@ -58,7 +65,9 @@ export function RegimeCard({ regime, updatedAt, series }: Props) {
             <Label text="Current status" />
             {updatedAt && (
               <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>
-                Updated: <span style={{ color: 'var(--t2)' }}>{fmtDateTime(updatedAt)}</span>
+                {marketOpen
+                  ? <>Updated: <span style={{ color: 'var(--t2)' }}>{fmtDateTime(updatedAt)}</span></>
+                  : <>As of <span style={{ color: 'var(--t2)' }}>{formatDate(lastTradingDay(todayET))}</span> · market closed</>}
               </span>
             )}
           </div>

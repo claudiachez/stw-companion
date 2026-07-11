@@ -290,20 +290,19 @@ export function MacroView() {
         </div>
       </section>
 
-      {/* ── Modules 5–8: Market Internals + GEX side by side (stack on mobile) ── */}
-      <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-        <section style={{ flex: '1 1 340px', minWidth: 0 }}>
-          <ModuleHeader title="Market Internals" help={HELP.internals} />
-          <MarketInternalsCard volatility={volatility} credit={credit} rates={rates} />
-        </section>
+      {/* ── Modules 5–7: Market Internals (Volatility · Credit · Rates+Dollar) ── */}
+      <section>
+        <ModuleHeader title="Market Internals" help={HELP.internals} />
+        <MarketInternalsCard volatility={volatility} credit={credit} rates={rates} />
+      </section>
 
-        <section style={{ flex: '1 1 340px', minWidth: 0 }}>
-          <ModuleHeader title="GEX / Positioning" help={HELP.gex} />
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
-            <GexPositioningCard data={gex} loading={gexLoading} threeDayDelta={trendHistory.deltas.gex.threeDayDelta} />
-          </div>
-        </section>
-      </div>
+      {/* ── Module 8: GEX / Positioning ────────────────────────────── */}
+      <section>
+        <ModuleHeader title="GEX / Positioning" help={HELP.gex} />
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
+          <GexPositioningCard data={gex} loading={gexLoading} threeDayDelta={trendHistory.deltas.gex.threeDayDelta} />
+        </div>
+      </section>
 
       {/* ── Module 9: Risk Appetite (gauge) ────────────────────────── */}
       <section>

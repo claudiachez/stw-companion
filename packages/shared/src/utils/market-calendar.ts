@@ -34,3 +34,21 @@ export function isTradingDay(dateStr: string): boolean {
   if (dow === 0 || dow === 6) return false;
   return !US_MARKET_HOLIDAYS.has(dateStr);
 }
+
+/**
+ * The most recent US trading day on or before `dateStr` (a 'YYYY-MM-DD' ET day).
+ * Returns `dateStr` itself when it's a trading day; otherwise walks back to the
+ * last open session (e.g. Saturday/Sunday → the preceding Friday, a holiday →
+ * the prior open day). Used to date market reads honestly on non-trading days.
+ */
+export function lastTradingDay(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  if (!y || !m || !d) return dateStr;
+  const cur = new Date(Date.UTC(y, m - 1, d));
+  for (let i = 0; i < 10; i++) {
+    const iso = cur.toISOString().slice(0, 10);
+    if (isTradingDay(iso)) return iso;
+    cur.setUTCDate(cur.getUTCDate() - 1);
+  }
+  return dateStr;
+}
