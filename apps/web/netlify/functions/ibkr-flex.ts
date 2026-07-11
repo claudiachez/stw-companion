@@ -338,12 +338,13 @@ async function run(event: Parameters<Handler>[0]) {
   // ── Parse positions + executions (both from the one Flex report) ──────────
   let positions: NormalisedPosition[];
   let executions: NormalisedExecution[];
+  let nlv: number | null = null; // Net Liquidation Value (live account equity), if the NAV section is enabled
   let accountId: string | null = null;
   try {
     const parser = new XMLParser({
       ignoreAttributes: false,
       attributeNamePrefix: '',
-      isArray: (name) => name === 'OpenPosition' || name === 'Trade',
+      isArray: (name) => name === 'OpenPosition' || name === 'Trade' || name === 'EquitySummaryByReportDateInBase',
     });
     const doc = parser.parse(xmlData);
     const statement = doc?.FlexQueryResponse?.FlexStatements?.FlexStatement;
@@ -362,6 +363,18 @@ async function run(event: Parameters<Handler>[0]) {
       .filter((t): t is RawTrade => t != null)
       .map(normaliseExecution)
       .filter((e): e is NormalisedExecution => e !== null);
+
+    // NAV / Equity Summary (optional — present once the operator enables the
+    // "Net Asset Value (NAV) in Base" section). The latest reportDate's `total`
+    // is the account's Net Liquidation Value = live equity incl. margin.
+    const rawNav = (statement?.EquitySummaryInBase?.EquitySummaryByReportDateInBase
+      ?? statement?.EquitySummaryInBase) as Array<Record<string, unknown>> | Record<string, unknown> | undefined;
+    if (rawNav) {
+      const rows = (Array.isArray(rawNav) ? rawNav : [rawNav]).filter((r) => r && r.total != null);
+      rows.sort((a, b) => String(a.reportDate ?? '').localeCompare(String(b.reportDate ?? '')));
+      const t = rows.length ? parseFloat(String(rows[rows.length - 1].total)) : NaN;
+      nlv = Number.isFinite(t) && t > 0 ? t : null;
+    }
   } catch {
     return err(502, 'Failed to parse IBKR response');
   }
@@ -387,6 +400,16 @@ async function run(event: Parameters<Handler>[0]) {
       .upsert(execRows, { onConflict: 'user_id,ibkr_exec_id', ignoreDuplicates: true });
     if (execErr) return err(500, `DB write failed (executions): ${execErr.message}`);
     executionsWritten = execRows.length;
+  }
+
+  // ── Live account equity (Net Liquidation Value) → risk_config ─────────────
+  // The limits engine's preferred denominator. UPDATE only (the row is created by
+  // the app's ensure-config on the Risk tab); we also bump equity_peak so the
+  // drawdown ladder tracks the live-NLV high-water mark, not the stale manual one.
+  if (nlv !== null) {
+    const { data: rc } = await admin.from('risk_config').select('equity_peak').eq('user_id', user.id).maybeSingle();
+    const peak = Math.max(rc?.equity_peak ?? 0, nlv);
+    await admin.from('risk_config').update({ ibkr_nlv: nlv, ibkr_nlv_at: syncTime, equity_peak: peak }).eq('user_id', user.id);
   }
 
   return {
