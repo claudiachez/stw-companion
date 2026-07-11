@@ -148,6 +148,21 @@ async function sbInsert(url: string, key: string, table: string, row: Record<str
   } catch { /* run_log is best-effort */ }
 }
 
+// Trading-day guard — shared market calendar (migration 068) via is_trading_day.
+// Weekends already excluded by the cron (`* 1-5`); this catches NYSE holidays.
+// Fails OPEN if the RPC is unavailable — never silently stop the daily write.
+async function isTradingDay(url: string, key: string, dateStr: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${url.replace(/\/$/, '')}/rest/v1/rpc/is_trading_day`, {
+      method: 'POST',
+      headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ d: dateStr }),
+    });
+    if (!res.ok) return true;
+    return (await res.json()) !== false;
+  } catch { return true; }
+}
+
 const handlerImpl: Handler = async (event) => {
   const twelveDataKey = (process.env.VITE_TWELVEDATA_KEY ?? process.env.TWELVEDATA_KEY ?? '').trim();
   const fredKey = (process.env.FRED_API_KEY ?? '').trim();
@@ -177,6 +192,17 @@ const handlerImpl: Handler = async (event) => {
   const fredLimit = isYahoo ? 504 + daysRequested + 600 : outputsize;
 
   const runLogBase = { run_type: 'regime-daily' };
+
+  // Trading-day guard — the scheduled DAILY path must not write a row on a market
+  // holiday. The backfill path is exempt: it writes only the trading-day bars the
+  // equity feed returns, so a holiday can't produce a spurious row there.
+  if (!isBackfill) {
+    const todayET = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    if (!(await isTradingDay(supabaseUrl, serviceKey, todayET))) {
+      await sbInsert(supabaseUrl, serviceKey, 'run_log', { ...runLogBase, status: 'ok', messages_processed: 0, summary: `skipped ${todayET} — not a trading day` });
+      return { statusCode: 200, body: JSON.stringify({ skipped: todayET, reason: 'not a trading day' }) };
+    }
+  }
 
   try {
     const [vixBars, vix3mBars, tnxBars] = await Promise.all([
