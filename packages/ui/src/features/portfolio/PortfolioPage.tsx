@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { TIERS, fmtDateTime, sizingTone, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, SPACE, regimeGate, regimeExitAdvice } from '@stw/shared';
+import { TIERS, fmtDateTime, sizingTone, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, SPACE } from '@stw/shared';
 import { useUserPositions, useIbkrSettings } from './useUserPositions';
 import { useSyncPortfolio } from './useSyncPortfolio';
 import { useHoldings } from '../picks/useHoldings';
@@ -22,7 +22,6 @@ import { useCapabilities } from '../../context/AppCapabilities';
 import { ViolationsSummary } from '../limits/ViolationsSummary';
 import { useSectorMap, useRiskConfig } from '../limits/useRiskConfig';
 import { DEFAULT_RISK_CONFIG } from '../limits/api';
-import { useLatestRegime } from '../regime/useLatestRegime';
 import { RegimeLight } from '../regime/RegimeLight';
 import { useRegimeInstrumentStore, REGIME_INSTRUMENTS } from '../regime/useRegimeInstrument';
 import { useAuthStore } from '../../store/auth';
@@ -296,10 +295,8 @@ function SummaryChip({ severity, onClick, children }: { severity: 'info' | 'warn
   );
 }
 
-function PortfolioSummary({ groups, showPnl, regimeAdvisory, regimeAdviceText, onOpenTailing }: {
+function PortfolioSummary({ groups, showPnl, onOpenTailing }: {
   groups: PortfolioGroup[]; showPnl: boolean;
-  regimeAdvisory: ReturnType<typeof regimeGate> | null;
-  regimeAdviceText: string | null;
   onOpenTailing: () => void;
 }) {
   const t = useMemo(() => {
@@ -329,18 +326,8 @@ function PortfolioSummary({ groups, showPnl, regimeAdvisory, regimeAdviceText, o
 
   return (
     <>
-      {/* Advisory regime line — its own full-width strip above the KPI row (host
-          2026-07-10), NOT crammed into a KPI card (keeps the KPI row uniform).
-          Compact echo of the Risk tab's RegimeLight. */}
-      {regimeAdvisory && regimeAdvisory.trend_state !== 'UNKNOWN' && (
-        <div
-          style={{ display: 'flex', alignItems: 'center', gap: SPACE[1.5], marginBottom: 10, fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}
-          title="Advisory — under forward validation. Not a trade signal."
-        >
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: regimeAdvisory.trend_state === 'GREEN' ? 'var(--acc)' : 'var(--status-negative-text)' }} />
-          <span>Regime: <span style={{ color: 'var(--t2)', fontWeight: FONT_WEIGHT.semibold }}>{regimeAdvisory.trend_state}</span>{regimeAdviceText ? ` · ${regimeAdviceText}` : ''} <span style={{ fontStyle: 'italic' }}>(advisory)</span></span>
-        </div>
-      )}
+      {/* Regime read lives on the Risk tab (RegimeLight) — removed from Overview
+          (host 2026-07-11) to keep the header to the KPI row. */}
 
       {/* Every card reads the same: hero number · qualifier (delta) · uppercase label. */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -644,17 +631,11 @@ export function PortfolioPage() {
     [convictionBatch, pickMap, heldUnderlyings],
   );
 
-  // Advisory regime note (value-add) — regimeGate() over the viewer's chosen index
-  // (default IWM = STW's proxy; user can prefer SPY/QQQ), framed advisory-only.
+  // The viewer's regime-light index (default IWM = STW's proxy; user can prefer
+  // SPY/QQQ) + their own REGIME_EXIT rule (migration 063) — both used by the
+  // Risk-tab RegimeLight below. Advisory / display-only.
   const regimeInstrument = useRegimeInstrumentStore((s) => s.instrument);
   const setRegimeInstrument = useRegimeInstrumentStore((s) => s.setInstrument);
-  const { data: regimeRow } = useLatestRegime(regimeInstrument);
-  const regimeAdvisory = regimeRow ? regimeGate(
-    { close: regimeRow.close, sma200: regimeRow.sma200 },
-    { vixClose: regimeRow.vix_close, vix3mClose: regimeRow.vix3m_close },
-  ) : null;
-  // The viewer's own REGIME_EXIT rule (per-user, migration 063) — falls back to the
-  // shared defaults for a user without a config row yet. Advisory / display-only.
   const regimeUserId = useAuthStore((s) => s.user?.id);
   const { data: regimeRiskConfig } = useRiskConfig(regimeUserId);
   const regimeExitRule = {
@@ -662,7 +643,6 @@ export function PortfolioPage() {
     stopPct: regimeRiskConfig?.regime_stop_pct ?? DEFAULT_RISK_CONFIG.regime_stop_pct,
     doubleRedGrossPct: regimeRiskConfig?.regime_doublered_gross_pct ?? DEFAULT_RISK_CONFIG.regime_doublered_gross_pct,
   };
-  const regimeAdviceText = regimeAdvisory ? regimeExitAdvice(regimeAdvisory, regimeExitRule) : null;
 
   const allGroups = useMemo<PortfolioGroup[]>(() => {
     const map = new Map<string, UserPosition[]>();
@@ -928,7 +908,7 @@ export function PortfolioPage() {
           ⚠ {decliningTailed.length} tailed position{decliningTailed.length !== 1 ? 's have' : ' has'} declining STW conviction: {decliningTailed.map((c) => c.ticker).join(', ')}
         </div>
       )}
-      <PortfolioSummary groups={allGroups} showPnl={showPnl} regimeAdvisory={regimeAdvisory} regimeAdviceText={regimeAdviceText} onOpenTailing={() => changeTab('tailing')} />
+      <PortfolioSummary groups={allGroups} showPnl={showPnl} onOpenTailing={() => changeTab('tailing')} />
       {showPnl && <TopMovers groups={allGroups} onOpenPosition={openPosition} />}
       {/* Heatmap colors by return, so it follows the P&L-visibility toggle like Top Movers. */}
       {showPnl && heatmapCells.length > 0 && (
@@ -945,15 +925,25 @@ export function PortfolioPage() {
           chosen index (default IWM = STW's proxy; picker below persists per-user). */}
       <div style={{ marginBottom: SPACE[4] }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: SPACE[2], flexWrap: 'wrap' }}>
-          <label htmlFor="regime-instrument" style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>Regime index</label>
-          <select
-            id="regime-instrument"
-            value={regimeInstrument}
-            onChange={(e) => setRegimeInstrument(e.target.value)}
-            style={{ fontSize: FONT_SIZE.xs, color: 'var(--text)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: '3px 8px' }}
-          >
-            {REGIME_INSTRUMENTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
+          <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>Regime index</span>
+          {/* Chips (same style as the Trend / Market Structure indicator toggles), not a dropdown. */}
+          {REGIME_INSTRUMENTS.map((o) => {
+            const active = regimeInstrument === o.value;
+            return (
+              <button
+                key={o.value}
+                onClick={() => setRegimeInstrument(o.value)}
+                title={o.label}
+                style={{
+                  fontSize: FONT_SIZE.xs, padding: '2px 10px', borderRadius: 4, border: '1px solid var(--border)',
+                  background: active ? 'var(--acc)' : 'transparent',
+                  color: active ? 'var(--text-inverse)' : 'var(--t2)', cursor: 'pointer', fontWeight: FONT_WEIGHT.semibold,
+                }}
+              >
+                {o.value}
+              </button>
+            );
+          })}
         </div>
         <RegimeLight instrument={regimeInstrument} exitRule={regimeExitRule} />
       </div>
