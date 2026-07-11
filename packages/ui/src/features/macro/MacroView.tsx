@@ -16,7 +16,7 @@ import { useRatesDollar } from './useRatesDollar';
 import { useDailyRecap } from './useDailyRecap';
 import { useSectorRotation } from './useSectorRotation';
 import { useMacroPrefs } from './useMacroPrefs';
-import { useMacroTrendHistory } from './useMacroTrendHistory';
+import { useMacroTrendHistory, resolveDelta } from './useMacroTrendHistory';
 import { useGexExposure } from './useGexExposure';
 import { useMacroEvents } from './useMacroEvents';
 import { useGraddox } from '../signals/useGraddox';
@@ -174,14 +174,19 @@ export function MacroView() {
     indicators: indicators.map((i) => ({ symbol: i.symbol, score: trendSubScore(i.bucket) })),
   });
 
-  // Module 2: per-sleeve score strip. GEX uses a 3D delta (it moves fast); the
-  // rest use the standard 5D delta.
+  // Module 2: per-sleeve score strip. Every sleeve shows its best-available trend
+  // (5D, or 3D as a fallback while history is short) so none reads as "missing";
+  // GEX stays fixed on 3D (it moves fast — spec Module 8/2).
+  const trendD = resolveDelta(trendHistory.deltas.trend);
+  const volD = resolveDelta(trendHistory.deltas.volatility);
+  const creditD = resolveDelta(trendHistory.deltas.credit);
+  const ratesD = resolveDelta(trendHistory.deltas.rates_dollar);
   const stripItems = [
-    { key: 'trend',       title: 'Trend',     score: trendSleeve,                 detail: trendSleeveLabel(trendSleeve), fiveDayDelta: trendHistory.deltas.trend.fiveDayDelta },
-    { key: 'volatility',  title: 'Volatility', score: volatility?.sleeveScore ?? null, detail: stressLabel(volatility?.sleeveScore ?? null), fiveDayDelta: trendHistory.deltas.volatility.fiveDayDelta },
-    { key: 'credit',      title: 'Credit',    score: credit?.sleeveScore ?? null,  detail: creditLabel(credit?.sleeveScore ?? null), fiveDayDelta: trendHistory.deltas.credit.fiveDayDelta },
-    { key: 'rates',       title: 'Rates/USD', score: rates?.sleeveScore ?? null,   detail: ratesDollarLabel(rates?.sleeveScore ?? null), fiveDayDelta: trendHistory.deltas.rates_dollar.fiveDayDelta },
-    { key: 'gex',         title: 'GEX',       score: gexSleeve,                    detail: gexPositioning, fiveDayDelta: trendHistory.deltas.gex.threeDayDelta, deltaLabel: '3D' as const },
+    { key: 'trend',       title: 'Trend',     score: trendSleeve,                 detail: trendSleeveLabel(trendSleeve), delta: trendD.value, deltaLabel: trendD.label },
+    { key: 'volatility',  title: 'Volatility', score: volatility?.sleeveScore ?? null, detail: stressLabel(volatility?.sleeveScore ?? null), delta: volD.value, deltaLabel: volD.label },
+    { key: 'credit',      title: 'Credit',    score: credit?.sleeveScore ?? null,  detail: creditLabel(credit?.sleeveScore ?? null), delta: creditD.value, deltaLabel: creditD.label },
+    { key: 'rates',       title: 'Rates/USD', score: rates?.sleeveScore ?? null,   detail: ratesDollarLabel(rates?.sleeveScore ?? null), delta: ratesD.value, deltaLabel: ratesD.label },
+    { key: 'gex',         title: 'GEX',       score: gexSleeve,                    detail: gexPositioning, delta: trendHistory.deltas.gex.threeDayDelta, deltaLabel: '3D' as const },
   ];
 
   const updatedAt = useMemo(() => (indLoading ? null : new Date()), [indLoading]);
@@ -285,19 +290,20 @@ export function MacroView() {
         </div>
       </section>
 
-      {/* ── Modules 5–7: Market Internals (Volatility · Credit · Rates+Dollar) ── */}
-      <section>
-        <ModuleHeader title="Market Internals" help={HELP.internals} />
-        <MarketInternalsCard volatility={volatility} credit={credit} rates={rates} />
-      </section>
+      {/* ── Modules 5–8: Market Internals + GEX side by side (stack on mobile) ── */}
+      <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        <section style={{ flex: '1 1 340px', minWidth: 0 }}>
+          <ModuleHeader title="Market Internals" help={HELP.internals} />
+          <MarketInternalsCard volatility={volatility} credit={credit} rates={rates} />
+        </section>
 
-      {/* ── Module 8: GEX / Positioning ────────────────────────────── */}
-      <section>
-        <ModuleHeader title="GEX / Positioning" help={HELP.gex} />
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
-          <GexPositioningCard data={gex} loading={gexLoading} threeDayDelta={trendHistory.deltas.gex.threeDayDelta} />
-        </div>
-      </section>
+        <section style={{ flex: '1 1 340px', minWidth: 0 }}>
+          <ModuleHeader title="GEX / Positioning" help={HELP.gex} />
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
+            <GexPositioningCard data={gex} loading={gexLoading} threeDayDelta={trendHistory.deltas.gex.threeDayDelta} />
+          </div>
+        </section>
+      </div>
 
       {/* ── Module 9: Risk Appetite (gauge) ────────────────────────── */}
       <section>
