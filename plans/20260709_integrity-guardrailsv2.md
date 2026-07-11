@@ -7,6 +7,20 @@
 
 ---
 
+## ⚑ Deferred for this session's review (host, 2026-07-11)
+
+**Regime multiplier + REGIME_EXIT advice: switch the trend input from the coarse
+200-day gate to the finer 9/21/200 structure bucket?** The Risk-tab RegimeLight now
+*displays* the structure bucket as its trend read (PR #107), but the multiplier +
+exit advice are still driven by the frozen `regimeGate` (engine v1.1.0, close-vs-200SMA).
+Making them use the structure would be an **engine change** — it collides with the
+"gate frozen at 1.1.0, no new indicators enter the gate" prohibition below, and needs
+a bucket→state mapping (`bear_rally`/`mid_caution` don't cleanly map to the binary
+GREEN/RED) + a forward-validation reset. Host asked to **leave it as-is for now and
+decide here** — if adopted, ship as engine **v1.2.0** with the validation baseline reset.
+
+---
+
 ## Standing prohibitions (carry through every block)
 
 1. Nothing enforces the regime multiplier on any order path until Phase B (paper) — advisory/display only.

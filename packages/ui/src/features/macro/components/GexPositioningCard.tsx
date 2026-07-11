@@ -57,11 +57,13 @@ function PriceTrack({ callWall, spot, gammaFlip, putWall, spotSub }: {
 
   return (
     <div style={{ margin: '16px 0 4px' }}>
-      {/* Spot marker (above the line) */}
-      <div style={{ position: 'relative', height: 32 }}>
+      {/* Spot marker (above the line) — the cushion + live tag ride WITH the spot
+          label at spot's x (not floating centered in the card). */}
+      <div style={{ position: 'relative', height: 46 }}>
         {spot != null && (
-          <div style={{ position: 'absolute', left: `${pos(spot)}%`, transform: `translateX(${tx(pos(spot))})`, textAlign: 'center', whiteSpace: 'nowrap', lineHeight: 1.1 }}>
-            <span style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>Spot {fmtLevel(spot)}</span>
+          <div style={{ position: 'absolute', left: `${pos(spot)}%`, transform: `translateX(${tx(pos(spot))})`, textAlign: 'center', whiteSpace: 'nowrap', lineHeight: 1.15 }}>
+            <div style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>Spot {fmtLevel(spot)}</div>
+            {spotSub && <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t2)' }}>{spotSub}</div>}
             <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--text)' }}>▼</div>
           </div>
         )}
@@ -85,7 +87,6 @@ function PriceTrack({ callWall, spot, gammaFlip, putWall, spotSub }: {
           );
         })}
       </div>
-      {spotSub && <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', textAlign: 'center', marginTop: 2 }}>{spotSub}</div>}
     </div>
   );
 }
