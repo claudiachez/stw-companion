@@ -1142,6 +1142,17 @@ active filter (closed hidden by default). The FilterBar count shows `N of {total
   **Search → Baskets → (Tiers/Status) → Types → Sort → toggles (checkboxes) → Clear → count**. Sort sits *after*
   the filters, never second. Match the order in `FilterBar.tsx` / `TradesFilterBar.tsx`; new tabs differ only by
   which filters exist, not by arrangement.
+- **When the data model gains a user-facing field, update the filters + sort options too (host 2026-07-11).**
+  A field that's *displayed* on a list surface (trend structure, sector regime, sector, conviction, …) but can't be
+  *filtered or sorted* by is an incomplete feature — the list surfaces (Stock Picks / Ticker Details, Trades, My
+  Portfolio) exist to let the user slice their book by exactly these axes. So every time a new field lands on a row,
+  in the same change (or an immediate follow-up) add its filter control (and a sort key where an ordering makes
+  sense) to each surface that shows it, in the canonical order above. Filter state that regime/technical fields need
+  lives in the per-ticker `regimes` map (`useTickerRegime`), not on the `Holding`/leg row, so the predicate is
+  applied at the page/call site (My Portfolio `matchFilters`, Picks post-`applyFilters`), not in the shared
+  `filters.ts`. When a chosen band's data is still loading/unknown for a ticker, exclude that row (it isn't a
+  confirmed match) rather than showing it. Treat "did I update the filters?" as part of the definition of done for
+  any data-model expansion.
 - **Timestamps align right; the left of a filter bar is for filters.** A "Last synced / Updated" stamp goes on
   the **right** of its bar (right-aligned), not the left — the left edge is filter real estate (host, 2026-06-25).
 - **A list/blotter is a flat table by default; grouping is an opt-in checkbox** (like "Tailed only"), not forced

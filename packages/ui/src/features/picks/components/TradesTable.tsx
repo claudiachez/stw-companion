@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { fmtLegInstrument, legIsOpen, legUnrealizedPnlPct, FONT_SIZE, FONT_WEIGHT, type Direction } from '@stw/shared';
+import { fmtLegInstrument, legIsOpen, legUnrealizedPnlPct, matchConvictionBand, FONT_SIZE, FONT_WEIGHT, type Direction } from '@stw/shared';
+import { useSectorMap } from '../../limits/useRiskConfig';
 import { TradeEditForm } from './TradeEditForm';
 import { TradesFilterBar } from './TradesFilterBar';
 import { TickerLink } from '../../../primitives/TickerLink';
@@ -85,7 +86,8 @@ function buildTrades(holdings: Holding[], cache: Record<string, Quote>): TradeRo
 }
 
 // Apply the Trades-tab filters + sort to the built rows. Kept pure so it's trivially testable.
-function applyTradeFilters(rows: TradeRow[], f: TradesFilters): TradeRow[] {
+// `sectorMap` (ticker → GICS sector) is threaded in because sector isn't on the leg/holding.
+function applyTradeFilters(rows: TradeRow[], f: TradesFilters, sectorMap: Record<string, string>): TradeRow[] {
   const q = f.search.trim().toUpperCase();
   const out = rows.filter((r) => {
     if (f.openClosed === 'open' && !r.isOpen) return false;
@@ -93,6 +95,8 @@ function applyTradeFilters(rows: TradeRow[], f: TradesFilters): TradeRow[] {
     if (f.type === 'shares' && r.instrumentType !== 'SHARES') return false;
     if (f.type === 'options' && r.instrumentType !== 'OPTION') return false;
     if (f.basket && r.holding.basket !== f.basket) return false;
+    if (!matchConvictionBand(r.holding.conviction ?? null, f.conviction)) return false;
+    if (f.sector && (sectorMap[r.holding.ticker] ?? '') !== f.sector) return false;
     if (q && !(r.holding.ticker.toUpperCase().includes(q) || r.instrument.toUpperCase().includes(q))) return false;
     return true;
   });
@@ -123,6 +127,7 @@ function applyTradeFilters(rows: TradeRow[], f: TradesFilters): TradeRow[] {
     case 'closed_asc':  out.sort(byDate('closeDate', 1)); break;
     case 'az':          out.sort(byTicker); break;
     case 'za':          out.sort((a, b) => byTicker(b, a)); break;
+    case 'conviction':  out.sort((a, b) => (nullsLast(b.holding.conviction ?? null) - nullsLast(a.holding.conviction ?? null)) || byTicker(a, b)); break;
     case 'opened_desc':
     default:            out.sort(byDate('openDate', -1)); // newest opened first (the default)
   }
@@ -151,8 +156,13 @@ export function TradesTable({ holdings, onSelectTicker }: Props) {
   const [editing, setEditing] = useState<Holding | null>(null);
 
   const filters = useTradesFiltersStore();
+  const { data: sectorMap = {} } = useSectorMap();
   const allTrades = useMemo(() => buildTrades(holdings, priceCache), [holdings, priceCache]);
-  const trades = useMemo(() => applyTradeFilters(allTrades, filters), [allTrades, filters]);
+  const trades = useMemo(() => applyTradeFilters(allTrades, filters, sectorMap), [allTrades, filters, sectorMap]);
+  const sectorOptions = useMemo(
+    () => [...new Set(holdings.map((h) => sectorMap[h.ticker]).filter((s): s is string => !!s))].sort(),
+    [holdings, sectorMap],
+  );
   const today = new Date().toISOString().slice(0, 10);
 
   // Column visibility follows the Open/Closed/All toggle so each view only shows columns that
@@ -209,7 +219,7 @@ export function TradesTable({ holdings, onSelectTicker }: Props) {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {editing && <TradeEditForm holding={editing} onDone={() => setEditing(null)} />}
 
-      <TradesFilterBar holdings={holdings} count={trades.length} total={allTrades.length} />
+      <TradesFilterBar holdings={holdings} sectors={sectorOptions} count={trades.length} total={allTrades.length} />
 
       <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '14px 12px' : '20px 24px' }}>
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', boxShadow: 'var(--shadow)' }}>

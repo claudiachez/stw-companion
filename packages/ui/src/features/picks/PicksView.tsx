@@ -17,6 +17,7 @@ import { useCapabilities } from '../../context/AppCapabilities';
 import { useUserPositions } from '../portfolio/useUserPositions';
 import { cleanUnderlying } from '../portfolio/api';
 import { useTickerRegime } from './useTickerRegime';
+import { useSectorMap } from '../limits/useRiskConfig';
 
 const PRICE_CACHE_KEY = 'finnhub_prices';
 const PRICE_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
@@ -48,6 +49,7 @@ export function PicksView() {
   // Per-ticker regime badge (own trend structure + sector standing) — computed once
   // here and passed down to both the list rows and the detail view.
   const { regimes } = useTickerRegime(positionTickers, finnhubKey, twelveDataKey);
+  const { data: sectorMap = {} } = useSectorMap();
   // Newest IBKR options-sync time across all legs. A leg priced earlier than this is stale
   // (the last sync didn't refresh it) — passed to HoldingDetail so the detail page can flag
   // an old price instead of it looking freshly synced.
@@ -174,9 +176,21 @@ export function PicksView() {
   if (isLoading) return <LoadingSpinner className="mt-16" />;
   if (error) return <EmptyState message="Failed to load holdings." />;
 
-  const filtered = applyFilters(holdings, filters);
+  // Base data-only filters (shared) then the UI-only regime/sector axes. Regime + GICS
+  // sector aren't on the Holding row — they come from the per-ticker technical pass
+  // (useTickerRegime) and ticker_sector_map — so the predicate is applied here at the
+  // call site, not in the shared filters.ts. A row whose regime is still loading/unknown
+  // is excluded while a band is active (it isn't a confirmed match).
+  const filtered = applyFilters(holdings, filters).filter((h) => {
+    if (filters.structure && regimes[h.ticker]?.bucket !== filters.structure) return false;
+    if (filters.standing && regimes[h.ticker]?.standing !== filters.standing) return false;
+    if (filters.sector && (sectorMap[h.ticker] ?? '') !== filters.sector) return false;
+    return true;
+  });
   // FilterBar count excludes the CASH balance row — it's not a real position.
   const positionCount = filtered.filter((h) => h.ticker !== 'CASH').length;
+  // GICS market sectors present across all holdings (for the Sector dropdown).
+  const sectorOptions = [...new Set(holdings.map((h) => sectorMap[h.ticker]).filter((s): s is string => !!s))].sort();
   // P&L sorts need a live-price-derived map (built here, sorted in @stw/shared via
   // the same resolver the rows use). All other sorts are pure data-only.
   const sorted = (filters.sort === 'pnl_desc' || filters.sort === 'pnl_asc')
@@ -283,7 +297,7 @@ export function PicksView() {
 
       {/* FilterBar belongs to the position list only */}
       {activeTab === 'positions' && !mobileDetail && (
-        <FilterBar holdings={holdings} filtered={positionCount} />
+        <FilterBar holdings={holdings} sectors={sectorOptions} filtered={positionCount} />
       )}
 
       {/* Portfolio Overview — full width */}

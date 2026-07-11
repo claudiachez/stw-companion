@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { ConvictionBand } from '@stw/shared';
 
 // Independent filter state for the Trades blotter — deliberately separate from the Ticker
 // Details FilterBar (useFiltersStore) so the two tabs never collide. A trade row is per-LEG,
@@ -13,11 +14,14 @@ export type TradeSort =
   | 'opened_desc' | 'opened_asc'
   | 'closed_desc' | 'closed_asc'
   | 'pnl_desc' | 'pnl_asc'
+  | 'conviction'
   | 'az' | 'za';
 
 export interface TradesFilters {
   search: string;
-  basket: string;        // sector; '' = all
+  basket: string;              // basket (thematic grouping); '' = all
+  conviction: ConvictionBand;  // underlying's STW conviction band (shared with My Portfolio)
+  sector: string;              // GICS market sector; '' = all
   type: TradeType;
   openClosed: TradeOpenClosed;
   sort: TradeSort;
@@ -26,6 +30,8 @@ export interface TradesFilters {
 interface TradesFiltersState extends TradesFilters {
   setSearch:     (v: string) => void;
   setBasket:     (v: string) => void;
+  setConviction: (v: ConvictionBand) => void;
+  setSector:     (v: string) => void;
   setType:       (v: TradeType) => void;
   setOpenClosed: (v: TradeOpenClosed) => void;
   setSort:       (v: TradeSort) => void;
@@ -33,7 +39,7 @@ interface TradesFiltersState extends TradesFilters {
 }
 
 const DEFAULTS: TradesFilters = {
-  search: '', basket: '', type: '', openClosed: 'all', sort: 'opened_desc',
+  search: '', basket: '', conviction: '', sector: '', type: '', openClosed: 'all', sort: 'opened_desc',
 };
 
 export const useTradesFiltersStore = create<TradesFiltersState>()(
@@ -42,6 +48,8 @@ export const useTradesFiltersStore = create<TradesFiltersState>()(
       ...DEFAULTS,
       setSearch:     (search)     => set({ search }),
       setBasket:     (basket)     => set({ basket }),
+      setConviction: (conviction) => set({ conviction }),
+      setSector:     (sector)     => set({ sector }),
       setType:       (type)       => set({ type }),
       setOpenClosed: (openClosed) => set({ openClosed }),
       setSort:       (sort)       => set({ sort }),
