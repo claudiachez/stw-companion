@@ -79,6 +79,16 @@ function buildEntry(history: (number | null)[]): TrendHistoryEntry {
   };
 }
 
+/**
+ * Best-available lookback for a sleeve/indicator: prefer the 5D delta, fall back
+ * to 3D while history is still short (5D needs 6 rows, 3D needs 4). Keeps every
+ * module showing a real trend — not a blank — in the first days after a fresh
+ * start, instead of only GEX (which always uses 3D). Null only when even 3D isn't ready.
+ */
+export function resolveDelta(e: TrendHistoryEntry): { value: number | null; label: '3D' | '5D' } {
+  return e.fiveDayDelta != null ? { value: e.fiveDayDelta, label: '5D' } : { value: e.threeDayDelta, label: '3D' };
+}
+
 export interface MacroTrendHistoryInput {
   regime: number | null;
   trend: number | null;

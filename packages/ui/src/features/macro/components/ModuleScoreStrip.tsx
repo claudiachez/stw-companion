@@ -6,9 +6,9 @@ export interface ModuleStripItem {
   title: string;
   score: number | null;
   detail: string;
-  /** Score delta over the lookback window (P2 trend engine); null until enough history exists. */
-  fiveDayDelta?: number | null;
-  /** Lookback label for the delta above — defaults to 5D. GEX uses 3D (it moves fast). */
+  /** Score delta over the best-available lookback (P2 trend engine); null until enough history exists. */
+  delta?: number | null;
+  /** Lookback label for the delta — 5D when history allows, else 3D (fallback). */
   deltaLabel?: '3D' | '5D';
 }
 
@@ -34,7 +34,7 @@ export function ModuleScoreStrip({ items }: Props) {
     <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4 }}>
       {items.map((it) => {
         const color = scoreColor(it.score);
-        const delta = deltaChip(it.fiveDayDelta, it.deltaLabel);
+        const delta = deltaChip(it.delta, it.deltaLabel);
         return (
           <div
             key={it.key}

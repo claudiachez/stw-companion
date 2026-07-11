@@ -33,35 +33,32 @@ function timeTag(ms: number): string {
   return '@ ' + new Date(ms).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' }) + ' ET';
 }
 
-interface LadderRow { icon: string; price: number; label: string; sub?: string; current?: boolean }
+interface LadderRow { price: number; label: string; sub?: string; color: string }
 
-// A price-sorted level ladder (high → low), so spot's position between the call
-// wall, gamma flip and put wall reads at a glance — the same shape as the Signals
-// page level ladder. Spot is live (Finnhub SPY × 10); the walls + flip are the
-// newsletter's structural read.
+// Price-sorted level ladder (high → low), styled like the Market Internals rows:
+// flat rows (no nested box, no icons), the color-code carried by the PRICE itself
+// — call wall red (resistance overhead), put wall green (support below), gamma
+// flip amber (the pivot), spot neutral-bold (where we are now). So spot's position
+// between the walls + flip reads at a glance.
 function LevelLadder({ rows }: { rows: LadderRow[] }) {
   return (
-    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+    <div style={{ marginTop: 10 }}>
       {rows.map((r, i) => (
         <div
           key={r.label}
           style={{
-            display: 'flex', alignItems: 'center', gap: 9, padding: '8px 13px',
-            borderBottom: i === rows.length - 1 ? undefined : '1px solid var(--bsub)',
-            background: r.current ? 'var(--c5bg)' : undefined,
+            display: 'flex', alignItems: 'baseline', gap: 10, padding: '9px 0', flexWrap: 'wrap',
+            borderBottom: i < rows.length - 1 ? '1px solid var(--bsub)' : 'none',
           }}
         >
-          <span style={{ fontSize: FONT_SIZE.sm, flexShrink: 0, width: 16, textAlign: 'center' }}>{r.icon}</span>
           <span style={{
-            fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.bold, fontVariantNumeric: 'tabular-nums',
-            letterSpacing: '-0.01em', minWidth: 62, color: r.current ? 'var(--c5l)' : 'var(--text)',
+            fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, fontVariantNumeric: 'tabular-nums',
+            letterSpacing: '-0.01em', color: r.color, minWidth: 82, flexShrink: 0, textAlign: 'right',
           }}>
             {fmtLevel(r.price)}
           </span>
-          <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', flex: 1, lineHeight: 1.35 }}>
-            {r.label}
-            {r.sub ? <><br /><span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>{r.sub}</span></> : null}
-          </span>
+          <span style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>{r.label}</span>
+          {r.sub && <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', marginLeft: 'auto', textAlign: 'right' }}>{r.sub}</span>}
         </div>
       ))}
     </div>
@@ -87,20 +84,19 @@ export function GexPositioningCard({ data, loading, threeDayDelta }: Props) {
     ? null
     : `3D ${threeDayDelta >= 0 ? '+' : ''}${Math.round(threeDayDelta)}`;
 
-  // Cushion phrased from SPOT's perspective (spot is N above/below the flip), on
-  // the Spot row — not the flip row, where "+89 vs spot" read backwards.
+  // Cushion phrased from SPOT's perspective (spot is N above/below the flip).
   const cushion = spot !== null && data.gammaFlip !== null ? spot - data.gammaFlip : null;
   const cushionText = cushion === null ? null
     : cushion >= 0 ? `+${fmtLevel(cushion)} above flip` : `${fmtLevel(Math.abs(cushion))} below flip`;
   const spotSub = [cushionText, liveTag].filter(Boolean).join(' · ') || undefined;
 
   // High → low so the call wall sits on top and the put wall at the bottom; spot
-  // slots into its live position between them.
+  // slots into its live position between them. Price color encodes the level type.
   const rows: LadderRow[] = ([
-    data.callWall !== null ? { icon: '🔴', price: data.callWall, label: 'Call Wall', sub: 'upside magnet' } : null,
-    spot !== null ? { icon: '💲', price: spot, label: 'Spot', sub: spotSub, current: true } : null,
-    data.gammaFlip !== null ? { icon: '🟡', price: data.gammaFlip, label: 'Gamma Flip', sub: 'positive/negative-γ pivot' } : null,
-    data.putWall !== null ? { icon: '🟢', price: data.putWall, label: 'Put Wall', sub: 'downside support' } : null,
+    data.callWall !== null ? { price: data.callWall, label: 'Call Wall', sub: 'upside magnet', color: 'var(--c1)' } : null,
+    spot !== null ? { price: spot, label: 'Spot', sub: spotSub, color: 'var(--text)' } : null,
+    data.gammaFlip !== null ? { price: data.gammaFlip, label: 'Gamma Flip', sub: 'positive/negative-γ pivot', color: 'var(--c3)' } : null,
+    data.putWall !== null ? { price: data.putWall, label: 'Put Wall', sub: 'downside support', color: 'var(--c5)' } : null,
   ].filter(Boolean) as LadderRow[]).sort((a, b) => b.price - a.price);
 
   return (
