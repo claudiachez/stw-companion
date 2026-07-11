@@ -17,3 +17,4 @@ export * from './utils/pacing';
 export * from './utils/fred';
 export * from './utils/gex';
 export * from './utils/market-calendar';
+export * from './utils/nyse-calendar';
