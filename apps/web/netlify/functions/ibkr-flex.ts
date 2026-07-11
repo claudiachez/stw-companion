@@ -309,8 +309,14 @@ async function run(event: Parameters<Handler>[0]) {
     const parsed1 = parser.parse(xml1);
     const resp1 = parsed1?.FlexStatementResponse;
     if (!resp1 || resp1.Status !== 'Success') {
-      const msg = resp1?.ErrorMessage ?? 'IBKR rejected the request';
-      return err(400, String(msg));
+      const msg = String(resp1?.ErrorMessage ?? 'IBKR rejected the request');
+      // IBKR's transient "generation" errors (e.g. code 1020) fire when the query
+      // is re-requested too soon (IBKR rate-limits per query) or right after a Flex
+      // template change — not a config problem. Add guidance rather than a bare echo.
+      const transient = /generated at this time|try again|please try|too many/i.test(msg);
+      return err(transient ? 503 : 400, transient
+        ? `${msg} — usually IBKR briefly rate-limiting (common right after changing your Flex template). Wait ~a minute, then sync once.`
+        : msg);
     }
     refCode = String(resp1.ReferenceCode);
   } catch {

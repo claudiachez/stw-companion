@@ -1,4 +1,5 @@
 import { useGraddox, useLastMorningRun } from './useGraddox';
+import { useLiveSignalQuotes } from './useLiveSignalQuotes';
 import { LevelCard } from './components/LevelCard';
 import { SignalsTable } from './components/SignalsTable';
 import { BiasChip } from './components/BiasChip';
@@ -19,6 +20,7 @@ const scale10 = (v: number | null | undefined) => (v != null ? +(v / 10).toFixed
 export function SignalsView() {
   const { data: gx, isLoading, error } = useGraddox();
   const { data: lastMorningRun } = useLastMorningRun();
+  const liveQuotes = useLiveSignalQuotes();
   const isMobile = useIsMobile();
 
   if (isLoading) return <LoadingSpinner className="mt-16" />;
@@ -49,7 +51,16 @@ export function SignalsView() {
     key_target: scale10(gx.spx.key_target),
     downside_risk: scale10(gx.spx.downside_risk),
   };
-  const spyPrice = scale10(gx.spx_price);
+  // "Current Price" prefers the LIVE Finnhub quote (same source as the Macro GEX
+  // spot) — one value across the platform — falling back to the Graddox report
+  // spot only when no live quote is available.
+  const spyPrice = liveQuotes.spy ?? scale10(gx.spx_price);
+  const qqqPrice = liveQuotes.qqq ?? gx.qqq_price;
+  const liveTimeTag = liveQuotes.at
+    ? '@ ' + new Date(liveQuotes.at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', ...ET }) + ' live'
+    : null;
+  const spyPriceTime = liveQuotes.spy != null ? (liveTimeTag ?? priceTime) : priceTime;
+  const qqqPriceTime = liveQuotes.qqq != null ? (liveTimeTag ?? priceTime) : priceTime;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -88,8 +99,8 @@ export function SignalsView() {
       <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', flex: 1, overflow: isMobile ? 'auto' : 'hidden' }}>
         {/* Left: level ladders */}
         <div style={{ flex: isMobile ? 'none' : '0 0 300px', width: isMobile ? '100%' : undefined, overflowY: isMobile ? 'visible' : 'auto', padding: isMobile ? 10 : 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <LevelCard title="📊 SPY Levels" levels={spyLevels} currentPrice={spyPrice} priceTime={priceTime} />
-          <LevelCard title="📊 QQQ Levels" levels={gx.qqq} currentPrice={gx.qqq_price} priceTime={priceTime} isQQQ />
+          <LevelCard title="📊 SPY Levels" levels={spyLevels} currentPrice={spyPrice} priceTime={spyPriceTime} />
+          <LevelCard title="📊 QQQ Levels" levels={gx.qqq} currentPrice={qqqPrice} priceTime={qqqPriceTime} isQQQ />
         </div>
 
         {/* Right: charts + signals + log */}

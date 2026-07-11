@@ -32,34 +32,60 @@ function timeTag(ms: number): string {
   return '@ ' + new Date(ms).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' }) + ' ET';
 }
 
-interface LadderRow { price: number; label: string; sub?: string; color: string }
+// Horizontal price track (number line) — plots the levels at their true relative
+// positions so you SEE where spot sits between support (put wall, left/green) and
+// resistance (call wall, right/red), with the gamma flip (amber) as the pivot. The
+// live Spot is the prominent marker above the line; the walls + flip label below.
+function PriceTrack({ callWall, spot, gammaFlip, putWall, spotSub }: {
+  callWall: number | null; spot: number | null; gammaFlip: number | null; putWall: number | null; spotSub?: string;
+}) {
+  const vals = [callWall, spot, gammaFlip, putWall].filter((v): v is number => v != null);
+  const lo = Math.min(...vals);
+  const hi = Math.max(...vals);
+  const pad = (hi - lo) * 0.08 || 1; // breathing room so edge markers aren't flush
+  const dmin = lo - pad;
+  const span = (hi + pad) - dmin || 1;
+  const pos = (v: number) => ((v - dmin) / span) * 100;
+  // Keep edge labels from overflowing the card.
+  const tx = (pct: number) => (pct < 14 ? '0%' : pct > 86 ? '-100%' : '-50%');
 
-// Price-sorted level ladder (high → low), styled like the Market Internals rows:
-// flat rows (no nested box, no icons), the color-code carried by the PRICE itself
-// — call wall red (resistance overhead), put wall green (support below), gamma
-// flip amber (the pivot), spot neutral-bold (where we are now). So spot's position
-// between the walls + flip reads at a glance.
-function LevelLadder({ rows }: { rows: LadderRow[] }) {
+  const refs = ([
+    callWall != null ? { price: callWall, label: 'Call Wall', color: 'var(--c1)' } : null,
+    gammaFlip != null ? { price: gammaFlip, label: 'Gamma Flip', color: 'var(--c3)' } : null,
+    putWall != null ? { price: putWall, label: 'Put Wall', color: 'var(--c5)' } : null,
+  ].filter(Boolean) as { price: number; label: string; color: string }[]);
+
   return (
-    <div style={{ marginTop: 10 }}>
-      {rows.map((r, i) => (
-        <div
-          key={r.label}
-          style={{
-            display: 'flex', alignItems: 'baseline', gap: 10, padding: '11px 0', flexWrap: 'wrap',
-            borderBottom: i < rows.length - 1 ? '1px solid var(--bsub)' : 'none',
-          }}
-        >
-          <span style={{
-            fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, fontVariantNumeric: 'tabular-nums',
-            letterSpacing: '-0.01em', color: r.color, minWidth: 82, flexShrink: 0, textAlign: 'right',
-          }}>
-            {fmtLevel(r.price)}
-          </span>
-          <span style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>{r.label}</span>
-          {r.sub && <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', marginLeft: 'auto', textAlign: 'right' }}>{r.sub}</span>}
-        </div>
-      ))}
+    <div style={{ margin: '16px 0 4px' }}>
+      {/* Spot marker (above the line) */}
+      <div style={{ position: 'relative', height: 32 }}>
+        {spot != null && (
+          <div style={{ position: 'absolute', left: `${pos(spot)}%`, transform: `translateX(${tx(pos(spot))})`, textAlign: 'center', whiteSpace: 'nowrap', lineHeight: 1.1 }}>
+            <span style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>Spot {fmtLevel(spot)}</span>
+            <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--text)' }}>▼</div>
+          </div>
+        )}
+      </div>
+      {/* Track: green (support) → amber (pivot) → red (resistance) */}
+      <div style={{ position: 'relative', height: 8, borderRadius: 4, background: 'linear-gradient(90deg, color-mix(in srgb, var(--c5) 45%, transparent), color-mix(in srgb, var(--c3) 45%, transparent), color-mix(in srgb, var(--c1) 45%, transparent))' }}>
+        {refs.map((r) => (
+          <div key={r.label} style={{ position: 'absolute', left: `${pos(r.price)}%`, top: -2, bottom: -2, width: 2, transform: 'translateX(-1px)', background: r.color }} title={`${r.label} ${fmtLevel(r.price)}`} />
+        ))}
+        {spot != null && <div style={{ position: 'absolute', left: `${pos(spot)}%`, top: -3, bottom: -3, width: 2, transform: 'translateX(-1px)', background: 'var(--text)' }} />}
+      </div>
+      {/* Wall/flip labels (below the line) */}
+      <div style={{ position: 'relative', height: 34, marginTop: 5 }}>
+        {refs.map((r) => {
+          const pct = pos(r.price);
+          return (
+            <div key={r.label} style={{ position: 'absolute', left: `${pct}%`, transform: `translateX(${tx(pct)})`, textAlign: 'center', whiteSpace: 'nowrap', lineHeight: 1.15 }}>
+              <div style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold, color: r.color, fontVariantNumeric: 'tabular-nums' }}>{fmtLevel(r.price)}</div>
+              <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>{r.label}</div>
+            </div>
+          );
+        })}
+      </div>
+      {spotSub && <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', textAlign: 'center', marginTop: 2 }}>{spotSub}</div>}
     </div>
   );
 }
@@ -72,7 +98,7 @@ export function GexPositioningCard({ data, loading, threeDayDelta }: Props) {
 
   // The sleeve score / label stay on the report spot — they're the regime-sleeve
   // contribution (matching the persisted composite score + the 3D delta), not a
-  // live-drifting number. The ladder's Spot row is the LIVE quote (host ask).
+  // live-drifting number. The track's Spot is the LIVE quote (host ask).
   const spot = live?.spx ?? data.spot;
   const liveTag = live ? `live ${timeTag(live.at)}` : data.asOf ? 'as of report' : null;
 
@@ -89,17 +115,6 @@ export function GexPositioningCard({ data, loading, threeDayDelta }: Props) {
     : cushion >= 0 ? `+${fmtLevel(cushion)} above flip` : `${fmtLevel(Math.abs(cushion))} below flip`;
   const spotSub = [cushionText, liveTag].filter(Boolean).join(' · ') || undefined;
 
-  // High → low so the call wall sits on top and the put wall at the bottom; spot
-  // slots into its live position between them. Price color encodes the level type.
-  const rows: LadderRow[] = ([
-    data.callWall !== null ? { price: data.callWall, label: 'Call Wall', sub: 'upside magnet', color: 'var(--c1)' } : null,
-    spot !== null ? { price: spot, label: 'Spot', sub: spotSub, color: 'var(--text)' } : null,
-    data.gammaFlip !== null ? { price: data.gammaFlip, label: 'Gamma Flip', sub: 'positive/negative-γ pivot', color: 'var(--c3)' } : null,
-    data.putWall !== null ? { price: data.putWall, label: 'Put Wall', sub: 'downside support', color: 'var(--c5)' } : null,
-  ].filter(Boolean) as LadderRow[]).sort((a, b) => b.price - a.price);
-
-  // Pair the raw aggregate-GEX value with the headline score so the number and its
-  // source read as one unit (no separate footer line repeating "Positive γ").
   const raw = netGexRaw(data.netGex);
   const hint = raw ? `net GEX ${raw}` : 'SPX · tactical overlay';
 
@@ -107,7 +122,7 @@ export function GexPositioningCard({ data, loading, threeDayDelta }: Props) {
     <div>
       <SleeveSummary score={score} label={label} hint={hint} delta={delta} />
 
-      <LevelLadder rows={rows} />
+      <PriceTrack callWall={data.callWall} spot={spot} gammaFlip={data.gammaFlip} putWall={data.putWall} spotSub={spotSub} />
 
       <div style={{ marginTop: 12, fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.5 }}>
         <div><span style={{ color: 'var(--t3)', fontWeight: FONT_WEIGHT.semibold }}>Read:</span> {implication}</div>
