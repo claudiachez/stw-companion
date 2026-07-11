@@ -1,52 +1,71 @@
 import { describe, it, expect } from 'vitest';
 import {
-  deriveGexLevels, gexSleeveScore, gexPositioningLabel, gexPositioningImplication,
-  type FlashAlphaGexResponse,
+  parseGammaEdgeReport, gexSleeveScore, gexPositioningLabel, gexPositioningImplication,
 } from './gex';
 
-const sample: FlashAlphaGexResponse = {
-  symbol: 'SPY',
-  underlying_price: 597.505,
-  as_of: '2026-02-28T16:30:45Z',
-  gamma_flip: 595.25,
-  net_gex: 2850000000,
-  net_gex_label: 'positive',
-  strikes: [
-    { strike: 590, call_gex: 5_000_000, put_gex: 20_000_000, net_gex: 25_000_000 },
-    { strike: 600, call_gex: 30_000_000, put_gex: 4_000_000, net_gex: 34_000_000 },
-    { strike: 610, call_gex: 12_000_000, put_gex: 1_000_000, net_gex: 13_000_000 },
-  ],
-};
+// Real "Structural Read" blocks from SPX Gamma Edge (spxgammaedge.substack.com),
+// HTML already stripped to plain text — the exact shape the gex-snapshot fn feeds
+// parseGammaEdgeReport (captured 2026-07-10 reports).
+const PREMARKET = 'QUICK READ Regime: Positive Gamma Active Bias: Mild Bullish While Above 7,486 '
+  + 'GEX Status: Strongly Positive ... The 7,600 Call Wall sits overhead. '
+  + 'Structural Read Prior Close: 7,543.64 Implied Open: ~7,527 Gamma Flip: ~7,486 '
+  + 'Open vs Flip: +41 Points Aggregate GEX: +101,111 Pin Zone: 7,500-7,550 Peak Gamma: 7,550 '
+  + 'Call Wall: 7,600 Upper Shelf: 7,700 Support Shelf: 7,400 Why This Setup Matters ...';
 
-describe('deriveGexLevels', () => {
-  it('carries native fields through', () => {
-    const l = deriveGexLevels(sample);
-    expect(l.symbol).toBe('SPY');
-    expect(l.spot).toBe(597.505);
-    expect(l.gammaFlip).toBe(595.25);
-    expect(l.netGex).toBe(2850000000);
-    expect(l.netGexLabel).toBe('positive');
-    expect(l.asOf).toBe('2026-02-28T16:30:45Z');
+const EOD = 'QUICK READ ... The 7,600 Call Wall is the largest on the board. '
+  + 'Structural Read Prior Close: 7,543.64 Session Close: 7,575.39 Gamma Flip: ~7,495 '
+  + 'Close vs Flip: +80 Points Aggregate GEX: +156,633 Pin Node: 7,550 '
+  + 'Call Wall: 7,600 Upper Shelf: 7,700 Support Shelf: 7,450 Why This Setup Matters ...';
+
+describe('parseGammaEdgeReport', () => {
+  it('parses the premarket report (spot = implied open)', () => {
+    const r = parseGammaEdgeReport(PREMARKET, 'premarket');
+    expect(r.spot).toBe(7527);        // Implied Open, not Prior Close
+    expect(r.gammaFlip).toBe(7486);
+    expect(r.callWall).toBe(7600);
+    expect(r.putWall).toBe(7400);     // Support Shelf
+    expect(r.netGex).toBe(101111);
+    expect(r.netGexLabel).toBe('positive');
+    expect(r.peakGamma).toBe(7550);
+    expect(r.upperShelf).toBe(7700);
+    expect(r.priorClose).toBe(7543.64);
   });
 
-  it('derives the call wall (max call gamma) and put wall (max put gamma)', () => {
-    const l = deriveGexLevels(sample);
-    expect(l.callWall).toBe(600); // greatest call_gex
-    expect(l.putWall).toBe(590);  // greatest put_gex
+  it('parses the EOD report (spot = session close, pin node → peakGamma)', () => {
+    const r = parseGammaEdgeReport(EOD, 'eod');
+    expect(r.spot).toBe(7575.39);     // Session Close
+    expect(r.gammaFlip).toBe(7495);
+    expect(r.callWall).toBe(7600);
+    expect(r.putWall).toBe(7450);
+    expect(r.netGex).toBe(156633);
+    expect(r.peakGamma).toBe(7550);   // via "Pin Node"
   });
 
-  it('handles a missing/empty strikes array', () => {
-    const l = deriveGexLevels({ ...sample, strikes: [] });
-    expect(l.callWall).toBeNull();
-    expect(l.putWall).toBeNull();
+  it('reads a negative aggregate GEX as negative gamma', () => {
+    const r = parseGammaEdgeReport('Structural Read Gamma Flip: ~7,500 Aggregate GEX: -156,633 Call Wall: 7,600 Support Shelf: 7,400', 'eod');
+    expect(r.netGex).toBe(-156633);
+    expect(r.netGexLabel).toBe('negative');
   });
 
-  it('coerces non-finite numeric fields to null', () => {
-    const l = deriveGexLevels({ ...sample, underlying_price: null, gamma_flip: null, net_gex: null, net_gex_label: 'weird' });
-    expect(l.spot).toBeNull();
-    expect(l.gammaFlip).toBeNull();
-    expect(l.netGex).toBeNull();
-    expect(l.netGexLabel).toBeNull();
+  it('falls back to prior close when the session spot label is absent', () => {
+    const r = parseGammaEdgeReport('Structural Read Prior Close: 7,543.64 Gamma Flip: ~7,486 Call Wall: 7,600 Support Shelf: 7,400', 'premarket');
+    expect(r.spot).toBe(7543.64);
+  });
+
+  it('never matches prose mentions — only colon-anchored structural lines', () => {
+    // "the 7,600 Call Wall" (no colon) must NOT be read as a level.
+    const r = parseGammaEdgeReport('Watch the 7,600 Call Wall overhead. Gamma Flip: ~7,486', 'premarket');
+    expect(r.callWall).toBeNull();
+    expect(r.gammaFlip).toBe(7486);
+  });
+
+  it('degrades to nulls on unrecognized text (never fabricates)', () => {
+    const r = parseGammaEdgeReport('No structural read here.', 'premarket');
+    expect(r.gammaFlip).toBeNull();
+    expect(r.spot).toBeNull();
+    expect(r.callWall).toBeNull();
+    expect(r.netGex).toBeNull();
+    expect(r.netGexLabel).toBeNull();
   });
 });
 
@@ -67,6 +86,12 @@ describe('gexSleeveScore', () => {
   it('clamps to [5, 95]', () => {
     expect(gexSleeveScore(660, 600)).toBe(95); // +10% would be 250 → clamp
     expect(gexSleeveScore(540, 600)).toBe(5);  // -10% would be -150 → clamp
+  });
+
+  it('scores real SPX levels (spot 7527 vs flip 7486 → mildly positive)', () => {
+    const s = gexSleeveScore(7527, 7486)!; // +0.545% → 50 + 10.9 ≈ 61
+    expect(s).toBeGreaterThan(55);
+    expect(s).toBeLessThan(66);
   });
 
   it('returns null on missing inputs', () => {

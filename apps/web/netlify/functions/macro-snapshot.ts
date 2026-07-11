@@ -267,11 +267,11 @@ const handlerImpl: Handler = async () => {
   ]);
 
   // ── Module 8: GEX (from gex_snapshots, written by the gex-snapshot fn from
-  //    FlashAlpha) — read the persisted sleeve score so this stored history and
-  //    the live UI agree on the same number. ──
+  //    the SPX Gamma Edge newsletter) — read the persisted sleeve score so this
+  //    stored history and the live UI agree on the same number. ──
   const gexRow = await sbGet<{ sleeve_score: number | null }>(
     supabaseUrl, serviceKey, 'gex_snapshots',
-    'select=sleeve_score&symbol=eq.SPY&order=snapshot_date.desc,session.desc',
+    'select=sleeve_score&symbol=eq.SPX&order=snapshot_date.desc,session.desc',
   );
   const gexSc = gexRow?.sleeve_score ?? null;
 

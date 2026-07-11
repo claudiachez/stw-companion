@@ -1,40 +1,58 @@
 /**
  * GEX Snapshot — scheduled writer for the Macro tab's GEX / Positioning module.
  *
- * Fetches SPY gamma exposure from FlashAlpha (GET /v1/exposure/gex/SPY), derives
- * the display levels + the regime GEX-sleeve score (@stw/shared), and upserts one
- * row per session (am/pm) into `gex_snapshots` (migration 067). Every client + the
- * macro-snapshot writer read that table — the browser NEVER calls FlashAlpha
- * directly, because the free tier is 5 requests/DAY (this writer spends ~2/day).
+ * Source: the SPX Gamma Edge newsletter (spxgammaedge.substack.com), a free,
+ * publicly readable, twice-daily report on SPX dealer gamma. We read the public
+ * RSS feed, pick the latest report for the session (`PREMARKET REPORT.` in the
+ * morning, `END OF SESSION REPORT.` after the close), strip the post body to
+ * plain text, and extract the factual "Structural Read" levels via the pure
+ * parseGammaEdgeReport (@stw/shared). One row per session (am/pm) is upserted
+ * into `gex_snapshots` as symbol='SPX'; every client + macro-snapshot read that
+ * table. We surface only the factual numeric levels with attribution — never the
+ * newsletter's prose (host terms, 2026-07-11).
  *
- * Free-tier constraints (documented, accepted): SPY only (index proxy — a paid key
- * unlocks SPX with no code change), and a SINGLE expiry per call (full-chain needs
- * the Growth plan), so we request the nearest upcoming Friday.
+ * Why a scheduled writer + a table (not a per-browser fetch): keeps one canonical
+ * cross-device row and avoids every client hitting the feed. No API key, no rate
+ * limit — the feed is public and carries the full body in content:encoded.
  *
- * Runs on one site only (web) to avoid double-spending the daily quota — the admin
- * site reads the same Supabase table. Env: FLASHALPHA_API_KEY (server-side, no
- * VITE_) + the usual VITE_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY.
+ * The row is tagged with the REPORT's own ET date (not "today"), so a weekend or
+ * holiday run simply re-upserts the last trading day's row — idempotent, never a
+ * stale overwrite.
  *
- * Schedule 30 12,20 * * 1-5 UTC ≈ 8:30am / 4:30pm ET (pre- and post-market). DST
- * shifts the wall-clock hour by one but never past a session boundary — same fixed-
- * UTC tradeoff already accepted by macro-snapshot.ts.
+ * Schedule 45 12,23 * * 1-5 UTC: 12:45 (after the ~12:12 premarket publish) and
+ * 23:45 (after the ~23:22 end-of-session publish). Env: VITE_SUPABASE_URL /
+ * SUPABASE_SERVICE_ROLE_KEY only (no FlashAlpha key anymore).
  */
 import type { Handler } from '@netlify/functions';
 import { schedule } from '@netlify/functions';
-import { deriveGexLevels, gexSleeveScore, type FlashAlphaGexResponse } from '@stw/shared';
+import { parseGammaEdgeReport, gexSleeveScore, type GammaEdgeKind } from '@stw/shared';
 
-const SYMBOL = 'SPY';
+const FEED_URL = 'https://spxgammaedge.substack.com/feed';
+const SYMBOL = 'SPX';
 
-/** Nearest upcoming Friday (incl. today if it's Friday), ET, as yyyy-MM-dd. */
-function nearestFriday(): string {
-  const etNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  const add = (5 - etNow.getDay() + 7) % 7; // days until Friday (0 if today is Friday)
-  const target = new Date(etNow);
-  target.setDate(etNow.getDate() + add);
-  const y = target.getFullYear();
-  const m = String(target.getMonth() + 1).padStart(2, '0');
-  const d = String(target.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+interface FeedItem { title: string; link: string; pubDate: string; content: string }
+
+/** Split the RSS into <item> blocks and pull the CDATA fields we need (no XML dep). */
+function parseFeed(xml: string): FeedItem[] {
+  return xml.split('<item>').slice(1).map((chunk) => {
+    const block = chunk.split('</item>')[0];
+    const field = (tag: string): string => {
+      const m = block.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`));
+      if (!m) return '';
+      return m[1].replace(/^<!\[CDATA\[/, '').replace(/\]\]>$/, '').trim();
+    };
+    return { title: field('title'), link: field('link'), pubDate: field('pubDate'), content: field('content:encoded') };
+  });
+}
+
+/** Strip the post HTML to the plain text parseGammaEdgeReport expects. */
+function htmlToText(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&#8217;/g, "'").replace(/&#8211;/g, '-').replace(/&#8482;/g, '')
+    .replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ').replace(/&gt;/g, '>').replace(/&lt;/g, '<')
+    .replace(/[ \t]+/g, ' ');
 }
 
 async function sbUpsert(url: string, key: string, table: string, row: Record<string, unknown>, onConflict: string): Promise<string | null> {
@@ -61,55 +79,69 @@ async function sbInsert(url: string, key: string, table: string, row: Record<str
   } catch { /* run_log is best-effort — never let a logging failure mask the real result */ }
 }
 
+/** ET calendar date (yyyy-MM-dd) for a Date. */
+function etDate(d: Date): string {
+  return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+}
+
 const handlerImpl: Handler = async () => {
-  const apiKey = (process.env.FLASHALPHA_API_KEY ?? '').trim();
   const supabaseUrl = (process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? '').trim();
   const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim();
+  const runLogBase = { run_type: 'gex-snapshot' };
 
   if (!supabaseUrl || !serviceKey) {
     return { statusCode: 500, body: JSON.stringify({ error: 'Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY' }) };
   }
 
-  const snapshotDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-  const session = new Date().getUTCHours() < 16 ? 'am' : 'pm';
-  const runLogBase = { run_type: 'gex-snapshot' };
-
-  if (!apiKey) {
-    await sbInsert(supabaseUrl, serviceKey, 'run_log', {
-      ...runLogBase, status: 'error', messages_processed: 0,
-      summary: 'Missing FLASHALPHA_API_KEY — add it to the web site env.',
-    });
-    return { statusCode: 500, body: JSON.stringify({ error: 'Missing FLASHALPHA_API_KEY' }) };
-  }
+  // Session by UTC hour: 12:45 → am (premarket), 23:45 → pm (end-of-session).
+  const session: 'am' | 'pm' = new Date().getUTCHours() < 18 ? 'am' : 'pm';
+  const kind: GammaEdgeKind = session === 'am' ? 'premarket' : 'eod';
+  const titleMatch = session === 'am' ? /PREMARKET REPORT/i : /END OF SESSION REPORT/i;
 
   try {
-    const expiration = nearestFriday();
-    const res = await fetch(`https://lab.flashalpha.com/v1/exposure/gex/${SYMBOL}?expiration=${expiration}`, {
-      headers: { 'X-Api-Key': apiKey, Accept: 'application/json' },
-    });
+    const res = await fetch(FEED_URL, { headers: { 'User-Agent': 'STW-Companion/1.0 (macro GEX ingest)', Accept: 'application/rss+xml, application/xml' } });
     if (!res.ok) {
-      const detail = `FlashAlpha HTTP ${res.status}: ${(await res.text()).slice(0, 160)}`;
+      const detail = `SPX Gamma Edge feed HTTP ${res.status}`;
       await sbInsert(supabaseUrl, serviceKey, 'run_log', { ...runLogBase, status: 'error', messages_processed: 0, summary: detail });
       return { statusCode: 502, body: JSON.stringify({ error: detail }) };
     }
 
-    const raw = await res.json() as FlashAlphaGexResponse;
-    const levels = deriveGexLevels(raw);
-    const sleeve = gexSleeveScore(levels.spot, levels.gammaFlip);
+    const items = parseFeed(await res.text());
+    const item = items.find((i) => titleMatch.test(i.title));
+    if (!item) {
+      const detail = `No ${kind} report found in feed (${items.length} items scanned)`;
+      await sbInsert(supabaseUrl, serviceKey, 'run_log', { ...runLogBase, status: 'error', messages_processed: 0, summary: detail });
+      return { statusCode: 502, body: JSON.stringify({ error: detail }) };
+    }
+
+    const report = parseGammaEdgeReport(htmlToText(item.content), kind);
+    // Guard against a silent format drift — if the two fields the sleeve depends
+    // on are both missing, treat it as a parse failure rather than writing blanks.
+    if (report.gammaFlip == null && report.spot == null) {
+      const detail = `Parsed ${kind} report but found no gamma flip / spot — feed format may have changed (${item.link})`;
+      await sbInsert(supabaseUrl, serviceKey, 'run_log', { ...runLogBase, status: 'error', messages_processed: 0, summary: detail });
+      return { statusCode: 500, body: JSON.stringify({ error: detail }) };
+    }
+
+    const sleeve = gexSleeveScore(report.spot, report.gammaFlip);
+    // Tag with the report's own ET date (idempotent across weekend/holiday reruns).
+    const pub = new Date(item.pubDate);
+    const snapshotDate = Number.isNaN(pub.getTime()) ? etDate(new Date()) : etDate(pub);
+    const asOf = Number.isNaN(pub.getTime()) ? new Date().toISOString() : pub.toISOString();
 
     const upsertError = await sbUpsert(supabaseUrl, serviceKey, 'gex_snapshots', {
       snapshot_date: snapshotDate,
       session,
       symbol: SYMBOL,
-      underlying_price: levels.spot,
-      gamma_flip: levels.gammaFlip,
-      net_gex: levels.netGex,
-      net_gex_label: levels.netGexLabel,
-      call_wall: levels.callWall,
-      put_wall: levels.putWall,
+      underlying_price: report.spot,
+      gamma_flip: report.gammaFlip,
+      net_gex: report.netGex,
+      net_gex_label: report.netGexLabel,
+      call_wall: report.callWall,
+      put_wall: report.putWall,
       sleeve_score: sleeve,
-      as_of: levels.asOf || new Date().toISOString(),
-      raw,
+      as_of: asOf,
+      raw: { source: 'spx-gamma-edge', kind, title: item.title, link: item.link, ...report },
     }, 'symbol,snapshot_date,session');
 
     if (upsertError) {
@@ -119,9 +151,9 @@ const handlerImpl: Handler = async () => {
 
     await sbInsert(supabaseUrl, serviceKey, 'run_log', {
       ...runLogBase, status: 'ok', messages_processed: 1,
-      summary: `wrote SPY GEX for ${snapshotDate}/${session} (flip ${levels.gammaFlip}, sleeve ${sleeve}, exp ${expiration})`,
+      summary: `wrote SPX GEX ${snapshotDate}/${session} (flip ${report.gammaFlip}, spot ${report.spot}, sleeve ${sleeve}) from ${kind} report`,
     });
-    return { statusCode: 200, body: JSON.stringify({ snapshotDate, session, sleeve, levels }) };
+    return { statusCode: 200, body: JSON.stringify({ snapshotDate, session, sleeve, report }) };
   } catch (e) {
     const detail = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
     await sbInsert(supabaseUrl, serviceKey, 'run_log', { ...runLogBase, status: 'error', messages_processed: 0, summary: `threw: ${detail}`.slice(0, 500) });
@@ -129,4 +161,4 @@ const handlerImpl: Handler = async () => {
   }
 };
 
-export const handler = schedule('30 12,20 * * 1-5', handlerImpl);
+export const handler = schedule('45 12,23 * * 1-5', handlerImpl);

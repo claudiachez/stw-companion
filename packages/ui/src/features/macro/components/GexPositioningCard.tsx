@@ -24,13 +24,12 @@ function LevelTile({ label, value, hint }: { label: string; value: number | null
   );
 }
 
-/** Compact aggregate-GEX label, e.g. "+$2.85B (positive γ)". */
+/** Aggregate-GEX label, e.g. "+101,111 (positive γ)". The SPX Gamma Edge figure
+ *  is a signed index-scaled aggregate (the newsletter's own units), not dollars. */
 function netGexText(netGex: number | null, label: string | null): string {
   if (netGex === null) return '—';
   const sign = netGex >= 0 ? '+' : '−';
-  const abs = Math.abs(netGex);
-  const mag = abs >= 1e9 ? `$${(abs / 1e9).toFixed(2)}B` : abs >= 1e6 ? `$${(abs / 1e6).toFixed(0)}M` : `$${abs.toFixed(0)}`;
-  return `${sign}${mag}${label ? ` (${label} γ)` : ''}`;
+  return `${sign}${Math.abs(netGex).toLocaleString('en-US')}${label ? ` (${label} γ)` : ''}`;
 }
 
 export function GexPositioningCard({ data, loading, threeDayDelta }: Props) {
@@ -50,9 +49,9 @@ export function GexPositioningCard({ data, loading, threeDayDelta }: Props) {
 
   return (
     <div>
-      <SleeveSummary score={score} label={label} hint="SPY · tactical overlay" delta={delta} />
+      <SleeveSummary score={score} label={label} hint="SPX · tactical overlay" delta={delta} />
 
-      {/* Key levels — SPY (free tier is SPY-only; a paid key adds SPX) */}
+      {/* Key levels — SPX (SPX Gamma Edge structural read) */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8 }}>
         <LevelTile label="Spot" value={data.spot} />
         <LevelTile label="Gamma Flip" value={data.gammaFlip} hint={cushionHint} />
@@ -61,12 +60,12 @@ export function GexPositioningCard({ data, loading, threeDayDelta }: Props) {
       </div>
 
       <div style={{ marginTop: 12, fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.5 }}>
-        <div><span style={{ color: 'var(--t3)', fontWeight: FONT_WEIGHT.semibold }}>Net GEX:</span> {netGexText(data.netGex, data.netGexLabel)}</div>
+        <div><span style={{ color: 'var(--t3)', fontWeight: FONT_WEIGHT.semibold }}>Aggregate GEX:</span> {netGexText(data.netGex, data.netGexLabel)}</div>
         <div><span style={{ color: 'var(--t3)', fontWeight: FONT_WEIGHT.semibold }}>Read:</span> {implication}</div>
       </div>
 
       <div style={{ marginTop: 10, fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', lineHeight: 1.4 }}>
-        Source: FlashAlpha · SPY (index proxy){data.asOf ? ` · Updated: ${fmtDateTime(data.asOf)}` : ''}
+        Levels via <a href="https://spxgammaedge.substack.com" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--t3)', textDecoration: 'underline' }}>SPX Gamma Edge</a> · SPX{data.asOf ? ` · Updated: ${fmtDateTime(data.asOf)}` : ''}
       </div>
     </div>
   );

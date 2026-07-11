@@ -67,10 +67,10 @@ const HELP = {
   ),
   gex: (
     <Help>
-      <div>Options-positioning read (dealer gamma exposure) for SPY, with the <strong>gamma flip</strong>, <strong>call wall</strong> and <strong>put wall</strong>.</div>
+      <div>Options-positioning read (dealer gamma exposure) for SPX, with the <strong>gamma flip</strong>, <strong>call wall</strong> and <strong>put wall</strong>.</div>
       <div><strong>Above the flip</strong> — positive gamma: dealers dampen moves, dips tend to hold (a grind, not a chase).</div>
       <div><strong>Below the flip</strong> — negative gamma: dealers amplify moves, breaks accelerate; keep size down.</div>
-      <div style={dim}>A tactical overlay — helps time entries and spot pivots. Source: FlashAlpha (SPY as the index proxy).</div>
+      <div style={dim}>A tactical overlay — helps time entries and spot pivots. Levels via SPX Gamma Edge.</div>
     </Help>
   ),
   riskAppetite: (
@@ -107,9 +107,9 @@ export function MacroView() {
   const { finnhubKey, twelveDataKey, canEdit } = useCapabilities();
   const { regimeWeights } = useAppConfig();
   const { prefs, toggle } = useMacroPrefs();
-  // Graddox is retained only to ground the AI recap (a follow-on swaps that too);
-  // the visible GEX card, the regime GEX sleeve and the score strip now read the
-  // FlashAlpha snapshot via useGexExposure.
+  // Graddox is retained only to ground the AI recap; the visible GEX card, the
+  // regime GEX sleeve and the score strip read the SPX Gamma Edge snapshot via
+  // useGexExposure.
   const { data: graddox } = useGraddox();
   const { data: gex, loading: gexLoading } = useGexExposure();
 
