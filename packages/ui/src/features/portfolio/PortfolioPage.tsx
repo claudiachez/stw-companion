@@ -589,7 +589,12 @@ export function PortfolioPage() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [showPnl, setShowPnl] = useState(true);
   const [filters, setFilters] = useState<PortfolioFilters>(DEFAULT_PORTFOLIO_FILTERS);
-  const [activeTab, setActiveTab] = useState<PortfolioTab>('overview');
+  // Persist the sub-tab in the URL (?tab=) so a refresh keeps you where you were,
+  // instead of snapping back to Overview.
+  const [activeTab, setActiveTab] = useState<PortfolioTab>(() => {
+    const t = new URLSearchParams(window.location.search).get('tab');
+    return PORTFOLIO_TABS.some((x) => x.value === t) ? (t as PortfolioTab) : 'overview';
+  });
   const capabilities = useCapabilities();
 
   // Own-position detail pane (list+detail pattern, mirroring PicksView.tsx) — desktop
@@ -716,8 +721,10 @@ export function PortfolioPage() {
     if (allGroups.some((g) => g.underlying === upper)) {
       setSelected(upper);
       setActiveTab('positions');
+      setSearchParams({ tab: 'positions' }, { replace: true }); // drop ?ticker, keep the tab
+      return;
     }
-    setSearchParams({}, { replace: true });
+    setSearchParams((prev) => { const p = new URLSearchParams(prev); p.delete('ticker'); return p; }, { replace: true });
   }, [searchParams, allGroups, setSearchParams]);
   const baskets = useMemo(
     () => [...new Set(allGroups.filter((g) => g.isTailed && g.basket).map((g) => g.basket))].sort(),
@@ -843,10 +850,11 @@ export function PortfolioPage() {
 
   const changeTab = (t: PortfolioTab) => {
     setActiveTab(t);
+    setSearchParams((prev) => { const p = new URLSearchParams(prev); p.set('tab', t); return p; }, { replace: true });
     if (t !== 'positions') setSelected(null); // the detail pane belongs to Positions only
   };
   // From Overview's top-movers: jump to the position's detail on the Positions tab.
-  const openPosition = (ticker: string) => { setSelected(ticker); setActiveTab('positions'); };
+  const openPosition = (ticker: string) => { setSelected(ticker); changeTab('positions'); };
 
   // Global controls — sync status + P&L visibility + Sync — available on every tab.
   const globalControls = (
