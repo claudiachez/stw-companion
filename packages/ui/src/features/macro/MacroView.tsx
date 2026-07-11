@@ -1,7 +1,7 @@
 import { useMemo, type ReactNode } from 'react';
 import {
   environmentScore, regimeBand, trendSleeveScore, trendSleeveLabel, trendSubScore,
-  gexPositioningLabel, stressLabel, creditLabel, ratesDollarLabel, FONT_SIZE,
+  gexPositioningLabel, stressLabel, creditLabel, ratesDollarLabel, isTradingDay, FONT_SIZE,
 } from '@stw/shared';
 import { useCapabilities } from '../../context/AppCapabilities';
 import { useAppConfig } from '../../hooks/useAppConfig';
@@ -191,6 +191,14 @@ export function MacroView() {
 
   const updatedAt = useMemo(() => (indLoading ? null : new Date()), [indLoading]);
 
+  // On a non-trading day the live recompute drifts slightly from the last persisted
+  // snapshot (different sleeve reads / feed lag), so the headline (62) could disagree
+  // with the trajectory's newest lamp (63). Show the last COMPLETE session's regime
+  // when the market's closed, so the current-status score == the newest lamp.
+  const todayET = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const lastSeriesScore = [...trendHistory.regimeSeries].reverse().find((p) => p.score !== null)?.score ?? null;
+  const displayRegime = (isTradingDay(todayET) || lastSeriesScore === null) ? regime : regimeBand(lastSeriesScore);
+
   function handleRefreshRecap(note?: string, session?: 'am' | 'pm') {
     if (!regime) return;
     generate({
@@ -245,7 +253,7 @@ export function MacroView() {
             </Help>
           )}
         />
-        <RegimeCard regime={dataReady ? regime : null} updatedAt={updatedAt} series={trendHistory.regimeSeries} />
+        <RegimeCard regime={dataReady ? displayRegime : null} updatedAt={updatedAt} series={trendHistory.regimeSeries} />
       </section>
 
       {/* ── Module 2: Module Score Strip ───────────────────────────── */}

@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { TIERS, fmtDateTime, sizingTone, TREND_BUCKET_META, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, SPACE, type TrendBucket } from '@stw/shared';
+import { TIERS, fmtDateTime, sizingTone, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, SPACE } from '@stw/shared';
 import { useUserPositions, useIbkrSettings } from './useUserPositions';
 import { useSyncPortfolio } from './useSyncPortfolio';
 import { useHoldings } from '../picks/useHoldings';
@@ -577,38 +577,6 @@ function TailingTab({ groups, portfolioValue, pickMap, decliningTailed, onSelect
   );
 }
 
-// The chosen regime index's own 9/21/200 structure (Risk tab) — the finer read
-// behind the RegimeLight's coarse 200-day gate, same buckets as the Macro Trend
-// module. Colors: green (momentum/healthy pullback), amber (caution/bear-rally),
-// red (risk-off).
-const REGIME_BUCKET_COLOR: Record<TrendBucket, string> = {
-  momentum: 'var(--c5)', healthy_pullback: 'var(--c5)', mid_caution: 'var(--c3)', bear_rally: 'var(--c3)', risk_off: 'var(--c1)',
-};
-
-function RegimeIndexStructure({ instrument, regime }: { instrument: string; regime: TickerRegime | undefined }) {
-  if (!regime || regime.bucket === null || regime.close === null) return null;
-  const color = REGIME_BUCKET_COLOR[regime.bucket];
-  const maCell = (label: string, ma: number | null) => {
-    if (ma === null) return <span style={{ color: 'var(--t3)' }}>{label} —</span>;
-    const above = (regime.close ?? 0) > ma;
-    return <span style={{ color: above ? 'var(--c5)' : 'var(--c1)', fontVariantNumeric: 'tabular-nums' }}>{label} {ma.toFixed(2)} {above ? '▲' : '▼'}</span>;
-  };
-  return (
-    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>{instrument} structure</span>
-        <span style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color }}>{TREND_BUCKET_META[regime.bucket].label}</span>
-      </div>
-      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: FONT_SIZE.xs, color: 'var(--t2)' }}>
-        <span style={{ fontVariantNumeric: 'tabular-nums' }}>Close {regime.close.toFixed(2)}</span>
-        {maCell('9MA', regime.ma9)}
-        {maCell('21MA', regime.ma21)}
-        {maCell('200MA', regime.ma200)}
-      </div>
-    </div>
-  );
-}
-
 // ── main page ─────────────────────────────────────────────────
 
 export function PortfolioPage() {
@@ -983,10 +951,9 @@ export function PortfolioPage() {
             );
           })}
         </div>
-        <RegimeLight instrument={regimeInstrument} exitRule={regimeExitRule} />
-        {/* The chosen index's own 9/21/200 structure — the finer read behind the
-            RegimeLight's coarse 200-day gate (host 2026-07-11). */}
-        <RegimeIndexStructure instrument={regimeInstrument} regime={regimes[regimeInstrument]} />
+        {/* One consolidated card: the frozen gate + the index's live 9/21/200
+            structure, so there's no second block with a conflicting close. */}
+        <RegimeLight instrument={regimeInstrument} exitRule={regimeExitRule} structure={regimes[regimeInstrument]} />
       </div>
       {capabilities.canUseLimits ? (
         <ViolationsSummary settingsTo="/settings" />
