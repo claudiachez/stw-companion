@@ -16,3 +16,4 @@ export * from './utils/voltarget';
 export * from './utils/pacing';
 export * from './utils/fred';
 export * from './utils/gex';
+export * from './utils/nyse-calendar';
