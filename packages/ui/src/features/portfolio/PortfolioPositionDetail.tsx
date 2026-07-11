@@ -7,9 +7,8 @@ import { StatusPill } from '../../primitives/StatusPill';
 import { EmptyState } from '../../primitives/EmptyState';
 import { useRiskConfig, useSectorMap } from '../limits/useRiskConfig';
 import { useLatestRegime } from '../regime/useLatestRegime';
-import { useCapabilities } from '../../context/AppCapabilities';
-import { useTickerRegime } from '../picks/useTickerRegime';
 import { RegimeBadge } from '../picks/components/RegimeBadge';
+import type { TickerRegime } from '../picks/useTickerRegime';
 import type { UserPosition } from './api';
 
 const STATE_COLOR: Record<'GREEN' | 'RED' | 'UNKNOWN', string> = {
@@ -67,7 +66,7 @@ function Section({ title, children }: { title: React.ReactNode; children: React.
  * STW's view is an explicit link inside the Tailing section.
  */
 export function PortfolioPositionDetail({
-  group, ownPortfolioPct, stwWeight, showPnl, onClose, onViewStwPosition,
+  group, ownPortfolioPct, stwWeight, showPnl, tickerRegime, onClose, onViewStwPosition,
 }: {
   group: DetailGroup;
   /** This position's share of the subscriber's own book, by market value. */
@@ -75,6 +74,8 @@ export function PortfolioPositionDetail({
   /** STW's own current_weight for this ticker, if tailed. */
   stwWeight: number | null;
   showPnl: boolean;
+  /** The ticker's own trend structure + sector-rotation standing (computed once at the page level). */
+  tickerRegime?: TickerRegime;
   onClose: () => void;
   onViewStwPosition: () => void;
 }) {
@@ -83,15 +84,6 @@ export function PortfolioPositionDetail({
   const { data: config } = useRiskConfig(userId);
   const { data: sectorMap } = useSectorMap();
   const { data: regime, isLoading: regimeLoading } = useLatestRegime('IWM');
-
-  // The ticker's own 9/21/200 trend structure + its sector's rotation standing —
-  // the same two chips the Stock Picks detail shows (RegimeBadge). Fetched here so
-  // the MA + sector-rotation calls only fire when a position detail is open, not on
-  // the list view. CASH has no technicals.
-  const { finnhubKey, twelveDataKey } = useCapabilities();
-  const regimeTickers = group.underlying === 'CASH' ? [] : [group.underlying];
-  const { regimes: tickerRegimes } = useTickerRegime(regimeTickers, finnhubKey, twelveDataKey);
-  const tickerRegime = tickerRegimes[group.underlying];
 
   const gate = regime ? regimeGate(
     { close: regime.close, sma200: regime.sma200 },
