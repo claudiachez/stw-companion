@@ -295,9 +295,10 @@ function SummaryChip({ severity, onClick, children }: { severity: 'info' | 'warn
   );
 }
 
-function PortfolioSummary({ groups, showPnl, onOpenTailing }: {
+function PortfolioSummary({ groups, showPnl, onOpenTailing, onOpenLowConviction }: {
   groups: PortfolioGroup[]; showPnl: boolean;
   onOpenTailing: () => void;
+  onOpenLowConviction: () => void;
 }) {
   const t = useMemo(() => {
     let mv = 0, pnl = 0, cost = 0, legs = 0, sharesVal = 0, optVal = 0, optRisk = 0, tailed = 0, low = 0;
@@ -382,7 +383,7 @@ function PortfolioSummary({ groups, showPnl, onOpenTailing }: {
             <span><strong style={{ color: 'var(--text)' }}>{t.tailed}</strong> of {positionCount} tailed{traderSummary ? ` · ${traderSummary}` : ''}</span>
           </SummaryChip>
           {t.low > 0 && (
-            <SummaryChip severity="warning" onClick={onOpenTailing}>
+            <SummaryChip severity="warning" onClick={onOpenLowConviction}>
               <span>⚠ {t.low} with low / declining conviction</span>
             </SummaryChip>
           )}
@@ -731,12 +732,28 @@ export function PortfolioPage() {
     [allGroups],
   );
 
-  const matchFilters = (underlying: string, isTailed: boolean, basket: string, isOpt: boolean) => {
+  const convictionBand = (c: number | null): boolean => {
+    const cf = filters.conviction;
+    if (!cf) return true;
+    if (c == null) return false; // untailed / no conviction — excluded once a band is chosen
+    if (cf === 'high') return c >= 4;
+    if (cf === 'medium') return c === 3;
+    if (cf === 'low') return c === 1 || c === 2; // matches the Overview "low / declining" chip
+    if (cf === 'legacy') return c === 0;
+    return true;
+  };
+  const matchFilters = (underlying: string, isTailed: boolean, basket: string, isOpt: boolean, conviction: number | null, regime: TickerRegime | undefined) => {
     const q = filters.search.trim().toUpperCase();
     if (filters.tailedOnly && !isTailed) return false;
     if (filters.type === 'stocks' && isOpt) return false;
     if (filters.type === 'options' && !isOpt) return false;
     if (filters.basket && basket !== filters.basket) return false;
+    if (!convictionBand(conviction)) return false;
+    // Trend structure + sector-regime read from the per-ticker technical pass. When a
+    // band is chosen and the regime is still loading/unknown, the row is excluded (it
+    // genuinely isn't a match yet) — the count reflects only confirmed matches.
+    if (filters.structure && regime?.bucket !== filters.structure) return false;
+    if (filters.standing && regime?.standing !== filters.standing) return false;
     if (q && !underlying.toUpperCase().includes(q)) return false;
     return true;
   };
@@ -745,7 +762,7 @@ export function PortfolioPage() {
 
   // grouped view rows
   const visibleGroups = useMemo<PortfolioGroup[]>(() => {
-    const filtered = allGroups.filter((g) => matchFilters(g.underlying, g.isTailed, g.basket, g.hasOption && !g.hasStock));
+    const filtered = allGroups.filter((g) => matchFilters(g.underlying, g.isTailed, g.basket, g.hasOption && !g.hasStock, g.conviction, regimes[g.underlying]));
     return [...filtered].sort((a, b) => {
       switch (filters.sort) {
         case 'pnl_desc': case 'pnl_asc': return (a.netPnl - b.netPnl) * dir;
@@ -757,7 +774,7 @@ export function PortfolioPage() {
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allGroups, filters]);
+  }, [allGroups, filters, regimes]);
 
   // flat per-leg rows (default view)
   const visibleLegs = useMemo<LegRowData[]>(() => {
@@ -765,7 +782,7 @@ export function PortfolioPage() {
       const underlying = cleanUnderlying(p.underlying);
       const pick = pickMap.get(underlying);
       return { p, underlying, isTailed: !!pick, traders: pick?.traders ?? [], conviction: pick?.conviction ?? null, basket: pick?.basket ?? '' };
-    }).filter((r) => matchFilters(r.underlying, r.isTailed, r.basket, r.p.asset_class === 'OPT'));
+    }).filter((r) => matchFilters(r.underlying, r.isTailed, r.basket, r.p.asset_class === 'OPT', r.conviction, regimes[r.underlying]));
     return rows.sort((a, b) => {
       switch (filters.sort) {
         case 'pnl_desc': case 'pnl_asc': return (nl(a.p.unrealized_pnl) - nl(b.p.unrealized_pnl)) * dir;
@@ -777,7 +794,7 @@ export function PortfolioPage() {
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [positions, pickMap, filters]);
+  }, [positions, pickMap, filters, regimes]);
 
   const lastSynced = useMemo(() => {
     if (lastResult) return lastResult.lastSyncedAt;
@@ -922,7 +939,17 @@ export function PortfolioPage() {
           ⚠ {decliningTailed.length} tailed position{decliningTailed.length !== 1 ? 's have' : ' has'} declining STW conviction: {decliningTailed.map((c) => c.ticker).join(', ')}
         </div>
       )}
-      <PortfolioSummary groups={allGroups} showPnl={showPnl} onOpenTailing={() => changeTab('tailing')} />
+      <PortfolioSummary
+        groups={allGroups}
+        showPnl={showPnl}
+        onOpenTailing={() => changeTab('tailing')}
+        onOpenLowConviction={() => {
+          // Jump to Positions with the conviction filter pre-applied to exactly the
+          // chip's set (tiers 1–2), so the user lands on the flagged positions.
+          setFilters({ ...DEFAULT_PORTFOLIO_FILTERS, conviction: 'low' });
+          changeTab('positions');
+        }}
+      />
       {showPnl && <TopMovers groups={allGroups} onOpenPosition={openPosition} />}
       {/* Heatmap colors by return, so it follows the P&L-visibility toggle like Top Movers. */}
       {showPnl && heatmapCells.length > 0 && (

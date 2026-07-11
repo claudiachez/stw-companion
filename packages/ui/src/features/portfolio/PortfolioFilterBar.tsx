@@ -3,7 +3,8 @@
 // read as one app. Renders inner controls only (no surface wrapper); the page hosts them in one
 // bar with the synced stamp + sync cluster. State is owned by PortfolioPage.
 
-import { FONT_SIZE } from '@stw/shared';
+import { FONT_SIZE, TREND_BUCKET_META, TREND_BUCKET_ORDER } from '@stw/shared';
+import type { TrendBucket, SectorStanding } from '@stw/shared';
 
 export type PortfolioSort =
   | 'pnl_desc' | 'pnl_asc'
@@ -13,9 +14,16 @@ export type PortfolioSort =
 
 export type PortfolioType = '' | 'stocks' | 'options';
 
+// Conviction bands map to the tailed pick's STW conviction tier. 'low' matches the
+// Overview "low / declining conviction" chip exactly (tiers 1–2, excluding Legacy 0).
+export type PortfolioConviction = '' | 'high' | 'medium' | 'low' | 'legacy';
+
 export interface PortfolioFilters {
   search: string;
   basket: string;
+  conviction: PortfolioConviction;
+  structure: TrendBucket | '';   // the ticker's own 9/21/200 trend structure
+  standing: SectorStanding | ''; // its sector's rotation standing (sector regime)
   type: PortfolioType;
   sort: PortfolioSort;
   tailedOnly: boolean;
@@ -25,11 +33,28 @@ export interface PortfolioFilters {
 export const DEFAULT_PORTFOLIO_FILTERS: PortfolioFilters = {
   search: '',
   basket: '',
+  conviction: '',
+  structure: '',
+  standing: '',
   type: '',
   sort: 'pnl_desc',
   tailedOnly: false,
   groupByTicker: true, // §6.3 — legs of the same underlying (shares + options) stay together by default
 };
+
+const CONVICTION_OPTIONS: { value: PortfolioConviction; label: string }[] = [
+  { value: 'high',   label: 'High (Tier 4–5)' },
+  { value: 'medium', label: 'Medium (Tier 3)' },
+  { value: 'low',    label: 'Low / declining (Tier 1–2)' },
+  { value: 'legacy', label: 'Legacy (Tier 0)' },
+];
+
+// Sector-regime (rotation standing) options — labels mirror RegimeBadge's chips.
+const STANDING_OPTIONS: { value: SectorStanding; label: string }[] = [
+  { value: 'leader',     label: 'Sector Leader' },
+  { value: 'setting_up', label: 'Sector Setting Up' },
+  { value: 'laggard',    label: 'Sector Laggard' },
+];
 
 const SORT_OPTIONS: { value: PortfolioSort; label: string }[] = [
   { value: 'pnl_desc',   label: 'Sort: P&L ↓' },
@@ -72,8 +97,8 @@ interface Props {
 }
 
 export function PortfolioFilterBar({ filters, onChange, baskets, filtered, total }: Props) {
-  const { search, basket, type, sort, tailedOnly, groupByTicker } = filters;
-  const hasFilter = !!search || !!basket || type !== '' || tailedOnly;
+  const { search, basket, conviction, structure, standing, type, sort, tailedOnly, groupByTicker } = filters;
+  const hasFilter = !!search || !!basket || !!conviction || !!structure || !!standing || type !== '' || tailedOnly;
 
   return (
     <>
@@ -92,6 +117,21 @@ export function PortfolioFilterBar({ filters, onChange, baskets, filtered, total
           {baskets.map((b) => <option key={b} value={b}>{b}</option>)}
         </select>
       )}
+
+      <select value={conviction} onChange={(e) => onChange({ ...filters, conviction: e.target.value as PortfolioConviction })} className={ctrlBorderClass} style={ctrlStyle} title="Filter by the tailed pick's STW conviction tier">
+        <option value="">All Conviction</option>
+        {CONVICTION_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+
+      <select value={structure} onChange={(e) => onChange({ ...filters, structure: e.target.value as TrendBucket | '' })} className={ctrlBorderClass} style={ctrlStyle} title="Filter by the ticker's own 9/21/200 trend structure">
+        <option value="">All Structure</option>
+        {TREND_BUCKET_ORDER.map((b) => <option key={b} value={b}>{TREND_BUCKET_META[b].label}</option>)}
+      </select>
+
+      <select value={standing} onChange={(e) => onChange({ ...filters, standing: e.target.value as SectorStanding | '' })} className={ctrlBorderClass} style={ctrlStyle} title="Filter by the ticker's sector rotation standing (sector regime)">
+        <option value="">All Sector Regime</option>
+        {STANDING_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
 
       <select value={type} onChange={(e) => onChange({ ...filters, type: e.target.value as PortfolioType })} className={ctrlBorderClass} style={ctrlStyle}>
         <option value="">All Types</option>
@@ -115,7 +155,7 @@ export function PortfolioFilterBar({ filters, onChange, baskets, filtered, total
 
       {hasFilter && (
         <button
-          onClick={() => onChange({ ...filters, search: '', basket: '', type: '', tailedOnly: false })}
+          onClick={() => onChange({ ...filters, search: '', basket: '', conviction: '', structure: '', standing: '', type: '', tailedOnly: false })}
           style={{ ...ctrlStyle, background: 'none', color: 'var(--t3)', padding: '0 4px' }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--t2)'; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--t3)'; }}
