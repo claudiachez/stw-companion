@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  evaluateRiskConfig, cashflowAdjustedDrawdownPct,
-  type PositionInput, type ConcentrationViolation, type ViolationSeverity,
+  evaluateRiskConfig, cashflowAdjustedDrawdownPct, bindingGrossTarget,
+  type PositionInput, type ConcentrationViolation, type ViolationSeverity, type BindingGrossTarget,
 } from '@stw/shared';
 import { useAuthStore } from '../../store/auth';
 import { LoadingSpinner } from '../../primitives/LoadingSpinner';
@@ -131,12 +131,15 @@ function ViolationRow({
   );
 }
 
-function GrossExposureBar({ v, ladderTargetPct, regimeDoubleRedGrossPct }: { v: ConcentrationViolation; ladderTargetPct: number | null; regimeDoubleRedGrossPct: number | null }) {
+function GrossExposureBar({ v, binding }: { v: ConcentrationViolation; binding: BindingGrossTarget | null }) {
   const { exposurePct: pct, limitPct } = v;
+  const targetPct = binding?.targetPct ?? null;
   const scaleMax = Math.max(limitPct, pct, 100) * 1.05;
   const fillPct = Math.min(100, (pct / scaleMax) * 100);
   const limitMarkerPct = Math.min(100, (limitPct / scaleMax) * 100);
-  const ladderMarkerPct = ladderTargetPct !== null ? Math.min(100, (ladderTargetPct / scaleMax) * 100) : null;
+  // The bar marker is the BINDING target (the number that actually governs), not the
+  // ladder alone — so a tighter double-RED regime target moves the mark too.
+  const ladderMarkerPct = targetPct !== null ? Math.min(100, (targetPct / scaleMax) * 100) : null;
   // At-limit (100%/100%) is `near` → amber, never green: a full bar you're trained
   // to see as "fine" defeats the point.
   const fill = SEVERITY_TEXT_COLOR[v.severity];
@@ -149,29 +152,33 @@ function GrossExposureBar({ v, ladderTargetPct, regimeDoubleRedGrossPct }: { v: 
       </div>
       {/* Ticks on the track make "how far over" legible: a solid mark at the cap
           (so an overshoot reads as distance past it, not a full bar) + a lighter
-          mark at the drawdown-ladder target. */}
+          mark at the binding de-risk target. */}
       <div className="relative h-2.5 rounded-full bg-s2 border border-border overflow-hidden">
         <div className="h-full rounded-full" style={{ width: `${fillPct}%`, background: fill }} />
         {ladderMarkerPct !== null && (
-          <div className="absolute top-0 bottom-0" style={{ left: `${ladderMarkerPct}%`, width: 1, background: 'var(--status-warning-text)', opacity: 0.7 }} title={`Ladder target: ${ladderTargetPct}%`} />
+          <div className="absolute top-0 bottom-0" style={{ left: `${ladderMarkerPct}%`, width: 1, background: 'var(--status-warning-text)', opacity: 0.7 }} title={`De-risk target: ${targetPct}%`} />
         )}
         <div className="absolute top-0 bottom-0" style={{ left: `${limitMarkerPct}%`, width: 2, background: 'var(--text)' }} title={`Cap: ${limitPct}%`} />
       </div>
       <div className="flex items-center gap-3 text-[10px] text-t3">
         <span><span style={{ color: 'var(--text)' }}>▏</span> cap {limitPct}%</span>
-        {ladderTargetPct !== null && <span><span style={{ color: 'var(--status-warning-text)' }}>▏</span> target {ladderTargetPct}%</span>}
+        {targetPct !== null && <span><span style={{ color: 'var(--status-warning-text)' }}>▏</span> target {targetPct}%</span>}
       </div>
-      {ladderTargetPct !== null && (
+      {binding && (
         <div className="text-xs text-[var(--status-warning-text)] bg-[var(--status-warning-bg)] border border-[var(--status-warning-border)] rounded px-3 py-2 mt-1">
-          <span className="block">Drawdown ladder target: reduce gross to {ladderTargetPct}%</span>
-          {/* Two de-risk triggers can be live at once — the drawdown ladder and the
-              regime double-RED policy. The binding constraint is the LOWER target;
-              call it out so they aren't read as separate, additive instructions. */}
-          {regimeDoubleRedGrossPct !== null && (
-            <span className="block text-t3 mt-1" style={{ color: 'var(--t2)' }}>
-              Your regime policy targets {regimeDoubleRedGrossPct}% gross in a double-RED regime.
-              If both apply, the binding target is the lower — {Math.min(ladderTargetPct, regimeDoubleRedGrossPct)}%.
-            </span>
+          {binding.source === 'both' ? (
+            <>
+              {/* Both de-risk triggers live at once — show the ONE binding number plus
+                  what it reconciles, so it's not read as two separate instructions. */}
+              <span className="block font-semibold">Binding target: reduce gross to {binding.targetPct}%</span>
+              <span className="block text-t3 mt-1" style={{ color: 'var(--t2)' }}>
+                The tighter of your drawdown ladder ({binding.ladderPct}%) and the double-RED regime rule ({binding.regimePct}%).
+              </span>
+            </>
+          ) : binding.source === 'ladder' ? (
+            <span className="block">Drawdown ladder target: reduce gross to {binding.targetPct}%</span>
+          ) : (
+            <span className="block">Regime rule (double-RED): reduce gross to {binding.targetPct}%</span>
           )}
         </div>
       )}
@@ -258,7 +265,14 @@ function BreachOnlyList({
   );
 }
 
-export function ViolationsSummary({ showSyncButton = false, settingsTo }: { showSyncButton?: boolean; settingsTo?: string }) {
+export function ViolationsSummary({ showSyncButton = false, settingsTo, bindingGross }: {
+  showSyncButton?: boolean;
+  settingsTo?: string;
+  /** The reconciled ladder-vs-regime gross target from the parent's useBindingGrossTarget
+   * (so this card and the sibling RegimeLight show the identical binding number). When
+   * omitted, falls back to a ladder-only reconciliation from this card's own data. */
+  bindingGross?: BindingGrossTarget | null;
+}) {
   const userId = useAuthStore((s) => s.user?.id);
 
   // "Settings" renders as a link when the host app provides a route (web → /settings);
@@ -389,8 +403,7 @@ export function ViolationsSummary({ showSyncButton = false, settingsTo }: { show
         )}
         <GrossExposureBar
           v={result.grossViolation}
-          ladderTargetPct={result.ladderTargetGrossPct}
-          regimeDoubleRedGrossPct={config.regime_doublered_gross_pct ?? null}
+          binding={bindingGross !== undefined ? bindingGross : bindingGrossTarget(result.ladderTargetGrossPct, null)}
         />
       </div>
 

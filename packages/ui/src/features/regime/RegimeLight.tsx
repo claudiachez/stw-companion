@@ -1,4 +1,4 @@
-import { regimeGate, regimeExitAdvice, formatDate, TREND_BUCKET_META, type RegimeExitRule, type TrendBucket } from '@stw/shared';
+import { regimeGate, regimeExitAdvice, formatDate, TREND_BUCKET_META, type RegimeExitRule, type TrendBucket, type BindingGrossTarget } from '@stw/shared';
 import { HelpToggle } from '../../primitives/HelpToggle';
 import { useLatestRegime } from './useLatestRegime';
 
@@ -34,10 +34,14 @@ export interface RegimeStructure {
  * closes never appear side by side (they used to, in two separate cards). The
  * gate verdicts stay authoritative; the live structure is the finer texture.
  */
-export function RegimeLight({ instrument = 'IWM', exitRule, structure }: {
+export function RegimeLight({ instrument = 'IWM', exitRule, structure, bindingGross }: {
   instrument?: string;
   exitRule?: RegimeExitRule;
   structure?: RegimeStructure | null;
+  /** Reconciled ladder-vs-regime gross target from the parent's useBindingGrossTarget.
+   * When BOTH triggers are firing, this card shows the same single binding number the
+   * gross-exposure card shows, so the two surfaces never disagree. */
+  bindingGross?: BindingGrossTarget | null;
 }) {
   const { data: row, isLoading } = useLatestRegime(instrument);
 
@@ -125,6 +129,19 @@ export function RegimeLight({ instrument = 'IWM', exitRule, structure }: {
           style={{ borderLeft: '2px solid var(--status-warning-text)', paddingLeft: 8 }}
         >
           Your rule: {advice}
+        </div>
+      )}
+
+      {/* When the drawdown ladder is ALSO firing (source 'both'), the double-RED gross
+          target above isn't the whole story — the ladder may bind tighter. Show the same
+          single reconciled number the gross-exposure card shows, so the two never conflict. */}
+      {bindingGross?.source === 'both' && (
+        <div
+          className="text-t2 text-xs"
+          style={{ borderLeft: '2px solid var(--status-warning-text)', paddingLeft: 8 }}
+        >
+          Binding gross target: <span className="font-semibold">{bindingGross.targetPct}%</span> — the tighter of your
+          drawdown ladder ({bindingGross.ladderPct}%) and this double-RED regime rule ({bindingGross.regimePct}%).
         </div>
       )}
 

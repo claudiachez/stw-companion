@@ -232,6 +232,39 @@ export function cashflowAdjustedDrawdownPct(
   return ((nlv - peakAdjustedToNow) / peakAdjustedToNow) * 100;
 }
 
+/**
+ * The two independent de-risking triggers both cap the same lever — gross exposure:
+ *   - the drawdown ladder (keyed to YOUR account drawdown) → `ladderPct`
+ *   - the double-RED regime rule (keyed to the MARKET gate) → `regimePct`
+ * Each is null when not currently firing. When BOTH fire (common — a crash usually
+ * causes a drawdown too), the BINDING target is the tighter (lower) one — you obey the
+ * most conservative. This is the single reconciliation both surfaces (the gross-exposure
+ * card and the regime light) render, so they never show two different numbers.
+ * Returns null when neither is active (nothing to de-risk to).
+ */
+export interface BindingGrossTarget {
+  /** The governing target % — the lower of the two when both apply. */
+  targetPct: number;
+  /** Drawdown-ladder target %, or null if no rung is breached. */
+  ladderPct: number | null;
+  /** Double-RED regime target %, or null if the regime isn't double-RED. */
+  regimePct: number | null;
+  /** Which trigger(s) are active — drives the copy. */
+  source: 'ladder' | 'regime' | 'both';
+}
+
+export function bindingGrossTarget(
+  ladderPct: number | null,
+  regimePct: number | null,
+): BindingGrossTarget | null {
+  if (ladderPct !== null && regimePct !== null) {
+    return { targetPct: Math.min(ladderPct, regimePct), ladderPct, regimePct, source: 'both' };
+  }
+  if (ladderPct !== null) return { targetPct: ladderPct, ladderPct, regimePct: null, source: 'ladder' };
+  if (regimePct !== null) return { targetPct: regimePct, ladderPct: null, regimePct, source: 'regime' };
+  return null;
+}
+
 /** Runs all three concentration checks + the drawdown ladder in one call. */
 export function evaluateRiskConfig(
   positions: PositionInput[],
