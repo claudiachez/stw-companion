@@ -16,29 +16,33 @@ const feeds = (text: React.ReactNode) => (
 );
 
 const CONNECT_STEPS = [
-  <>Log in to <b style={bold}>clientportal.ibkr.com</b> or <b style={bold}>account.ibkr.com</b></>,
-  <>Go to <b style={bold}>Reports → Flex Queries</b></>,
-  <>Click <b style={bold}>Create → Activity Flex Query</b>. Under <b style={bold}>Sections</b>, enable the three below (one query carries all three).</>,
+  <>Log in to <b style={bold}>clientportal.ibkr.com</b> or <b style={bold}>account.ibkr.com</b>.</>,
+  <>Go to <b style={bold}>Reports → Flex Queries</b>.</>,
+  <>Click <b style={bold}>Create → Activity Flex Query</b>. Under <b style={bold}>Sections</b>, enable the three below — one query carries all of them.</>,
   <>
-    <b style={bold}>Section 1 — Open Positions.</b> Tick: Symbol, Underlying Symbol, Asset Category, Quantity, Cost Basis Price, Mark Price, Unrealized P&amp;L, Put/Call, Strike, Expiry, Multiplier, Conid.
+    <b style={bold}>Open Positions</b> — tick: Symbol, Underlying Symbol, Asset Category, Quantity, Cost Basis Price, <b style={bold}>Cost Basis Money</b>, Mark Price, Unrealized P&amp;L, Put/Call, Strike, Expiry, Multiplier, Conid.
     {feeds(<>your live positions on <b style={bold}>My Portfolio</b>, and the position / sector / gross concentration checks on the <b style={bold}>Risk</b> tab.</>)}
   </>,
   <>
-    <b style={bold}>Section 2 — Trades</b> (set <b style={bold}>Options → Level of Detail = Execution</b>). Tick: <b style={bold}>IB Execution ID</b> (not <i>External</i>), Asset Category, Date/Time, Symbol, Underlying Symbol, Buy/Sell, Quantity, <b style={bold}>Trade Price</b> (not <i>Orig</i>), IB Commission, <b style={bold}>Currency</b> (not IB Commission Currency), Put/Call, Strike, Expiry, Multiplier, IB Order ID, Trade ID, Transaction ID.
+    <b style={bold}>Trades</b> — set <b style={bold}>Options → Level of Detail = Execution</b>, then tick: <b style={bold}>IB Execution ID</b> (not <i>External</i>), Asset Category, Date/Time, Symbol, Underlying Symbol, Buy/Sell, Quantity, <b style={bold}>Trade Price</b> (not <i>Orig Trade Price</i>), IB Commission, <b style={bold}>Currency</b> (not <i>IB Commission Currency</i>), Put/Call, Strike, Expiry, Multiplier, IB Order ID, Trade ID, Transaction ID.
     {feeds(<>your executions history + trade-cost analysis (your fills vs the mark).</>)}
   </>,
   <>
-    <b style={bold}>Section 3 — Net Asset Value (NAV) in Base.</b> Tick <b style={bold}>Total</b> (your Net Liquidation Value) and <b style={bold}>Report Date</b>.
+    <b style={bold}>Net Asset Value (NAV) in Base</b> — tick <b style={bold}>Total</b> (your Net Liquidation Value) and <b style={bold}>Report Date</b>.
     {feeds(<>your <b style={bold}>live account equity</b> — the denominator for gross exposure — so the Risk tab measures against your <b style={bold}>current balance (incl. margin)</b>, not a stale deposit figure.</>)}
   </>,
-  <>Leave <b style={bold}>General Configuration</b> at its defaults — Date Format <b style={bold}>yyyyMMdd</b>, Time Format <b style={bold}>HHmmss</b>, and <b style={bold}>Breakout by Day = No</b>; set the query <b style={bold}>Period</b> to <b style={bold}>Year to Date</b> (or Last 365 Days) for the first sync.</>,
+  <>
+    Under <b style={bold}>General Configuration</b>, leave Date Format <b style={bold}>yyyyMMdd</b>, Time Format <b style={bold}>HHmmss</b>, <b style={bold}>Breakout by Day = No</b>, and set <b style={bold}>Period → Last 7 Days</b>.
+    {feeds(<>a short window keeps the report fast. The app syncs automatically each day into an <b style={bold}>append-only</b> history, so no fill is ever dropped. To load <b style={bold}>past</b> trades in one go, use <b style={bold}>Import history</b> below.</>)}
+  </>,
   <>Save the query — note the <b style={bold}>Query ID</b> shown next to it.</>,
-  <>Back on Flex Queries, copy your <b style={bold}>Flex Token</b> (top of page, under "Generate Tokens").</>,
-  <>Paste both below, click <b style={bold}>Save</b>.</>,
+  <>Back on Flex Queries, copy your <b style={bold}>Flex Token</b> (top of the page, under "Generate Tokens").</>,
+  <>Paste both below and click <b style={bold}>Save</b>. We verify immediately and <b style={bold}>flag any missing field</b> right here.</>,
 ];
 
 export function SettingsPage() {
   const user = useAuthStore((s) => s.user);
+  const session = useAuthStore((s) => s.session);
   const queryClient = useQueryClient();
   const { data: settings, isLoading } = useIbkrSettings();
   const { data: positions } = useUserPositions();
@@ -53,6 +57,12 @@ export function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+
+  // One-time full-history import from an uploaded Flex XML export.
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{ executions: number; accountId: string | null } | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   // Setup is onboarding content a returning, already-connected user rarely needs — collapsed
   // by default once connected, expanded by default on first-ever setup. Initialized once
@@ -106,6 +116,29 @@ export function SettingsPage() {
     }
   }
 
+  async function handleImportFile(file: File) {
+    if (!session?.access_token) { setImportError('Not signed in'); return; }
+    setImporting(true);
+    setImportError(null);
+    setImportResult(null);
+    try {
+      const xml = await file.text();
+      const res = await fetch('/.netlify/functions/ibkr-import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/xml', Authorization: `Bearer ${session.access_token}` },
+        body: xml,
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+      setImportResult({ executions: json.executions ?? 0, accountId: json.accountId ?? null });
+    } catch (e) {
+      setImportError(e instanceof Error ? e.message : 'Import failed');
+    } finally {
+      setImporting(false);
+      if (importInputRef.current) importInputRef.current.value = '';
+    }
+  }
+
   if (isLoading) return <LoadingSpinner className="mt-16" />;
 
   const isConnected = !!(settings?.ibkr_flex_token && settings?.ibkr_query_id);
@@ -155,6 +188,18 @@ export function SettingsPage() {
           Verified ✓ — {lastResult.accountId ? `account ${lastResult.accountId} · ` : ''}
           synced {lastResult.count} position{lastResult.count !== 1 ? 's' : ''}
           {lastResult.executions > 0 ? ` · ${lastResult.executions} execution${lastResult.executions !== 1 ? 's' : ''}` : ''}
+          {lastResult.nlv != null ? ` · NLV ${new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(lastResult.nlv)}` : ''}
+        </AlertStrip>
+      )}
+      {/* Non-fatal Flex-template config gaps — the sync succeeded, but a section/field is
+          missing. Tells the user exactly what to tick in their query rather than leaving
+          a column silently empty. */}
+      {lastResult && !syncError && lastResult.warnings.length > 0 && (
+        <AlertStrip severity="warning">
+          <span style={{ fontWeight: FONT_WEIGHT.semibold }}>Your Flex query is missing something:</span>
+          <ul style={{ margin: `${SPACE[1]}px 0 0`, paddingLeft: SPACE[4], display: 'flex', flexDirection: 'column', gap: SPACE[1] }}>
+            {lastResult.warnings.map((w, i) => <li key={i} style={{ lineHeight: 1.5 }}>{w}</li>)}
+          </ul>
         </AlertStrip>
       )}
 
@@ -188,11 +233,21 @@ export function SettingsPage() {
             </button>
             {howToConnectExpanded && (
               <div style={{ padding: `0 ${SPACE[4]}px ${SPACE[3.5]}px` }}>
-                <ol style={{ margin: 0, paddingLeft: SPACE[5], display: 'flex', flexDirection: 'column', gap: SPACE[1.5] }}>
+                {/* Explicit number badges — the design-system CSS reset strips native
+                    <ol> markers, so the step numbers must be rendered, not relied on. */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE[2] }}>
                   {CONNECT_STEPS.map((step, i) => (
-                    <li key={i} style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)', lineHeight: 1.6 }}>{step}</li>
+                    <div key={i} style={{ display: 'flex', gap: SPACE[2.5], alignItems: 'flex-start' }}>
+                      <span style={{
+                        flexShrink: 0, width: 20, height: 20, borderRadius: RADIUS.full,
+                        background: 'var(--s2)', border: '1px solid var(--border)', color: 'var(--t2)',
+                        fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 1,
+                      }}>{i + 1}</span>
+                      <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)', lineHeight: 1.6 }}>{step}</span>
+                    </div>
                   ))}
-                </ol>
+                </div>
                 <p style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[2.5], marginBottom: 0 }}>
                   Your token is stored server-side and never exposed in the browser.
                 </p>
@@ -251,6 +306,42 @@ export function SettingsPage() {
               {saving ? (token.trim() && queryId.trim() ? 'Saving & verifying…' : 'Saving…') : saved ? 'Saved ✓' : 'Save'}
             </Button>
           </div>
+        </div>
+      )}
+
+      {/* One-time history backfill — the daily sync only carries a short window, so
+          prior trades are seeded from a full-period Flex XML export uploaded here. */}
+      {isConnected && (
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: RADIUS.xl, padding: `${SPACE[3.5]}px ${SPACE[4]}px`, display: 'flex', flexDirection: 'column', gap: SPACE[2] }}>
+          <span style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>Import trade history</span>
+          <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)', lineHeight: 1.55 }}>
+            The daily sync only carries the last few days. To load your <b style={bold}>full past history</b> in one go:
+            in the IBKR portal run your Flex query with a long <b style={bold}>Period</b> (e.g. Year to Date), download the
+            <b style={bold}> XML</b>, and upload it here. Only your fills are imported — duplicates are skipped, and your live
+            positions are left untouched.
+          </span>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".xml,text/xml,application/xml"
+            style={{ display: 'none' }}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImportFile(f); }}
+          />
+          <Button
+            variant="secondary"
+            onClick={() => importInputRef.current?.click()}
+            disabled={importing}
+            style={{ alignSelf: 'flex-start' }}
+          >
+            {importing ? 'Importing…' : 'Choose Flex XML…'}
+          </Button>
+          {importResult && (
+            <AlertStrip severity="positive">
+              Imported {importResult.executions} fill{importResult.executions !== 1 ? 's' : ''}
+              {importResult.accountId ? ` from account ${importResult.accountId}` : ''} — duplicates skipped.
+            </AlertStrip>
+          )}
+          {importError && <AlertStrip severity="negative">{importError}</AlertStrip>}
         </div>
       )}
 
