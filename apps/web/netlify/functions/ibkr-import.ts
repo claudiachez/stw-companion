@@ -67,8 +67,10 @@ export const handler: Handler = async (event) => {
     const syncTime = new Date().toISOString();
     let persisted;
     try {
-      // Executions only — never touch the live positions/NLV snapshot from a history file.
-      persisted = await persistFlexResult(admin, user.id, parsed, syncTime, { positions: false, executions: true, nlv: false });
+      // Executions only, in 'refresh' mode — an explicit import is authoritative, so it
+      // UPDATES existing fills (backfilling e.g. a price an older sync stored as null)
+      // rather than skipping them. Live positions/NLV snapshot is never touched.
+      persisted = await persistFlexResult(admin, user.id, parsed, syncTime, { positions: false, executions: true, nlv: false, executionsMode: 'refresh' });
     } catch (e) {
       return err(500, e instanceof Error ? e.message : 'DB write failed');
     }
