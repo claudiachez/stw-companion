@@ -333,7 +333,13 @@ export interface PersistResult { count: number; executions: number; nlv: number 
  * Persist a parsed report for one user. Flags let a caller write only what it has:
  *   - positions: delete-all-then-insert (mutable snapshot). Skipped when empty (a fully
  *     cash account is legitimate) unless the section was genuinely present-but-empty.
- *   - executions: idempotent upsert on (user_id, ibkr_exec_id), never delete (immutable log).
+ *   - executions: upsert on (user_id, ibkr_exec_id), never delete (immutable log). Mode:
+ *       'append'  (default, the daily sync) — ignoreDuplicates: a seen fill is never
+ *                 re-touched, so overlapping windows don't churn.
+ *       'refresh' (the manual import) — update-on-conflict, so re-importing an
+ *                 authoritative export CORRECTS existing rows (e.g. backfills a price
+ *                 that an older, Trade-Price-less sync stored as null). Import is the
+ *                 sanctioned "repair my history" path; the append-only sync never does this.
  *   - nlv: UPDATE ibkr_nlv + bump equity_peak high-water mark.
  */
 export async function persistFlexResult(
@@ -341,11 +347,12 @@ export async function persistFlexResult(
   userId: string,
   parsed: ParsedFlexReport,
   syncTime: string,
-  flags: { positions?: boolean; executions?: boolean; nlv?: boolean } = {},
+  flags: { positions?: boolean; executions?: boolean; nlv?: boolean; executionsMode?: 'append' | 'refresh' } = {},
 ): Promise<PersistResult> {
   const writePositions = flags.positions ?? true;
   const writeExecutions = flags.executions ?? true;
   const writeNlv = flags.nlv ?? true;
+  const executionsMode = flags.executionsMode ?? 'append';
 
   let count = 0;
   if (writePositions && parsed.positions.length > 0) {
@@ -361,7 +368,7 @@ export async function persistFlexResult(
     const execRows = parsed.executions.map((e) => ({ ...e, user_id: userId, synced_at: syncTime }));
     const { error } = await admin
       .from('user_executions')
-      .upsert(execRows, { onConflict: 'user_id,ibkr_exec_id', ignoreDuplicates: true });
+      .upsert(execRows, { onConflict: 'user_id,ibkr_exec_id', ignoreDuplicates: executionsMode === 'append' });
     if (error) throw new Error(`DB write failed (executions): ${error.message}`);
     executionsWritten = execRows.length;
   }
