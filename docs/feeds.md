@@ -21,7 +21,7 @@ Session-Close doc-maintenance step.
 | **Finnhub** | `VITE_FINNHUB_KEY` | Free, ~60/min | Live **stock** quotes; `profile2` (industry, for `sector-map-sync`) | CORS OK; free tier serves neither index symbols nor daily candles |
 | **FlashAlpha** | `FLASHALPHA_API_KEY` (server-side, no `VITE_`) | Free, **5 requests/DAY, SPY-only, single expiry** (SPX/full-chain need a paid plan) | Macro **GEX / Positioning** module — SPY net GEX · gamma flip · call/put walls | **5/day rules out a per-browser proxy** → the `gex-snapshot` scheduled writer is the ONLY caller; clients read `gex_snapshots`. `X-Api-Key` header |
 | **IBKR — local proxy** | none (localhost) | Gateway pacing only | Admin option-leg marks (`legs.mark_price`) + real order placement | `apps/admin/ibkr_proxy.py`; never deployed |
-| **IBKR — Flex Web Service** | per-subscriber token in `profiles` | ~1 req / few-min per token | Subscriber's own **open positions** (`<OpenPositions>`) → `user_positions` (snapshot, delete+reinsert) **and fills** (`<Trades>`, optional) → `user_executions` (append-only, idempotent on `ibExecID`) | via `apps/web/netlify/functions/ibkr-flex.ts`; `user_executions` consumed by `scripts/tca.mjs` |
+| **IBKR — Flex Web Service** | per-subscriber token in `profiles` | ~1 req / few-min per token (throttles a query hard when hit repeatedly → 1001) | Subscriber's own **open positions** (`<OpenPositions>`) → `user_positions` (snapshot, delete+reinsert), **fills** (`<Trades>`) → `user_executions` (append-only, idempotent on `ibExecID`), **NAV** (`<EquitySummaryInBase>` latest `total`) → `risk_config.ibkr_nlv`, and **Change in NAV** `depositsWithdrawals` (parsed, not yet persisted — for the pending drawdown rebuild) | Shared pipeline in `apps/web/netlify/_lib/flex-core.ts` (fetch+parse+persist), used by **3 callers**: `ibkr-flex.ts` (interactive), `ibkr-sync-cron.ts` (nightly), `ibkr-import.ts` (one-time XML upload). **Recommended query = Period "Last 7 Days"** (keeps the Web Service report small enough to generate); history is backfilled via the import. `user_executions` consumed by `scripts/tca.mjs` |
 | **Anthropic** | `ANTHROPIC_API_KEY` (server-side) | Pay per token | Macro daily recap (AM/PM) | functions only |
 
 > Retired 2026-07-10: the **MarketWatch** economic-calendar scrape (`cheerio`) — replaced by FRED's
@@ -118,6 +118,7 @@ re-implementing pacing.
 | `regime-daily` | admin | weekdays 23:00 UTC (daily); backfill on demand | daily: FRED (VIX/VIX3M/US10Y) + TwelveData (IWM/SPY/QQQ). depth backfill (`?source=yahoo`): FRED + Yahoo Finance | `regime_daily` (**PROD = 19,500 rows, IWM/SPY/QQQ 2000-09-01→present, `source=yahoo+fred`**; daily cron live since promotion #87) |
 | `sector-map-sync` | web | weekdays 22:00 UTC | Finnhub `profile2` | `ticker_sector_map` |
 | `macro-recap-am/pm` | web | weekdays 12:00 / 21:30 UTC | Anthropic | `macro_daily_recaps` |
+| `ibkr-sync-cron` | web | 08:00 UTC Tue–Sat (~4am ET) | IBKR Flex (per connected user) | `user_positions` + `user_executions` (append) + `risk_config.ibkr_nlv` — keeps fills complete even if the user never opens the app. **Dormant until prod (`main`)** per the note below |
 
 > Netlify fires scheduled functions **only on a site's production (`main`) deploy** — not on branch/
 > `staging` deploys. So these self-populate on prod only. Note a `schedule()`-wrapped function is

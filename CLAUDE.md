@@ -1,10 +1,12 @@
 # STW Companion — Claude Code Guide
 
 > **⚠️ START HERE — branch.** **`staging` is the active trunk** — all feature work happens here.
-> **`staging` is ~16 commits ahead of `main`** (the whole Week-2 batch below + the regime_daily depth
-> extension; check `git log --oneline origin/main..origin/staging | wc -l`). A `staging → main` PR is a
-> separate, approval-gated production deploy; **do not open one without explicit host approval**, even if
-> staging looks ready.
+> **`staging` is ~66 commits ahead of `main`** (Week-2 + regime depth + Macro traffic-light + the IBKR
+> sync rework below; check `git log --oneline origin/main..origin/staging | wc -l`). A `staging → main` PR
+> is a separate, approval-gated production deploy; **do not open one without explicit host approval**, even
+> if staging looks ready. **A promotion is PENDING** — nothing since the Week-1 batch (PR #87) is on prod,
+> including all the IBKR sync work; the **nightly `ibkr-sync-cron` stays dormant until promotion** (Netlify
+> fires scheduled fns only on the `main` deploy).
 > **✅ WEEK 2 MERGED to `staging` (PR [#88](https://github.com/claudiachez/stw-companion/pull/88),
 > 2026-07-10) — NOT yet on production (`main`).** What's on staging: **executions sync** (`user_executions`,
 > migration 064 — Flex `<Trades>` ingestion via `ibkr-flex.ts`), **TCA v1** (`scripts/tca.mjs`, admin/CLI),
@@ -15,9 +17,10 @@
 > layout) is LIVE on production** (PR #87, merged 2026-07-09) — and the **`regime-daily` cron's first
 > post-merge tick is CONFIRMED** (`run_log` `regime-daily` ok at 2026-07-09 23:05 UTC; a fresh 2026-07-09
 > `regime_daily` row per IWM/SPY/QQQ). The FRED re-platform + GICS taxonomy is also live (PR #81).
-> Migrations run to **067**, applied + verified on **both PROD and sandbox** (058 is PROD-only — sandbox has
-> no `tiers`/`profiles` tables; known permanent gap). **067 = `gex_snapshots`** (FlashAlpha GEX writer;
-> applied + verified both envs 2026-07-10, 0 rows until the `gex-snapshot` cron first fires).
+> Migrations run to **070**, applied + verified on **both PROD and sandbox** (058 is PROD-only — sandbox has
+> no `tiers`/`profiles` tables; known permanent gap). **068/069 = `market_holidays` + trading-day RPCs**,
+> **070 = `risk_config.ibkr_nlv`** (live equity from the Flex NAV section). No migrations were authored the
+> last session (IBKR sync rework was code-only).
 > **Launch Gate 2 DB-layer multi-tenancy proof PASSED**
 > on PROD (adversarial RLS test, two throwaway tenants; `ops_log` row 12) — see `docs/launch_gates.md`.
 > **CCXI is now mapped → Industrials** in `ticker_sector_map` (verified 2026-07-10; the `TICKER_GICS`
@@ -25,14 +28,16 @@
 > **PROD `regime_daily` = 19,500 rows (IWM/SPY/QQQ, 2000-09-01 → present, `source=yahoo+fred`)** — the
 > depth extension is DONE (PR #89, merged to `staging` 2026-07-10; the backfill wrote directly to PROD, so
 > it is live regardless of promotion). **Sandbox still 0 rows** (dev-only; needs a sandbox service-role key).
-> **`user_executions` is 0 rows on PROD** — expected until the operator enables the Flex **Trades** section
-> AND the executions code deploys (currently on staging, not the site the operator syncs against). No fills
-> flow until both are true. `app_config.ibkr_live_trading_enabled` = **`0` on both** (last confirmed 2026-07-05).
-> **`FRED_API_KEY`** + **`FLASHALPHA_API_KEY`** (both server-side, no `VITE_`) are set on both sites incl.
-> prod (host confirmed 2026-07-10). If migrations stop short of 067 you are on a stale checkout, re-sync.
+> **PROD `user_executions` = 443 fills (Jan–Jul), ALL priced** — repaired 2026-07-12 via the new Flex-XML
+> **import** (operator uploaded a YTD export with Trade Price ticked; refresh-mode backfilled the prices an
+> earlier Trade-Price-less sync had left null). **`risk_config.ibkr_nlv` is still NULL** — the import is
+> executions-only; it needs one **live Sync** to write NLV (the operator's live-sync attempts were hitting
+> IBKR's 1001 rate-limit at handoff — let it cool, sync once). `app_config.ibkr_live_trading_enabled` = **`0`
+> on both** (last confirmed 2026-07-05). **`FRED_API_KEY`** + **`FLASHALPHA_API_KEY`** (server-side, no
+> `VITE_`) set on both sites incl. prod. If migrations stop short of 070 you are on a stale checkout, re-sync.
 > **First commands every session:** `git fetch origin && git checkout staging && git pull --ff-only`.
-> Sanity check: `supabase/migrations/` should go up to `067_gex_snapshots.sql`,
-> `packages/shared/src/utils/voltarget.ts` and `scripts/tca.mjs` should exist, and `plans/` files are
+> Sanity check: `supabase/migrations/` should go up to `070_risk_config_ibkr_nlv.sql`,
+> `apps/web/netlify/_lib/flex-core.ts` and `scripts/tca.mjs` should exist, and `plans/` files are
 > **date-prefixed** (`YYYYMMDD_<name>`) — if any is missing, you're on a stale checkout. Then **cut a
 > feature branch** before making any change: `git checkout -b claude/<short-feature-name>`. **Never commit
 > directly to `staging`** — work on the branch, push it, open a PR back to `staging` (host merges/approves).
@@ -55,6 +60,52 @@
   be useful (an RLS policy's email, an org/task UUID) — those aren't narrative attribution and are fine
   as-is.
 - **After ~10 commits in a chat**, run the Session Close routine (see section below)
+
+---
+
+## Current Status — IBKR subscriber-sync rework + filter expansion + risk-config audit (handoff 2026-07-12)
+
+**All on `staging`, merged via PRs #109–#112, NONE on `main`.** Typecheck + 282 tests + 0 lint errors throughout. No migrations authored this session. Four threads:
+
+- **Filter expansion (PRs #110):** every list surface (Stock Picks/Ticker Details, Trades, My Portfolio
+  Positions) gained filters for the fields that were *displayed but not filterable* — **conviction band**,
+  **trend structure** (9/21/200 bucket), **sector regime** (rotation standing), **GICS sector**; plus a
+  "Sort: Conviction" on Trades. The My-Portfolio Overview "⚠ N with low / declining conviction" chip now
+  jumps to **Positions** with the conviction filter pre-applied (was Tailing, which never showed it). New
+  shared `matchConvictionBand` + `CONVICTION_BAND_OPTIONS` (`@stw/shared`, +6 tests). Regime/sector aren't
+  on the `Holding` row (they come from `useTickerRegime` + `ticker_sector_map`), so predicates run at the
+  page/call site, not shared `filters.ts`. **Standing rule added** (see Conventions).
+- **IBKR subscriber-sync rework (PRs #111/#112):** the Flex query now generates over the API again once its
+  **Period = "Last 7 Days"** (a large YTD query 1001'd the Web Service). Reworked around that:
+  - **One shared pipeline** `apps/web/netlify/_lib/flex-core.ts` (fetch + parse + persist) used by 3 callers:
+    `ibkr-flex.ts` (interactive), **`ibkr-sync-cron.ts`** (new nightly, 08:00 UTC Tue–Sat, all connected
+    users — dormant until prod), **`ibkr-import.ts`** (new one-time XML upload for history backfill/repair).
+  - **Field fixes:** **Trade Price** is the fill price; **Orig Trade Price** is used only when *positive*
+    (it's frequently `"0"` — never store a $0 fill). **Cost Basis Money** falls back to `costBasisPrice ×
+    qty × mult`. **NAV** section → `risk_config.ibkr_nlv`. **Change in NAV** `depositsWithdrawals` parsed
+    (not yet persisted — for the pending drawdown rebuild).
+  - **Missing-field warnings:** the parser flags a mis-ticked template (no Trade Price / no NAV / not
+    Execution-level / no positions) → amber strip on Settings after a sync.
+  - **Executions write modes:** sync = append-only (`ignoreDuplicates`); **import = refresh**
+    (update-on-conflict) so re-importing *corrects* existing rows (backfills prices). Import is the
+    sanctioned "repair history" path.
+  - **Settings walkthrough** rewritten: the four Flex sections are lettered **a–d under step 3** (+ added
+    **Change in NAV**), numbers/letters are literal rendered badges (the CSS reset was eating `<ol>`
+    markers). Import block lives inside the IBKR connection section.
+- **Operator data repaired:** PROD `user_executions` went 0 → **443 fills, all priced** via the import
+  (see the banner). `ibkr_nlv` still null pending one live Sync.
+- **Risk-config audit (no code):** reviewed the operator's `risk_config` for rule contradictions. The
+  headline: the **drawdown ladder is firing on a phantom −60% drawdown** because `equity_peak` is stuck at
+  the $100k placeholder (the trigger only ratchets up + tracks `account_equity`, never the corrected $40k).
+  And a real finding from the NAV history: a ~$60k **withdrawal** on 2026-02-17 means a naive NLV
+  high-water-mark peak would *still* misread it as a drawdown — so the drawdown fix needs **cash-flow
+  adjustment** (the Change-in-NAV data), not just "peak tracks NLV". This is the next session's build (Next
+  Steps #1). Also flagged: ladder gross-target vs regime double-RED gross-target are two unreconciled
+  de-risking triggers; and the double-RED "trim to 70% OR gross to 30%" offers two ~40pp-apart options.
+
+**⚠️ PENDING (host):** (1) one **live Sync** to populate `ibkr_nlv` (blocked at handoff by IBKR's 1001
+rate-limit — cool down, sync once). (2) A `staging → main` promotion (approval-gated) — until then the
+nightly cron never fires and none of this is on prod.
 
 ---
 
@@ -613,6 +664,29 @@ it, shipped it to production, then separately investigated + fixed a live data-i
 
 ## Next Steps
 
+**★ NEXT TASK — cash-flow-adjusted drawdown-ladder rebuild (host-agreed for the next session).**
+The drawdown ladder is currently broken: it reads a phantom **−60%** drawdown because `equity_peak`
+is stuck at the $100k placeholder (`fn_risk_config_track_equity_peak` only ratchets UP and tracks
+`account_equity`, never the corrected $40k). Naively switching the peak to a high-water-mark of
+`ibkr_nlv` is **not enough** — the operator's NAV history shows a ~$60k **withdrawal** on 2026-02-17,
+which a raw NLV peak would misread as a −60% loss. So the rebuild must compute drawdown **net of
+external cash flows** using the **`<ChangeInNAV>` `depositsWithdrawals`** now parsed by `flex-core.ts`
+(persist it — likely a new `risk_config` column or a small per-day table — then re-base the peak off
+NLV-minus-cumulative-cashflows). Until real data exists, the ladder should **stay silent** rather than
+show a phantom number. Read-first: `packages/shared/src/utils/limits.ts` (`drawdownLadderTarget`),
+`packages/ui/src/features/limits/ViolationsSummary.tsx` (computes `drawdownPct` from
+`(accountEquity − equity_peak)/equity_peak`), `apps/web/netlify/_lib/flex-core.ts` (already parses
+`depositsWithdrawals`), and migration `059_risk_config_account_equity.sql` (the peak trigger). This is a
+**migration + trigger + logic** change. Also open from the same audit (lower priority): the ladder
+gross-target vs regime double-RED gross-target are two unreconciled de-risking triggers (consider a
+"binding constraint = the lower one" flag on the Risk tab); and the double-RED advice offers a "trim to
+70% OR gross to 30%" pair that's ~40pp apart (make the trim fallback proportional or drop it).
+
+**PENDING (host actions, not code):** (a) run **one live Sync** to populate `risk_config.ibkr_nlv`
+(was blocked by IBKR's 1001 rate-limit at handoff — let the query cool, then sync once; a large/edited
+query also 1001s, so keep Period = Last 7 Days). (b) A **`staging → main` promotion** is approval-gated
+and pending — the nightly `ibkr-sync-cron` cannot fire until it lands on prod.
+
 0. **✅ WEEK-2 ITEM 4 — `regime_daily` depth extension DONE (PR #89, 2026-07-10).** PROD `regime_daily`
    is now **19,500 rows, IWM/SPY/QQQ 2000-09-01→present** (`source=yahoo+fred`) — see the Current Status
    subsection at the top. **Newly unblocked:** Item 3's **vol-target validation backtest** (the
@@ -968,32 +1042,50 @@ different integration (IBKR's Client Portal Web API, or Alpaca's OAuth trading A
 (`IB_PORT=4002` for paper mode) so testing never requires editing the file.
 
 ### Subscriber — Flex Query portfolio sync
-`apps/web/netlify/functions/ibkr-flex.ts` is a **serverless** Netlify function that
-calls IBKR's cloud Flex Web Service API to fetch a subscriber's **own** portfolio positions.
-Security model: client sends its Supabase JWT → function verifies it, reads
-`ibkr_flex_token` + `ibkr_query_id` from `profiles` via service key → calls IBKR →
-writes positions to `user_positions`. The raw token never reaches the browser.
+**One shared pipeline** — `apps/web/netlify/_lib/flex-core.ts` (`fetchFlexReport` two-step Web Service
+call → `parseFlexReport` → `persistFlexResult`) — used by **three callers; never fork it**:
+- **`ibkr-flex.ts`** — interactive per-user sync (browser sends its Supabase JWT → function verifies,
+  reads `ibkr_flex_token` + `ibkr_query_id` from `profiles` via service key, calls IBKR; the raw token
+  never reaches the browser). Short poll budget (Netlify 10s limit).
+- **`ibkr-sync-cron.ts`** — scheduled (08:00 UTC Tue–Sat), syncs **every connected user** so fills stay
+  complete even if the user never opens the app. **Only fires on the prod (`main`) deploy** (Netlify
+  scheduled-fn rule) — dormant on staging.
+- **`ibkr-import.ts`** — JWT-auth one-time **XML upload** (the user exports a long-period report from the
+  IBKR portal, which builds big reports the Web Service refuses). Executions-only; backfills / **repairs**
+  history the short live window can't reach.
 
-**The one Flex report carries TWO sections, written with OPPOSITE semantics** (Week 2, migration 064):
-- `<OpenPositions>` → `user_positions` — a **mutable snapshot**, delete-all-then-insert every sync.
-- `<Trades>` → `user_executions` — an **append-only immutable log**, idempotent upsert on
-  `(user_id, ibkr_exec_id)` (`ibExecID`), **never deleted**. The Flex Trades lookback (~1 year) slides
-  daily and pre-window history is unrecoverable, so every fill ever seen is kept. The Trades section is
-  optional (absent → 0 executions, never an error) and must be enabled on the operator's Flex template
-  (manual, outside repo). Fill instant parsed ET-wall-clock→UTC, raw string preserved (`exec_datetime_raw`).
-  Consumed by TCA v1 (`scripts/tca.mjs`, admin/CLI). Same per-user RLS as `user_positions`.
-  The Settings connect-walkthrough (`SettingsPage.tsx` `CONNECT_STEPS`) documents the exact Flex field
-  labels + the lookalike traps (IB vs External Execution ID; Trade Price vs Orig Trade Price; Currency
-  vs IB Commission Currency) and the General-Config defaults the parser depends on (yyyyMMdd/HHmmss,
-  Breakout by Day = No — Breakout=Yes splits into per-day FlexStatement blocks the parser won't read).
+**The one Activity Flex report carries up to FOUR sections, persisted with different semantics:**
+- `<OpenPositions>` → `user_positions` — **mutable snapshot**, delete-all-then-insert every sync.
+- `<Trades>` → `user_executions` — **append-only log**, upsert on `(user_id, ibkr_exec_id)`. **Write mode
+  matters:** the sync uses `append` (`ignoreDuplicates` — a seen fill is never re-touched); the **import
+  uses `refresh`** (update-on-conflict) so re-importing an authoritative export *corrects* existing rows
+  (e.g. backfills a price an older Trade-Price-less sync stored null). Fill instant ET-wall-clock→UTC, raw
+  string kept (`exec_datetime_raw`). Consumed by TCA (`scripts/tca.mjs`).
+- `<EquitySummaryInBase>` latest `total` → `risk_config.ibkr_nlv` (live equity; the "one value, one
+  source" denominator). Written by the **sync**, NOT the import.
+- `<ChangeInNAV>` `depositsWithdrawals` → **parsed but not yet persisted** — reserved for the pending
+  cash-flow-adjusted drawdown rebuild (Next Steps #1).
 
-Required Netlify env vars on the **web** site:
-- `VITE_SUPABASE_URL` — already present (shared with the Vite client build)
-- `SUPABASE_SERVICE_ROLE_KEY` — server-side only, must be added separately (no VITE_ prefix)
+**Field rules (in `flex-core.ts`):** **Trade Price** is the fill price; **Orig Trade Price** is a lookalike
+that's frequently `"0"`, so it's a last resort used **only when positive** — never store a $0 fill.
+**Cost Basis Money** falls back to `costBasisPrice × qty × multiplier`. `parseFlexReport` returns a
+**`warnings[]`** of mis-ticked-template gaps (no Trade Price / no NAV section / Trades not at Execution
+LOD / no Open Positions), surfaced as an amber strip on Settings after a sync.
 
-These three pipelines are independent. The admin proxy prices (and now trades) STW's own
-positions on the admin's own account; the subscriber function only ever reads the
-subscriber's own account, read-only. Do not conflate them.
+**Recommended subscriber query = Activity Flex, Period "Last 7 Days"** — a large YTD query makes the Web
+Service return `1001 "could not be generated"` (it also throttles a query hard when hit repeatedly). Short
+window + daily cron + append-only = no fill ever dropped; full history comes from the import. The
+`SettingsPage.tsx` `CONNECT_STEPS` walkthrough documents the exact fields + lookalike traps (IB vs External
+Execution ID; Trade Price vs Orig; Currency vs IB Commission Currency) and the General-Config defaults the
+parser depends on (yyyyMMdd/HHmmss, Breakout by Day = No).
+
+`flex-core.ts` uses **supabase-js with the `ws` Realtime-transport shim** (a sanctioned exception to the
+"no supabase-js in functions" convention below — the delete/insert/upsert flows are cleaner with the
+client, and the shim avoids the import-time WebSocket crash). Env vars (web site): `VITE_SUPABASE_URL`,
+`SUPABASE_SERVICE_ROLE_KEY`.
+
+These three IBKR pipelines are independent (admin proxy prices/trades STW's own account; the subscriber
+functions only ever read a subscriber's own account). Do not conflate them.
 
 ---
 
@@ -1004,7 +1096,7 @@ subscriber's own account, read-only. Do not conflate them.
 - **Supabase — NO `@supabase/supabase-js` in Netlify Functions.** `createClient` from supabase-js 2.100+ throws on Node 20 because the Realtime client tries to open a WebSocket at import time and crashes the function. Use **direct REST `fetch()`** for all Supabase reads/writes in functions — `GET /rest/v1/<table>?...` with `apikey` + `Authorization: Bearer <key>` headers. See `apps/web/netlify/_lib/recap-core.ts` for the pattern. This replaces the old guidance about `createClient` options.
 - **Env var whitespace:** always call `.trim()` on env vars read in functions — pasted keys/URLs sometimes carry a trailing newline that causes "Invalid API key" from Supabase even when the value looks correct in the Netlify UI.
 - **Both web and admin deploy functions.** Both `apps/web/netlify/functions/` and `apps/admin/netlify/functions/` are deployed by their respective Netlify sites. Functions that must work on both sites (e.g. `macro-recap.ts`) need a copy in each app — Netlify functions are site-scoped, not cross-domain callable.
-- **Scheduled functions are cron-only over HTTP.** Once a function is wrapped with `schedule('<cron>', handlerImpl)` (the repo's pattern — `macro-snapshot`, `sector-map-sync`, `regime-daily`; `schedule` is an *identity* pass-through at runtime, so `handler === handlerImpl`), Netlify **no longer serves it over public HTTP** in production — it fires only on its cron. The UI "Run now" button sends no querystring, so it can only trigger the default (no-param) path. A function that ALSO has a param-driven mode (e.g. `regime-daily`'s `?backfill=1&days=N&before=`) can't reach that mode via the deployed URL — run it via `netlify functions:invoke --name <fn> --querystring "…"` against Netlify Dev, **or** the local esbuild-bundle harness below.
+- **Scheduled functions are cron-only over HTTP, and fire ONLY on the prod (`main`) deploy.** Once a function is wrapped with `schedule('<cron>', handlerImpl)` (the repo's pattern — `macro-snapshot`, `sector-map-sync`, `regime-daily`, `ibkr-sync-cron`; `schedule` is an *identity* pass-through at runtime, so `handler === handlerImpl`), Netlify **no longer serves it over public HTTP** and **only runs its cron on the site's production (`main`) deploy — never on branch/`staging` deploys**. So a newly-added scheduled writer stays dormant until a `staging → main` promotion, even though its code is on staging. The UI "Run now" button sends no querystring, so it can only trigger the default (no-param) path. The UI "Run now" button sends no querystring, so it can only trigger the default (no-param) path. A function that ALSO has a param-driven mode (e.g. `regime-daily`'s `?backfill=1&days=N&before=`) can't reach that mode via the deployed URL — run it via `netlify functions:invoke --name <fn> --querystring "…"` against Netlify Dev, **or** the local esbuild-bundle harness below.
 - **Running/backfilling a function locally with no site URL (the zero-drift way).** To execute a function's real code from this environment (e.g. the `regime_daily` PROD backfill): esbuild-**bundle** the handler exactly like Netlify does — `./node_modules/.pnpm/node_modules/.bin/esbuild <fn>.ts --bundle --platform=node --target=node20 --format=cjs --outfile=bundle.cjs` (inlines `@stw/shared` — this is the deploy artifact, no logic drift) — then a tiny CJS runner sets env from `apps/web/.env.local` + `apps/web/.env` (TwelveData key lives in `.env`, empty in `.env.local`) + the prod service-role key file, and calls `require('./bundle.cjs').handler({ queryStringParameters: {…} })`. **Do NOT use `tsx` to import the handler directly** — tsx's per-file transpile can't statically link `@stw/shared`'s `export *` barrel (a static `import { FRED_SERIES }` fails with "does not provide an export named" even though dynamic `import()` sees it); the esbuild bundle sidesteps it entirely.
 
 ### Macro data sources & module structure (FRED re-platform, 2026-07-10)
