@@ -664,23 +664,36 @@ it, shipped it to production, then separately investigated + fixed a live data-i
 
 ## Next Steps
 
-**★ NEXT TASK — cash-flow-adjusted drawdown-ladder rebuild (host-agreed for the next session).**
-The drawdown ladder is currently broken: it reads a phantom **−60%** drawdown because `equity_peak`
-is stuck at the $100k placeholder (`fn_risk_config_track_equity_peak` only ratchets UP and tracks
-`account_equity`, never the corrected $40k). Naively switching the peak to a high-water-mark of
-`ibkr_nlv` is **not enough** — the operator's NAV history shows a ~$60k **withdrawal** on 2026-02-17,
-which a raw NLV peak would misread as a −60% loss. So the rebuild must compute drawdown **net of
-external cash flows** using the **`<ChangeInNAV>` `depositsWithdrawals`** now parsed by `flex-core.ts`
-(persist it — likely a new `risk_config` column or a small per-day table — then re-base the peak off
-NLV-minus-cumulative-cashflows). Until real data exists, the ladder should **stay silent** rather than
-show a phantom number. Read-first: `packages/shared/src/utils/limits.ts` (`drawdownLadderTarget`),
-`packages/ui/src/features/limits/ViolationsSummary.tsx` (computes `drawdownPct` from
-`(accountEquity − equity_peak)/equity_peak`), `apps/web/netlify/_lib/flex-core.ts` (already parses
-`depositsWithdrawals`), and migration `059_risk_config_account_equity.sql` (the peak trigger). This is a
-**migration + trigger + logic** change. Also open from the same audit (lower priority): the ladder
-gross-target vs regime double-RED gross-target are two unreconciled de-risking triggers (consider a
-"binding constraint = the lower one" flag on the Risk tab); and the double-RED advice offers a "trim to
-70% OR gross to 30%" pair that's ~40pp apart (make the trim fallback proportional or drop it).
+**★ NEXT TASK — cash-flow-adjusted drawdown-ladder rebuild — DONE on branch
+`claude/drawdown-ladder-cash-flow-7hkvcg` (2026-07-12), PR → `staging` open; NOT merged, NOT on prod.**
+Typecheck + 291 tests (+9) + 0 lint errors. What shipped:
+- **Migration `071_risk_config_cashflow_drawdown.sql`** (⚠️ **host must apply to PROD + sandbox**) — adds
+  `cumulative_cashflow` / `cumulative_cashflow_at` / `equity_peak_cashflow`; rewrites
+  `fn_risk_config_track_equity_peak` to drive the peak off **`ibkr_nlv`** (live broker equity) on a
+  **cash-flow-adjusted** high-water basis, no longer off the `account_equity` placeholder; and **clears
+  every existing phantom peak** (rebuilds from the first real NLV sync — until then the peak stays null
+  and the ladder is silent, so no phantom number).
+- **Model** (see the migration header + `cashflowAdjustedDrawdownPct` in `@stw/shared` + its 9 tests):
+  peak = raw `ibkr_nlv` at the flow-adjusted high, paired with `equity_peak_cashflow` (the cumulative
+  cash flow *as of* that high), so drawdown counts **only flow since the peak** —
+  `peakAdjustedToNow = equity_peak + (cumulative_cashflow − equity_peak_cashflow)`,
+  `drawdownPct = (nlv − peakAdjustedToNow)/peakAdjustedToNow`. Baseline-invariant: the historical
+  ~$60k 2026-02-17 withdrawal (predates our first NLV observation) no longer reads as a loss; a deposit
+  RAISES the bar rather than reading as a gain; a real loss reports honestly. First-order (additive)
+  adjustment, not full time-weighted return — good enough for an advisory de-risk flag.
+- **`flex-core.ts`** — the NLV write no longer sets `equity_peak` (the DB trigger owns it); a new
+  `cashflow` persist flag writes `cumulative_cashflow` from `<ChangeInNAV>` `depositsWithdrawals`
+  **IMPORT-ONLY** (`ibkr-import.ts` passes `cashflow: true`). The daily "Last 7 Days" sync deliberately
+  does **not** write it — a rolling-window period aggregate can't be accumulated without double-counting.
+  **Documented limitation:** a NEW deposit/withdrawal after the last import isn't flow-adjusted until the
+  user re-imports (the same "repair history" path). Also: a **manual-only user (no IBKR) now gets NO
+  drawdown** (silent) — the ladder genuinely needs a live equity feed; a static `account_equity` can't
+  produce a drawdown. Intentional.
+- **`ViolationsSummary.tsx`** — uses `cashflowAdjustedDrawdownPct`; the gross card now shows a
+  **binding-constraint note** (the lower of the ladder gross target vs the regime double-RED gross target
+  is the one that binds). **`regimeExitAdvice`** (double-RED) — the trim fallback is now **proportional**
+  to the gross target (`~doubleRedGrossPct% of size` ≈ gross→G%) instead of the looser single-RED
+  `trimToPct`, so the two options describe the same de-risk (was a ~40pp-apart pair).
 
 **PENDING (host actions, not code):** (a) run **one live Sync** to populate `risk_config.ibkr_nlv`
 (was blocked by IBKR's 1001 rate-limit at handoff — let the query cool, then sync once; a large/edited

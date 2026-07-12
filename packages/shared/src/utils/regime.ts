@@ -170,7 +170,12 @@ export interface RegimeExitRule {
 export function regimeExitAdvice(gate: RegimeGateResult, rule: RegimeExitRule): string | null {
   if (gate.risk_multiplier === null) return null;
   if (gate.trend_state === 'RED' && gate.vol_state === 'RED') {
-    return `Reduce gross exposure to ${rule.doubleRedGrossPct}% — or trim each open position to ${rule.trimToPct}% / tighten stops to ${rule.stopPct}%.`;
+    // The trim fallback is PROPORTIONAL to the gross target, not the single-RED
+    // trimToPct (host review 2026-07-12): trimming every position uniformly to G%
+    // of size scales gross to ~G%, so the two options describe the SAME de-risk —
+    // reusing trimToPct (e.g. 70%) offered a ~40pp-looser alternative that didn't
+    // achieve the gross reduction it sat next to.
+    return `Reduce gross exposure to ${rule.doubleRedGrossPct}% — i.e. trim each open position to ~${rule.doubleRedGrossPct}% of current size, or tighten stops to ${rule.stopPct}%.`;
   }
   if (gate.trend_state === 'RED' || gate.vol_state === 'RED') {
     return `Trim each open position to ${rule.trimToPct}% of current size, or tighten stops to ${rule.stopPct}%.`;

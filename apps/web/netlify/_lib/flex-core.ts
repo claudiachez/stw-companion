@@ -14,8 +14,9 @@
  *   OpenPositions          → user_positions   (mutable snapshot: delete-all-then-insert)
  *   Trades                 → user_executions  (append-only log: idempotent on ibExecID)
  *   EquitySummaryInBase    → risk_config.ibkr_nlv (latest reportDate total = live NLV)
- *   ChangeInNAV            → depositsWithdrawals (for cash-flow-adjusted drawdown; parsed
- *                            here so it's ready, persisted by the drawdown build)
+ *   ChangeInNAV            → risk_config.cumulative_cashflow (depositsWithdrawals, for
+ *                            cash-flow-adjusted drawdown — IMPORT ONLY; the rolling daily
+ *                            sync can't accumulate it without double-counting, migr. 071)
  */
 import { XMLParser } from 'fast-xml-parser';
 
@@ -340,18 +341,24 @@ export interface PersistResult { count: number; executions: number; nlv: number 
  *                 authoritative export CORRECTS existing rows (e.g. backfills a price
  *                 that an older, Trade-Price-less sync stored as null). Import is the
  *                 sanctioned "repair my history" path; the append-only sync never does this.
- *   - nlv: UPDATE ibkr_nlv + bump equity_peak high-water mark.
+ *   - nlv: UPDATE ibkr_nlv (the DB trigger fn_risk_config_track_equity_peak derives
+ *     the cash-flow-adjusted equity_peak high-water mark from it — see migration 071).
+ *   - cashflow: UPDATE cumulative_cashflow from ChangeInNAV depositsWithdrawals. Only
+ *     the one-time full-history IMPORT sets this — the daily "Last 7 Days" sync must
+ *     NOT, because summing a rolling window's period aggregate across overlapping runs
+ *     would double-count (see migration 071's header for the full rationale).
  */
 export async function persistFlexResult(
   admin: Admin,
   userId: string,
   parsed: ParsedFlexReport,
   syncTime: string,
-  flags: { positions?: boolean; executions?: boolean; nlv?: boolean; executionsMode?: 'append' | 'refresh' } = {},
+  flags: { positions?: boolean; executions?: boolean; nlv?: boolean; cashflow?: boolean; executionsMode?: 'append' | 'refresh' } = {},
 ): Promise<PersistResult> {
   const writePositions = flags.positions ?? true;
   const writeExecutions = flags.executions ?? true;
   const writeNlv = flags.nlv ?? true;
+  const writeCashflow = flags.cashflow ?? false;
   const executionsMode = flags.executionsMode ?? 'append';
 
   let count = 0;
@@ -374,9 +381,16 @@ export async function persistFlexResult(
   }
 
   if (writeNlv && parsed.nlv !== null) {
-    const { data: rc } = await admin.from('risk_config').select('equity_peak').eq('user_id', userId).maybeSingle();
-    const peak = Math.max(rc?.equity_peak ?? 0, parsed.nlv);
-    await admin.from('risk_config').update({ ibkr_nlv: parsed.nlv, ibkr_nlv_at: syncTime, equity_peak: peak }).eq('user_id', userId);
+    // equity_peak is NOT set here — the risk_config BEFORE-UPDATE trigger derives the
+    // cash-flow-adjusted high-water mark from ibkr_nlv + cumulative_cashflow (071).
+    await admin.from('risk_config').update({ ibkr_nlv: parsed.nlv, ibkr_nlv_at: syncTime }).eq('user_id', userId);
+  }
+
+  // Authoritative full-history net cash flow (import only — see the flag doc above).
+  if (writeCashflow && parsed.depositsWithdrawals !== null) {
+    await admin.from('risk_config')
+      .update({ cumulative_cashflow: parsed.depositsWithdrawals, cumulative_cashflow_at: syncTime })
+      .eq('user_id', userId);
   }
 
   return { count, executions: executionsWritten, nlv: parsed.nlv };

@@ -200,6 +200,38 @@ export function drawdownLadderTarget(ladder: DrawdownStep[], drawdownPct: number
   return target;
 }
 
+/**
+ * Cash-flow-adjusted drawdown-from-peak, in percent (0 = at the high-water mark,
+ * negative = below it). Returns null when there isn't enough real data to compute
+ * a drawdown (no live equity, or no established peak) — the caller renders NOTHING
+ * in that case rather than a phantom number.
+ *
+ * Drawdown is measured NET OF EXTERNAL CASH FLOWS so a deposit/withdrawal — which
+ * moves NLV without being a gain or loss — is not mistaken for one. The peak is a
+ * raw NLV high-water mark (`equityPeak`) paired with the cumulative cash flow AS OF
+ * that high (`equityPeakCashflow`, maintained by fn_risk_config_track_equity_peak);
+ * only the flow SINCE the peak is applied, by re-basing the peak to "now":
+ *   peakAdjustedToNow = equityPeak + (cumulativeCashflow − equityPeakCashflow)
+ *   drawdownPct       = (nlv − peakAdjustedToNow) / peakAdjustedToNow × 100
+ * A net deposit since the peak RAISES the bar (more capital to protect); a net
+ * withdrawal LOWERS it. This is a first-order (additive) adjustment, not full
+ * time-weighted return — good enough for an advisory de-risk trigger.
+ *
+ * See migration 071 for the full rationale + the storage model.
+ */
+export function cashflowAdjustedDrawdownPct(
+  nlv: number | null,
+  equityPeak: number | null,
+  cumulativeCashflow: number | null,
+  equityPeakCashflow: number | null,
+): number | null {
+  if (nlv === null || equityPeak === null) return null;
+  const flowsSincePeak = (cumulativeCashflow ?? 0) - (equityPeakCashflow ?? 0);
+  const peakAdjustedToNow = equityPeak + flowsSincePeak;
+  if (peakAdjustedToNow <= 0) return null;
+  return ((nlv - peakAdjustedToNow) / peakAdjustedToNow) * 100;
+}
+
 /** Runs all three concentration checks + the drawdown ladder in one call. */
 export function evaluateRiskConfig(
   positions: PositionInput[],
