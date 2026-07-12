@@ -129,9 +129,9 @@ Event-sourced positions: **`leg_transactions`** (the diary — the only hand-wri
 | `run_log` | routines + scheduled Netlify writers | "Latest Portfolio Changes"; ingestion audit |
 | `ticker_sector_map` | **`sector-map-sync`** fn + one-off migration | GICS sector (Risk concentration, heatmap, detail pane) |
 | `macro_daily_snapshots` / `macro_daily_recaps` / `regime_daily` | scheduled Netlify fns | Macro 5D engine / recap / regime gate |
-| `risk_config` / `risk_violation_acks` | subscriber Settings | My Portfolio Risk tab |
-| `user_positions` | web `ibkr-flex.ts` (user-owned RLS) | My Portfolio |
-| `user_executions` | web `ibkr-flex.ts` `<Trades>` (append-only, user-owned RLS) | TCA (`scripts/tca.mjs`, admin/CLI) |
+| `risk_config` / `risk_violation_acks` | subscriber Settings; **`ibkr_nlv` written by the Flex sync** (NAV section) | My Portfolio Risk tab |
+| `user_positions` | web IBKR Flex pipeline — `_lib/flex-core.ts` via `ibkr-flex.ts` (interactive) + `ibkr-sync-cron.ts` (nightly, prod-only) (user-owned RLS) | My Portfolio |
+| `user_executions` | same pipeline `<Trades>` (append-only), **plus `ibkr-import.ts`** one-time XML upload in *refresh* mode (updates existing fills, e.g. backfills prices) (user-owned RLS) | TCA (`scripts/tca.mjs`, admin/CLI) |
 | `regime_exit_audit` | `risk_config` trigger (user-owned RLS) | audit trail of REGIME_EXIT edits |
 | `profiles` / `tiers` | auth + Settings | AccessGate paywall, Settings |
 | `app_config` | admin Config page | sizing/capital defaults, IBKR kill switch, regime sleeve weights |
