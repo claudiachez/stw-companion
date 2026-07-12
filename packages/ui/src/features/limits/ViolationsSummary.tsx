@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  evaluateRiskConfig,
+  evaluateRiskConfig, cashflowAdjustedDrawdownPct,
   type PositionInput, type ConcentrationViolation, type ViolationSeverity,
 } from '@stw/shared';
 import { useAuthStore } from '../../store/auth';
@@ -131,7 +131,7 @@ function ViolationRow({
   );
 }
 
-function GrossExposureBar({ v, ladderTargetPct }: { v: ConcentrationViolation; ladderTargetPct: number | null }) {
+function GrossExposureBar({ v, ladderTargetPct, regimeDoubleRedGrossPct }: { v: ConcentrationViolation; ladderTargetPct: number | null; regimeDoubleRedGrossPct: number | null }) {
   const { exposurePct: pct, limitPct } = v;
   const scaleMax = Math.max(limitPct, pct, 100) * 1.05;
   const fillPct = Math.min(100, (pct / scaleMax) * 100);
@@ -163,7 +163,16 @@ function GrossExposureBar({ v, ladderTargetPct }: { v: ConcentrationViolation; l
       </div>
       {ladderTargetPct !== null && (
         <div className="text-xs text-[var(--status-warning-text)] bg-[var(--status-warning-bg)] border border-[var(--status-warning-border)] rounded px-3 py-2 mt-1">
-          Drawdown ladder target: reduce gross to {ladderTargetPct}%
+          <span className="block">Drawdown ladder target: reduce gross to {ladderTargetPct}%</span>
+          {/* Two de-risk triggers can be live at once — the drawdown ladder and the
+              regime double-RED policy. The binding constraint is the LOWER target;
+              call it out so they aren't read as separate, additive instructions. */}
+          {regimeDoubleRedGrossPct !== null && (
+            <span className="block text-t3 mt-1" style={{ color: 'var(--t2)' }}>
+              Your regime policy targets {regimeDoubleRedGrossPct}% gross in a double-RED regime.
+              If both apply, the binding target is the lower — {Math.min(ladderTargetPct, regimeDoubleRedGrossPct)}%.
+            </span>
+          )}
         </div>
       )}
     </div>
@@ -283,9 +292,14 @@ export function ViolationsSummary({ showSyncButton = false, settingsTo }: { show
   // number was far lower.
   const accountEquity = config.ibkr_nlv ?? config.account_equity;
   const usingLiveEquity = config.ibkr_nlv != null;
-  const drawdownPct = config.equity_peak
-    ? ((accountEquity - config.equity_peak) / config.equity_peak) * 100
-    : null;
+  // Drawdown is measured NET OF CASH FLOWS off the live NLV against its cash-flow-
+  // adjusted peak (migration 071) — NOT (equity − equity_peak)/equity_peak off the
+  // manual placeholder, which lit up a phantom −60% (peak stuck at $100k, NLV ~$40k).
+  // Null (→ ladder silent) until a real NLV + peak exist; a ~$60k historical
+  // withdrawal no longer reads as a loss.
+  const drawdownPct = cashflowAdjustedDrawdownPct(
+    config.ibkr_nlv, config.equity_peak, config.cumulative_cashflow, config.equity_peak_cashflow,
+  );
 
   const result = evaluateRiskConfig(positionInputs, sectorMap ?? {}, accountEquity, {
     maxPositionPct: config.max_position_pct,
@@ -376,6 +390,7 @@ export function ViolationsSummary({ showSyncButton = false, settingsTo }: { show
         <GrossExposureBar
           v={result.grossViolation}
           ladderTargetPct={result.ladderTargetGrossPct}
+          regimeDoubleRedGrossPct={config.regime_doublered_gross_pct ?? null}
         />
       </div>
 

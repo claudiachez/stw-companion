@@ -67,10 +67,12 @@ export const handler: Handler = async (event) => {
     const syncTime = new Date().toISOString();
     let persisted;
     try {
-      // Executions only, in 'refresh' mode — an explicit import is authoritative, so it
+      // Executions in 'refresh' mode — an explicit import is authoritative, so it
       // UPDATES existing fills (backfilling e.g. a price an older sync stored as null)
-      // rather than skipping them. Live positions/NLV snapshot is never touched.
-      persisted = await persistFlexResult(admin, user.id, parsed, syncTime, { positions: false, executions: true, nlv: false, executionsMode: 'refresh' });
+      // rather than skipping them. Live positions/NLV snapshot is never touched. The
+      // import is ALSO the sole writer of cumulative_cashflow (full-history ChangeInNAV
+      // net flow) — the daily sync can't accumulate a rolling window (migration 071).
+      persisted = await persistFlexResult(admin, user.id, parsed, syncTime, { positions: false, executions: true, nlv: false, cashflow: true, executionsMode: 'refresh' });
     } catch (e) {
       return err(500, e instanceof Error ? e.message : 'DB write failed');
     }
