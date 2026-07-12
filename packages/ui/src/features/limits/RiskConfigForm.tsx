@@ -34,7 +34,10 @@ function NumRow({ label, value, onChange, suffix, note, prefix, min, max, layout
         <span style={prefixSlot}>{prefix ?? ''}</span>
         <TextInput type="number" min={min} max={max} style={smallInput}
           value={value} onChange={(e) => onChange(Number(e.target.value))} />
-        <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>{suffix}{note ? ` ${note}` : ''}</span>
+        {/* flex:1 + minWidth:0 lets a long descriptor wrap WITHIN its own column
+            (to the right of the input) instead of wrapping as a block to a new
+            flush-left line — the Max-option row was doing the latter. */}
+        <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', flex: '1 1 auto', minWidth: 0 }}>{suffix}{note ? ` ${note}` : ''}</span>
       </div>
     </FormRow>
   );
@@ -146,10 +149,13 @@ export function RiskConfigForm({ userId, config }: { userId: string; config: Ris
             // Live from IBKR — read-only (the sync owns it), so the limits denominator
             // tracks the current balance, not a stale hand-typed figure.
             <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[1.5], flexWrap: 'wrap' }}>
+              {/* Empty prefix slot so the value's left edge lines up with the input
+                  column on every other row (the "$"/"At" slot), not 22px left of it. */}
+              <span style={prefixSlot} />
               <span style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
                 {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(config.ibkr_nlv)}
               </span>
-              <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>Current account equity — live balance from IBKR, incl. margin (updates each sync)</span>
+              <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', flex: '1 1 auto', minWidth: 0 }}>Current account equity — live balance from IBKR, incl. margin (updates each sync)</span>
             </div>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[1.5], flexWrap: 'wrap' }}>
