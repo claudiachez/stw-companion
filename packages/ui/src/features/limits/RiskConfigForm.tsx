@@ -64,6 +64,22 @@ function ladderWarnings(ladder: DrawdownStep[]): string[] {
   return warnings;
 }
 
+/** The drawdown ladder (keyed to YOUR equity drawdown) and the double-RED regime rule
+ * (keyed to the MARKET gate) are independent triggers, but both cap the same lever —
+ * gross exposure — and in practice fire together (a crash usually causes a drawdown).
+ * They aren't linked, but they should be COHERENT: a full double-RED market is at least
+ * as serious as your deepest drawdown rung, so its gross target shouldn't be LOOSER than
+ * the ladder's floor (if it were, the ladder would already de-risk you further and the
+ * regime target would never bind). Flag that as a likely misconfig — non-blocking. */
+function crossPolicyWarnings(regimeDoubleRedGrossPct: number, ladder: DrawdownStep[]): string[] {
+  if (ladder.length === 0) return [];
+  const floor = Math.min(...ladder.map((r) => r.targetGrossPct));
+  if (regimeDoubleRedGrossPct > floor) {
+    return [`Double-RED regime target (${regimeDoubleRedGrossPct}% gross) is looser than your deepest drawdown-ladder target (${floor}%). A double-RED market is usually at least as serious as a deep drawdown — set it at or below ${floor}% so it actually tightens exposure (otherwise the ladder already de-risks you further and this never binds).`];
+  }
+  return [];
+}
+
 /** A single position can't out-concentrate its own sector, and a single sector
  * can't out-concentrate the whole book. */
 function thresholdWarnings(maxPositionPct: number, maxOptionPositionPct: number, maxSectorPct: number, maxGrossPct: number): string[] {
@@ -98,7 +114,11 @@ export function RiskConfigForm({ userId, config }: { userId: string; config: Ris
   const regimeStopPct = draft.regimeStopPct ?? config.regime_stop_pct;
   const regimeDoubleRedGrossPct = draft.regimeDoubleRedGrossPct ?? config.regime_doublered_gross_pct;
   const dirty = Object.keys(draft).length > 0;
-  const warnings = [...thresholdWarnings(maxPositionPct, maxOptionPositionPct, maxSectorPct, maxGrossPct), ...ladderWarnings(ladder)];
+  const warnings = [
+    ...thresholdWarnings(maxPositionPct, maxOptionPositionPct, maxSectorPct, maxGrossPct),
+    ...ladderWarnings(ladder),
+    ...crossPolicyWarnings(regimeDoubleRedGrossPct, ladder),
+  ];
 
   function updateRung(i: number, patch: Partial<DrawdownStep>) {
     setDraft((d) => ({ ...d, ladder: ladder.map((r, idx) => (idx === i ? { ...r, ...patch } : r)) }));
