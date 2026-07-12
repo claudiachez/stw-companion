@@ -1,4 +1,4 @@
-import { regimeGate, regimeExitAdvice, formatDate, TREND_BUCKET_META, type RegimeExitRule, type TrendBucket } from '@stw/shared';
+import { regimeGate, regimeExitAdvice, formatDate, TREND_BUCKET_META, type RegimeExitRule, type TrendBucket, type BindingGrossTarget } from '@stw/shared';
 import { HelpToggle } from '../../primitives/HelpToggle';
 import { useLatestRegime } from './useLatestRegime';
 
@@ -34,10 +34,14 @@ export interface RegimeStructure {
  * closes never appear side by side (they used to, in two separate cards). The
  * gate verdicts stay authoritative; the live structure is the finer texture.
  */
-export function RegimeLight({ instrument = 'IWM', exitRule, structure }: {
+export function RegimeLight({ instrument = 'IWM', exitRule, structure, bindingGross }: {
   instrument?: string;
   exitRule?: RegimeExitRule;
   structure?: RegimeStructure | null;
+  /** Reconciled ladder-vs-regime gross target from the parent's useBindingGrossTarget.
+   * When BOTH triggers are firing, this card shows the same single binding number the
+   * gross-exposure card shows, so the two surfaces never disagree. */
+  bindingGross?: BindingGrossTarget | null;
 }) {
   const { data: row, isLoading } = useLatestRegime(instrument);
 
@@ -125,6 +129,22 @@ export function RegimeLight({ instrument = 'IWM', exitRule, structure }: {
           style={{ borderLeft: '2px solid var(--status-warning-text)', paddingLeft: 8 }}
         >
           Your rule: {advice}
+        </div>
+      )}
+
+      {/* The advice above already states the regime's gross target. Add a line ONLY when
+          the drawdown ladder binds even TIGHTER than it — the one case where the number
+          above isn't the operative one — so the two surfaces never disagree. In a coherent
+          config (double-RED ≤ ladder floor) the regime target binds and this stays hidden;
+          it surfaces the misconfig the Settings warning also flags. */}
+      {bindingGross?.source === 'both'
+        && bindingGross.ladderPct !== null && bindingGross.regimePct !== null
+        && bindingGross.ladderPct < bindingGross.regimePct && (
+        <div
+          className="text-t2 text-xs"
+          style={{ borderLeft: '2px solid var(--status-warning-text)', paddingLeft: 8 }}
+        >
+          Your drawdown ladder binds tighter — reduce gross to <span className="font-semibold">{bindingGross.ladderPct}%</span>, not the {bindingGross.regimePct}% above.
         </div>
       )}
 

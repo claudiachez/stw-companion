@@ -2,6 +2,7 @@ import { useAuthStore } from '../../store/auth';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { LoadingSpinner } from '../../primitives/LoadingSpinner';
 import { useRiskConfig, useEnsureRiskConfig } from './useRiskConfig';
+import { useBindingGrossTarget } from './useBindingGrossTarget';
 import { RiskConfigForm } from './RiskConfigForm';
 import { ViolationsSummary } from './ViolationsSummary';
 import { RegimeLight } from '../regime/RegimeLight';
@@ -19,14 +20,16 @@ export function LimitsPanel() {
   const isMobile = useIsMobile();
   const { data: config, isLoading: configLoading } = useRiskConfig(userId);
   useEnsureRiskConfig(userId, config, configLoading);
+  // Called unconditionally (before the early return) — handles a null config itself.
+  const bindingGross = useBindingGrossTarget(config, 'IWM');
 
   if (configLoading || !config) return <LoadingSpinner className="mt-16" />;
 
   return (
     <div className={`${isMobile ? '' : 'max-w-2xl mx-auto'} flex flex-col gap-4`}>
-      <RegimeLight instrument="IWM" exitRule={{ trimToPct: config.regime_trim_to_pct, stopPct: config.regime_stop_pct, doubleRedGrossPct: config.regime_doublered_gross_pct }} />
+      <RegimeLight instrument="IWM" exitRule={{ trimToPct: config.regime_trim_to_pct, stopPct: config.regime_stop_pct, doubleRedGrossPct: config.regime_doublered_gross_pct }} bindingGross={bindingGross} />
       <VolTargetPanel config={config} instrument="IWM" />
-      <ViolationsSummary showSyncButton />
+      <ViolationsSummary showSyncButton bindingGross={bindingGross} />
       <RiskConfigForm userId={userId!} config={config} />
     </div>
   );

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   positionMarketValue, rollupByUnderlying, grossExposure,
   positionConcentration, optionPositionConcentration, sectorConcentration, grossExposureViolation,
-  drawdownLadderTarget, cashflowAdjustedDrawdownPct, evaluateRiskConfig, classifySeverity, UNMAPPED_SECTOR,
+  drawdownLadderTarget, cashflowAdjustedDrawdownPct, bindingGrossTarget, evaluateRiskConfig, classifySeverity, UNMAPPED_SECTOR,
   type PositionInput, type RiskConfig,
 } from './limits';
 
@@ -230,6 +230,27 @@ describe('cashflowAdjustedDrawdownPct — the phantom-drawdown fix', () => {
   it('returns null if the re-based peak is non-positive (degenerate)', () => {
     // A withdrawal larger than the peak drives peakAdjustedToNow ≤ 0 → no meaningful %.
     expect(cashflowAdjustedDrawdownPct(10_000, 40_000, -50_000, 0)).toBeNull();
+  });
+});
+
+describe('bindingGrossTarget — reconcile ladder vs regime double-RED', () => {
+  it('returns null when neither trigger is firing', () => {
+    expect(bindingGrossTarget(null, null)).toBeNull();
+  });
+  it('ladder only → that target, source "ladder"', () => {
+    expect(bindingGrossTarget(50, null)).toEqual({ targetPct: 50, ladderPct: 50, regimePct: null, source: 'ladder' });
+  });
+  it('regime only → that target, source "regime"', () => {
+    expect(bindingGrossTarget(null, 30)).toEqual({ targetPct: 30, ladderPct: null, regimePct: 30, source: 'regime' });
+  });
+  it('both firing → the tighter (lower) target binds, source "both"', () => {
+    // ladder 50%, regime 30% → 30% governs.
+    expect(bindingGrossTarget(50, 30)).toEqual({ targetPct: 30, ladderPct: 50, regimePct: 30, source: 'both' });
+    // ladder tighter than regime → ladder governs.
+    expect(bindingGrossTarget(20, 30)).toEqual({ targetPct: 20, ladderPct: 20, regimePct: 30, source: 'both' });
+  });
+  it('both equal → that shared value binds', () => {
+    expect(bindingGrossTarget(40, 40)?.targetPct).toBe(40);
   });
 });
 
