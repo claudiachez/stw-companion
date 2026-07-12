@@ -17,10 +17,11 @@
 > layout) is LIVE on production** (PR #87, merged 2026-07-09) — and the **`regime-daily` cron's first
 > post-merge tick is CONFIRMED** (`run_log` `regime-daily` ok at 2026-07-09 23:05 UTC; a fresh 2026-07-09
 > `regime_daily` row per IWM/SPY/QQQ). The FRED re-platform + GICS taxonomy is also live (PR #81).
-> Migrations run to **070**, applied + verified on **both PROD and sandbox** (058 is PROD-only — sandbox has
+> Migrations run to **071**, applied + verified on **both PROD and sandbox** (058 is PROD-only — sandbox has
 > no `tiers`/`profiles` tables; known permanent gap). **068/069 = `market_holidays` + trading-day RPCs**,
-> **070 = `risk_config.ibkr_nlv`** (live equity from the Flex NAV section). No migrations were authored the
-> last session (IBKR sync rework was code-only).
+> **070 = `risk_config.ibkr_nlv`** (live equity from the Flex NAV section), **071 =
+> `risk_config` cash-flow-adjusted drawdown** (`cumulative_cashflow`/`_at`/`equity_peak_cashflow` +
+> rewritten `fn_risk_config_track_equity_peak`; applied to PROD + sandbox 2026-07-12).
 > **Launch Gate 2 DB-layer multi-tenancy proof PASSED**
 > on PROD (adversarial RLS test, two throwaway tenants; `ops_log` row 12) — see `docs/launch_gates.md`.
 > **CCXI is now mapped → Industrials** in `ticker_sector_map` (verified 2026-07-10; the `TICKER_GICS`
@@ -28,15 +29,16 @@
 > **PROD `regime_daily` = 19,500 rows (IWM/SPY/QQQ, 2000-09-01 → present, `source=yahoo+fred`)** — the
 > depth extension is DONE (PR #89, merged to `staging` 2026-07-10; the backfill wrote directly to PROD, so
 > it is live regardless of promotion). **Sandbox still 0 rows** (dev-only; needs a sandbox service-role key).
-> **PROD `user_executions` = 443 fills (Jan–Jul), ALL priced** — repaired 2026-07-12 via the new Flex-XML
-> **import** (operator uploaded a YTD export with Trade Price ticked; refresh-mode backfilled the prices an
-> earlier Trade-Price-less sync had left null). **`risk_config.ibkr_nlv` is still NULL** — the import is
-> executions-only; it needs one **live Sync** to write NLV (the operator's live-sync attempts were hitting
-> IBKR's 1001 rate-limit at handoff — let it cool, sync once). `app_config.ibkr_live_trading_enabled` = **`0`
-> on both** (last confirmed 2026-07-05). **`FRED_API_KEY`** + **`FLASHALPHA_API_KEY`** (server-side, no
-> `VITE_`) set on both sites incl. prod. If migrations stop short of 070 you are on a stale checkout, re-sync.
+> **PROD `user_executions` = 443 fills (Jan–Jul), ALL priced** (imported 2026-07-12). **`risk_config`
+> on PROD is now FULLY populated:** `ibkr_nlv=$45,090` (operator synced with Flex Period = **"Last
+> Business Day"** — a large/YTD *query* 1001s the Web Service; the import is a separate file-upload path),
+> `cumulative_cashflow=−60,000` (from the import's `<ChangeInNAV>`), `equity_peak=$45,090` →
+> **drawdown reads 0.00%** (the phantom −60% is fixed; the historical ~$60k withdrawal is neutralized).
+> `app_config.ibkr_live_trading_enabled` = **`0` on both** (last confirmed 2026-07-05). **`FRED_API_KEY`**
+> + **`FLASHALPHA_API_KEY`** (server-side, no `VITE_`) set on both sites incl. prod. If migrations stop
+> short of 071 you are on a stale checkout, re-sync.
 > **First commands every session:** `git fetch origin && git checkout staging && git pull --ff-only`.
-> Sanity check: `supabase/migrations/` should go up to `070_risk_config_ibkr_nlv.sql`,
+> Sanity check: `supabase/migrations/` should go up to `071_risk_config_cashflow_drawdown.sql`,
 > `apps/web/netlify/_lib/flex-core.ts` and `scripts/tca.mjs` should exist, and `plans/` files are
 > **date-prefixed** (`YYYYMMDD_<name>`) — if any is missing, you're on a stale checkout. Then **cut a
 > feature branch** before making any change: `git checkout -b claude/<short-feature-name>`. **Never commit
@@ -60,6 +62,38 @@
   be useful (an RLS policy's email, an org/task UUID) — those aren't narrative attribution and are fine
   as-is.
 - **After ~10 commits in a chat**, run the Session Close routine (see section below)
+
+---
+
+## Current Status — cash-flow-adjusted drawdown ladder + ladder↔regime reconciliation (handoff 2026-07-12, later)
+
+**Two PRs merged to `staging`, NONE on `main`. Typecheck + 296 tests + 0 lint throughout. Migration 071
+applied + verified on PROD + sandbox.**
+
+- **Drawdown ladder rebuild — DONE, LIVE-VALIDATED on real PROD data (PR #114).** The Risk-tab ladder was
+  firing a phantom **−60%** drawdown (peak stuck at the $100k `account_equity` placeholder). Now the peak
+  tracks **`ibkr_nlv`** (live broker equity) on a **cash-flow-adjusted high-water basis** — migration
+  **071** (new `cumulative_cashflow`/`cumulative_cashflow_at`/`equity_peak_cashflow`; rewritten
+  `fn_risk_config_track_equity_peak`). Pure `cashflowAdjustedDrawdownPct` in `@stw/shared`. After the
+  operator's sync + import, PROD reads `ibkr_nlv=$45,090`, `cumulative_cashflow=−60,000` → **drawdown
+  0.00%** (the historical ~$60k withdrawal is correctly neutralized). See Decisions locked below.
+- **Ladder ↔ regime reconciliation + Settings polish (PR #115).** The drawdown ladder and the double-RED
+  regime rule both cap gross exposure; they're **independent** (idiosyncratic vs systematic) but the
+  tighter one **binds**. New `bindingGrossTarget()` + `useBindingGrossTarget()` compute the binding target
+  **once per parent** and pass it to both the gross-exposure card and the Regime light, so the two never
+  show conflicting numbers. Plus a config **coherence warning** (double-RED target set looser than the
+  ladder floor) and RiskConfigForm alignment fixes. See Decisions locked.
+- **Assessed against the integrity-guardrails plan:** this is maintenance/coherence on the
+  **already-shipped limits engine**, not a validation-track item; honors all standing prohibitions (gate
+  frozen 1.1.0, advisory-only, no gate/composite blend — verified). Report:
+  `plans/20260712_integrity-guardrails-report.md`.
+- **NEW Week-3 discussion item (host, 2026-07-12):** decide whether to switch the regime **trend input**
+  from the 200-day gate to the 9/21/200 **structure bucket** — an engine change (→ v1.2.0 + validation
+  reset), to be judged by the numbers once Week 3's extended history + analyzer exist. Framed in the
+  report §5; pointer added to the plan's Week-3 section. **Was the ⚑ deferred 2026-07-11 item.**
+
+**⚠️ PENDING (host):** a **`staging → main` promotion** (approval-gated) — Weeks 1–2 + all the drawdown
+work above are on `staging` only. **Next substantive plan work = Week 3 (historical reconstruction).**
 
 ---
 
@@ -558,6 +592,34 @@ evaluated** — that was the exact tautology bug found and fixed (gross exposure
   option / sector) carries a one-line what-and-why explanation. Exceptions-first is the resting view
   (breach + near + unevaluated shown; "Show all" reveals the OK rows).
 
+**Decisions locked — cash-flow-adjusted drawdown + ladder↔regime reconciliation (host 2026-07-12):**
+- **Drawdown is measured net of external cash flows, off live NLV — never the `account_equity`
+  placeholder.** `equity_peak` is the RAW `ibkr_nlv` at the flow-adjusted high-water mark, paired with
+  `equity_peak_cashflow` (cumulative cash flow as of that high); only flow SINCE the peak counts:
+  `peakAdjustedToNow = equity_peak + (cumulative_cashflow − equity_peak_cashflow)`,
+  `drawdownPct = (ibkr_nlv − peakAdjustedToNow)/peakAdjustedToNow`. One source of truth:
+  `cashflowAdjustedDrawdownPct` in `@stw/shared`. The DB trigger `fn_risk_config_track_equity_peak`
+  (migration 071) owns the peak — **`persistFlexResult` must NOT set `equity_peak`**. A deposit RAISES
+  the bar; a withdrawal lowers it; a historical flow that predates the first NLV observation never reads
+  as a loss. First-order (additive) adjustment, not time-weighted return — sufficient for an advisory flag.
+- **`cumulative_cashflow` is written by the IMPORT only** (`ibkr-import.ts`, `cashflow: true`), from the
+  full-history `<ChangeInNAV>` `depositsWithdrawals`. The daily "Last 7 Days" sync must **never** write it
+  — a rolling-window period aggregate can't be accumulated without double-counting. Consequence (accepted):
+  a new deposit/withdrawal isn't flow-adjusted until the user re-imports; a manual-only user (no IBKR) gets
+  no drawdown (the ladder needs a live equity feed — a static number can't produce one). **Render nothing
+  (ladder silent) until real NLV + peak exist — never a phantom number.**
+- **The drawdown ladder and the double-RED regime rule are INDEPENDENT triggers, reconciled by "tightest
+  binds," never auto-linked.** Ladder = your account drawdown (idiosyncratic); regime = the market gate
+  (systematic). Both cap gross exposure; when both fire the LOWER target binds. One source of truth:
+  `bindingGrossTarget(ladderPct, regimePct)` in `@stw/shared` → `useBindingGrossTarget(config, instrument)`,
+  computed **once per parent** (`PortfolioPage`/`LimitsPanel`) and passed to BOTH the gross-exposure card
+  and the Regime light so they never show conflicting numbers. The gross card shows the full reconciliation;
+  the Regime light adds a line ONLY when the ladder binds strictly tighter than the regime target (its own
+  advice already states the number otherwise). A non-blocking Settings **coherence warning** fires when the
+  double-RED target is set looser than the deepest ladder rung (a config that would never bind).
+  `regimeExitAdvice`'s double-RED trim fallback is proportional to the gross target (`~doubleRedGrossPct%
+  of size`), not the looser single-RED `trimToPct`. All advisory/display-only — nothing enforces.
+
 **Decisions locked — REGIME_EXIT is a per-user rule, not a signed document (host 2026-07-08):**
 - The advisory de-risking policy (integrity-guardrails Item 4) is a **per-user setting**, not the
   single operator-owned `docs/regime_exit_v0.md` the original spec described. Values live on
@@ -664,41 +726,25 @@ it, shipped it to production, then separately investigated + fixed a live data-i
 
 ## Next Steps
 
-**★ NEXT TASK — cash-flow-adjusted drawdown-ladder rebuild — DONE on branch
-`claude/drawdown-ladder-cash-flow-7hkvcg` (2026-07-12), PR → `staging` open; NOT merged, NOT on prod.**
-Typecheck + 291 tests (+9) + 0 lint errors. What shipped:
-- **Migration `071_risk_config_cashflow_drawdown.sql`** (⚠️ **host must apply to PROD + sandbox**) — adds
-  `cumulative_cashflow` / `cumulative_cashflow_at` / `equity_peak_cashflow`; rewrites
-  `fn_risk_config_track_equity_peak` to drive the peak off **`ibkr_nlv`** (live broker equity) on a
-  **cash-flow-adjusted** high-water basis, no longer off the `account_equity` placeholder; and **clears
-  every existing phantom peak** (rebuilds from the first real NLV sync — until then the peak stays null
-  and the ladder is silent, so no phantom number).
-- **Model** (see the migration header + `cashflowAdjustedDrawdownPct` in `@stw/shared` + its 9 tests):
-  peak = raw `ibkr_nlv` at the flow-adjusted high, paired with `equity_peak_cashflow` (the cumulative
-  cash flow *as of* that high), so drawdown counts **only flow since the peak** —
-  `peakAdjustedToNow = equity_peak + (cumulative_cashflow − equity_peak_cashflow)`,
-  `drawdownPct = (nlv − peakAdjustedToNow)/peakAdjustedToNow`. Baseline-invariant: the historical
-  ~$60k 2026-02-17 withdrawal (predates our first NLV observation) no longer reads as a loss; a deposit
-  RAISES the bar rather than reading as a gain; a real loss reports honestly. First-order (additive)
-  adjustment, not full time-weighted return — good enough for an advisory de-risk flag.
-- **`flex-core.ts`** — the NLV write no longer sets `equity_peak` (the DB trigger owns it); a new
-  `cashflow` persist flag writes `cumulative_cashflow` from `<ChangeInNAV>` `depositsWithdrawals`
-  **IMPORT-ONLY** (`ibkr-import.ts` passes `cashflow: true`). The daily "Last 7 Days" sync deliberately
-  does **not** write it — a rolling-window period aggregate can't be accumulated without double-counting.
-  **Documented limitation:** a NEW deposit/withdrawal after the last import isn't flow-adjusted until the
-  user re-imports (the same "repair history" path). Also: a **manual-only user (no IBKR) now gets NO
-  drawdown** (silent) — the ladder genuinely needs a live equity feed; a static `account_equity` can't
-  produce a drawdown. Intentional.
-- **`ViolationsSummary.tsx`** — uses `cashflowAdjustedDrawdownPct`; the gross card now shows a
-  **binding-constraint note** (the lower of the ladder gross target vs the regime double-RED gross target
-  is the one that binds). **`regimeExitAdvice`** (double-RED) — the trim fallback is now **proportional**
-  to the gross target (`~doubleRedGrossPct% of size` ≈ gross→G%) instead of the looser single-RED
-  `trimToPct`, so the two options describe the same de-risk (was a ~40pp-apart pair).
+**★ NEXT TASK — WEEK 3 (historical reconstruction) of `plans/20260709_integrity-guardrailsv2.md`.**
+Weeks 1–2 are complete (Week 1 on prod; Week 2 on `staging`) and Week 2's data is now flowing (443
+executions, NLV synced, drawdown live). Week 3 is the next substantive block: reconstruct ~60 historical
+weekly portfolio snapshots into **staging tables** (`backfill_leg_transactions`/`backfill_legs`), entry
+dates resolved via targeted alert search, exits via present-in-N/absent-in-N+1, diff rules that never
+treat weight deltas as transactions. Read-first: the plan's **WEEK 3** section (full architecture,
+decided — do not re-litigate) + the **NEW discussion item** it now carries (regime trend input: 200-day
+gate vs 9/21/200 structure bucket — decide as part of Week 3; see `plans/20260712_integrity-guardrails-report.md` §5).
+**Standing prohibitions carry through:** gate frozen at 1.1.0, advisory/display-only, gate + Macro
+composite never blend, no new indicators enter the gate.
 
-**PENDING (host actions, not code):** (a) run **one live Sync** to populate `risk_config.ibkr_nlv`
-(was blocked by IBKR's 1001 rate-limit at handoff — let the query cool, then sync once; a large/edited
-query also 1001s, so keep Period = Last 7 Days). (b) A **`staging → main` promotion** is approval-gated
-and pending — the nightly `ibkr-sync-cron` cannot fire until it lands on prod.
+**★ THE DRAWDOWN-LADDER REBUILD IS DONE + LIVE-VALIDATED (PRs #114 + #115, both merged to `staging`).**
+Migration 071 applied to PROD + sandbox; PROD drawdown reads **0.00%** on real data. Full detail in the
+Current Status subsection at the top + `plans/20260712_integrity-guardrails-report.md`. The model +
+reconciliation rules are recorded under **Decisions locked** below.
+
+**PENDING (host actions, not code):** A **`staging → main` promotion** is approval-gated and pending —
+Weeks 1–2 + the drawdown work are on `staging` only; the nightly `ibkr-sync-cron` cannot fire until it
+lands on prod. (`risk_config.ibkr_nlv` is now populated — no further sync action needed.)
 
 0. **✅ WEEK-2 ITEM 4 — `regime_daily` depth extension DONE (PR #89, 2026-07-10).** PROD `regime_daily`
    is now **19,500 rows, IWM/SPY/QQQ 2000-09-01→present** (`source=yahoo+fred`) — see the Current Status
