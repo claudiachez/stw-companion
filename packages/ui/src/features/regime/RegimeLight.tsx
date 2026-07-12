@@ -132,16 +132,19 @@ export function RegimeLight({ instrument = 'IWM', exitRule, structure, bindingGr
         </div>
       )}
 
-      {/* When the drawdown ladder is ALSO firing (source 'both'), the double-RED gross
-          target above isn't the whole story — the ladder may bind tighter. Show the same
-          single reconciled number the gross-exposure card shows, so the two never conflict. */}
-      {bindingGross?.source === 'both' && (
+      {/* The advice above already states the regime's gross target. Add a line ONLY when
+          the drawdown ladder binds even TIGHTER than it — the one case where the number
+          above isn't the operative one — so the two surfaces never disagree. In a coherent
+          config (double-RED ≤ ladder floor) the regime target binds and this stays hidden;
+          it surfaces the misconfig the Settings warning also flags. */}
+      {bindingGross?.source === 'both'
+        && bindingGross.ladderPct !== null && bindingGross.regimePct !== null
+        && bindingGross.ladderPct < bindingGross.regimePct && (
         <div
           className="text-t2 text-xs"
           style={{ borderLeft: '2px solid var(--status-warning-text)', paddingLeft: 8 }}
         >
-          Binding gross target: <span className="font-semibold">{bindingGross.targetPct}%</span> — the tighter of your
-          drawdown ladder ({bindingGross.ladderPct}%) and this double-RED regime rule ({bindingGross.regimePct}%).
+          Your drawdown ladder binds tighter — reduce gross to <span className="font-semibold">{bindingGross.ladderPct}%</span>, not the {bindingGross.regimePct}% above.
         </div>
       )}
 
