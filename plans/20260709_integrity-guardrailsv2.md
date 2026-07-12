@@ -78,6 +78,12 @@ Current history: 2020-12-08 → present — exactly one bear market (2022), COVI
 
 # WEEK 3 — Historical reconstruction (snapshot-anchored, alert-resolved)
 
+> **Added discussion item (host, 2026-07-12):** decide the **regime trend input — 200-day gate vs
+> 9/21/200 structure bucket** — as part of Week 3, once the extended `regime_daily` history + the
+> analyzer give the evidence to judge it by the numbers. It's an engine change (→ v1.2.0, validation
+> reset, bucket→state mapping) so it can't be taken casually; full framing in
+> `plans/20260712_integrity-guardrails-report.md` §5. Was the ⚑ deferred item (2026-07-11).
+
 **Entry conditions (all met as of week-1 promotion + week-2 item 0):** integrity migration live (`source='backfill'`, `date_precision` exist); Closed-weight invariant live; ET date convention in `@stw/shared`.
 
 **Architecture (decided; do not re-litigate):** the host publishes a weekly full-portfolio snapshot (updates-portfolio channel) — a reconciled state series. Reconstruction runs the existing Friday truth-up parsing logic over ~60 historical weekly snapshots in **staging mode** (staging tables only: `backfill_leg_transactions`, `backfill_legs`), with three deliberate divergences from live behavior:
