@@ -9,6 +9,8 @@ import { useRiskConfig, useSectorMap } from '../limits/useRiskConfig';
 import { useLatestRegime } from '../regime/useLatestRegime';
 import { useRegimeInstrumentStore } from '../regime/useRegimeInstrument';
 import { RegimeBadge } from '../picks/components/RegimeBadge';
+import { useEarningsCalendar } from '../earnings/useEarningsCalendar';
+import { EarningsBadge } from '../earnings/EarningsBadge';
 import type { TickerRegime } from '../picks/useTickerRegime';
 import type { UserPosition } from './api';
 
@@ -103,6 +105,8 @@ export function PortfolioPositionDetail({
   const posPct = ownPortfolioPct ?? 0;
   const posSeverity: ViolationSeverity | null = config ? classifySeverity(posPct, config.max_position_pct) : null;
   const sector = (sectorMap ?? {})[group.underlying] ?? null;
+  const { getNext: getNextEarnings } = useEarningsCalendar();
+  const nextEarnings = getNextEarnings(group.underlying);
 
   const sizeDelta = ownPortfolioPct !== null && stwWeight !== null ? ownPortfolioPct - stwWeight : null;
 
@@ -110,7 +114,7 @@ export function PortfolioPositionDetail({
   // technical read: trend structure + sector-rotation standing (RegimeBadge), the same
   // two chips the Stock Picks detail shows. The tailed-pick info (trader / basket /
   // conviction / sizing) stays in the Tailing section, not the header (host, 2026-07-08).
-  const badges = (sector || tickerRegime) ? (
+  const badges = (sector || tickerRegime || nextEarnings) ? (
     <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
       {sector && (
         <span style={{
@@ -120,6 +124,7 @@ export function PortfolioPositionDetail({
         }}>{sector}</span>
       )}
       <RegimeBadge regime={tickerRegime} />
+      {nextEarnings && <EarningsBadge event={nextEarnings} />}
     </span>
   ) : null;
 

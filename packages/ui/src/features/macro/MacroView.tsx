@@ -1,7 +1,7 @@
 import { useMemo, type ReactNode } from 'react';
 import {
   environmentScore, regimeBand, trendSleeveScore, trendSleeveLabel, trendSubScore,
-  gexPositioningLabel, stressLabel, creditLabel, ratesDollarLabel, isTradingDay, FONT_SIZE,
+  gexPositioningLabel, stressLabel, creditLabel, ratesDollarLabel, isTradingDay, MARKET_MOVERS, FONT_SIZE,
 } from '@stw/shared';
 import { useCapabilities } from '../../context/AppCapabilities';
 import { useAppConfig } from '../../hooks/useAppConfig';
@@ -19,6 +19,8 @@ import { useMacroPrefs } from './useMacroPrefs';
 import { useMacroTrendHistory, resolveDelta } from './useMacroTrendHistory';
 import { useGexExposure } from './useGexExposure';
 import { useMacroEvents } from './useMacroEvents';
+import { useEarningsCalendar } from '../earnings/useEarningsCalendar';
+import { useHoldings } from '../picks/useHoldings';
 import { useGraddox } from '../signals/useGraddox';
 import { RegimeCard } from './components/RegimeCard';
 import { ModuleScoreStrip } from './components/ModuleScoreStrip';
@@ -29,6 +31,7 @@ import { GexPositioningCard } from './components/GexPositioningCard';
 import { SentimentGauge } from './components/SentimentGauge';
 import { MacroRecapCard } from './components/MacroRecapCard';
 import { SectorRotationCard } from './components/SectorRotationCard';
+import { EarningsAheadCard } from './components/EarningsAheadCard';
 import { ModuleHeader } from './components/macroVisuals';
 
 // Concise "what is this / why it matters / how to read it" blurbs, shown via the
@@ -99,6 +102,14 @@ const HELP = {
       <div style={dim}>Refreshed: hourly.</div>
     </Help>
   ),
+  earnings: (
+    <Help>
+      <div>Upcoming quarterly <strong>earnings reports</strong> — the biggest single-ticker volatility events. Covers STW holdings plus the mega-caps whose prints move the whole index.</div>
+      <div><strong>before open</strong> / <strong>after close</strong> tells you when the move lands; the EPS estimate is the consensus the print is judged against.</div>
+      <div style={dim}><span style={{ color: 'var(--acc)' }}>●</span> a name STW holds · ● a market-mover shown for index context.</div>
+      <div style={dim}>Refreshed: daily.</div>
+    </Help>
+  ),
   sectorRotation: (
     <Help>
       <div>Where money is rotating across the 11 SPDR sectors, ranked #1 (leading) → #11 (lagging) by structure + 1-month relative strength.</div>
@@ -140,6 +151,18 @@ export function MacroView() {
   const { score, loading: sentLoading } = useSentimentGauge(twelveDataKey);
   const { recap, recapDate, recapSession, loading: recapLoading, error: recapError, generate } = useDailyRecap();
   const { events: eventsList, read: eventsRead, loading: eventsLoading, error: eventsError, warning: eventsWarning } = useMacroEvents();
+  const { data: holdings } = useHoldings();
+  const { upcomingFor: upcomingEarningsFor, loading: earningsLoading } = useEarningsCalendar();
+  // Earnings calendar covers STW holdings ∪ the mega-cap market-movers (the Macro
+  // tab is market-wide; a subscriber's own extra positions surface on My Portfolio).
+  const heldTickers = useMemo(
+    () => (holdings ?? []).map((h) => h.ticker).filter((t): t is string => !!t && t !== 'CASH'),
+    [holdings],
+  );
+  const upcomingEarnings = useMemo(
+    () => upcomingEarningsFor([...heldTickers, ...MARKET_MOVERS]),
+    [upcomingEarningsFor, heldTickers],
+  );
   const { rows: sectorRows, loading: sectorLoading, asOf: sectorAsOf, constituents: sectorConstituents, constituentsLoading: sectorConstituentsLoading } = useSectorRotation(twelveDataKey);
 
   const visibleIndicators = indicators.filter((i) => visibleSymbols.includes(i.symbol));
@@ -292,6 +315,14 @@ export function MacroView() {
             vixDelta5={volatility?.vixDelta5 ?? null}
             us10yDelta5={rates?.us10yDelta5 ?? null}
           />
+        </div>
+      </section>
+
+      {/* ── Module 3b: Earnings Ahead ──────────────────────────────── */}
+      <section>
+        <ModuleHeader title="Earnings Ahead" help={HELP.earnings} />
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
+          <EarningsAheadCard events={upcomingEarnings} heldTickers={heldTickers} loading={earningsLoading} />
         </div>
       </section>
 
