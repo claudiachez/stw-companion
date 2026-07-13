@@ -1,8 +1,10 @@
 import { fmtDateTime, eventOverlayLabel, eventImportanceLabel, TREND_BUCKET_META, FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
-import type { EventRiskRead, TrendBucket } from '@stw/shared';
+import type { EventRiskRead, MacroEvent, EventImportance, TrendBucket } from '@stw/shared';
 
 interface Props {
   read: EventRiskRead;
+  /** Full window of scheduled events, soonest-first — rendered as the week-ahead list. */
+  events: MacroEvent[];
   loading: boolean;
   error: string | null;
   warning?: string | null;
@@ -20,6 +22,13 @@ const RISK_COLOR: Record<EventRiskRead['riskLevel'], string> = {
   shock: 'var(--c1)',
 };
 
+const IMPORTANCE_COLOR: Record<EventImportance, string> = {
+  very_high: 'var(--c1)',
+  high: 'var(--c3)',
+  medium: 'var(--t2)',
+  low: 'var(--t3)',
+};
+
 function buildSetup(qqqBucket: TrendBucket | null, vix: number | null, vixDelta5: number | null, us10yDelta5: number | null): string {
   const parts: string[] = [];
   if (qqqBucket) parts.push(`QQQ ${TREND_BUCKET_META[qqqBucket].label.toLowerCase()}`);
@@ -35,7 +44,7 @@ function buildSetup(qqqBucket: TrendBucket | null, vix: number | null, vixDelta5
 // be cross-checked against the setup above, never read in isolation.
 function interpret(eventName: string, surprise: number | null, us10yDelta5: number | null, qqqBucket: TrendBucket | null): string {
   const isInflation = /\bcpi\b|\bpce\b|\bppi\b/i.test(eventName);
-  const isJobs = /\bnonfarm payrolls\b|\bunemployment rate\b|\baverage hourly earnings\b/i.test(eventName);
+  const isJobs = /\bnonfarm payrolls\b|\bunemployment rate\b|\baverage hourly earnings\b|\bemployment situation\b/i.test(eventName);
   const isFed = /\bfomc\b|\bpowell\b/i.test(eventName);
   const yieldsRising = (us10yDelta5 ?? 0) > 0.03;
   const weakStructure = qqqBucket === 'bear_rally' || qqqBucket === 'risk_off' || qqqBucket === 'mid_caution';
@@ -67,71 +76,81 @@ function interpret(eventName: string, surprise: number | null, us10yDelta5: numb
     : 'Came in below consensus — watch the cross-market reaction (yields, VIX) to confirm direction.';
 }
 
-export function MacroEventRiskCard({ read, loading, error, warning, qqqBucket, vix, vixDelta5, us10yDelta5 }: Props) {
+/** One scheduled release, rendered on a single line: name · date · consensus · previous. */
+function EventRow({ e, highlight }: { e: MacroEvent; highlight: boolean }) {
+  return (
+    <div
+      style={{
+        display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap',
+        padding: '7px 0', borderTop: '1px solid var(--border)', fontSize: FONT_SIZE.sm,
+      }}
+    >
+      <span style={{ width: 7, height: 7, borderRadius: '50%', background: IMPORTANCE_COLOR[e.importance], flexShrink: 0, alignSelf: 'center' }} />
+      <span style={{ fontWeight: highlight ? FONT_WEIGHT.semibold : FONT_WEIGHT.medium, color: 'var(--text)' }}>
+        {e.eventName}{e.period ? ` (${e.period})` : ''}
+      </span>
+      <span style={{ color: 'var(--t2)' }}>{fmtDateTime(e.releaseTimeEt)}</span>
+      <span style={{ marginLeft: 'auto', display: 'flex', gap: 12, flexWrap: 'wrap', color: 'var(--t3)' }}>
+        <span>Consensus: {e.consensus ?? '—'}</span>
+        <span>Previous: {e.previous ?? '—'}</span>
+      </span>
+    </div>
+  );
+}
+
+export function MacroEventRiskCard({ read, events, loading, error, warning, qqqBucket, vix, vixDelta5, us10yDelta5 }: Props) {
   if (loading && !read.event) return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>Loading event calendar…</div>;
   if (error) return <div style={{ color: 'var(--c1)', fontSize: FONT_SIZE.sm }}>Event data unavailable: {error}</div>;
 
   const { overlay, riskLevel, event, surprise } = read;
-
-  if (overlay === 'none') {
-    return (
-      <div>
-        <div style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--t2)' }}>{eventOverlayLabel('none')}</div>
-        <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)', marginTop: 4 }}>
-          {event
-            ? <>Next tracked event: {event.eventName} — {fmtDateTime(event.releaseTimeEt)}, outside the 48h risk window.</>
-            : 'Nothing major scheduled in the next 48 hours.'}
-        </div>
-        {warning && <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: 8 }}>{warning}</div>}
-        <EventSourceNote />
-      </div>
-    );
-  }
-
-  if (!event) return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>No event data available.</div>;
-
-  const isPreRelease = overlay === 'event_watch' || overlay === 'high_event_risk';
   const setup = buildSetup(qqqBucket, vix, vixDelta5, us10yDelta5);
-  const interpretation = interpret(event.eventName, surprise, us10yDelta5, qqqBucket);
+  const interpretation = event ? interpret(event.eventName, surprise, us10yDelta5, qqqBucket) : null;
+  const isPreRelease = overlay === 'event_watch' || overlay === 'high_event_risk';
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, color: RISK_COLOR[riskLevel] }}>{eventOverlayLabel(overlay)}</span>
-        <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>{eventImportanceLabel(event.importance)} impact</span>
-      </div>
+      {/* Overlay status — the classification for the nearest major event. */}
+      {overlay === 'none' ? (
+        <div style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--t2)' }}>
+          {eventOverlayLabel('none')}
+          <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)', marginLeft: 8 }}>
+            {event ? `next: ${event.eventName}, outside the 48h window` : 'nothing major in the next 48 hours'}
+          </span>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, color: RISK_COLOR[riskLevel] }}>{eventOverlayLabel(overlay)}</span>
+          {event && <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>{event.eventName} — {fmtDateTime(event.releaseTimeEt)}</span>}
+          <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>{event ? `${eventImportanceLabel(event.importance)} impact` : ''}</span>
+        </div>
+      )}
 
-      <div style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>
-        {event.eventName}{event.period ? ` (${event.period})` : ''}
-      </div>
-      <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', marginTop: 2 }}>
-        {fmtDateTime(event.releaseTimeEt)}
-      </div>
+      {/* Post-release surprise line (only once an actual has printed). */}
+      {!isPreRelease && overlay !== 'none' && event && surprise !== null && (
+        <div style={{ marginTop: 6, fontSize: FONT_SIZE.sm, color: surprise > 0 ? 'var(--c1)' : surprise < 0 ? 'var(--c5)' : 'var(--t2)' }}>
+          Actual {event.actual ?? '—'} vs consensus {event.consensus ?? '—'} · Surprise {surprise >= 0 ? '+' : ''}{surprise.toFixed(2)}
+        </div>
+      )}
 
-      <div style={{ display: 'flex', gap: 16, marginTop: 10, flexWrap: 'wrap', fontSize: FONT_SIZE.sm }}>
-        {isPreRelease ? (
-          <>
-            <div><span style={{ color: 'var(--t3)' }}>Consensus:</span> {event.consensus ?? '—'}</div>
-            <div><span style={{ color: 'var(--t3)' }}>Previous:</span> {event.previous ?? '—'}</div>
-          </>
-        ) : (
-          <>
-            <div><span style={{ color: 'var(--t3)' }}>Actual:</span> {event.actual ?? '—'}</div>
-            <div><span style={{ color: 'var(--t3)' }}>Consensus:</span> {event.consensus ?? '—'}</div>
-            <div><span style={{ color: 'var(--t3)' }}>Previous:</span> {event.previous ?? '—'}</div>
-            {surprise !== null && (
-              <div style={{ color: surprise > 0 ? 'var(--c1)' : surprise < 0 ? 'var(--c5)' : 'var(--t2)' }}>
-                Surprise: {surprise >= 0 ? '+' : ''}{surprise.toFixed(2)}
-              </div>
-            )}
-          </>
-        )}
-      </div>
+      {/* Setup + interpretation for the nearest event. */}
+      {event && (
+        <div style={{ marginTop: 10, fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.5 }}>
+          <div><span style={{ color: 'var(--t3)', fontWeight: FONT_WEIGHT.semibold }}>Setup:</span> {setup}</div>
+          {interpretation && <div><span style={{ color: 'var(--t3)', fontWeight: FONT_WEIGHT.semibold }}>Interpretation:</span> {interpretation}</div>}
+        </div>
+      )}
 
-      <div style={{ marginTop: 12, fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.5 }}>
-        <div><span style={{ color: 'var(--t3)', fontWeight: FONT_WEIGHT.semibold }}>Setup:</span> {setup}</div>
-        <div><span style={{ color: 'var(--t3)', fontWeight: FONT_WEIGHT.semibold }}>Interpretation:</span> {interpretation}</div>
-      </div>
+      {/* Week-ahead list — every scheduled release in the window, one row each. */}
+      {events.length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.semibold, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 2 }}>
+            Scheduled releases
+          </div>
+          {events.map((e, i) => (
+            <EventRow key={`${e.eventName}-${e.releaseTimeEt}`} e={e} highlight={event ? e.releaseTimeEt === event.releaseTimeEt && e.eventName === event.eventName : i === 0} />
+          ))}
+        </div>
+      )}
 
       {warning && <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: 8 }}>{warning}</div>}
       <EventSourceNote />
@@ -142,7 +161,7 @@ export function MacroEventRiskCard({ read, loading, error, warning, qqqBucket, v
 function EventSourceNote() {
   return (
     <div style={{ marginTop: 8, fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>
-      Source: FRED release calendar + FOMC schedule
+      Source: <a href="https://fred.stlouisfed.org/releases" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--t3)', textDecoration: 'underline' }}>FRED release calendar</a> + FOMC schedule · Consensus not published on a public calendar
     </div>
   );
 }

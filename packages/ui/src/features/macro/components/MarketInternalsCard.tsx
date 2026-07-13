@@ -107,6 +107,7 @@ export function MarketInternalsCard({ volatility, credit, rates }: Props) {
       )}
       <SourceNote
         source="FRED daily (VIX, HY OAS, DGS10, broad $) · IV: TwelveData SPY"
+        href="https://fred.stlouisfed.org"
         asOf={volatility?.asOf}
         updatedAt={volatility?.updatedAt}
       />

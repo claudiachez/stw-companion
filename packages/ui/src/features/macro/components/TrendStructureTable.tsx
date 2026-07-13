@@ -164,7 +164,7 @@ export function TrendStructureTable({ indicators, visibleSymbols, onToggle, asOf
           </tbody>
         </table>
       </div>
-      <SourceNote source="Quotes: Finnhub (live, ≤15m) · MAs: TwelveData daily" asOf={asOf} updatedAt={updatedAt} />
+      <SourceNote source="Quotes: Finnhub (live, ≤15m) · MAs: TwelveData daily" href="https://twelvedata.com" asOf={asOf} updatedAt={updatedAt} />
     </div>
   );
 }

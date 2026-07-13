@@ -1,26 +1,28 @@
 /**
- * Macro Event Risk calendar (P3) — now sourced from FRED, not the MarketWatch scrape.
+ * Macro Event Risk calendar (P3) — sourced from FRED, not a scrape.
  *
- * Supplies the raw calendar rows for the Module 3 overlay (CPI, PCE, NFP, GDP,
- * FOMC). Classification (overlay state / risk level / surprise) is pure logic in
- * @stw/shared (`classifyEventRisk`); this function only returns clean rows.
+ * Supplies the raw calendar rows for the Module 3 overlay. Classification (overlay
+ * state / risk level / surprise) is pure logic in @stw/shared (`classifyEventRisk`);
+ * this function only returns clean rows, sorted soonest-first.
  *
- * Source (rebuilt 2026-07-08, retiring the fragile MarketWatch HTML scrape):
- *   - FRED `/fred/release/dates` per target release — authoritative U.S. econ-release
- *     schedule. Query each by release_id (verified live against /fred/releases:
- *     CPI 10, Personal Income & Outlays/PCE 54, Employment Situation/NFP 50, GDP 53,
- *     PPI 46) with include_release_dates_with_no_data so future scheduled dates
- *     appear, then window-filter client-side. (The all-releases feed can't be used:
- *     sort_order=desc surfaces the furthest-future dates first, so the near-term
- *     ones fall outside any small limit — confirmed empirically.) FRED gives a DATE
- *     only, so each release is stamped with its conventional ET release time.
+ * Sources:
+ *   - FRED `/fred/release/dates` per target release — the authoritative U.S.
+ *     econ-release schedule. Query each by release_id (verified live against
+ *     /fred/releases) with include_release_dates_with_no_data so future scheduled
+ *     dates appear, then window-filter. FRED gives a DATE only, so each release is
+ *     stamped with its conventional ET release time.
+ *   - FRED `/fred/series/observations` (latest value) per release → the **Previous**
+ *     print (the last released figure, e.g. CPI YoY %). The release *calendar* has
+ *     no values; the *series* does. Both fetches for a release happen in the same
+ *     paced worker, so it stays a single concurrent FRED round.
  *   - FOMC rate decisions are Fed meetings, not a FRED release → a small static list
  *     (see FOMC_DECISION_DATES; VERIFY against the Fed's published schedule).
  *
- * What FRED can't give (vs the old scrape): actual/consensus/previous print values.
- * classifyEventRisk degrades cleanly — the post-release surprise/"shock" path just
- * doesn't fire (it needs actual+consensus); the upcoming-event windows (event_watch
- * / high_event_risk), which only need the release time + importance, work fully.
+ * What FRED still can't give: **consensus** (a proprietary survey of economists) and
+ * **actual** on a schedule. So `consensus`/`actual` stay null — classifyEventRisk's
+ * surprise/"shock" path just doesn't fire; the upcoming-event windows work fully.
+ * (Note: FRED's calendar lists UMich Consumer Sentiment's FINAL date, not the
+ * mid-month preliminary — its scheduled date can read later than a trader expects.)
  *
  * On any failure or zero rows this returns `source: 'unavailable'` with an empty
  * list + a `warning` — never a fabricated row, never an uncaught throw. Direct
@@ -42,15 +44,26 @@ export interface MacroEventRow {
 }
 
 type Importance = MacroEventRow['importance'];
+type PrevFmt = 'pct' | 'thousandsChg' | 'levelK' | 'index';
+
+/** How to fetch + render a release's latest print for the "Previous" column.
+ *  `units` is a FRED observation transform (pc1 = YoY %, pch = MoM %, chg = period
+ *  change, lin = as-reported). `label` is a short qualifier so the figure reads
+ *  unambiguously (e.g. "4.2% YoY"). */
+interface PrevSpec { series: string; units: string; fmt: PrevFmt; label?: string }
 
 // Releases we surface, by FRED release_id (verified live against /fred/releases),
-// with each one's conventional ET release time (FRED provides a date only).
-const TARGET_RELEASES: { id: number; name: string; importance: Importance; timeEt: string }[] = [
-  { id: 10, name: 'Consumer Price Index (CPI)', importance: 'very_high', timeEt: '08:30' },
-  { id: 54, name: 'Personal Income & Outlays (PCE)', importance: 'very_high', timeEt: '08:30' },
-  { id: 50, name: 'Employment Situation (NFP)', importance: 'very_high', timeEt: '08:30' },
-  { id: 53, name: 'Gross Domestic Product (GDP)', importance: 'high', timeEt: '08:30' },
-  { id: 46, name: 'Producer Price Index (PPI)', importance: 'high', timeEt: '08:30' },
+// each with its conventional ET release time and the series for its Previous print.
+const TARGET_RELEASES: { id: number; name: string; importance: Importance; timeEt: string; prev: PrevSpec }[] = [
+  { id: 10, name: 'Consumer Price Index (CPI)',      importance: 'very_high', timeEt: '08:30', prev: { series: 'CPIAUCSL',            units: 'pc1', fmt: 'pct',          label: 'YoY' } },
+  { id: 46, name: 'Producer Price Index (PPI)',      importance: 'high',      timeEt: '08:30', prev: { series: 'PPIFIS',              units: 'pc1', fmt: 'pct',          label: 'YoY' } },
+  { id: 54, name: 'Personal Income & Outlays (PCE)', importance: 'very_high', timeEt: '08:30', prev: { series: 'PCEPI',               units: 'pc1', fmt: 'pct',          label: 'YoY' } },
+  { id: 50, name: 'Employment Situation (NFP)',      importance: 'very_high', timeEt: '08:30', prev: { series: 'PAYEMS',              units: 'chg', fmt: 'thousandsChg', label: 'MoM' } },
+  { id: 53, name: 'Gross Domestic Product (GDP)',    importance: 'high',      timeEt: '08:30', prev: { series: 'A191RL1Q225SBEA',     units: 'lin', fmt: 'pct',          label: 'QoQ ann.' } },
+  { id: 9,  name: 'Retail Sales',                    importance: 'high',      timeEt: '08:30', prev: { series: 'RSAFS',               units: 'pch', fmt: 'pct',          label: 'MoM' } },
+  { id: 351, name: 'Philadelphia Fed Manufacturing', importance: 'medium',    timeEt: '08:30', prev: { series: 'GACDFSA066MSFRBPHI',  units: 'lin', fmt: 'index' } },
+  { id: 27, name: 'Housing Starts & Building Permits', importance: 'medium',  timeEt: '08:30', prev: { series: 'HOUST',               units: 'lin', fmt: 'levelK',       label: 'starts, SAAR' } },
+  { id: 91, name: 'Consumer Sentiment (UMich)',      importance: 'medium',    timeEt: '10:00', prev: { series: 'UMCSENT',             units: 'lin', fmt: 'index' } },
 ];
 
 // FOMC rate decisions — announced day 2 of each meeting at 2:00pm ET. NOT a FRED
@@ -82,6 +95,18 @@ function inWindow(date: string, now: Date): boolean {
   return d >= lo && d <= hi;
 }
 
+/** Render a raw FRED observation value into the compact "Previous" string. */
+function fmtPrev(v: number, spec: PrevSpec): string {
+  let body: string;
+  switch (spec.fmt) {
+    case 'pct':          body = `${v.toFixed(1)}%`; break;
+    case 'thousandsChg': body = `${v >= 0 ? '+' : ''}${Math.round(v).toLocaleString('en-US')}K`; break;
+    case 'levelK':       body = `${Math.round(v).toLocaleString('en-US')}K`; break;
+    case 'index':        body = v.toFixed(1); break;
+  }
+  return spec.label ? `${body} ${spec.label}` : body;
+}
+
 interface FredReleaseDate { date: string }
 
 /** Scheduled dates for one FRED release (most recent ~2yrs; desc, includes future). */
@@ -92,6 +117,19 @@ async function releaseDates(id: number, key: string): Promise<string[]> {
   if (!res.ok) return [];
   const d = await res.json() as { release_dates?: FredReleaseDate[] };
   return (d.release_dates ?? []).map((r) => r.date).filter(Boolean);
+}
+
+/** Latest observation for a series (the last released print), formatted for display. */
+async function previousPrint(spec: PrevSpec, key: string): Promise<string | null> {
+  const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${spec.series}&api_key=${key}`
+    + `&file_type=json&units=${spec.units}&sort_order=desc&limit=1`;
+  const res = await fetch(url);
+  if (!res.ok) return null;
+  const d = await res.json() as { observations?: { value: string }[] };
+  const raw = d.observations?.[0]?.value;
+  if (raw == null || raw === '' || raw === '.') return null;
+  const v = Number(raw);
+  return Number.isFinite(v) ? fmtPrev(v, spec) : null;
 }
 
 export const handler: Handler = async (event) => {
@@ -114,20 +152,24 @@ export const handler: Handler = async (event) => {
   try {
     const events: MacroEventRow[] = [];
 
-    // One FRED call per target release (5), paced through the shared limiter.
+    // One paced FRED round: each release worker fetches both its scheduled dates and
+    // its latest print (the Previous value), concurrently within the chunk.
     const perRelease = await runPaced(
       TARGET_RELEASES,
-      async (t) => ({ t, dates: await releaseDates(t.id, fredKey) }),
+      async (t) => {
+        const [dates, previous] = await Promise.all([releaseDates(t.id, fredKey), previousPrint(t.prev, fredKey)]);
+        return { t, dates, previous };
+      },
       FEED_LIMITS.fred,
     );
-    for (const { t, dates } of perRelease) {
+    for (const { t, dates, previous } of perRelease) {
       for (const date of dates) {
         if (!inWindow(date, now)) continue;
         events.push({
           eventName: t.name,
           releaseTimeEt: isoEt(date, t.timeEt),
           period: null,
-          actual: null, consensus: null, previous: null,
+          actual: null, consensus: null, previous,
           importance: t.importance,
           source: 'FRED',
           sourceTimestamp: nowIso,

@@ -110,6 +110,8 @@ CRITICAL GROUNDING RULES:
 - Quote price levels exactly as given (SPX/QQQ levels are in index points).
 - This is a MORNING note — frame it as "what to watch today" and "how to set up", not a recap of what happened.
 
+NO REPETITION — each field has a DISTINCT job. Do not restate the same point, phrase, or number in more than one field. If two fields would say the same thing, cut one down to its unique angle. Price levels appear ONLY in "watching". "verdict" describes the setup; "playbook" prescribes actions — keep those two from overlapping.
+
 DATA
 Market Regime: ${regime.score ?? 'n/a'}/100 — ${regime.label}. Trading-mode guidance: ${regime.tradingMode}.
 Module scores (0-100, higher = more risk-on / less stress):
@@ -124,14 +126,14 @@ VIX ${context.volatility.vix ?? 'n/a'}
 ${gexBlock}
 
 Respond with ONLY a JSON object (no markdown fences) with exactly these fields:
-- headline: a punchy one-line hook for today's pre-market setup / theme to watch
-- verdict: 2-3 short paragraphs (separate with \\n\\n) — the morning read: what the structure is telling you heading into the session
-- bigStory: 1 paragraph on the single most important thing to watch or understand for today
-- scenarios: an object { "bull": "...", "base": "...", "bear": "..." } — one tight sentence each for TODAY's session
-- playbook: 1-2 paragraphs on how to approach today — what setups, what to avoid, when to act
-- watching: one line naming the key levels that decide today's tone, e.g. "Hold above 5,435 = bulls in control; lose it and 5,339 is next."
+- headline: ONE line — the single theme/hook for today. No price levels, no numbers.
+- verdict: 2-3 short paragraphs (separate with \\n\\n) — the READ: what the structure and positioning are telling you heading into the session, and WHY. Describe the setup; do NOT list levels or prescribe actions here.
+- bigStory: 1 paragraph on the single most important thing for today — a DIFFERENT angle than the verdict (a specific catalyst, a cross-asset tell, or a positioning fact), not a restatement of it.
+- scenarios: an object { "bull": "...", "base": "...", "bear": "..." } — one tight sentence each, three genuinely DISTINCT paths for today (up / chop / down), no overlap between them.
+- playbook: 1-2 paragraphs of ACTIONS only — what setups to take, how to size, what to avoid, when to wait. Not market description (that is the verdict's job).
+- watching: one line naming the key levels that decide today's tone, e.g. "Hold above 5,435 = bulls in control; lose it and 5,339 is next." Levels appear ONLY here.
 - tradingMode: a short action label consistent with the regime ("Risk-On", "Selective", "Defensive", "Risk-Off")
-- finalWord: a short, memorable line to carry into the session`;
+- finalWord: ONE short, memorable discipline/mindset line to carry into the session — NOT a restatement of the headline or verdict.`;
 }
 
 function buildPmPrompt(body: RecapBody): string {
@@ -156,6 +158,8 @@ CRITICAL GROUNDING RULES:
 - Quote price levels exactly as given (SPX/QQQ levels are in index points).
 - This is an EVENING note — frame it as "what happened" and "what to set up for tomorrow".
 
+NO REPETITION — each field has a DISTINCT job. Do not restate the same point, phrase, or number in more than one field. If two fields would say the same thing, cut one down to its unique angle. Price levels appear ONLY in "watching". "verdict" explains what happened; "playbook" prescribes tomorrow's actions — keep those two from overlapping.
+
 DATA
 Market Regime: ${regime.score ?? 'n/a'}/100 — ${regime.label}. Trading-mode guidance: ${regime.tradingMode}.
 Module scores (0-100, higher = more risk-on / less stress):
@@ -170,14 +174,14 @@ VIX ${context.volatility.vix ?? 'n/a'}
 ${gexBlock}
 
 Respond with ONLY a JSON object (no markdown fences) with exactly these fields:
-- headline: a punchy one-line hook capturing today's defining theme or move
-- verdict: 2-3 short paragraphs (separate with \\n\\n) — what happened beneath the surface, what's driving it
-- bigStory: 1 paragraph on the single dominant theme of the session (rotation, VIX move, dealer positioning, etc.)
-- scenarios: an object { "bull": "...", "base": "...", "bear": "..." } — one tight sentence each for TOMORROW's session
-- playbook: 1-2 paragraphs on the next-day setup — what followed through, what failed, how to position overnight
-- watching: one line naming the key levels for tomorrow, e.g. "Watch 5,435 above and 5,339 below."
+- headline: ONE line capturing today's defining theme or move. No price levels, no numbers.
+- verdict: 2-3 short paragraphs (separate with \\n\\n) — what happened beneath the surface and what's driving it. Explain the session; do NOT list levels or prescribe tomorrow's actions here.
+- bigStory: 1 paragraph on the single dominant theme of the session (rotation, VIX move, dealer positioning, etc.) — a DIFFERENT angle than the verdict, not a restatement.
+- scenarios: an object { "bull": "...", "base": "...", "bear": "..." } — one tight sentence each, three genuinely DISTINCT paths for tomorrow, no overlap between them.
+- playbook: 1-2 paragraphs of ACTIONS only for the next session — what to press, what to cut, how to position overnight. Not a recap (that is the verdict's job).
+- watching: one line naming the key levels for tomorrow, e.g. "Watch 5,435 above and 5,339 below." Levels appear ONLY here.
 - tradingMode: a short action label consistent with the regime ("Risk-On", "Selective", "Defensive", "Risk-Off")
-- finalWord: a short, memorable closing line`;
+- finalWord: ONE short, memorable discipline/mindset closing line — NOT a restatement of the headline or verdict.`;
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────

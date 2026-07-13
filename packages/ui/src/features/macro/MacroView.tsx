@@ -47,6 +47,7 @@ const HELP = {
     <Help>
       <div>Each sleeve's 0–100 score at a glance — <strong>higher = more risk-on</strong>.</div>
       <div style={dim}>Shows what's actually driving the regime: trend, stress, credit, rates or positioning.</div>
+      <div style={dim}>Refreshed: on load; underlying sleeves update daily after the close.</div>
     </Help>
   ),
   trend: (
@@ -55,6 +56,7 @@ const HELP = {
       <div><strong>Above all three</strong> — momentum.</div>
       <div><strong>Below the 200-day</strong> — risk-off.</div>
       <div><strong>Below the 200-day but bouncing above the short ones</strong> — a bear-market rally, not bullish.</div>
+      <div style={dim}>Refreshed: quotes live (≤15m); moving averages daily after the close.</div>
     </Help>
   ),
   internals: (
@@ -63,6 +65,7 @@ const HELP = {
       <div><strong>Credit / Liquidity</strong> — HY OAS spread vs its 50-day average. A widening spread warns of credit stress before stocks.</div>
       <div><strong>Rates + Dollar</strong> — 10-year yield + broad dollar. Both rising is a headwind for growth stocks (a yield drop during stress is flight-to-safety, not a tailwind).</div>
       <div style={dim}>Each sleeve is scored 0–100 — higher = more risk-on.</div>
+      <div style={dim}>Refreshed: daily after the close (FRED posts VIX/rates with a ~1-day lag).</div>
     </Help>
   ),
   gex: (
@@ -71,6 +74,7 @@ const HELP = {
       <div><strong>Above the flip</strong> — positive gamma: dealers dampen moves, dips tend to hold (a grind, not a chase).</div>
       <div><strong>Below the flip</strong> — negative gamma: dealers amplify moves, breaks accelerate; keep size down.</div>
       <div style={dim}>A tactical overlay — helps time entries and spot pivots. Levels via SPX Gamma Edge.</div>
+      <div style={dim}>Refreshed: twice each weekday — pre-market (~8:30am ET) and after the close (~4:30pm ET).</div>
     </Help>
   ),
   riskAppetite: (
@@ -78,19 +82,21 @@ const HELP = {
       <div>How much <strong>fear vs greed</strong> is priced right now (0 = extreme fear, 100 = extreme greed).</div>
       <div>Different from the regime: the regime is what the environment <em>is</em>; this is how emotional the tape is.</div>
       <div style={dim}>Built from momentum, VIX, IV premium, GEX, credit and breadth.</div>
+      <div style={dim}>Refreshed: quotes live (≤15m); daily metrics once per session.</div>
     </Help>
   ),
   recap: (
     <Help>
       <div>An AI note that turns all the module scores into a plain-English read plus a suggested trading mode.</div>
-      <div style={dim}>Auto-generates twice each weekday: pre-market at 8am ET, post-market at 4:30pm ET.</div>
+      <div style={dim}>Refreshed: twice each weekday — pre-market at 8am ET, post-market at 4:30pm ET.</div>
     </Help>
   ),
   eventRisk: (
     <Help>
-      <div>Scheduled macro events (CPI, PCE, jobs, FOMC, GDP, PPI) that could move the setup in the next day or two.</div>
+      <div>Scheduled macro events (CPI, PPI, PCE, jobs, GDP, retail sales, housing, sentiment, Philly Fed, FOMC) that could move the setup over the next few days.</div>
       <div>A temporary <strong>overlay</strong>, not a permanent regime change — it fades a few trading days after the print unless the structure actually shifted.</div>
-      <div style={dim}>Source: FRED economic-release calendar + the published FOMC schedule.</div>
+      <div style={dim}>Source: FRED economic-release calendar + the published FOMC schedule. Consensus isn't published on a public calendar, so it reads "—"; Previous is the last released print.</div>
+      <div style={dim}>Refreshed: hourly.</div>
     </Help>
   ),
   sectorRotation: (
@@ -99,6 +105,7 @@ const HELP = {
       <div><strong>Structure</strong> — the same 9/21/200-day trend bucketing as the Trend module.</div>
       <div><strong>Radar</strong> — each sector's RS vs SPY (percentage points) across Week/1M/3M/6M/1Y.</div>
       <div><strong>Leaders / Setting Up</strong> — names from that sector with confirmed bullish structure (Leaders) or turning positive on 1M RS (Setting Up).</div>
+      <div style={dim}>Refreshed: daily after the close.</div>
     </Help>
   ),
 };
@@ -132,7 +139,7 @@ export function MacroView() {
   const { data: rates, loading: ratesLoading } = useRatesDollar(stressRising);
   const { score, loading: sentLoading } = useSentimentGauge(twelveDataKey);
   const { recap, recapDate, recapSession, loading: recapLoading, error: recapError, generate } = useDailyRecap();
-  const { read: eventsRead, loading: eventsLoading, error: eventsError, warning: eventsWarning } = useMacroEvents();
+  const { events: eventsList, read: eventsRead, loading: eventsLoading, error: eventsError, warning: eventsWarning } = useMacroEvents();
   const { rows: sectorRows, loading: sectorLoading, asOf: sectorAsOf, constituents: sectorConstituents, constituentsLoading: sectorConstituentsLoading } = useSectorRotation(twelveDataKey);
 
   const visibleIndicators = indicators.filter((i) => visibleSymbols.includes(i.symbol));
@@ -250,6 +257,7 @@ export function MacroView() {
                 <span style={{ color: 'var(--c3)' }}>amber</span> neutral ·{' '}
                 <span style={{ color: 'var(--c1)' }}>red</span> risk-off. Read left → right to see if the backdrop is getting better or worse.
               </div>
+              <div style={dim}>Refreshed: on load; underlying sleeves update daily after the close.</div>
             </Help>
           )}
         />
@@ -268,6 +276,7 @@ export function MacroView() {
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
           <MacroEventRiskCard
             read={eventsRead}
+            events={eventsList}
             loading={eventsLoading}
             error={eventsError}
             warning={eventsWarning}
