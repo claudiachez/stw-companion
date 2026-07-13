@@ -226,7 +226,14 @@ export function MacroView() {
         riskAppetite: score ? { total: score.total, inputs: score.inputs.map((x) => ({ label: x.label, score: x.score })) } : null,
         gex: graddox ? { bias: graddox.bias, biasNote: graddox.bias_note, lastUpdated: graddox.last_updated, spx: graddox.spx, qqq: graddox.qqq } : null,
       },
-      eventRisk: null,
+      eventRisk: eventsRead.event ? {
+        level: eventsRead.riskLevel,
+        event: eventsRead.event.eventName,
+        time: eventsRead.event.releaseTimeEt,
+        consensus: eventsRead.event.consensus ?? undefined,
+        previous: eventsRead.event.previous ?? undefined,
+        overlay: eventsRead.overlay,
+      } : null,
     }, note, session);
   }
 

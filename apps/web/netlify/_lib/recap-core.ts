@@ -60,6 +60,45 @@ function todayEt(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD
 }
 
+// ── Catalysts (scheduled economic releases) ────────────────────────────────────
+// Grounds the recap in the REAL upcoming FRED calendar so the note can speak to
+// imminent catalysts (size discipline into CPI, etc.) without fabrication. Fetched
+// from the already-deployed macro-events function — same no-duplication pattern as
+// macro-snapshot's fetchEventRisk (process.env.URL is the Netlify site URL at runtime).
+
+interface CatalystRow { eventName: string; releaseTimeEt: string; importance: string; previous: string | null }
+
+/** Compact ET stamp for a catalyst line, e.g. "Jul 14 · 8:30 AM ET". */
+function catalystStamp(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' ET';
+}
+
+/** Upcoming scheduled releases in the next 7 days (soonest-first, capped). */
+async function fetchCatalysts(): Promise<CatalystRow[]> {
+  const base = (process.env.URL ?? process.env.DEPLOY_URL ?? '').trim();
+  if (!base) return [];
+  try {
+    const res = await fetch(`${base.replace(/\/$/, '')}/.netlify/functions/macro-events`);
+    if (!res.ok) return [];
+    const d = await res.json() as { events?: CatalystRow[] };
+    const cutoff = Date.now() + 7 * 86_400_000;
+    return (d.events ?? [])
+      .filter((e) => { const t = new Date(e.releaseTimeEt).getTime(); return !Number.isNaN(t) && t >= Date.now() - 86_400_000 && t <= cutoff; })
+      .slice(0, 8);
+  } catch { return []; }
+}
+
+/** Prompt block listing the upcoming catalysts — real FRED data, never invented. */
+function catalystBlock(rows: CatalystRow[]): string {
+  if (!rows.length) return 'Catalysts ahead: none scheduled in the next 7 days.';
+  const lines = rows
+    .map((e) => `- ${catalystStamp(e.releaseTimeEt)} — ${e.eventName} (${e.importance.replace('_', ' ')} impact)${e.previous ? `, previous ${e.previous}` : ''}`)
+    .join('\n');
+  return `Catalysts ahead (real, from the FRED release calendar — factor imminent high-impact ones into the read):\n${lines}`;
+}
+
 // ── Prompt builders ────────────────────────────────────────────────────────────
 
 interface RecapModule { score: number | null; label: string }
@@ -72,6 +111,7 @@ interface RecapBody {
     volatility: { vix: number | null; ivPremium: null };
     gex: { bias: string; biasNote: string; lastUpdated: string; spx: LevelSet | null; qqq: LevelSet | null } | null;
   };
+  catalysts: CatalystRow[];
 }
 
 function moduleLine(name: string, m: RecapModule): string {
@@ -89,7 +129,7 @@ function levelLine(name: string, ls: LevelSet | null): string {
 }
 
 function buildAmPrompt(body: RecapBody): string {
-  const { regime, modules, context } = body;
+  const { regime, modules, context, catalysts } = body;
   const indicatorLines = context.indicators
     .map((i) => `- ${i.symbol} (${i.name}): ${i.bucket ?? 'n/a'}${i.chgPct != null ? `, ${i.chgPct >= 0 ? '+' : ''}${i.chgPct.toFixed(2)}% yesterday` : ''}`)
     .join('\n');
@@ -109,6 +149,7 @@ CRITICAL GROUNDING RULES:
 - If the data is thin, write a shorter note rather than padding with invented detail.
 - Quote price levels exactly as given (SPX/QQQ levels are in index points).
 - This is a MORNING note — frame it as "what to watch today" and "how to set up", not a recap of what happened.
+- CATALYSTS: the "Catalysts ahead" list is the real scheduled economic calendar. Factor genuinely imminent, high-impact ones into the verdict and playbook (e.g. size discipline into a very-high-impact print). Do NOT predict the number or invent a consensus — only the "previous" figure shown is known.
 
 NO REPETITION — each field has a DISTINCT job. Do not restate the same point, phrase, or number in more than one field. If two fields would say the same thing, cut one down to its unique angle. Price levels appear ONLY in "watching". "verdict" describes the setup; "playbook" prescribes actions — keep those two from overlapping.
 
@@ -124,6 +165,7 @@ Index structure (vs 9/21/200-day MAs):
 ${indicatorLines || '- n/a'}
 VIX ${context.volatility.vix ?? 'n/a'}
 ${gexBlock}
+${catalystBlock(catalysts)}
 
 Respond with ONLY a JSON object (no markdown fences) with exactly these fields:
 - headline: ONE line — the single theme/hook for today. No price levels, no numbers.
@@ -137,7 +179,7 @@ Respond with ONLY a JSON object (no markdown fences) with exactly these fields:
 }
 
 function buildPmPrompt(body: RecapBody): string {
-  const { regime, modules, context } = body;
+  const { regime, modules, context, catalysts } = body;
   const indicatorLines = context.indicators
     .map((i) => `- ${i.symbol} (${i.name}): ${i.bucket ?? 'n/a'}${i.chgPct != null ? `, ${i.chgPct >= 0 ? '+' : ''}${i.chgPct.toFixed(2)}% on the day` : ''}`)
     .join('\n');
@@ -157,6 +199,7 @@ CRITICAL GROUNDING RULES:
 - If the data is thin, write a shorter note rather than padding with invented detail.
 - Quote price levels exactly as given (SPX/QQQ levels are in index points).
 - This is an EVENING note — frame it as "what happened" and "what to set up for tomorrow".
+- CATALYSTS: the "Catalysts ahead" list is the real scheduled economic calendar. Factor genuinely imminent, high-impact ones into the verdict and playbook (e.g. size discipline into a very-high-impact print tomorrow). Do NOT predict the number or invent a consensus — only the "previous" figure shown is known.
 
 NO REPETITION — each field has a DISTINCT job. Do not restate the same point, phrase, or number in more than one field. If two fields would say the same thing, cut one down to its unique angle. Price levels appear ONLY in "watching". "verdict" explains what happened; "playbook" prescribes tomorrow's actions — keep those two from overlapping.
 
@@ -172,6 +215,7 @@ Index structure (vs 9/21/200-day MAs):
 ${indicatorLines || '- n/a'}
 VIX ${context.volatility.vix ?? 'n/a'}
 ${gexBlock}
+${catalystBlock(catalysts)}
 
 Respond with ONLY a JSON object (no markdown fences) with exactly these fields:
 - headline: ONE line capturing today's defining theme or move. No price levels, no numbers.
@@ -266,6 +310,7 @@ export async function generateDailyRecap(tag: string, session: 'am' | 'pm'): Pro
   const regime = regimeBand(envScore);
   const spyChg = spyCloses.length >= 2 ? ((spyCloses.at(-1)! / spyCloses.at(-2)!) - 1) * 100 : null;
   const qqqChg = qqqCloses.length >= 2 ? ((qqqCloses.at(-1)! / qqqCloses.at(-2)!) - 1) * 100 : null;
+  const catalysts = await fetchCatalysts();
 
   const body: RecapBody = {
     regime: { score: regime.score, label: regime.label, tradingMode: regime.tradingMode },
@@ -290,6 +335,7 @@ export async function generateDailyRecap(tag: string, session: 'am' | 'pm'): Pro
         qqq:         (signalRow.qqq as LevelSet | null) ?? null,
       } : null,
     },
+    catalysts,
   };
 
   const prompt = session === 'am' ? buildAmPrompt(body) : buildPmPrompt(body);
