@@ -163,7 +163,7 @@ export function SettingsPage() {
 
   return (
     <div style={{ height: '100%', overflowY: 'auto' }}>
-    <div style={{ maxWidth: 640, margin: '0 auto', padding: `${SPACE[4]}px ${SPACE[4]}px ${SPACE[8]}px`, display: 'flex', flexDirection: 'column', gap: SPACE[3] }}>
+    <div style={{ maxWidth: 780, margin: '0 auto', padding: `${SPACE[4]}px ${SPACE[4]}px ${SPACE[8]}px`, display: 'flex', flexDirection: 'column', gap: SPACE[3] }}>
 
       {/* Compact connection status strip — the "done" state once connected. Setup/edit
           only reappears behind the toggle below, never as permanent prime real estate. */}

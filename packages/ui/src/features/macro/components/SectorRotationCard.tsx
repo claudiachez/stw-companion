@@ -141,6 +141,7 @@ export function SectorRotationCard({ rows, loading, asOf, updatedAt, constituent
       </div>
       <SourceNote
         source={`RS = relative strength vs SPY (pp) over each lookback · radar plots RS across Week/1M/3M/6M/1Y · Leaders/Setting Up are each sector's own constituents${constituentsLoading ? ' (loading…)' : ''}, not STW holdings · MAs: TwelveData daily`}
+        href="https://twelvedata.com"
         asOf={asOf}
         updatedAt={updatedAt}
       />
