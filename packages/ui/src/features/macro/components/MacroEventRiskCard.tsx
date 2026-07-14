@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { fmtDateTime, eventOverlayLabel, eventImportanceLabel, TREND_BUCKET_META, FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
 import type { EventRiskRead, MacroEvent, EventImportance, TrendBucket } from '@stw/shared';
 
@@ -99,10 +100,17 @@ function EventRow({ e, highlight }: { e: MacroEvent; highlight: boolean }) {
 }
 
 export function MacroEventRiskCard({ read, events, loading, error, warning, qqqBucket, vix, vixDelta5, us10yDelta5 }: Props) {
+  const [expanded, setExpanded] = useState(false);
   if (loading && !read.event) return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>Loading event calendar…</div>;
   if (error) return <div style={{ color: 'var(--c1)', fontSize: FONT_SIZE.sm }}>Event data unavailable: {error}</div>;
 
   const { overlay, riskLevel, event, surprise } = read;
+
+  // Default view = the next 7 days; the rest of the window hides behind "Show more".
+  const cutoff = Date.now() + 7 * 86_400_000;
+  const within7 = events.filter((e) => new Date(e.releaseTimeEt).getTime() <= cutoff);
+  const laterCount = events.length - within7.length;
+  const shown = expanded ? events : within7;
   const setup = buildSetup(qqqBucket, vix, vixDelta5, us10yDelta5);
   const interpretation = event ? interpret(event.eventName, surprise, us10yDelta5, qqqBucket) : null;
   const isPreRelease = overlay === 'event_watch' || overlay === 'high_event_risk';
@@ -140,15 +148,32 @@ export function MacroEventRiskCard({ read, events, loading, error, warning, qqqB
         </div>
       )}
 
-      {/* Week-ahead list — every scheduled release in the window, one row each. */}
+      {/* Week-ahead list — next 7 days by default, "Show more" reveals the rest. */}
       {events.length > 0 && (
         <div style={{ marginTop: 14 }}>
           <div style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.semibold, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 2 }}>
-            Scheduled releases
+            Scheduled releases{expanded ? '' : ' · next 7 days'}
           </div>
-          {events.map((e, i) => (
+          {shown.length === 0 && (
+            <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)', padding: '7px 0', borderTop: '1px solid var(--border)' }}>
+              Nothing scheduled in the next 7 days.
+            </div>
+          )}
+          {shown.map((e, i) => (
             <EventRow key={`${e.eventName}-${e.releaseTimeEt}`} e={e} highlight={event ? e.releaseTimeEt === event.releaseTimeEt && e.eventName === event.eventName : i === 0} />
           ))}
+          {laterCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              style={{
+                marginTop: 8, background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                fontSize: FONT_SIZE.sm, color: 'var(--t2)', textDecoration: 'underline',
+              }}
+            >
+              {expanded ? 'Show less' : `Show more (${laterCount})`}
+            </button>
+          )}
         </div>
       )}
 

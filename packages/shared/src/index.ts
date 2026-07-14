@@ -8,6 +8,7 @@ export * from './utils/positions';
 export * from './utils/legs';
 export * from './utils/filters';
 export * from './utils/conviction';
+export * from './utils/earnings';
 export * from './utils/macro';
 export * from './utils/limits';
 export * from './utils/regime';

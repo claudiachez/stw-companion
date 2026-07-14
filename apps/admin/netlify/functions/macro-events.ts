@@ -197,7 +197,7 @@ export const handler: Handler = async (event) => {
     events.sort((a, b) => (a.releaseTimeEt < b.releaseTimeEt ? -1 : a.releaseTimeEt > b.releaseTimeEt ? 1 : 0));
     return {
       statusCode: 200,
-      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=3600' },
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=300, stale-while-revalidate=3600' },
       body: JSON.stringify({ events, source: 'FRED' }),
     };
   } catch (e) {
