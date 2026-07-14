@@ -66,7 +66,17 @@ function todayEt(): string {
 // from the already-deployed macro-events function — same no-duplication pattern as
 // macro-snapshot's fetchEventRisk (process.env.URL is the Netlify site URL at runtime).
 
-interface CatalystRow { eventName: string; releaseTimeEt: string; importance: string; previous: string | null }
+interface CatalystRow { eventName: string; releaseTimeEt: string; importance: string; actual: string | null; previous: string | null }
+
+/** Minutes since ET midnight, e.g. 8:35am → 515. Drives the AM release gate. */
+function etMinutesNow(): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(new Date());
+  const h = parseInt(parts.find((p) => p.type === 'hour')!.value, 10) % 24;
+  const m = parseInt(parts.find((p) => p.type === 'minute')!.value, 10);
+  return h * 60 + m;
+}
 
 /** Compact ET stamp for a catalyst line, e.g. "Jul 14 · 8:30 AM ET". */
 function catalystStamp(iso: string): string {
@@ -90,13 +100,22 @@ async function fetchCatalysts(): Promise<CatalystRow[]> {
   } catch { return []; }
 }
 
-/** Prompt block listing the upcoming catalysts — real FRED data, never invented. */
+/** Prompt block: recently-released prints (with the actual number) + upcoming
+ *  catalysts — all real FRED data, never invented. */
 function catalystBlock(rows: CatalystRow[]): string {
-  if (!rows.length) return 'Catalysts ahead: none scheduled in the next 7 days.';
-  const lines = rows
-    .map((e) => `- ${catalystStamp(e.releaseTimeEt)} — ${e.eventName} (${e.importance.replace('_', ' ')} impact)${e.previous ? `, previous ${e.previous}` : ''}`)
-    .join('\n');
-  return `Catalysts ahead (real, from the FRED release calendar — factor imminent high-impact ones into the read):\n${lines}`;
+  if (!rows.length) return 'Economic calendar: nothing released or scheduled in the ±window.';
+  const nowMs = Date.now();
+  const lines = rows.map((e) => {
+    const impact = e.importance.replace('_', ' ');
+    const released = new Date(e.releaseTimeEt).getTime() <= nowMs;
+    if (released) {
+      // Just-released: lead with the ACTUAL print (the number the host wants to see).
+      const val = e.actual ? `actual ${e.actual}${e.previous ? `, prev ${e.previous}` : ''}` : 'print pending';
+      return `- ${catalystStamp(e.releaseTimeEt)} — ${e.eventName} (${impact} impact): RELEASED — ${val}`;
+    }
+    return `- ${catalystStamp(e.releaseTimeEt)} — ${e.eventName} (${impact} impact): due${e.previous ? `, previous ${e.previous}` : ''}`;
+  }).join('\n');
+  return `Economic calendar (real, from FRED — recently released prints + upcoming catalysts; factor imminent high-impact ones into the read, and speak to any just-released number):\n${lines}`;
 }
 
 // ── Prompt builders ────────────────────────────────────────────────────────────
@@ -149,7 +168,7 @@ CRITICAL GROUNDING RULES:
 - If the data is thin, write a shorter note rather than padding with invented detail.
 - Quote price levels exactly as given (SPX/QQQ levels are in index points).
 - This is a MORNING note — frame it as "what to watch today" and "how to set up", not a recap of what happened.
-- CATALYSTS: the "Catalysts ahead" list is the real scheduled economic calendar. Factor genuinely imminent, high-impact ones into the verdict and playbook (e.g. size discipline into a very-high-impact print). Do NOT predict the number or invent a consensus — only the "previous" figure shown is known.
+- ECONOMIC CALENDAR: the list below is real FRED data. A "RELEASED" line already carries today's ACTUAL print — lead the read with it where it's high-impact (e.g. what a hot/cool CPI means for the session). A "due" line is upcoming — factor imminent high-impact ones into the setup (size discipline into the print). The only known numbers are the actual + previous shown; NEVER invent a consensus/expectation or predict an unreleased number.
 
 NO REPETITION — each field has a DISTINCT job. Do not restate the same point, phrase, or number in more than one field. If two fields would say the same thing, cut one down to its unique angle. Price levels appear ONLY in "watching". "verdict" describes the setup; "playbook" prescribes actions — keep those two from overlapping.
 
@@ -199,7 +218,7 @@ CRITICAL GROUNDING RULES:
 - If the data is thin, write a shorter note rather than padding with invented detail.
 - Quote price levels exactly as given (SPX/QQQ levels are in index points).
 - This is an EVENING note — frame it as "what happened" and "what to set up for tomorrow".
-- CATALYSTS: the "Catalysts ahead" list is the real scheduled economic calendar. Factor genuinely imminent, high-impact ones into the verdict and playbook (e.g. size discipline into a very-high-impact print tomorrow). Do NOT predict the number or invent a consensus — only the "previous" figure shown is known.
+- ECONOMIC CALENDAR: the list below is real FRED data. A "RELEASED" line carries today's ACTUAL print — speak to any high-impact one that dropped. A "due" line is upcoming — factor imminent high-impact ones into tomorrow's setup (size discipline into the print). The only known numbers are the actual + previous shown; NEVER invent a consensus/expectation or predict an unreleased number.
 
 NO REPETITION — each field has a DISTINCT job. Do not restate the same point, phrase, or number in more than one field. If two fields would say the same thing, cut one down to its unique angle. Price levels appear ONLY in "watching". "verdict" explains what happened; "playbook" prescribes tomorrow's actions — keep those two from overlapping.
 
@@ -230,7 +249,11 @@ Respond with ONLY a JSON object (no markdown fences) with exactly these fields:
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-export async function generateDailyRecap(tag: string, session: 'am' | 'pm'): Promise<void> {
+export async function generateDailyRecap(
+  tag: string,
+  session: 'am' | 'pm',
+  opts: { minEtMinutes?: number } = {},
+): Promise<void> {
   const supabaseUrl  = (process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? '').trim();
   const serviceKey   = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim();
   const anthropicKey = (process.env.ANTHROPIC_API_KEY ?? '').trim();
@@ -238,6 +261,15 @@ export async function generateDailyRecap(tag: string, session: 'am' | 'pm'): Pro
 
   if (!supabaseUrl || !serviceKey || !anthropicKey || !twelveKey) {
     console.error(`${tag}: missing required env vars — aborting`);
+    return;
+  }
+
+  // Release gate: the AM run fires at two UTC times (12:35 + 13:35) to bracket 8:35 ET
+  // across DST (Netlify cron is UTC-only). Write only once it's ≥ the gate minute in ET,
+  // so the recap lands AFTER the 8:30 econ releases and can report them; idempotency
+  // makes the earlier/later duplicate fire a no-op.
+  if (opts.minEtMinutes != null && etMinutesNow() < opts.minEtMinutes) {
+    console.log(`${tag}: ${etMinutesNow()}min ET < gate ${opts.minEtMinutes} — deferring to the later fire`);
     return;
   }
 

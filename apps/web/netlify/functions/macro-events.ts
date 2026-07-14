@@ -11,16 +11,18 @@
  *     /fred/releases) with include_release_dates_with_no_data so future scheduled
  *     dates appear, then window-filter. FRED gives a DATE only, so each release is
  *     stamped with its conventional ET release time.
- *   - FRED `/fred/series/observations` (latest value) per release → the **Previous**
- *     print (the last released figure, e.g. CPI YoY %). The release *calendar* has
- *     no values; the *series* does. Both fetches for a release happen in the same
- *     paced worker, so it stays a single concurrent FRED round.
+ *   - FRED `/fred/series/observations` (latest TWO values) per release → the print
+ *     numbers. The release *calendar* has no values; the *series* does. For an
+ *     UPCOMING event the latest value is its **Previous**; for a just-RELEASED event
+ *     the latest value is its **Actual** and the one before it the Previous (the
+ *     series carries the new figure within minutes of the 8:30 drop). Both fetches
+ *     for a release happen in the same paced worker (a single concurrent FRED round).
  *   - FOMC rate decisions are Fed meetings, not a FRED release → a small static list
  *     (see FOMC_DECISION_DATES; VERIFY against the Fed's published schedule).
  *
- * What FRED still can't give: **consensus** (a proprietary survey of economists) and
- * **actual** on a schedule. So `consensus`/`actual` stay null — classifyEventRisk's
- * surprise/"shock" path just doesn't fire; the upcoming-event windows work fully.
+ * What FRED still can't give: **consensus** (a proprietary survey of economists). So
+ * `consensus` stays null — classifyEventRisk's surprise/"shock" path just doesn't fire;
+ * the reaction overlay fires on the release TIME (not on consensus) and shows the actual.
  * (Note: FRED's calendar lists UMich Consumer Sentiment's FINAL date, not the
  * mid-month preliminary — its scheduled date can read later than a trader expects.)
  *
@@ -119,17 +121,25 @@ async function releaseDates(id: number, key: string): Promise<string[]> {
   return (d.release_dates ?? []).map((r) => r.date).filter(Boolean);
 }
 
-/** Latest observation for a series (the last released print), formatted for display. */
-async function previousPrint(spec: PrevSpec, key: string): Promise<string | null> {
+/**
+ * The latest two observations for a series, formatted. `latest` is the most recent
+ * released print; `prior` the one before it. An UPCOMING event shows `latest` as its
+ * Previous; a just-RELEASED event shows `latest` as its Actual and `prior` as Previous
+ * (the FRED data series carries the new number within minutes of the 8:30 release —
+ * calendar dates alone never do).
+ */
+async function latestPrints(spec: PrevSpec, key: string): Promise<{ latest: string | null; prior: string | null }> {
   const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${spec.series}&api_key=${key}`
-    + `&file_type=json&units=${spec.units}&sort_order=desc&limit=1`;
+    + `&file_type=json&units=${spec.units}&sort_order=desc&limit=2`;
   const res = await fetch(url);
-  if (!res.ok) return null;
+  if (!res.ok) return { latest: null, prior: null };
   const d = await res.json() as { observations?: { value: string }[] };
-  const raw = d.observations?.[0]?.value;
-  if (raw == null || raw === '' || raw === '.') return null;
-  const v = Number(raw);
-  return Number.isFinite(v) ? fmtPrev(v, spec) : null;
+  const fmt = (raw: string | undefined): string | null => {
+    if (raw == null || raw === '' || raw === '.') return null;
+    const v = Number(raw);
+    return Number.isFinite(v) ? fmtPrev(v, spec) : null;
+  };
+  return { latest: fmt(d.observations?.[0]?.value), prior: fmt(d.observations?.[1]?.value) };
 }
 
 export const handler: Handler = async (event) => {
@@ -153,23 +163,31 @@ export const handler: Handler = async (event) => {
     const events: MacroEventRow[] = [];
 
     // One paced FRED round: each release worker fetches both its scheduled dates and
-    // its latest print (the Previous value), concurrently within the chunk.
+    // its latest two prints, concurrently within the chunk.
     const perRelease = await runPaced(
       TARGET_RELEASES,
       async (t) => {
-        const [dates, previous] = await Promise.all([releaseDates(t.id, fredKey), previousPrint(t.prev, fredKey)]);
-        return { t, dates, previous };
+        const [dates, prints] = await Promise.all([releaseDates(t.id, fredKey), latestPrints(t.prev, fredKey)]);
+        return { t, dates, prints };
       },
       FEED_LIMITS.fred,
     );
-    for (const { t, dates, previous } of perRelease) {
+    for (const { t, dates, prints } of perRelease) {
       for (const date of dates) {
         if (!inWindow(date, now)) continue;
+        const releaseTimeEt = isoEt(date, t.timeEt);
+        // A row whose release time has passed is RELEASED → its latest print is the
+        // Actual, the one before it the Previous. A still-upcoming row shows the last
+        // released value as its Previous (Actual pending). This is what lets a just-
+        // released CPI show its number instead of vanishing from the card.
+        const released = new Date(releaseTimeEt).getTime() <= now.getTime();
         events.push({
           eventName: t.name,
-          releaseTimeEt: isoEt(date, t.timeEt),
+          releaseTimeEt,
           period: null,
-          actual: null, consensus: null, previous,
+          actual: released ? prints.latest : null,
+          consensus: null,
+          previous: released ? prints.prior : prints.latest,
           importance: t.importance,
           source: 'FRED',
           sourceTimestamp: nowIso,

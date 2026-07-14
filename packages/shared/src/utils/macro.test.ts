@@ -477,6 +477,37 @@ describe('classifyEventRisk', () => {
     expect(read.overlay).toBe('reaction_overlay');
     expect(read.event?.eventName).toBe('PPI');
   });
+
+  it('fires a Reaction Overlay the moment release time passes, even before the actual posts (FRED lag)', () => {
+    // THE regression (CPI missing at 8:58am): FRED gives release DATES only, so `actual`
+    // is null for the minutes-to-hours until FRED's data series updates. The overlay must
+    // still fire on the release time — before the fix it was gated on `actual` and vanished.
+    const events = [mkEvent({ releaseTimeEt: '2026-06-27T20:30:00-04:00', actual: null, consensus: null })]; // ~3.5h ago
+    const read = classifyEventRisk(events, now);
+    expect(read.overlay).toBe('reaction_overlay');
+    expect(read.event?.eventName).toBe('CPI');
+    expect(read.surprise).toBeNull();
+  });
+
+  it('a just-released major outranks a far-off upcoming major (closest wins)', () => {
+    const events = [
+      mkEvent({ eventName: 'CPI', releaseTimeEt: '2026-06-27T23:00:00-04:00', actual: null, consensus: null }), // ~1h ago
+      mkEvent({ eventName: 'NFP', releaseTimeEt: '2026-06-28T20:00:00-04:00' }),                                // ~20h out
+    ];
+    const read = classifyEventRisk(events, now);
+    expect(read.overlay).toBe('reaction_overlay');
+    expect(read.event?.eventName).toBe('CPI');
+  });
+
+  it('an imminent upcoming major outranks a stale recent release (closest wins)', () => {
+    const events = [
+      mkEvent({ eventName: 'CPI', releaseTimeEt: '2026-06-26T08:30:00-04:00', actual: '3.1% YoY' }),   // ~40h ago
+      mkEvent({ eventName: 'NFP', releaseTimeEt: '2026-06-28T02:00:00-04:00' }),                        // ~2h out
+    ];
+    const read = classifyEventRisk(events, now);
+    expect(read.overlay).toBe('high_event_risk');
+    expect(read.event?.eventName).toBe('NFP');
+  });
 });
 
 describe('eventOverlayLabel + eventImportanceLabel', () => {
