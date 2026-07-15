@@ -15,7 +15,7 @@ Session-Close doc-maintenance step.
 
 | Feed | Key (env) | Tier / limit | Serves (current) | CORS / access |
 |---|---|---|---|---|
-| **FRED** | `FRED_API_KEY` (server-side, no `VITE_`) | Free, ~120 req/min, no daily cap | Macro **index** indicators (VIX, VIX3M, US10Y, HY-OAS credit, dollar) **+ the Event Risk release calendar** | **No CORS** → browser reads via the `fred` Netlify proxy; writers call FRED directly |
+| **FRED** | `FRED_API_KEY` (server-side, no `VITE_`) | Free, ~120 req/min, no daily cap | Macro **index** indicators (VIX, VIX3M, US10Y, HY-OAS credit, dollar) **+ the Event Risk release calendar (`/release/dates`) and its print numbers (`/series/observations`)** | **No CORS** → browser reads via the `fred` Netlify proxy; writers call FRED directly |
 | **TwelveData** | `VITE_TWELVEDATA_KEY` | Free, **8 credits/min, 800/day, 1 credit/symbol** | **Equity daily closes only** — trend ETFs (SPY/QQQ/IWM/RSP/VEA) + Sector-Rotation constituents; `regime-daily`'s **daily** IWM/SPY/QQQ append | CORS OK (client-direct) |
 | **Yahoo Finance (chart API)** | none (keyless) | Free, no key, deep history in one call | **`regime-daily` depth backfill only** (`?source=yahoo`) — IWM/SPY/QQQ daily closes back to ~2000 (SPY 1996) | server-side (writer only), sends a `User-Agent` |
 | **Finnhub** | `VITE_FINNHUB_KEY` | Free, ~60/min | Live **stock** quotes; `profile2` (industry, for `sector-map-sync`) | CORS OK; free tier serves neither index symbols nor daily candles |
@@ -44,10 +44,13 @@ Session-Close doc-maintenance step.
   is the real ICE BofA spread (upgrade over the HYG-price proxy); VXVCLS makes `regime-daily`'s
   `vol_state` term-structure check resolve (was perpetually `UNKNOWN`); FRED's 120/min removes the
   cold-load bottleneck that TwelveData's 8/min caused for the indices.
-- **Event Risk** (`macro-events.ts`): FRED `/fred/release/dates` **per release_id** — CPI `10`,
-  PCE `54`, Employment/NFP `50`, GDP `53`, PPI `46` — window-filtered, plus a static
-  `FOMC_DECISION_DATES` list. A calendar has no actual/consensus values, so `classifyEventRisk`'s
-  surprise/shock path no-ops; the upcoming-event windows work. **FOMC dates are hardcoded best-effort
+- **Event Risk** (`macro-events.ts`): FRED `/fred/release/dates` **per release_id** for the schedule —
+  CPI `10`, PPI `46`, PCE `54`, NFP `50`, GDP `53`, Retail Sales `9`, Philly Fed `351`, Housing `27`,
+  UMich `91` — window-filtered (7-day default), plus a static `FOMC_DECISION_DATES` list. **The print
+  NUMBERS come from `/fred/series/observations`** (latest two obs per release, via each release's
+  `PrevSpec`): an upcoming row shows `previous`, a just-released row shows `actual` + `previous`.
+  **`consensus` has no free feed** so `classifyEventRisk`'s surprise/shock path no-ops — but the reaction
+  overlay fires on RELEASE TIME (a released event never vanishes). **FOMC dates are hardcoded best-effort
   — verify against the Fed's published schedule when they roll over.**
 
 ## TwelveData (equity daily closes)

@@ -65,6 +65,33 @@
 
 ---
 
+## Current Status — Macro econ-release actuals + premarket-recap timing (handoff 2026-07-14)
+
+**All on `staging`, NONE on `main`. `staging` is 85 commits ahead of `main`.** This session was
+Macro-tab work driven by a host report (CPI wasn't showing in Event Risk after the 8:30 release). Typecheck
++ 311 tests + 0 lint. No migrations. Merged via PR #118; #116/#117 (earnings module + 7-day Event Risk +
+Settings troubleshoot) were also merged to `staging` this session (by the host / parallel work — not this
+chat's authorship, but they're the base #118 builds on).
+
+- **Event Risk now shows the release's ACTUAL print (PR #118).** Root cause of the "no CPI at 8:58am"
+  report: `classifyEventRisk`'s post-release reaction overlay was gated on `e.actual`, which the FRED
+  *calendar* never supplies → a released event vanished. Fix: the overlay fires on **release time** (not
+  `actual`; closest major — just-released vs imminent — wins), and `macro-events.ts` fetches each release's
+  latest TWO `/fred/series/observations` so a released row fills `actual` + `previous`. Consensus still
+  unavailable (no free feed) → no surprise calc, never a fabricated number. See Conventions → Macro data sources.
+- **Premarket recap runs at 8:35 ET, after the 8:30 releases, and ingests them.** Was 8:00 ET (pre-release)
+  and ingested no econ data. Now the AM cron fires `35 12,13 * * 1-5` + an ET gate (writes only once ET ≥
+  8:35; two UTC fires bracket DST since Netlify cron is UTC-only; idempotency no-ops the duplicate), and the
+  recap feeds the day's FRED calendar + released actuals into the prompt.
+- **Deploy nuance:** Event Risk actuals = on-demand HTTP fn → live on staging once deployed. Recap retiming
+  = scheduled fn → only fires on the **prod (`main`)** deploy; dormant on staging until promotion.
+- **⚠️ Branch cleanup:** `claude/macro-econ-actuals` (#118, merged) did NOT auto-delete — **delete it
+  manually** in the GitHub UI (git push-delete is proxy-blocked here). Other session branches auto-deleted.
+
+**⚠️ PENDING (host):** the **`staging → main` promotion** — everything below is staging-only.
+
+---
+
 ## Current Status — cash-flow-adjusted drawdown ladder + ladder↔regime reconciliation (handoff 2026-07-12, later)
 
 **Two PRs merged to `staging`, NONE on `main`. Typecheck + 296 tests + 0 lint throughout. Migration 071
@@ -754,6 +781,13 @@ lands on prod. (`risk_config.ibkr_nlv` is now populated — no further sync acti
    The regime history now spans dot-com / GFC 2008 / 2011 / 2018 / COVID. `plans/20260709_regime_daily_depth_extension.md`
    carries the DONE status + the Stooq→Yahoo deviation note.
 
+0b. **VERIFY the Macro econ-actuals + recap timing (PR #118, this session).** On a real **release
+   morning** after this deploys: (a) open the Macro tab shortly after 8:30 ET and confirm Event Risk shows
+   the just-released print (e.g. "CPI … actual X, prior Y") in a Reaction Overlay instead of the event
+   vanishing — this is on-demand, so it's testable on **staging**; (b) the premarket recap timing only
+   fires on **prod (`main`)**, so it can't be confirmed until a promotion. Also **delete the merged
+   `claude/macro-econ-actuals` branch** in the GitHub UI (git push-delete is proxy-blocked).
+
 1. **★ MACRO TAB improvements — the two host-requested threads are DONE (PRs #90–#93, on `staging`).**
    What shipped: **(a)** the 5D trend engine is now surfaced — colored score-strip deltas, a Regime
    trend chip (`▲ +5 vs yesterday`), and the 9-day regime trajectory lamps in the new `RegimeCard`
@@ -1199,14 +1233,22 @@ Feed responsibilities, post-re-platform (full inventory: [`plans/20260707_data_f
   061), read via `useAppConfig().regimeWeights`, passed to `environmentScore(sleeves, weights?)` (which
   normalizes by the total, so scale is cosmetic). Edited on Admin Config → "Market Regime weights". The
   `macro-snapshot` writer reads the same keys so the persisted regime matches the live banner.
-- **Event Risk** (`macro-events.ts`, web + admin): FRED `/fred/release/dates` **per release_id**
-  (CPI 10 · PCE 54 · NFP 50 · GDP 53 · PPI 46) + a static `FOMC_DECISION_DATES` list, window-filtered.
-  The MarketWatch/`cheerio` scrape is retired. A calendar has no actual/consensus values, so
-  `classifyEventRisk`'s surprise/shock path no-ops; upcoming-event windows work fully. **FOMC dates are
-  a hardcoded best-effort list — verify against the Fed's published schedule when they roll over.**
+- **Event Risk** (`macro-events.ts`, web + admin): FRED `/fred/release/dates` **per release_id** for the
+  schedule (CPI 10 · PPI 46 · PCE 54 · NFP 50 · GDP 53 · Retail Sales 9 · Philly Fed 351 · Housing 27 ·
+  UMich 91) + a static `FOMC_DECISION_DATES` list, window-filtered (7-day default, "Show more" expands).
+  **The `/fred/series/observations` DATA series supplies the print numbers** (calendar has none): each
+  release fetches its latest TWO obs, so an UPCOMING row shows `previous` and a just-RELEASED row shows
+  `actual` (latest) + `previous` (prior) — that's what makes a just-dropped CPI show its number.
+  **`consensus` stays null** (no free feed) so `classifyEventRisk`'s surprise/shock path no-ops — but the
+  **reaction overlay fires on RELEASE TIME, not on `actual`** (a released event never vanishes; closest
+  major — just-released vs imminent — is the headline). Never fabricate a print; a null actual (FRED lag)
+  renders "—". **FOMC dates are a hardcoded best-effort list — verify against the Fed's schedule.**
 - **Macro recap** (`macro-recap-am/pm` scheduled fns + `macro-recap.ts` manual fn): a **daily** note, two
-  sessions per weekday (AM pre-market 12:00 UTC, PM post-market 21:30 UTC). Grounded ONLY in passed data
-  — **never fabricate figures**. Sonnet→Haiku (`MACRO_RECAP_MODEL` override). Persisted in
+  sessions per weekday. **AM = 8:35 ET** — the cron fires `35 12,13 * * 1-5` (two UTC times bracketing
+  8:35 ET across DST, since Netlify cron is UTC-only) and the recap's `minEtMinutes` gate writes only once
+  ET ≥ 8:35, so it lands AFTER the 8:30 econ releases; idempotency no-ops the second fire. PM = 21:30 UTC.
+  Grounds in the day's FRED econ calendar + released actuals (via the macro-events endpoint) alongside the
+  scores — **never fabricate figures** (actual + prior only, no consensus). Sonnet→Haiku (`MACRO_RECAP_MODEL`). Persisted in
   `public.macro_daily_recaps` (migration 051). Hook: `useDailyRecap.ts`.
 - **5D trend engine** (`useMacroTrendHistory.ts`): reads `public.macro_daily_snapshots` (migration 048),
   written by the `macro-snapshot` scheduled fn (4:30pm ET weekdays), folding today's live scores in.
