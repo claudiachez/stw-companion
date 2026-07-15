@@ -1,4 +1,5 @@
 import { useMemo, type ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   environmentScore, regimeBand, trendSleeveScore, trendSleeveLabel, trendSubScore,
   gexPositioningLabel, stressLabel, creditLabel, ratesDollarLabel, isTradingDay, MARKET_MOVERS, FONT_SIZE,
@@ -32,7 +33,7 @@ import { GexPositioningCard } from './components/GexPositioningCard';
 import { SentimentGauge } from './components/SentimentGauge';
 import { MacroRecapCard } from './components/MacroRecapCard';
 import { SectorRotationCard } from './components/SectorRotationCard';
-import { EarningsAheadCard } from './components/EarningsAheadCard';
+import { EarningsAheadCard, type EarningsCat } from './components/EarningsAheadCard';
 import { ModuleHeader } from './components/macroVisuals';
 
 // Concise "what is this / why it matters / how to read it" blurbs, shown via the
@@ -123,7 +124,14 @@ const HELP = {
 };
 
 export function MacroView() {
-  const { finnhubKey, twelveDataKey, canEdit } = useCapabilities();
+  const { finnhubKey, twelveDataKey, canEdit, isAdmin } = useCapabilities();
+  const navigate = useNavigate();
+  // Held earnings tickers link to their detail page: a "yours" name → My Portfolio
+  // (web only — admin has no /portfolio, and its book ≈ STW's), everything else → Stock
+  // Picks. Market-movers aren't linked (no detail page); the card gates on category.
+  const openEarningsTicker = (symbol: string, cat: EarningsCat) => {
+    navigate(cat === 'yours' && !isAdmin ? `/portfolio?ticker=${symbol}` : `/picks?ticker=${symbol}`);
+  };
   const { regimeWeights } = useAppConfig();
   const { prefs, toggle } = useMacroPrefs();
   // Graddox is retained only to ground the AI recap; the visible GEX card, the
@@ -331,7 +339,7 @@ export function MacroView() {
       <section>
         <ModuleHeader title="Earnings Ahead" help={HELP.earnings} />
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
-          <EarningsAheadCard events={upcomingEarnings} ownTickers={ownTickers} stwTickers={stwTickers} loading={earningsLoading} />
+          <EarningsAheadCard events={upcomingEarnings} ownTickers={ownTickers} stwTickers={stwTickers} loading={earningsLoading} onSelectTicker={openEarningsTicker} />
         </div>
       </section>
 

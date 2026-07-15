@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { earningsHourLabel, earningsProximity, fmtEpsEstimate, FONT_SIZE, FONT_WEIGHT, formatDate, type EarningsEvent } from '@stw/shared';
 
 /** Which book a reporting ticker belongs to, most-relevant-first (yours > STW > index mover). */
-type EarningsCat = 'yours' | 'stw' | 'mover';
+export type EarningsCat = 'yours' | 'stw' | 'mover';
 
 const CAT_META: Record<EarningsCat, { color: string; label: string }> = {
   yours: { color: 'var(--acc)', label: 'yours' },
@@ -18,18 +18,32 @@ interface Props {
   /** Tickers STW holds. A ticker in both `ownTickers` and here reads as "yours". */
   stwTickers: string[];
   loading: boolean;
+  /** Open a held ticker's detail page. Called only for `yours`/`stw` rows (they have a
+   *  detail page); `mover` rows have none, so they stay plain text. */
+  onSelectTicker?: (symbol: string, cat: EarningsCat) => void;
 }
 
 /** One earnings row, single line: ticker · book tag · date · session · est EPS · proximity. */
-function EarningsRow({ e, cat }: { e: EarningsEvent; cat: EarningsCat }) {
+function EarningsRow({ e, cat, onSelectTicker }: { e: EarningsEvent; cat: EarningsCat; onSelectTicker?: (symbol: string, cat: EarningsCat) => void }) {
   const hour = earningsHourLabel(e.hour);
   const eps = fmtEpsEstimate(e.epsEstimate);
   const meta = [hour, eps].filter(Boolean).join(' · ');
   const { color, label } = CAT_META[cat];
+  const linkable = cat !== 'mover' && !!onSelectTicker;
   return (
     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', padding: '7px 0', borderTop: '1px solid var(--border)', fontSize: FONT_SIZE.sm }}>
       <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0, alignSelf: 'center' }} />
-      <span style={{ fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>{e.symbol}</span>
+      {linkable ? (
+        <button
+          type="button"
+          onClick={() => onSelectTicker!(e.symbol, cat)}
+          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontWeight: FONT_WEIGHT.semibold, color: 'var(--acc)', textDecoration: 'underline', fontSize: FONT_SIZE.sm }}
+        >
+          {e.symbol}
+        </button>
+      ) : (
+        <span style={{ fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>{e.symbol}</span>
+      )}
       <span style={{ fontSize: FONT_SIZE['2xs'], color: cat === 'yours' ? 'var(--acc)' : 'var(--t3)' }}>{label}</span>
       <span style={{ color: 'var(--t2)' }}>{formatDate(e.date)}</span>
       {meta && <span style={{ color: 'var(--t3)' }}>{meta}</span>}
@@ -38,7 +52,7 @@ function EarningsRow({ e, cat }: { e: EarningsEvent; cat: EarningsCat }) {
   );
 }
 
-export function EarningsAheadCard({ events, ownTickers, stwTickers, loading }: Props) {
+export function EarningsAheadCard({ events, ownTickers, stwTickers, loading, onSelectTicker }: Props) {
   const [expanded, setExpanded] = useState(false);
   const own = new Set(ownTickers.map((t) => t.toUpperCase()));
   const stw = new Set(stwTickers.map((t) => t.toUpperCase()));
@@ -66,7 +80,7 @@ export function EarningsAheadCard({ events, ownTickers, stwTickers, loading }: P
         </div>
       )}
       {shown.map((e) => (
-        <EarningsRow key={`${e.symbol}-${e.date}`} e={e} cat={catOf(e.symbol)} />
+        <EarningsRow key={`${e.symbol}-${e.date}`} e={e} cat={catOf(e.symbol)} onSelectTicker={onSelectTicker} />
       ))}
       {laterCount > 0 && (
         <button
