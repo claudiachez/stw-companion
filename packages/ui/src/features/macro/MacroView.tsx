@@ -312,7 +312,9 @@ export function MacroView() {
             warning={eventsWarning}
             qqqBucket={qqqBucket}
             vix={volatility?.vix ?? null}
-            vixDelta5={volatility?.vixDelta5 ?? null}
+            vixDelta1={volatility?.vixDelta1 ?? null}
+            us10y={rates?.us10y ?? null}
+            us10yDelta1={rates?.us10yDelta1 ?? null}
             us10yDelta5={rates?.us10yDelta5 ?? null}
           />
         </div>
