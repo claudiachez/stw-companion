@@ -28,7 +28,10 @@ export function useMacroEvents() {
   const query = useQuery({
     queryKey: ['macro-events'],
     queryFn: fetchMacroEvents,
-    staleTime: 30 * 60 * 1000,
+    // Short staleTime: on a release morning the actual print + favorability arrow
+    // should appear promptly, and after a deploy the new payload shape (e.g. the
+    // lowerIsBetter field) shouldn't sit behind a long client cache.
+    staleTime: 5 * 60 * 1000,
     retry: 1,
   });
 
