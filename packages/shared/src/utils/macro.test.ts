@@ -9,7 +9,7 @@ import {
   gexScore, gexBiasLabel, gexImplication,
   breadthScore, RISK_APPETITE_WEIGHTS, riskAppetiteScore,
   classifyTrendDirection, regimeDirectionLabel, trendDirectionPhrase, trendDirectionArrow,
-  eventImportance, eventSurprise, classifyEventRisk, eventOverlayLabel, eventImportanceLabel,
+  eventImportance, eventSurprise, eventPrintTrend, classifyEventRisk, eventOverlayLabel, eventImportanceLabel,
   SECTOR_ETFS, RS_LOOKBACKS, relativeStrength,
   weekRange,
   SECTOR_CONSTITUENTS, rankSectorConstituents,
@@ -507,6 +507,35 @@ describe('classifyEventRisk', () => {
     const read = classifyEventRisk(events, now);
     expect(read.overlay).toBe('high_event_risk');
     expect(read.event?.eventName).toBe('NFP');
+  });
+});
+
+describe('eventPrintTrend', () => {
+  it('inflation falling is a favorable down-move (green ▼)', () => {
+    expect(eventPrintTrend('3.1% YoY', '3.4% YoY', true)).toEqual({ dir: 'down', favorable: 'good' });
+  });
+  it('inflation rising is an unfavorable up-move (red ▲)', () => {
+    expect(eventPrintTrend('3.4% YoY', '3.1% YoY', true)).toEqual({ dir: 'up', favorable: 'bad' });
+  });
+  it('jobs rising is a favorable up-move (higher-is-better)', () => {
+    expect(eventPrintTrend('+200K MoM', '+150K MoM', false)).toEqual({ dir: 'up', favorable: 'good' });
+  });
+  it('jobs falling is an unfavorable down-move', () => {
+    expect(eventPrintTrend('+100K MoM', '+150K MoM', false)).toEqual({ dir: 'down', favorable: 'bad' });
+  });
+  it('parses through thousands separators and units', () => {
+    expect(eventPrintTrend('1,400K starts', '1,350K starts', false)).toEqual({ dir: 'up', favorable: 'good' });
+  });
+  it('unchanged print is flat/neutral', () => {
+    expect(eventPrintTrend('3.1% YoY', '3.1% YoY', true)).toEqual({ dir: 'flat', favorable: 'neutral' });
+  });
+  it('no favorability convention → direction only, neutral color', () => {
+    expect(eventPrintTrend('48.5', '46.0', undefined)).toEqual({ dir: 'up', favorable: 'neutral' });
+  });
+  it('returns null when a value is missing or non-numeric', () => {
+    expect(eventPrintTrend(null, '3.1%', true)).toBeNull();
+    expect(eventPrintTrend('3.1%', null, true)).toBeNull();
+    expect(eventPrintTrend('n/a', '3.1%', true)).toBeNull();
   });
 });
 

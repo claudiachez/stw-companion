@@ -422,10 +422,11 @@ export function eventImportance(eventName: string): EventImportance {
   return 'low';
 }
 
-/** First numeric token in a calendar print, e.g. "0.4%" → 0.4, "175K" → 175. */
+/** First numeric token in a calendar print, e.g. "0.4%" → 0.4, "175K" → 175,
+ *  "1,400K" → 1400 (thousands separators stripped first). */
 function parseEventValue(s: string | null | undefined): number | null {
   if (!s) return null;
-  const m = s.match(/-?\d+(\.\d+)?/);
+  const m = s.replace(/,/g, '').match(/-?\d+(\.\d+)?/);
   return m ? parseFloat(m[0]) : null;
 }
 
@@ -434,6 +435,37 @@ export function eventSurprise(actual: string | null, consensus: string | null): 
   const a = parseEventValue(actual);
   const c = parseEventValue(consensus);
   return a === null || c === null ? null : a - c;
+}
+
+export type EventPrintDir = 'up' | 'down' | 'flat';
+export interface EventPrintTrend {
+  /** Which way the number moved vs the previous print — drives the arrow glyph. */
+  dir: EventPrintDir;
+  /** Whether that move is favorable for markets — drives the arrow COLOR. `neutral`
+   *  when the move is flat or the metric carries no favorability convention. */
+  favorable: 'good' | 'bad' | 'neutral';
+}
+
+/**
+ * Compare a released print's actual vs its previous value into a direction + favorability,
+ * WITHOUT a consensus (FRED publishes none). `lowerIsBetter` encodes the metric's market
+ * read: inflation prints improve when they FALL; growth/jobs/sentiment when they RISE.
+ * The arrow points the way the number moved; the color says whether that's good or bad.
+ * Returns null when either value is missing or non-numeric (e.g. FOMC, pre-release).
+ */
+export function eventPrintTrend(
+  actual: string | null | undefined,
+  previous: string | null | undefined,
+  lowerIsBetter: boolean | undefined,
+): EventPrintTrend | null {
+  const a = parseEventValue(actual ?? null);
+  const p = parseEventValue(previous ?? null);
+  if (a === null || p === null) return null;
+  if (a === p) return { dir: 'flat', favorable: 'neutral' };
+  const dir: EventPrintDir = a > p ? 'up' : 'down';
+  if (lowerIsBetter === undefined) return { dir, favorable: 'neutral' };
+  const improved = lowerIsBetter ? a < p : a > p;
+  return { dir, favorable: improved ? 'good' : 'bad' };
 }
 
 const EVENT_WATCH_HOURS = 48;

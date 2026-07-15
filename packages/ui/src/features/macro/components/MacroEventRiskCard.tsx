@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { fmtDateTime, eventOverlayLabel, eventImportanceLabel, TREND_BUCKET_META, FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
-import type { EventRiskRead, MacroEvent, EventImportance, TrendBucket } from '@stw/shared';
+import { fmtDateTime, eventOverlayLabel, eventImportanceLabel, eventPrintTrend, TREND_BUCKET_META, FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
+import type { EventRiskRead, MacroEvent, EventImportance, EventPrintTrend, TrendBucket } from '@stw/shared';
 
 interface Props {
   read: EventRiskRead;
@@ -29,6 +29,21 @@ const IMPORTANCE_COLOR: Record<EventImportance, string> = {
   medium: 'var(--t2)',
   low: 'var(--t3)',
 };
+
+const FAVOR_COLOR: Record<EventPrintTrend['favorable'], string> = {
+  good: 'var(--c5)',   // green — the move helps markets
+  bad: 'var(--c1)',    // red — the move hurts
+  neutral: 'var(--t3)',
+};
+
+/** Actual-vs-previous move: glyph shows the direction the number went, color whether
+ *  that's favorable (FRED gives no consensus, so this replaces the surprise arrow). */
+function PrintArrow({ trend }: { trend: EventPrintTrend }) {
+  const glyph = trend.dir === 'up' ? '▲' : trend.dir === 'down' ? '▼' : '▬';
+  return (
+    <span aria-hidden style={{ color: FAVOR_COLOR[trend.favorable], fontWeight: FONT_WEIGHT.bold, fontSize: FONT_SIZE.xs }}>{glyph}</span>
+  );
+}
 
 function buildSetup(qqqBucket: TrendBucket | null, vix: number | null, vixDelta5: number | null, us10yDelta5: number | null): string {
   const parts: string[] = [];
@@ -81,6 +96,7 @@ function interpret(eventName: string, surprise: number | null, us10yDelta5: numb
  *  Consensus is not shown — the FRED calendar doesn't publish it, so it was always "—". */
 function EventRow({ e, highlight }: { e: MacroEvent; highlight: boolean }) {
   const released = new Date(e.releaseTimeEt).getTime() <= Date.now();
+  const trend = released && e.actual ? eventPrintTrend(e.actual, e.previous, e.lowerIsBetter) : null;
   return (
     <div
       style={{
@@ -94,7 +110,11 @@ function EventRow({ e, highlight }: { e: MacroEvent; highlight: boolean }) {
       </span>
       <span style={{ color: 'var(--t2)' }}>{fmtDateTime(e.releaseTimeEt)}</span>
       <span style={{ marginLeft: 'auto', display: 'flex', gap: 12, flexWrap: 'wrap', color: 'var(--t3)' }}>
-        {released && e.actual && <span style={{ color: 'var(--text)', fontWeight: FONT_WEIGHT.medium }}>Actual: {e.actual}</span>}
+        {released && e.actual && (
+          <span style={{ color: trend ? FAVOR_COLOR[trend.favorable] : 'var(--text)', fontWeight: FONT_WEIGHT.medium, display: 'inline-flex', alignItems: 'baseline', gap: 4 }}>
+            Actual: {e.actual}{trend && <PrintArrow trend={trend} />}
+          </span>
+        )}
         {e.previous && <span>Previous: {e.previous}</span>}
       </span>
     </div>
@@ -120,6 +140,7 @@ export function MacroEventRiskCard({ read, events, loading, error, warning, qqqB
   const setup = buildSetup(qqqBucket, vix, vixDelta5, us10yDelta5);
   const interpretation = event ? interpret(event.eventName, surprise, us10yDelta5, qqqBucket) : null;
   const isPreRelease = overlay === 'event_watch' || overlay === 'high_event_risk';
+  const headlineTrend = event?.actual ? eventPrintTrend(event.actual, event.previous, event.lowerIsBetter) : null;
 
   return (
     <div>
@@ -140,13 +161,17 @@ export function MacroEventRiskCard({ read, events, loading, error, warning, qqqB
       )}
 
       {/* Post-release line — leads with the ACTUAL print as soon as the release time
-          passes. The FRED calendar carries no consensus, so we compare against the
-          previous print (surprise vs consensus shows only on the rare row that has one). */}
+          passes. The FRED calendar carries no consensus, so instead of a surprise we
+          show a direction+favorability arrow vs the PREVIOUS print (green ▲/▼ = the move
+          helps markets, red = it hurts). */}
       {!isPreRelease && overlay !== 'none' && event && event.actual && (
-        <div style={{ marginTop: 6, fontSize: FONT_SIZE.sm, color: surprise != null ? (surprise > 0 ? 'var(--c1)' : surprise < 0 ? 'var(--c5)' : 'var(--t2)') : 'var(--t2)' }}>
-          Actual {event.actual}
-          {event.previous ? ` vs prev ${event.previous}` : ''}
-          {surprise != null ? ` · Surprise ${surprise >= 0 ? '+' : ''}${surprise.toFixed(2)}` : ''}
+        <div style={{ marginTop: 6, fontSize: FONT_SIZE.sm, color: 'var(--t2)', display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
+          <span style={{ color: headlineTrend ? FAVOR_COLOR[headlineTrend.favorable] : 'var(--text)', fontWeight: FONT_WEIGHT.semibold }}>
+            Actual {event.actual}
+          </span>
+          {headlineTrend && <PrintArrow trend={headlineTrend} />}
+          {event.previous && <span>vs prev {event.previous}</span>}
+          {surprise != null && <span>· Surprise {surprise >= 0 ? '+' : ''}{surprise.toFixed(2)}</span>}
         </div>
       )}
 
