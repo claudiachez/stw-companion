@@ -110,11 +110,11 @@ rate decisions, Fed Chair speeches, the monthly jobs report, the unemployment ra
 sales, ISM manufacturing/services surveys, Treasury bond auctions), and everything else **Low**.
 
 **A note on what actually works here:** the upcoming-event states — Event Watch and High Event
-Risk — are the reliable part of this module: they tell you a known release is coming in the next
-day or two, so a strong technical setup could be about to get tested. The economic-release
-calendar carries scheduled dates, but *not* the actual print value or the consensus estimate, so
-the post-release "surprise / shock" reaction is **not** computed from the feed. Treat this module
-as a heads-up window on what's coming, not a scorer of what just landed.
+Risk — tell you a known release is coming in the next day or two, so a strong technical setup
+could be about to get tested. Once a release lands, the Reaction Overlay shows its **actual print**
+and the **previous** figure (e.g. CPI 3.1% YoY, prior 3.3%). What's *not* available is the
+**consensus estimate** (no free data feed carries it), so the module can't compute a "beat vs miss
+/ surprise" — it shows you the number that printed, not how it compared to expectations.
 
 **Why it matters:** a strong technical setup can get knocked over by a surprise inflation print
 or jobs number. This module gives you a heads-up window rather than a surprise.
