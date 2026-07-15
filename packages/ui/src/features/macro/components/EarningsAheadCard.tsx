@@ -1,24 +1,36 @@
 import { useState } from 'react';
 import { earningsHourLabel, earningsProximity, fmtEpsEstimate, FONT_SIZE, FONT_WEIGHT, formatDate, type EarningsEvent } from '@stw/shared';
 
+/** Which book a reporting ticker belongs to, most-relevant-first (yours > STW > index mover). */
+type EarningsCat = 'yours' | 'stw' | 'mover';
+
+const CAT_META: Record<EarningsCat, { color: string; label: string }> = {
+  yours: { color: 'var(--acc)', label: 'yours' },
+  stw:   { color: 'var(--c3)',  label: 'STW' },
+  mover: { color: 'var(--t3)',  label: 'mkt mover' },
+};
+
 interface Props {
   /** Upcoming reports for the tracked set, soonest-first. */
   events: EarningsEvent[];
-  /** Tickers STW holds — anything else in the list is a market-mover shown for index context. */
-  heldTickers: string[];
+  /** Tickers the signed-in user holds (their own IBKR positions) — highest priority. */
+  ownTickers: string[];
+  /** Tickers STW holds. A ticker in both `ownTickers` and here reads as "yours". */
+  stwTickers: string[];
   loading: boolean;
 }
 
-/** One earnings row, single line: ticker · date · session · est EPS · proximity. */
-function EarningsRow({ e, held }: { e: EarningsEvent; held: boolean }) {
+/** One earnings row, single line: ticker · book tag · date · session · est EPS · proximity. */
+function EarningsRow({ e, cat }: { e: EarningsEvent; cat: EarningsCat }) {
   const hour = earningsHourLabel(e.hour);
   const eps = fmtEpsEstimate(e.epsEstimate);
   const meta = [hour, eps].filter(Boolean).join(' · ');
+  const { color, label } = CAT_META[cat];
   return (
     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', padding: '7px 0', borderTop: '1px solid var(--border)', fontSize: FONT_SIZE.sm }}>
-      <span style={{ width: 7, height: 7, borderRadius: '50%', background: held ? 'var(--acc)' : 'var(--t3)', flexShrink: 0, alignSelf: 'center' }} />
+      <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0, alignSelf: 'center' }} />
       <span style={{ fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>{e.symbol}</span>
-      {!held && <span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>mkt mover</span>}
+      <span style={{ fontSize: FONT_SIZE['2xs'], color: cat === 'yours' ? 'var(--acc)' : 'var(--t3)' }}>{label}</span>
       <span style={{ color: 'var(--t2)' }}>{formatDate(e.date)}</span>
       {meta && <span style={{ color: 'var(--t3)' }}>{meta}</span>}
       <span style={{ marginLeft: 'auto', color: 'var(--t3)' }}>{earningsProximity(e.date)}</span>
@@ -26,9 +38,14 @@ function EarningsRow({ e, held }: { e: EarningsEvent; held: boolean }) {
   );
 }
 
-export function EarningsAheadCard({ events, heldTickers, loading }: Props) {
+export function EarningsAheadCard({ events, ownTickers, stwTickers, loading }: Props) {
   const [expanded, setExpanded] = useState(false);
-  const held = new Set(heldTickers.map((t) => t.toUpperCase()));
+  const own = new Set(ownTickers.map((t) => t.toUpperCase()));
+  const stw = new Set(stwTickers.map((t) => t.toUpperCase()));
+  const catOf = (symbol: string): EarningsCat => {
+    const s = symbol.toUpperCase();
+    return own.has(s) ? 'yours' : stw.has(s) ? 'stw' : 'mover';
+  };
 
   if (loading && events.length === 0) return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>Loading earnings calendar…</div>;
   if (events.length === 0) return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>No tracked earnings scheduled in the next 45 days.</div>;
@@ -49,7 +66,7 @@ export function EarningsAheadCard({ events, heldTickers, loading }: Props) {
         </div>
       )}
       {shown.map((e) => (
-        <EarningsRow key={`${e.symbol}-${e.date}`} e={e} held={held.has(e.symbol.toUpperCase())} />
+        <EarningsRow key={`${e.symbol}-${e.date}`} e={e} cat={catOf(e.symbol)} />
       ))}
       {laterCount > 0 && (
         <button
@@ -61,7 +78,7 @@ export function EarningsAheadCard({ events, heldTickers, loading }: Props) {
         </button>
       )}
       <div style={{ marginTop: 10, fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>
-        Source: <a href="https://finnhub.io" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--t3)', textDecoration: 'underline' }}>Finnhub</a> earnings calendar · <span style={{ color: 'var(--acc)' }}>●</span> held · ● market-mover
+        Source: <a href="https://finnhub.io" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--t3)', textDecoration: 'underline' }}>Finnhub</a> earnings calendar · <span style={{ color: 'var(--acc)' }}>●</span> yours · <span style={{ color: 'var(--c3)' }}>●</span> STW · ● market-mover
       </div>
     </div>
   );
