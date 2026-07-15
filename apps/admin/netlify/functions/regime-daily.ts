@@ -181,7 +181,14 @@ const handlerImpl: Handler = async (event) => {
   }
 
   const isBackfill = qs.backfill === '1';
-  const daysRequested = isBackfill ? Math.max(1, parseInt(qs.days ?? '30', 10)) : 1;
+  // Daily path rewrites a short TRAILING window, not just today: FRED publishes a
+  // day's VIX/VIX3M the NEXT business day, so today's row is always written with a
+  // null VIX. Re-computing the last few trading days each run lets the on-conflict
+  // merge fill those index fields in once FRED posts them (self-healing within ~1
+  // business day). Writing 1 row/day left every row permanently null → vol_state
+  // UNKNOWN → the "latest complete row" froze days behind (bug found 2026-07-15).
+  const DAILY_TRAILING_DAYS = 5;
+  const daysRequested = isBackfill ? Math.max(1, parseInt(qs.days ?? '30', 10)) : DAILY_TRAILING_DAYS;
   const beforeDate = qs.before; // optional cursor for walking further back across invocations
   // Need enough history for the 504-day percentile window + the days actually being written.
   // TwelveData caps at 5000; FRED has no cap, so on the Yahoo deep backfill the
