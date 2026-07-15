@@ -45,6 +45,33 @@ export async function fetchUserPositions(userId: string): Promise<UserPosition[]
   return (data ?? []) as UserPosition[];
 }
 
+/** A single filled trade from the user's IBKR account (user_executions, append-only log). */
+export interface UserExecution {
+  id:           string;
+  underlying:   string;
+  symbol:       string;
+  asset_class:  string;        // 'STK' | 'OPT'
+  side:         string;        // 'BUY' | 'SELL'
+  quantity:     number | null; // signed (sells negative)
+  price:        number | null; // fill price
+  commission:   number | null;
+  strike:       number | null;
+  put_call:     string | null;
+  expiry:       string | null; // 'yyyyMMdd'
+  multiplier:   number;
+  executed_at:  string;        // ISO
+}
+
+export async function fetchUserExecutions(userId: string): Promise<UserExecution[]> {
+  const { data, error } = await getSupabase()
+    .from('user_executions')
+    .select('id,underlying,symbol,asset_class,side,quantity,price,commission,strike,put_call,expiry,multiplier,executed_at')
+    .eq('user_id', userId)
+    .order('executed_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as UserExecution[];
+}
+
 export async function fetchIbkrSettings(userId: string): Promise<IbkrSettings> {
   const { data, error } = await getSupabase()
     .from('profiles')

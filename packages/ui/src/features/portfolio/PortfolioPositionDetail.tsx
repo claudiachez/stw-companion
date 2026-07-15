@@ -1,4 +1,4 @@
-import { regimeGate, regimeExitAdvice, classifySeverity, formatDate, sizingTone, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, SPACE, RADIUS, type ViolationSeverity } from '@stw/shared';
+import { regimeGate, regimeExitAdvice, classifySeverity, formatDate, fmtDateTime, sizingTone, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, SPACE, RADIUS, type ViolationSeverity } from '@stw/shared';
 import { useAuthStore } from '../../store/auth';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { DetailPane, DetailPaneMetricLabel } from '../../primitives/DetailPane';
@@ -12,6 +12,7 @@ import { RegimeBadge } from '../picks/components/RegimeBadge';
 import { useEarningsCalendar } from '../earnings/useEarningsCalendar';
 import { EarningsBadge } from '../earnings/EarningsBadge';
 import type { TickerRegime } from '../picks/useTickerRegime';
+import { useUserExecutions } from './useUserPositions';
 import type { UserPosition } from './api';
 
 const STATE_COLOR: Record<'GREEN' | 'RED' | 'UNKNOWN', string> = {
@@ -34,6 +35,21 @@ function fmtPct(n: number | null): string {
 function pnlColor(n: number | null): string {
   if (n === null) return 'var(--t2)';
   return n >= 0 ? 'var(--pnl-gain)' : 'var(--pnl-loss)';
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** IBKR 'yyyyMMdd' → "Jan 15 '27"; passes through anything not in that shape. */
+function fmtExpiry(e: string | null): string {
+  if (!e || !/^\d{8}$/.test(e)) return e ?? '';
+  return `${MONTHS[+e.slice(4, 6) - 1]} ${+e.slice(6, 8)} '${e.slice(2, 4)}`;
+}
+/** "Shares" or "$12.5C Jan 15 '27" — used by both the P&L breakdown and the ledger. */
+function instrumentLabel(x: { asset_class: string; strike: number | null; put_call: string | null; expiry: string | null }): string {
+  if (x.asset_class === 'OPT' && x.strike != null && x.put_call) {
+    const exp = fmtExpiry(x.expiry);
+    return `$${x.strike}${x.put_call}${exp ? ` ${exp}` : ''}`;
+  }
+  return 'Shares';
 }
 
 export interface DetailGroup {
@@ -107,6 +123,8 @@ export function PortfolioPositionDetail({
   const sector = (sectorMap ?? {})[group.underlying] ?? null;
   const { getNext: getNextEarnings } = useEarningsCalendar();
   const nextEarnings = getNextEarnings(group.underlying);
+  const { data: allExecutions } = useUserExecutions();
+  const execs = (allExecutions ?? []).filter((x) => x.underlying?.toUpperCase() === group.underlying.toUpperCase());
 
   const sizeDelta = ownPortfolioPct !== null && stwWeight !== null ? ownPortfolioPct - stwWeight : null;
 
@@ -264,24 +282,51 @@ export function PortfolioPositionDetail({
         </Section>
       )}
 
-      {/* P&L — Shares / Options breakdown (Open) + a standard coming-soon empty state (Closed) */}
+      {/* P&L — Shares / Options breakdown for the OPEN legs, each showing its cost
+          basis (avg entry → current mark) alongside the unrealized return. */}
       <Section title="P&L">
         <div style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--t2)', marginBottom: SPACE[1.5] }}>Open</div>
         {showPnl ? group.positions.map((p) => (
-          <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: FONT_SIZE.sm, padding: '4px 0', color: 'var(--t2)' }}>
-            <span>{p.asset_class === 'OPT' ? `$${p.strike}${p.put_call} ${p.expiry ?? ''}`.trim() : 'Shares'}</span>
-            <span style={{ color: pnlColor(p.unrealized_pnl), fontVariantNumeric: 'tabular-nums' }}>
+          <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', gap: SPACE[2], fontSize: FONT_SIZE.sm, padding: '4px 0', color: 'var(--t2)' }}>
+            <span style={{ display: 'flex', flexDirection: 'column' }}>
+              <span>{instrumentLabel(p)}</span>
+              <span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>
+                {p.quantity !== null ? `${Math.abs(p.quantity)} @ ` : ''}avg {p.avg_cost !== null ? `$${p.avg_cost.toFixed(2)}` : '—'}
+                {p.mark_price !== null ? ` · mark $${p.mark_price.toFixed(2)}` : ''}
+              </span>
+            </span>
+            <span style={{ color: pnlColor(p.unrealized_pnl), fontVariantNumeric: 'tabular-nums', alignSelf: 'flex-start' }}>
               {p.unrealized_pnl !== null ? fmtMoney(p.unrealized_pnl) : '—'} {p.unrealized_pnl_pct !== null && `(${fmtPct(p.unrealized_pnl_pct)})`}
             </span>
           </div>
         )) : <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)' }}>Hidden</div>}
-        <div style={{ borderTop: '1px solid var(--bsub)', marginTop: SPACE[3], paddingTop: SPACE[2] }}>
-          <div style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--t2)', marginBottom: SPACE[1] }}>Closed</div>
+      </Section>
+
+      {/* Transaction History — the user's OWN fills for this ticker (user_executions),
+          the same dated-ledger idea as Stock Picks' Transaction History. Read-only;
+          newest-first. Covers buys AND sells, so it also surfaces closed/trimmed legs. */}
+      <Section title="Transaction History">
+        {execs.length === 0 ? (
           <EmptyState
-            icon="⏳"
-            message="Closed-position history — coming soon. Your IBKR sync currently returns open positions only."
+            icon="🧾"
+            message="No synced fills for this position yet. Import your IBKR trade history from Settings to see your transactions here."
           />
-        </div>
+        ) : (
+          <div>
+            {execs.map((x) => (
+              <div key={x.id} style={{ display: 'flex', alignItems: 'baseline', gap: SPACE[2], flexWrap: 'wrap', padding: '6px 0', borderTop: '1px solid var(--bsub)', fontSize: FONT_SIZE.sm }}>
+                <span style={{ fontWeight: FONT_WEIGHT.semibold, color: x.side === 'SELL' ? 'var(--pnl-loss)' : 'var(--acc)', minWidth: 30 }}>
+                  {x.side === 'SELL' ? 'Sell' : 'Buy'}
+                </span>
+                <span style={{ color: 'var(--text)' }}>{instrumentLabel(x)}</span>
+                <span style={{ color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>
+                  {x.quantity !== null ? Math.abs(x.quantity) : '—'} @ {x.price !== null ? `$${x.price.toFixed(2)}` : '—'}
+                </span>
+                <span style={{ marginLeft: 'auto', color: 'var(--t3)' }}>{fmtDateTime(x.executed_at)}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </Section>
     </DetailPane>
   );
