@@ -21,6 +21,7 @@ import { useGexExposure } from './useGexExposure';
 import { useMacroEvents } from './useMacroEvents';
 import { useEarningsCalendar } from '../earnings/useEarningsCalendar';
 import { useHoldings } from '../picks/useHoldings';
+import { useUserPositions } from '../portfolio/useUserPositions';
 import { useGraddox } from '../signals/useGraddox';
 import { RegimeCard } from './components/RegimeCard';
 import { ModuleScoreStrip } from './components/ModuleScoreStrip';
@@ -104,9 +105,9 @@ const HELP = {
   ),
   earnings: (
     <Help>
-      <div>Upcoming quarterly <strong>earnings reports</strong> — the biggest single-ticker volatility events. Covers STW holdings plus the mega-caps whose prints move the whole index.</div>
+      <div>Upcoming quarterly <strong>earnings reports</strong> — the biggest single-ticker volatility events. Covers <strong>your own positions</strong>, STW's holdings, and the mega-caps whose prints move the whole index.</div>
       <div><strong>before open</strong> / <strong>after close</strong> tells you when the move lands; the EPS estimate is the consensus the print is judged against.</div>
-      <div style={dim}><span style={{ color: 'var(--acc)' }}>●</span> a name STW holds · ● a market-mover shown for index context.</div>
+      <div style={dim}><span style={{ color: 'var(--acc)' }}>●</span> a name you hold · <span style={{ color: 'var(--c3)' }}>●</span> a name STW holds · ● a market-mover shown for index context.</div>
       <div style={dim}>Refreshed: daily.</div>
     </Help>
   ),
@@ -152,16 +153,22 @@ export function MacroView() {
   const { recap, recapDate, recapSession, loading: recapLoading, error: recapError, generate } = useDailyRecap();
   const { events: eventsList, read: eventsRead, loading: eventsLoading, error: eventsError, warning: eventsWarning } = useMacroEvents();
   const { data: holdings } = useHoldings();
+  const { data: userPositions } = useUserPositions();
   const { upcomingFor: upcomingEarningsFor, loading: earningsLoading } = useEarningsCalendar();
-  // Earnings calendar covers STW holdings ∪ the mega-cap market-movers (the Macro
-  // tab is market-wide; a subscriber's own extra positions surface on My Portfolio).
-  const heldTickers = useMemo(
+  // Earnings calendar covers the signed-in user's OWN positions ∪ STW holdings ∪ the
+  // mega-cap market-movers. On the subscriber web app `ownTickers` is their IBKR book;
+  // on admin it's empty (no user_positions), so the set collapses to STW ∪ movers.
+  const ownTickers = useMemo(
+    () => Array.from(new Set((userPositions ?? []).map((p) => p.underlying?.toUpperCase()).filter((t): t is string => !!t && t !== 'CASH'))),
+    [userPositions],
+  );
+  const stwTickers = useMemo(
     () => (holdings ?? []).map((h) => h.ticker).filter((t): t is string => !!t && t !== 'CASH'),
     [holdings],
   );
   const upcomingEarnings = useMemo(
-    () => upcomingEarningsFor([...heldTickers, ...MARKET_MOVERS]),
-    [upcomingEarningsFor, heldTickers],
+    () => upcomingEarningsFor([...ownTickers, ...stwTickers, ...MARKET_MOVERS]),
+    [upcomingEarningsFor, ownTickers, stwTickers],
   );
   const { rows: sectorRows, loading: sectorLoading, asOf: sectorAsOf, constituents: sectorConstituents, constituentsLoading: sectorConstituentsLoading } = useSectorRotation(twelveDataKey);
 
@@ -324,7 +331,7 @@ export function MacroView() {
       <section>
         <ModuleHeader title="Earnings Ahead" help={HELP.earnings} />
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
-          <EarningsAheadCard events={upcomingEarnings} heldTickers={heldTickers} loading={earningsLoading} />
+          <EarningsAheadCard events={upcomingEarnings} ownTickers={ownTickers} stwTickers={stwTickers} loading={earningsLoading} />
         </div>
       </section>
 
