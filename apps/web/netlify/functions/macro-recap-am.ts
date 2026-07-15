@@ -1,12 +1,20 @@
-// Pre-market daily recap — targets ~8:35am ET on weekdays, AFTER the 8:30 econ
-// releases (CPI/PCE/NFP/PPI/GDP) so the note can actually report them.
+// Pre-market daily recap.
+//   • Quiet morning (no high-impact econ release): publishes at ~7:50am ET.
+//   • Econ-release morning (CPI/PPI/PCE/NFP/GDP at 8:30): holds until ~8:33am ET so the
+//     note can lead with the just-released print instead of guessing ahead of it.
 //
-// Netlify cron is UTC-only, so we fire at BOTH 12:35 and 13:35 UTC to bracket 8:35 ET
-// across DST, and the recap's own ET gate (minEtMinutes: 515 = 8:35) writes only once
-// it's ≥ 8:35 ET. Idempotency (skip if today's AM recap exists) makes the second fire a
-// no-op. Summer: 12:35 UTC = 8:35 EDT writes, 13:35 skips. Winter: 12:35 UTC = 7:35 EST
-// defers, 13:35 = 8:35 EST writes. Either way: one write, at 8:35 ET, post-releases.
+// Netlify cron is UTC-only, so we fire at several UTC times that cover 7:50 ET and
+// 8:33 ET across DST, and the recap's own ET gate decides which target applies today
+// (7:50 quiet / 8:33 release-day). Idempotency (skip if today's AM recap exists) makes
+// every fire after the first a no-op.
+//   Fires (min past hour, UTC): 33 & 50 past 11, 12, 13.
+//   7:50 EDT = 11:50 UTC · 7:50 EST = 12:50 UTC · 8:33 EDT = 12:33 UTC · 8:33 EST = 13:33 UTC.
 import { schedule } from '@netlify/functions';
 import { generateDailyRecap } from '../_lib/recap-core';
 
-export const handler = schedule('35 12,13 * * 1-5', () => generateDailyRecap('macro-recap-am', 'am', { minEtMinutes: 8 * 60 + 35 }));
+export const handler = schedule(
+  '33,50 11,12,13 * * 1-5',
+  () => generateDailyRecap('macro-recap-am', 'am', {
+    amDynamicGate: { normalEtMin: 7 * 60 + 50, eventEtMin: 8 * 60 + 33 },
+  }),
+);

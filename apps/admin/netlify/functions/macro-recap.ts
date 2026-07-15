@@ -146,7 +146,6 @@ ${eventLine}
 Respond with ONLY a JSON object (no markdown fences) with exactly these fields:
 - headline: a punchy one-line hook capturing today's defining theme
 - verdict: 2-3 short paragraphs (separate with \\n\\n) — the read: what's happening beneath the surface, what's driving it
-- bigStory: 1 paragraph on the single dominant theme of the session
 - scenarios: an object { "bull": "...", "base": "...", "bear": "..." } — one tight sentence each for the ${session === 'am' ? 'current session' : 'next session'}
 - playbook: 1-2 paragraphs on ${session === 'am' ? 'how to approach today — what setups, what to avoid' : 'next-day setup — what followed through, how to position overnight'}
 - watching: one line naming the key levels${session === 'am' ? ' that decide today\'s tone' : ' for tomorrow'}, e.g. "Watch 5,435 above and 5,339 below."

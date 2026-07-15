@@ -77,8 +77,10 @@ function interpret(eventName: string, surprise: number | null, us10yDelta5: numb
     : 'Came in below consensus — watch the cross-market reaction (yields, VIX) to confirm direction.';
 }
 
-/** One scheduled release, rendered on a single line: name · date · consensus · previous. */
+/** One release, rendered on a single line: name · date · (actual once released) · previous.
+ *  Consensus is not shown — the FRED calendar doesn't publish it, so it was always "—". */
 function EventRow({ e, highlight }: { e: MacroEvent; highlight: boolean }) {
+  const released = new Date(e.releaseTimeEt).getTime() <= Date.now();
   return (
     <div
       style={{
@@ -92,8 +94,8 @@ function EventRow({ e, highlight }: { e: MacroEvent; highlight: boolean }) {
       </span>
       <span style={{ color: 'var(--t2)' }}>{fmtDateTime(e.releaseTimeEt)}</span>
       <span style={{ marginLeft: 'auto', display: 'flex', gap: 12, flexWrap: 'wrap', color: 'var(--t3)' }}>
-        <span>Consensus: {e.consensus ?? '—'}</span>
-        <span>Previous: {e.previous ?? '—'}</span>
+        {released && e.actual && <span style={{ color: 'var(--text)', fontWeight: FONT_WEIGHT.medium }}>Actual: {e.actual}</span>}
+        {e.previous && <span>Previous: {e.previous}</span>}
       </span>
     </div>
   );
@@ -106,11 +108,15 @@ export function MacroEventRiskCard({ read, events, loading, error, warning, qqqB
 
   const { overlay, riskLevel, event, surprise } = read;
 
-  // Default view = the next 7 days; the rest of the window hides behind "Show more".
-  const cutoff = Date.now() + 7 * 86_400_000;
-  const within7 = events.filter((e) => new Date(e.releaseTimeEt).getTime() <= cutoff);
-  const laterCount = events.length - within7.length;
-  const shown = expanded ? events : within7;
+  // The "Scheduled releases" list is UPCOMING-only — a release whose time has passed
+  // drops off (it's already surfaced by the Reaction Overlay headline above with its
+  // actual print). Default view = the next 7 days; the rest hides behind "Show more".
+  const nowMs = Date.now();
+  const cutoff = nowMs + 7 * 86_400_000;
+  const upcoming = events.filter((e) => new Date(e.releaseTimeEt).getTime() >= nowMs);
+  const within7 = upcoming.filter((e) => new Date(e.releaseTimeEt).getTime() <= cutoff);
+  const laterCount = upcoming.length - within7.length;
+  const shown = expanded ? upcoming : within7;
   const setup = buildSetup(qqqBucket, vix, vixDelta5, us10yDelta5);
   const interpretation = event ? interpret(event.eventName, surprise, us10yDelta5, qqqBucket) : null;
   const isPreRelease = overlay === 'event_watch' || overlay === 'high_event_risk';
@@ -133,10 +139,14 @@ export function MacroEventRiskCard({ read, events, loading, error, warning, qqqB
         </div>
       )}
 
-      {/* Post-release surprise line (only once an actual has printed). */}
-      {!isPreRelease && overlay !== 'none' && event && surprise !== null && (
-        <div style={{ marginTop: 6, fontSize: FONT_SIZE.sm, color: surprise > 0 ? 'var(--c1)' : surprise < 0 ? 'var(--c5)' : 'var(--t2)' }}>
-          Actual {event.actual ?? '—'} vs consensus {event.consensus ?? '—'} · Surprise {surprise >= 0 ? '+' : ''}{surprise.toFixed(2)}
+      {/* Post-release line — leads with the ACTUAL print as soon as the release time
+          passes. The FRED calendar carries no consensus, so we compare against the
+          previous print (surprise vs consensus shows only on the rare row that has one). */}
+      {!isPreRelease && overlay !== 'none' && event && event.actual && (
+        <div style={{ marginTop: 6, fontSize: FONT_SIZE.sm, color: surprise != null ? (surprise > 0 ? 'var(--c1)' : surprise < 0 ? 'var(--c5)' : 'var(--t2)') : 'var(--t2)' }}>
+          Actual {event.actual}
+          {event.previous ? ` vs prev ${event.previous}` : ''}
+          {surprise != null ? ` · Surprise ${surprise >= 0 ? '+' : ''}${surprise.toFixed(2)}` : ''}
         </div>
       )}
 
@@ -186,7 +196,7 @@ export function MacroEventRiskCard({ read, events, loading, error, warning, qqqB
 function EventSourceNote() {
   return (
     <div style={{ marginTop: 8, fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>
-      Source: <a href="https://fred.stlouisfed.org/releases" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--t3)', textDecoration: 'underline' }}>FRED release calendar</a> + FOMC schedule · Consensus not published on a public calendar
+      Source: <a href="https://fred.stlouisfed.org/releases" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--t3)', textDecoration: 'underline' }}>FRED release calendar</a> + FOMC schedule
     </div>
   );
 }
