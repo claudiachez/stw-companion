@@ -40,6 +40,7 @@ export interface MacroEventRow {
   actual: string | null;
   consensus: string | null;
   previous: string | null;
+  lowerIsBetter?: boolean;
   importance: 'low' | 'medium' | 'high' | 'very_high';
   source: string;
   sourceTimestamp: string;
@@ -56,16 +57,18 @@ interface PrevSpec { series: string; units: string; fmt: PrevFmt; label?: string
 
 // Releases we surface, by FRED release_id (verified live against /fred/releases),
 // each with its conventional ET release time and the series for its Previous print.
-const TARGET_RELEASES: { id: number; name: string; importance: Importance; timeEt: string; prev: PrevSpec }[] = [
-  { id: 10, name: 'Consumer Price Index (CPI)',      importance: 'very_high', timeEt: '08:30', prev: { series: 'CPIAUCSL',            units: 'pc1', fmt: 'pct',          label: 'YoY' } },
-  { id: 46, name: 'Producer Price Index (PPI)',      importance: 'high',      timeEt: '08:30', prev: { series: 'PPIFIS',              units: 'pc1', fmt: 'pct',          label: 'YoY' } },
-  { id: 54, name: 'Personal Income & Outlays (PCE)', importance: 'very_high', timeEt: '08:30', prev: { series: 'PCEPI',               units: 'pc1', fmt: 'pct',          label: 'YoY' } },
-  { id: 50, name: 'Employment Situation (NFP)',      importance: 'very_high', timeEt: '08:30', prev: { series: 'PAYEMS',              units: 'chg', fmt: 'thousandsChg', label: 'MoM' } },
-  { id: 53, name: 'Gross Domestic Product (GDP)',    importance: 'high',      timeEt: '08:30', prev: { series: 'A191RL1Q225SBEA',     units: 'lin', fmt: 'pct',          label: 'QoQ ann.' } },
-  { id: 9,  name: 'Retail Sales',                    importance: 'high',      timeEt: '08:30', prev: { series: 'RSAFS',               units: 'pch', fmt: 'pct',          label: 'MoM' } },
-  { id: 351, name: 'Philadelphia Fed Manufacturing', importance: 'medium',    timeEt: '08:30', prev: { series: 'GACDFSA066MSFRBPHI',  units: 'lin', fmt: 'index' } },
-  { id: 27, name: 'Housing Starts & Building Permits', importance: 'medium',  timeEt: '08:30', prev: { series: 'HOUST',               units: 'lin', fmt: 'levelK',       label: 'starts, SAAR' } },
-  { id: 91, name: 'Consumer Sentiment (UMich)',      importance: 'medium',    timeEt: '10:00', prev: { series: 'UMCSENT',             units: 'lin', fmt: 'index' } },
+// `lowerIsBetter` encodes each metric's market read for the favorability arrow: inflation
+// prints (CPI/PPI/PCE) are bullish when they FALL; growth/activity/jobs/sentiment when they RISE.
+const TARGET_RELEASES: { id: number; name: string; importance: Importance; timeEt: string; lowerIsBetter: boolean; prev: PrevSpec }[] = [
+  { id: 10, name: 'Consumer Price Index (CPI)',      importance: 'very_high', timeEt: '08:30', lowerIsBetter: true,  prev: { series: 'CPIAUCSL',            units: 'pc1', fmt: 'pct',          label: 'YoY' } },
+  { id: 46, name: 'Producer Price Index (PPI)',      importance: 'high',      timeEt: '08:30', lowerIsBetter: true,  prev: { series: 'PPIFIS',              units: 'pc1', fmt: 'pct',          label: 'YoY' } },
+  { id: 54, name: 'Personal Income & Outlays (PCE)', importance: 'very_high', timeEt: '08:30', lowerIsBetter: true,  prev: { series: 'PCEPI',               units: 'pc1', fmt: 'pct',          label: 'YoY' } },
+  { id: 50, name: 'Employment Situation (NFP)',      importance: 'very_high', timeEt: '08:30', lowerIsBetter: false, prev: { series: 'PAYEMS',              units: 'chg', fmt: 'thousandsChg', label: 'MoM' } },
+  { id: 53, name: 'Gross Domestic Product (GDP)',    importance: 'high',      timeEt: '08:30', lowerIsBetter: false, prev: { series: 'A191RL1Q225SBEA',     units: 'lin', fmt: 'pct',          label: 'QoQ ann.' } },
+  { id: 9,  name: 'Retail Sales',                    importance: 'high',      timeEt: '08:30', lowerIsBetter: false, prev: { series: 'RSAFS',               units: 'pch', fmt: 'pct',          label: 'MoM' } },
+  { id: 351, name: 'Philadelphia Fed Manufacturing', importance: 'medium',    timeEt: '08:30', lowerIsBetter: false, prev: { series: 'GACDFSA066MSFRBPHI',  units: 'lin', fmt: 'index' } },
+  { id: 27, name: 'Housing Starts & Building Permits', importance: 'medium',  timeEt: '08:30', lowerIsBetter: false, prev: { series: 'HOUST',               units: 'lin', fmt: 'levelK',       label: 'starts, SAAR' } },
+  { id: 91, name: 'Consumer Sentiment (UMich)',      importance: 'medium',    timeEt: '10:00', lowerIsBetter: false, prev: { series: 'UMCSENT',             units: 'lin', fmt: 'index' } },
 ];
 
 // FOMC rate decisions — announced day 2 of each meeting at 2:00pm ET. NOT a FRED
@@ -188,6 +191,7 @@ export const handler: Handler = async (event) => {
           actual: released ? prints.latest : null,
           consensus: null,
           previous: released ? prints.prior : prints.latest,
+          lowerIsBetter: t.lowerIsBetter,
           importance: t.importance,
           source: 'FRED',
           sourceTimestamp: nowIso,
