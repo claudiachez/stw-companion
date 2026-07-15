@@ -12,7 +12,9 @@ interface Props {
   /** Cross-market setup context — same inputs the other sleeves already compute. */
   qqqBucket: TrendBucket | null;
   vix: number | null;
-  vixDelta5: number | null;
+  vixDelta1: number | null;
+  us10y: number | null;
+  us10yDelta1: number | null;
   us10yDelta5: number | null;
 }
 
@@ -45,14 +47,20 @@ function PrintArrow({ trend }: { trend: EventPrintTrend }) {
   );
 }
 
-function buildSetup(qqqBucket: TrendBucket | null, vix: number | null, vixDelta5: number | null, us10yDelta5: number | null): string {
+/** Convention: a bare metric always carries a comparison to the prior period (yesterday).
+ *  Renders "(+0.7 vs yest)" / "(-0.03 vs yest)" / "(flat vs yest)"; empty if no delta. */
+function vsYest(delta: number | null, decimals: number): string {
+  if (delta === null) return '';
+  const rounded = Number(delta.toFixed(decimals));
+  if (rounded === 0) return ' (flat vs yest)';
+  return ` (${rounded > 0 ? '+' : '-'}${Math.abs(rounded).toFixed(decimals)} vs yest)`;
+}
+
+function buildSetup(qqqBucket: TrendBucket | null, vix: number | null, vixDelta1: number | null, us10y: number | null, us10yDelta1: number | null): string {
   const parts: string[] = [];
   if (qqqBucket) parts.push(`QQQ ${TREND_BUCKET_META[qqqBucket].label.toLowerCase()}`);
-  if (vix !== null) {
-    const dir = vixDelta5 !== null ? (vixDelta5 > 0.5 ? ', rising' : vixDelta5 < -0.5 ? ', falling' : '') : '';
-    parts.push(`VIX ${vix.toFixed(1)}${dir}`);
-  }
-  if (us10yDelta5 !== null) parts.push(`10Y ${us10yDelta5 > 0.03 ? 'rising' : us10yDelta5 < -0.03 ? 'falling' : 'flat'}`);
+  if (vix !== null) parts.push(`VIX ${vix.toFixed(1)}${vsYest(vixDelta1, 1)}`);
+  if (us10y !== null) parts.push(`10Y ${us10y.toFixed(2)}%${vsYest(us10yDelta1, 2)}`);
   return parts.length ? `${parts.join(', ')}.` : 'Setup context unavailable.';
 }
 
@@ -121,7 +129,7 @@ function EventRow({ e, highlight }: { e: MacroEvent; highlight: boolean }) {
   );
 }
 
-export function MacroEventRiskCard({ read, events, loading, error, warning, qqqBucket, vix, vixDelta5, us10yDelta5 }: Props) {
+export function MacroEventRiskCard({ read, events, loading, error, warning, qqqBucket, vix, vixDelta1, us10y, us10yDelta1, us10yDelta5 }: Props) {
   const [expanded, setExpanded] = useState(false);
   if (loading && !read.event) return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>Loading event calendar…</div>;
   if (error) return <div style={{ color: 'var(--c1)', fontSize: FONT_SIZE.sm }}>Event data unavailable: {error}</div>;
@@ -137,7 +145,7 @@ export function MacroEventRiskCard({ read, events, loading, error, warning, qqqB
   const within7 = upcoming.filter((e) => new Date(e.releaseTimeEt).getTime() <= cutoff);
   const laterCount = upcoming.length - within7.length;
   const shown = expanded ? upcoming : within7;
-  const setup = buildSetup(qqqBucket, vix, vixDelta5, us10yDelta5);
+  const setup = buildSetup(qqqBucket, vix, vixDelta1, us10y, us10yDelta1);
   const interpretation = event ? interpret(event.eventName, surprise, us10yDelta5, qqqBucket) : null;
   const isPreRelease = overlay === 'event_watch' || overlay === 'high_event_risk';
   const headlineTrend = event?.actual ? eventPrintTrend(event.actual, event.previous, event.lowerIsBetter) : null;

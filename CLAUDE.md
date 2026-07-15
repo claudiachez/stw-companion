@@ -1299,6 +1299,17 @@ holdings set), so there's no detail page for most of these symbols to link to.
 "Positions" counts exclude the `CASH` balance row (it's not a position) and reflect the
 active filter (closed hidden by default). The FilterBar count shows `N of {total}`.
 
+### Metrics always carry a prior-period comparison (host, 2026-07-15)
+A bare number is not enough context — **whenever a metric is displayed, pair it with a comparison
+to the prior period** (default: **yesterday**) so the reader sees the direction/magnitude of change,
+not just the level. The Macro Event Risk **Setup** line is the reference: `VIX 16.5 (+0.7 vs yest)`,
+`10Y 4.25% (+0.03 vs yest)` — value, then a signed delta vs yesterday (the `vsYest()` helper in
+`MacroEventRiskCard.tsx`; renders `(flat vs yest)` when the rounded delta is zero, nothing when the
+delta is unavailable). A categorical/bucket label that already encodes trend (e.g. QQQ "mid-term
+caution") satisfies this without a number. Prefer a **1-day (yesterday) delta** where the series is
+daily; the hooks expose `vixDelta1`/`us10yDelta1` alongside the existing 5-day deltas. Apply this to
+any new bare-metric display, not just this line.
+
 ### Sector taxonomy (standing, 2026-07-10)
 - The canonical sector set is **GICS-11 + `ETF` + `Cash`** (`packages/shared/src/constants/sectors.ts`,
   `GicsSector`/`SectorBucket`). `ticker_sector_map.sector` holds one of these values — never a raw
