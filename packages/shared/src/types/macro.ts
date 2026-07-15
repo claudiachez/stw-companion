@@ -125,8 +125,8 @@ export interface MacroDailyRecap {
   headline: string;
   /** Main narrative — 2–3 paragraphs separated by blank lines. */
   verdict: string;
-  /** The dominant story / rotation / setup. */
-  bigStory: string;
+  /** @deprecated No longer generated or rendered (removed 2026-07-15). Kept optional so stored recaps still type-check. */
+  bigStory?: string;
   /** Bull / base / bear reads for the session or next day ahead. */
   scenarios: { bull: string; base: string; bear: string };
   /** Actionable game plan — levels to watch, setups in play. */

@@ -438,7 +438,7 @@ export function eventSurprise(actual: string | null, consensus: string | null): 
 
 const EVENT_WATCH_HOURS = 48;
 const HIGH_RISK_HOURS = 24;
-const REACTION_OVERLAY_HOURS = 72; // ~1-3 trading days; fades after unless structure changed
+const REACTION_OVERLAY_HOURS = 48; // ~2 trading days post-release; fades after unless structure changed
 const SHOCK_RELATIVE_SURPRISE = 0.2; // |surprise| ≥ 20% of |consensus| reads as a meaningful beat/miss
 
 function hoursBetween(aIso: string, bMs: number): number {
@@ -448,8 +448,8 @@ function hoursBetween(aIso: string, bMs: number): number {
 /**
  * Classify the current event-risk overlay from a list of calendar rows.
  *
- * A just-released major event drives a **Reaction Overlay** for up to ~3 trading
- * days — this fires on the release TIME passing, NOT on an `actual` value being
+ * A just-released major event drives a **Reaction Overlay** for up to ~48h (~2
+ * trading days) — this fires on the release TIME passing, NOT on an `actual` value being
  * present (the FRED calendar publishes dates only; the print is attached
  * separately and may lag the release by minutes). Otherwise the nearest upcoming
  * Very-High/High event sets High Event Risk (≤24h) or Event Watch (≤48h).

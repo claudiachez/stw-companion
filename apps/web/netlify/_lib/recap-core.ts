@@ -78,6 +78,25 @@ function etMinutesNow(): number {
   return h * 60 + m;
 }
 
+/** True if the calendar has a HIGH/VERY-HIGH release scheduled for `dateEt` in the
+ *  morning (before noon ET) — the AM gate uses this to hold the note until 8:33 ET
+ *  on a CPI/PPI/PCE/NFP/GDP day so it can lead with the print, and publish early
+ *  (7:50 ET) on a quiet morning. */
+function isEconReleaseMorning(catalysts: CatalystRow[], dateEt: string): boolean {
+  return catalysts.some((c) => {
+    const t = new Date(c.releaseTimeEt);
+    if (Number.isNaN(t.getTime())) return false;
+    if (c.importance !== 'very_high' && c.importance !== 'high') return false;
+    const cDate = t.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    if (cDate !== dateEt) return false;
+    const hourEt = parseInt(
+      new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', hour12: false }).format(t),
+      10,
+    ) % 24;
+    return hourEt < 12;
+  });
+}
+
 /** Compact ET stamp for a catalyst line, e.g. "Jul 14 · 8:30 AM ET". */
 function catalystStamp(iso: string): string {
   const d = new Date(iso);
@@ -189,7 +208,6 @@ ${catalystBlock(catalysts)}
 Respond with ONLY a JSON object (no markdown fences) with exactly these fields:
 - headline: ONE line — the single theme/hook for today. No price levels, no numbers.
 - verdict: 2-3 short paragraphs (separate with \\n\\n) — the READ: what the structure and positioning are telling you heading into the session, and WHY. Describe the setup; do NOT list levels or prescribe actions here.
-- bigStory: 1 paragraph on the single most important thing for today — a DIFFERENT angle than the verdict (a specific catalyst, a cross-asset tell, or a positioning fact), not a restatement of it.
 - scenarios: an object { "bull": "...", "base": "...", "bear": "..." } — one tight sentence each, three genuinely DISTINCT paths for today (up / chop / down), no overlap between them.
 - playbook: 1-2 paragraphs of ACTIONS only — what setups to take, how to size, what to avoid, when to wait. Not market description (that is the verdict's job).
 - watching: one line naming the key levels that decide today's tone, e.g. "Hold above 5,435 = bulls in control; lose it and 5,339 is next." Levels appear ONLY here.
@@ -239,7 +257,6 @@ ${catalystBlock(catalysts)}
 Respond with ONLY a JSON object (no markdown fences) with exactly these fields:
 - headline: ONE line capturing today's defining theme or move. No price levels, no numbers.
 - verdict: 2-3 short paragraphs (separate with \\n\\n) — what happened beneath the surface and what's driving it. Explain the session; do NOT list levels or prescribe tomorrow's actions here.
-- bigStory: 1 paragraph on the single dominant theme of the session (rotation, VIX move, dealer positioning, etc.) — a DIFFERENT angle than the verdict, not a restatement.
 - scenarios: an object { "bull": "...", "base": "...", "bear": "..." } — one tight sentence each, three genuinely DISTINCT paths for tomorrow, no overlap between them.
 - playbook: 1-2 paragraphs of ACTIONS only for the next session — what to press, what to cut, how to position overnight. Not a recap (that is the verdict's job).
 - watching: one line naming the key levels for tomorrow, e.g. "Watch 5,435 above and 5,339 below." Levels appear ONLY here.
@@ -252,7 +269,14 @@ Respond with ONLY a JSON object (no markdown fences) with exactly these fields:
 export async function generateDailyRecap(
   tag: string,
   session: 'am' | 'pm',
-  opts: { minEtMinutes?: number } = {},
+  opts: {
+    /** Fixed gate minute (minutes since ET midnight) — used by the PM run. */
+    minEtMinutes?: number;
+    /** AM run only: publish EARLY on a quiet day, but wait for the 8:30 release on an
+     *  econ-release day so the note can report the print. `normalEtMin` fires on a day
+     *  with no morning high-impact release; `eventEtMin` on a day that has one (CPI/PPI/…). */
+    amDynamicGate?: { normalEtMin: number; eventEtMin: number };
+  } = {},
 ): Promise<void> {
   const supabaseUrl  = (process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? '').trim();
   const serviceKey   = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim();
@@ -264,23 +288,34 @@ export async function generateDailyRecap(
     return;
   }
 
-  // Release gate: the AM run fires at two UTC times (12:35 + 13:35) to bracket 8:35 ET
-  // across DST (Netlify cron is UTC-only). Write only once it's ≥ the gate minute in ET,
-  // so the recap lands AFTER the 8:30 econ releases and can report them; idempotency
-  // makes the earlier/later duplicate fire a no-op.
-  if (opts.minEtMinutes != null && etMinutesNow() < opts.minEtMinutes) {
-    console.log(`${tag}: ${etMinutesNow()}min ET < gate ${opts.minEtMinutes} — deferring to the later fire`);
-    return;
-  }
-
   const date = todayEt();
 
-  // Idempotency — skip if today's session recap already exists.
+  // Idempotency — skip if today's session recap already exists. Checked BEFORE the gate
+  // so a later/duplicate fire (both runs fire at several UTC times to bracket DST) no-ops
+  // cheaply without touching the calendar.
   const existing = await sbSelect<{ date: string }>(
     supabaseUrl, serviceKey, 'macro_daily_recaps', `select=date&date=eq.${date}&session=eq.${session}`,
   );
   if (existing) {
     console.log(`${tag}: recap for ${date}/${session} already exists — skipping`);
+    return;
+  }
+
+  // Release gate. Both runs fire at multiple UTC times (to bracket their ET target across
+  // DST, since Netlify cron is UTC-only) and write only once it's ≥ the gate minute in ET;
+  // earlier fires defer, later duplicate fires no-op via the idempotency check above.
+  //   • PM: fixed gate (4:30pm ET) — fires 20:30 + 21:30 UTC.
+  //   • AM: publish early (7:50 ET) on a quiet morning, but hold until 8:33 ET on a day
+  //     with a morning high-impact econ release so the note can lead with the print.
+  //     Fires 33/50 past 11/12/13 UTC to cover both targets across DST.
+  let catalysts: CatalystRow[] | null = null;
+  let gate = opts.minEtMinutes ?? null;
+  if (opts.amDynamicGate) {
+    catalysts = await fetchCatalysts();
+    gate = isEconReleaseMorning(catalysts, date) ? opts.amDynamicGate.eventEtMin : opts.amDynamicGate.normalEtMin;
+  }
+  if (gate != null && etMinutesNow() < gate) {
+    console.log(`${tag}: ${etMinutesNow()}min ET < gate ${gate} — deferring to a later fire`);
     return;
   }
 
@@ -342,7 +377,8 @@ export async function generateDailyRecap(
   const regime = regimeBand(envScore);
   const spyChg = spyCloses.length >= 2 ? ((spyCloses.at(-1)! / spyCloses.at(-2)!) - 1) * 100 : null;
   const qqqChg = qqqCloses.length >= 2 ? ((qqqCloses.at(-1)! / qqqCloses.at(-2)!) - 1) * 100 : null;
-  const catalysts = await fetchCatalysts();
+  // Reuse the calendar already fetched by the AM gate; PM fetches it here.
+  catalysts = catalysts ?? await fetchCatalysts();
 
   const body: RecapBody = {
     regime: { score: regime.score, label: regime.label, tradingMode: regime.tradingMode },

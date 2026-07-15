@@ -156,7 +156,6 @@ ${eventLine}
 Respond with ONLY a JSON object (no markdown fences) with exactly these fields:
 - headline: a punchy one-line hook capturing the week's defining theme/contradiction
 - verdict: 2-4 short paragraphs (separate with \\n\\n) — the weekly read: what happened beneath the surface, what's driving it
-- bigStory: 1-2 paragraphs on the single dominant theme of the week (e.g. rotation, dealer positioning, a regime shift)
 - scenarios: an object { "bull": "...", "base": "...", "bear": "..." } — one tight sentence each for the ${session === 'am' ? 'current session' : 'next session'}
 - playbook: 1-2 paragraphs on ${session === 'am' ? 'how to approach today — what setups, what to avoid' : 'next-day setup — what followed through, how to position overnight'}
 - watching: one line naming the key levels${session === 'am' ? ' that decide today\'s tone' : ' for tomorrow'}, e.g. "Watch 5,435 above and 5,339 below."
