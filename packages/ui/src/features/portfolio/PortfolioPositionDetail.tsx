@@ -1,4 +1,4 @@
-import { regimeGate, regimeExitAdvice, classifySeverity, formatDate, fmtDateTime, sizingTone, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, SPACE, RADIUS, type ViolationSeverity } from '@stw/shared';
+import { regimeGate, regimeExitAdvice, classifySeverity, formatDate, fmtDateTime, fmtOptionExpiry, sizingTone, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, SPACE, RADIUS, type ViolationSeverity } from '@stw/shared';
 import { useAuthStore } from '../../store/auth';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useQuote } from '../../hooks/useLivePrice';
@@ -38,16 +38,12 @@ function pnlColor(n: number | null): string {
   return n >= 0 ? 'var(--pnl-gain)' : 'var(--pnl-loss)';
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-/** IBKR 'yyyyMMdd' → "Jan 15 '27"; passes through anything not in that shape. */
-function fmtExpiry(e: string | null): string {
-  if (!e || !/^\d{8}$/.test(e)) return e ?? '';
-  return `${MONTHS[+e.slice(4, 6) - 1]} ${+e.slice(6, 8)} '${e.slice(2, 4)}`;
-}
-/** "Shares" or "$12.5C Jan 15 '27" — used by both the P&L breakdown and the ledger. */
+/** "Shares" or "$12.5C Jan 15 '27". Delegates the date to the shared `fmtOptionExpiry`
+ *  (the predefined expiry format) after converting IBKR's 'yyyyMMdd' to its YYYY-MM-DD input. */
 function instrumentLabel(x: { asset_class: string; strike: number | null; put_call: string | null; expiry: string | null }): string {
   if (x.asset_class === 'OPT' && x.strike != null && x.put_call) {
-    const exp = fmtExpiry(x.expiry);
+    const dashed = x.expiry && /^\d{8}$/.test(x.expiry) ? `${x.expiry.slice(0, 4)}-${x.expiry.slice(4, 6)}-${x.expiry.slice(6, 8)}` : x.expiry;
+    const exp = fmtOptionExpiry(dashed, true);
     return `$${x.strike}${x.put_call}${exp ? ` ${exp}` : ''}`;
   }
   return 'Shares';
@@ -164,12 +160,17 @@ export function PortfolioPositionDetail({
 
   // Current price of the underlying — live Finnhub quote (the one decided source for
   // equity quotes), falling back to the stored IBKR stock-leg mark when the market's
-  // closed / not cached. Same source Stock Picks' detail leads with.
+  // closed / not cached. Same source Stock Picks' detail leads with. Each carries its
+  // own source + as-of stamp (fmtDateTime, the predefined format) — never a bare number.
   const quote = useQuote(group.underlying);
   const stockMark = group.positions.find((p) => p.asset_class === 'STK')?.mark_price ?? null;
   const livePrice = quote?.c ?? null;
-  const price = livePrice ?? stockMark;
+  const isLivePrice = livePrice !== null;
+  const price = isLivePrice ? livePrice : stockMark;
   const dayPct = quote?.dp ?? null;
+  const quoteTime = quote?.t ? fmtDateTime(new Date(quote.t * 1000)) : null;      // Finnhub quote time
+  const syncTime = group.positions[0]?.last_synced_at ? fmtDateTime(group.positions[0].last_synced_at) : null; // IBKR sync time
+  const priceSource = isLivePrice ? (quoteTime ? `Finnhub · ${quoteTime}` : 'Finnhub') : (syncTime ? `IBKR · ${syncTime}` : 'IBKR');
 
   const sizeDelta = ownPortfolioPct !== null && stwWeight !== null ? ownPortfolioPct - stwWeight : null;
 
@@ -211,13 +212,16 @@ export function PortfolioPositionDetail({
       key: 'price',
       content: (
         <>
-          <DetailPaneMetricLabel>Current Price</DetailPaneMetricLabel>
+          <DetailPaneMetricLabel>{isLivePrice ? 'Current Price' : 'Last Price'}</DetailPaneMetricLabel>
           <div style={{ fontSize: FONT_SIZE.display, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)', lineHeight: 1.1 }}>
             {price !== null ? `$${price.toFixed(2)}` : '—'}
           </div>
-          <div style={{ fontSize: FONT_SIZE.xs, marginTop: SPACE[0.5], color: dayPct !== null ? (dayPct >= 0 ? 'var(--pnl-gain)' : 'var(--pnl-loss)') : 'var(--t3)' }}>
-            {dayPct !== null ? `${dayPct >= 0 ? '+' : ''}${dayPct.toFixed(2)}% today` : (livePrice === null && price !== null ? 'last IBKR sync' : 'live')}
-          </div>
+          {isLivePrice && dayPct !== null && (
+            <div style={{ fontSize: FONT_SIZE.xs, marginTop: SPACE[0.5], fontWeight: FONT_WEIGHT.semibold, color: dayPct >= 0 ? 'var(--pnl-gain)' : 'var(--pnl-loss)' }}>
+              {dayPct >= 0 ? '+' : ''}{dayPct.toFixed(2)}% today
+            </div>
+          )}
+          <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[0.5] }}>{priceSource}</div>
         </>
       ),
     },
@@ -400,6 +404,9 @@ export function PortfolioPositionDetail({
                 </div>
               );
             })}
+            <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[2] }}>
+              Source: IBKR executions{syncTime ? ` · synced ${syncTime}` : ''}
+            </div>
           </div>
         )}
       </Section>
