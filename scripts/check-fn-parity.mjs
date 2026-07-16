@@ -15,9 +15,9 @@ const WEB = 'apps/web/netlify/functions';
 const ADMIN = 'apps/admin/netlify/functions';
 
 // Keep this list SHORT and justified — each entry is a copy we've accepted can drift.
-const ALLOW_DIVERGENT = new Map([
-  ['macro-recap.ts', 'admin decodes the Supabase JWT locally + returns richer per-site errors — reconcile the shared prompt/logic, see file headers'],
-]);
+// (Empty: every paired function is enforced byte-identical. Add an entry only for a
+// genuine, documented per-site difference — not to paper over an accidental drift.)
+const ALLOW_DIVERGENT = new Map();
 
 const webFiles = existsSync(WEB) ? readdirSync(WEB).filter((f) => f.endsWith('.ts')) : [];
 const paired = webFiles.filter((f) => existsSync(join(ADMIN, f)));

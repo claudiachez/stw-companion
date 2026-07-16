@@ -1,19 +1,20 @@
 /**
- * Macro weekly recap generator — admin site copy.
+ * Macro daily recap generator (manual "Regenerate", editor-only).
  *
- * Identical to apps/web/netlify/functions/macro-recap.ts. The admin site needs
- * its own copy because Netlify functions are site-scoped; the web function is
- * not callable from the admin domain.
+ * Builds the AM/PM daily note from the macro module scores + grounding context (GEX,
+ * trend structure, breadth, VIX, event risk) and upserts it into macro_daily_recaps
+ * (migration 051), keyed by (date, session) — the cross-device row every user reads.
+ * Grounded ONLY in the data passed; never fabricates figures. An optional `note`
+ * steers the rewrite's angle. Editor-gated by a hard 403 (a real, costly Anthropic call).
  *
- * Uses direct fetch() to the Anthropic API (NOT @anthropic-ai/sdk — ESM/CJS
- * bundling issues in the Netlify Functions runtime produce 502s; see CLAUDE.md).
+ * SITE-SCOPED: a byte-identical copy lives in apps/web AND apps/admin (a function on one
+ * site isn't callable from the other domain). Keep them identical — `pnpm check:fn-parity`.
  *
- * Required Netlify env vars (admin site):
- *   VITE_SUPABASE_URL  (or SUPABASE_URL)
- *   SUPABASE_SERVICE_ROLE_KEY
- *   ANTHROPIC_API_KEY
- * Optional:
- *   MACRO_RECAP_MODEL  (defaults to claude-sonnet-4-6, then claude-haiku-4-5-20251001)
+ * Uses direct fetch() to the Anthropic API (NOT @anthropic-ai/sdk — ESM/CJS bundling
+ * issues in the Netlify runtime produce 502s; see CLAUDE.md). Sonnet → Haiku fallback.
+ *
+ * Required Netlify env vars: VITE_SUPABASE_URL (or SUPABASE_URL), SUPABASE_SERVICE_ROLE_KEY,
+ * ANTHROPIC_API_KEY. Optional: MACRO_RECAP_MODEL (default claude-sonnet-4-6 → claude-haiku-4-5-20251001).
  */
 import type { Handler } from '@netlify/functions';
 
