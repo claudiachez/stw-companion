@@ -47,6 +47,26 @@ describe('parseGammaEdgeReport', () => {
     expect(r.netGexLabel).toBe('negative');
   });
 
+  // 2026-07 newsletter redesign: a "QUICK READ" block with inline levels replaced the
+  // labeled "Structural Read" section. Flip/walls/pin parse; a clean spot no longer exists.
+  it('parses the QUICK READ redesign (Key Levels line, positive gamma, no clean spot)', () => {
+    const txt = 'QUICK READ Regime: Strong Positive Gamma Bias: Neutral-to-Bullish Above 7,496 '
+      + 'Key Levels: 7,496 Flip | 7,550 Pin | 7,600 Fortress Wall Volatility: Compressed';
+    const r = parseGammaEdgeReport(txt, 'premarket');
+    expect(r.gammaFlip).toBe(7496);
+    expect(r.callWall).toBe(7600);
+    expect(r.peakGamma).toBe(7550);
+    expect(r.netGexLabel).toBe('positive'); // from "Positive Gamma" regime text
+    expect(r.spot).toBeNull();
+  });
+
+  it('reads QUICK READ net GEX with a K suffix (135.8K → 135800)', () => {
+    const r = parseGammaEdgeReport('QUICK READ Regime: Strong Positive Gamma GEX Status: Rebuilt To +135.8K Key Signal: 7,600 Wall Doubled', 'eod');
+    expect(r.netGex).toBe(135800);
+    expect(r.callWall).toBe(7600);
+    expect(r.netGexLabel).toBe('positive');
+  });
+
   it('falls back to prior close when the session spot label is absent', () => {
     const r = parseGammaEdgeReport('Structural Read Prior Close: 7,543.64 Gamma Flip: ~7,486 Call Wall: 7,600 Support Shelf: 7,400', 'premarket');
     expect(r.spot).toBe(7543.64);

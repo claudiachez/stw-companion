@@ -121,7 +121,10 @@ const handlerImpl: Handler = async () => {
   // Session by UTC hour: 12:45 → am (premarket), 23:45 → pm (end-of-session).
   const session: 'am' | 'pm' = new Date().getUTCHours() < 18 ? 'am' : 'pm';
   const kind: GammaEdgeKind = session === 'am' ? 'premarket' : 'eod';
-  const titleMatch = session === 'am' ? /PREMARKET REPORT/i : /END OF SESSION REPORT/i;
+  // The newsletter renamed its reports in the 2026-07 redesign: "PREMARKET REPORT." →
+  // "Premarket Brief.", "END OF SESSION REPORT." → "End of Session" (both still carry the
+  // QUICK READ / Key Levels block). Match the new titles first, keep the old as fallback.
+  const titleMatch = session === 'am' ? /Premarket Brief|PREMARKET REPORT/i : /End of Session|END OF SESSION REPORT/i;
 
   try {
     const res = await fetch(FEED_URL, { headers: { 'User-Agent': 'STW-Companion/1.0 (macro GEX ingest)', Accept: 'application/rss+xml, application/xml' } });
