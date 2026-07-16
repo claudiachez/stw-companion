@@ -1,6 +1,7 @@
 import { regimeGate, regimeExitAdvice, classifySeverity, formatDate, fmtDateTime, sizingTone, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, SPACE, RADIUS, type ViolationSeverity } from '@stw/shared';
 import { useAuthStore } from '../../store/auth';
 import { useIsMobile } from '../../hooks/useIsMobile';
+import { useQuote } from '../../hooks/useLivePrice';
 import { DetailPane, DetailPaneMetricLabel } from '../../primitives/DetailPane';
 import { Badge } from '../../primitives/Badge';
 import { StatusPill } from '../../primitives/StatusPill';
@@ -161,6 +162,15 @@ export function PortfolioPositionDetail({
   const execs = (allExecutions ?? []).filter((x) => x.underlying?.toUpperCase() === group.underlying.toUpperCase());
   const execGroups = buildExecGroups(execs);
 
+  // Current price of the underlying — live Finnhub quote (the one decided source for
+  // equity quotes), falling back to the stored IBKR stock-leg mark when the market's
+  // closed / not cached. Same source Stock Picks' detail leads with.
+  const quote = useQuote(group.underlying);
+  const stockMark = group.positions.find((p) => p.asset_class === 'STK')?.mark_price ?? null;
+  const livePrice = quote?.c ?? null;
+  const price = livePrice ?? stockMark;
+  const dayPct = quote?.dp ?? null;
+
   const sizeDelta = ownPortfolioPct !== null && stwWeight !== null ? ownPortfolioPct - stwWeight : null;
 
   // Header badges = the ticker's market SECTOR (universal to the position) + its own
@@ -194,6 +204,20 @@ export function PortfolioPositionDetail({
             market value{ownPortfolioPct !== null ? ` · ${ownPortfolioPct.toFixed(1)}% of book` : ''}
           </div>
           <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', marginTop: SPACE[1.5] }}>{legCount} leg{legCount !== 1 ? 's' : ''} · {composition}</div>
+        </>
+      ),
+    },
+    {
+      key: 'price',
+      content: (
+        <>
+          <DetailPaneMetricLabel>Current Price</DetailPaneMetricLabel>
+          <div style={{ fontSize: FONT_SIZE.display, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)', lineHeight: 1.1 }}>
+            {price !== null ? `$${price.toFixed(2)}` : '—'}
+          </div>
+          <div style={{ fontSize: FONT_SIZE.xs, marginTop: SPACE[0.5], color: dayPct !== null ? (dayPct >= 0 ? 'var(--pnl-gain)' : 'var(--pnl-loss)') : 'var(--t3)' }}>
+            {dayPct !== null ? `${dayPct >= 0 ? '+' : ''}${dayPct.toFixed(2)}% today` : (livePrice === null && price !== null ? 'last IBKR sync' : 'live')}
+          </div>
         </>
       ),
     },
