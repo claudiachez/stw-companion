@@ -349,39 +349,30 @@ export function PortfolioPositionDetail({
             message="No synced fills for this position yet. Import your IBKR trade history from Settings to see your transactions here."
           />
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE[2] }}>
+          <div>
             {execGroups.map((g) => {
               const retPct = g.closed && g.costBasis > 0 ? (g.realized / g.costBasis) * 100 : null;
               return (
-                <div key={g.key} style={{ borderTop: '1px solid var(--bsub)', paddingTop: SPACE[1.5] }}>
-                  {/* Outcome header */}
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: SPACE[2], flexWrap: 'wrap' }}>
-                    <span style={{ fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>{g.label}</span>
-                    <span style={{
-                      fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: LETTER_SPACING.label,
-                      textTransform: 'uppercase', color: 'var(--t3)', background: 'var(--s2)',
-                      border: '1px solid var(--border)', borderRadius: RADIUS.DEFAULT, padding: '1px 6px',
-                    }}>
-                      {g.closed ? 'Closed' : `Open · ${Math.abs(g.netQty)}`}
-                    </span>
-                    {g.closed && showPnl && (
-                      <span style={{ marginLeft: 'auto', color: pnlColor(g.realized), fontWeight: FONT_WEIGHT.semibold, fontVariantNumeric: 'tabular-nums' }}>
-                        {g.realized >= 0 ? '+' : ''}{fmtMoney(g.realized)}{retPct !== null ? ` (${fmtPct(retPct)})` : ''}
+                <div key={g.key} style={{ display: 'flex', justifyContent: 'space-between', gap: SPACE[2], padding: '6px 0', borderTop: '1px solid var(--bsub)', fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>
+                  {/* Instrument + its fills (same instrument · muted-subline idiom as the P&L section) */}
+                  <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ color: 'var(--text)', fontWeight: FONT_WEIGHT.medium }}>{g.label}</span>
+                    {g.fills.map((x) => (
+                      <span key={x.id} style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>
+                        <span style={{ color: x.side === 'SELL' ? 'var(--pnl-loss)' : 'var(--acc)', fontWeight: FONT_WEIGHT.semibold }}>{x.side === 'SELL' ? 'Sell' : 'Buy'}</span>
+                        {' '}{x.quantity !== null ? Math.abs(x.quantity) : '—'} @ {x.price !== null ? `$${x.price.toFixed(2)}` : '—'} · {fmtDateTime(x.executed_at)}
                       </span>
-                    )}
-                  </div>
-                  {/* Fills that make up the group (newest-first) */}
-                  {g.fills.map((x) => (
-                    <div key={x.id} style={{ display: 'flex', alignItems: 'baseline', gap: SPACE[2], flexWrap: 'wrap', padding: '2px 0', fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>
-                      <span style={{ fontWeight: FONT_WEIGHT.semibold, color: x.side === 'SELL' ? 'var(--pnl-loss)' : 'var(--acc)', minWidth: 26 }}>
-                        {x.side === 'SELL' ? 'Sell' : 'Buy'}
-                      </span>
-                      <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-                        {x.quantity !== null ? Math.abs(x.quantity) : '—'} @ {x.price !== null ? `$${x.price.toFixed(2)}` : '—'}
-                      </span>
-                      <span style={{ marginLeft: 'auto' }}>{fmtDateTime(x.executed_at)}</span>
-                    </div>
-                  ))}
+                    ))}
+                  </span>
+                  {/* Outcome (right-aligned value, same as the P&L section): realized when
+                      closed, else still-open status. */}
+                  <span style={{ alignSelf: 'flex-start', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    {g.closed
+                      ? (showPnl
+                          ? <span style={{ color: pnlColor(g.realized), fontWeight: FONT_WEIGHT.semibold, fontVariantNumeric: 'tabular-nums' }}>{g.realized >= 0 ? '+' : ''}{fmtMoney(g.realized)}{retPct !== null ? ` (${fmtPct(retPct)})` : ''}</span>
+                          : <span style={{ color: 'var(--t3)' }}>Closed</span>)
+                      : <span style={{ color: 'var(--t3)' }}>Open · {Math.abs(g.netQty)}</span>}
+                  </span>
                 </div>
               );
             })}
