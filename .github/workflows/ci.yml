@@ -1,0 +1,31 @@
+name: CI
+
+# The automated PR gate. Before this existed, typecheck / lint / tests only ran when
+# someone remembered to run them locally — so a convention or type break could reach
+# staging. This makes them mandatory on every PR and on pushes to the deploy branches.
+on:
+  pull_request:
+  push:
+    branches: [staging, main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Netlify function parity (web ↔ admin)
+        run: pnpm check:fn-parity
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Lint
+        run: pnpm lint
+      - name: Unit tests
+        run: pnpm test

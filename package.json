@@ -10,7 +10,8 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "lint": "eslint .",
-    "lint:prune": "eslint . --prune-suppressions"
+    "lint:prune": "eslint . --prune-suppressions",
+    "check:fn-parity": "node scripts/check-fn-parity.mjs"
   },
   "devDependencies": {
     "@typescript-eslint/parser": "^8.63.0",
