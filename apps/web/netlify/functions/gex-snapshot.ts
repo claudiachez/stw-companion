@@ -19,9 +19,11 @@
  * holiday run simply re-upserts the last trading day's row — idempotent, never a
  * stale overwrite.
  *
- * Schedule 45 12,23 * * 1-5 UTC: 12:45 (after the ~12:12 premarket publish) and
- * 23:45 (after the ~23:22 end-of-session publish). Env: VITE_SUPABASE_URL /
- * SUPABASE_SERVICE_ROLE_KEY only (no FlashAlpha key anymore).
+ * Schedule 32 12,23 * * 1-5 UTC: 12:32 (= 8:32am ET, to run alongside the AM recap;
+ * after the ~12:12 premarket publish) and 23:32 (after the ~23:22 end-of-session
+ * publish). The report is UTC-published, so the fixed-UTC am fire lands after it in
+ * either DST season; the displayed "Updated" stamp is the report's own `as_of`, not the
+ * fire time. Env: VITE_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY only (no FlashAlpha key).
  */
 import type { Handler } from '@netlify/functions';
 import { schedule } from '@netlify/functions';
@@ -184,4 +186,4 @@ const handlerImpl: Handler = async () => {
   }
 };
 
-export const handler = schedule('45 12,23 * * 1-5', handlerImpl);
+export const handler = schedule('32 12,23 * * 1-5', handlerImpl);
