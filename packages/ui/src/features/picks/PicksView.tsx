@@ -11,26 +11,14 @@ import { TradesTable } from './components/TradesTable';
 import { LoadingSpinner } from '../../primitives/LoadingSpinner';
 import { EmptyState } from '../../primitives/EmptyState';
 import { TIERS, holdingPnlPct, FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
-import { usePriceCacheStore, type Quote } from '../../store/priceCache';
+import { usePriceCacheStore } from '../../store/priceCache';
+import { useLiveQuotes } from '../../hooks/useLiveQuotes';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useCapabilities } from '../../context/AppCapabilities';
 import { useUserPositions } from '../portfolio/useUserPositions';
 import { cleanUnderlying } from '../portfolio/api';
 import { useTickerRegime } from './useTickerRegime';
 import { useSectorMap } from '../limits/useRiskConfig';
-
-const PRICE_CACHE_KEY = 'finnhub_prices';
-const PRICE_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
-
-type PriceEntry = { data: Quote; ts: number };
-type LocalPriceCache = Record<string, PriceEntry>;
-
-function loadLocalPrices(): LocalPriceCache {
-  try { return JSON.parse(localStorage.getItem(PRICE_CACHE_KEY) ?? '{}'); } catch { return {}; }
-}
-function saveLocalPrices(c: LocalPriceCache) {
-  try { localStorage.setItem(PRICE_CACHE_KEY, JSON.stringify(c)); } catch { /* storage full */ }
-}
 
 // ── Picks content (shared by web + admin) ─────────────────────
 // Paywall/tier gating lives in each app shell, not here.
@@ -65,8 +53,7 @@ export function PicksView() {
     [holdings],
   );
   const filters = useFiltersStore();
-  const setPrice = usePriceCacheStore((s) => s.setPrice);
-  const setFetchStatus = usePriceCacheStore((s) => s.setFetchStatus);
+  useLiveQuotes(positionTickers, finnhubKey);
   const priceCache = usePriceCacheStore((s) => s.cache);
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
   // Resizable split: the list pane's width as a % of the row; user drags the divider to set it.
@@ -128,50 +115,6 @@ export function PicksView() {
     setSearchParams(next, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    if (!finnhubKey || positionTickers.length === 0) return;
-
-    const tickers = positionTickers;
-    const now = Date.now();
-    const local = loadLocalPrices();
-
-    // Seed Zustand from cache immediately — UI shows prices before any fetch
-    tickers.forEach((ticker) => {
-      const entry = local[ticker];
-      if (entry && now - entry.ts < PRICE_CACHE_TTL) setPrice(ticker, entry.data);
-    });
-
-    // Only fetch tickers whose cache has expired or is missing
-    const stale = tickers.filter((t) => {
-      const e = local[t];
-      return !e || now - e.ts >= PRICE_CACHE_TTL;
-    });
-
-    if (stale.length === 0) { setFetchStatus('done'); return; }
-
-    setFetchStatus('fetching');
-    let completed = 0;
-
-    stale.forEach((ticker, i) => {
-      // 1 100ms stagger → ~54 req/min, safely under Finnhub free-tier 60/min
-      setTimeout(() => {
-        fetch(`https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${finnhubKey}`)
-          .then((r) => r.json())
-          .then((d) => {
-            if (d.c) {
-              setPrice(ticker, d);
-              local[ticker] = { data: d, ts: now };
-              saveLocalPrices(local);
-            } else if (d.error) {
-              console.warn(`Finnhub [${ticker}]:`, d.error);
-            }
-          })
-          .catch((err) => console.error(`Finnhub fetch failed [${ticker}]:`, err))
-          .finally(() => { if (++completed === stale.length) setFetchStatus('done'); });
-      }, i * 1100);
-    });
-  }, [positionTickers, setPrice, setFetchStatus, finnhubKey]);
 
   if (isLoading) return <LoadingSpinner className="mt-16" />;
   if (error) return <EmptyState message="Failed to load holdings." />;
