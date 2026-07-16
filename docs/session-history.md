@@ -2,6 +2,41 @@
 
 > Dated handoff/status narratives + old Next Steps, moved out of CLAUDE.md. Historical record only — durable rules live in CLAUDE.md / docs/decisions.md / docs/ui-conventions.md. Current status is docs/status.md.
 
+## Session — Macro/portfolio polish + dev-process guardrails + PROD promotion (2026-07-16)
+
+**Ended with a host-approved `staging → main` promotion (PR #138, 124 commits) — everything below is
+now on PRODUCTION.** Prod verified: both sites serve `macro-events` HTTP 200 post-deploy. Typecheck +
+lint + 319 tests green throughout; CI ran + passed on the PRs. No migrations authored.
+
+Macro / portfolio (merged to staging, then promoted):
+- **Event Risk favorability arrow** (#121): actual-vs-previous arrow (glyph = move, color = good/bad;
+  inflation green when falling) since FRED has no consensus. `eventPrintTrend` in `@stw/shared`.
+  Reaction-overlay window 72h→48h (#120). Consensus display dropped (always null).
+- **Prior-period comparison** on the Macro Setup line (#122) — `vix/us10y` show a `vs yest` delta.
+  New standing rule (CLAUDE.md ground rules): every displayed value = source + as-of stamp + prior-period.
+- **Admin `macro-events` favorability sync** (#123) — the gray-arrow bug: site-scoped copy missed `lowerIsBetter`.
+- **Earnings Ahead** (#124): covers user positions ∪ STW holdings ∪ movers, tagged yours/STW/mover;
+  ticker links + fresher cache (#127); **open positions only** (#130).
+- **My Portfolio detail parity**: cost basis + Transaction History (grouped by contract, outcome-first)
+  (#126/#128/#129); **Current Price** live via shared `useLiveQuotes` (#131) + source/as-of stamp (#132).
+- **regime-daily** (#125): 5-day trailing window so FRED VIX self-heals; PROD Jul 10–14 rows hand-patched.
+
+Dev-process guardrails (the session's second half, in response to repeated convention misses):
+- **CI gate** (#133): `.github/workflows/ci.yml` runs typecheck/lint/test/`check:fn-parity` on every PR
+  (there was NO automated gate before). Function-parity script catches web↔admin drift.
+- **`/stw-review`** (#134): pre-PR checklist for the semantic conventions CI can't enforce.
+- **CLAUDE.md 1609→113 lines** (#135): extracted transient/verbose content to `docs/{status,session-history,
+  decisions,ui-conventions,routines,ibkr,macro}.md`; nothing lost. `/wrap-up` updated to maintain it.
+- **`macro-recap.ts` reconciled** (#136) — the copies had drifted (canonicalized on the correct daily version).
+- **`@stw/functions` de-dup** (#137): the three paired functions now live once as a workspace package
+  with thin re-exports; Netlify deploy-preview verified all three serve correctly on both sites.
+
+Deviations / notes:
+- Physical fn de-dup was initially flagged as deploy-risky; done only after esbuild-bundle + deploy-preview
+  proof. Discovered the apps' tsconfigs never typecheck `netlify/` (only `src/`) — the package now does,
+  which surfaced + fixed two latent type issues.
+- Two local memories added (not in repo): forecast-parallel-surfaces, data-display-definition-of-done.
+
 ## Current Status — Macro econ-release actuals + premarket-recap timing (handoff 2026-07-14)
 
 **All on `staging`, NONE on `main`. `staging` is 85 commits ahead of `main`.** This session was

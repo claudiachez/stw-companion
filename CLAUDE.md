@@ -74,9 +74,10 @@ order placement out of web. `plans/` files are date-prefixed `YYYYMMDD_<name>`.
 ## Conventions
 - **Netlify fns:** direct `fetch()` to Anthropic + Supabase REST — never `@anthropic-ai/sdk` or
   `@supabase/supabase-js` (both crash the Node runtime; `flex-core`'s supabase-js+ws is the one
-  sanctioned exception). `.trim()` every env var. A shared function needs an IDENTICAL copy in both
-  `apps/*/netlify/functions/` (enforced by `pnpm check:fn-parity`). `schedule(...)` fns run cron ONLY
-  on the prod (`main`) deploy.
+  sanctioned exception). `.trim()` every env var. Shared functions live ONCE in the `@stw/functions`
+  workspace package; each app's `netlify/functions/<name>.ts` is a thin re-export (bundles like
+  `@stw/shared`). `pnpm check:fn-parity` still guards any remaining per-app copy byte-identical.
+  `schedule(...)` fns run cron ONLY on the prod (`main`) deploy.
 - **One value, one source** — never two pipelines for one number: account equity = `risk_config.ibkr_nlv`;
   Macro GEX = `gex_snapshots`; live equity quotes = Finnhub via `priceCache` (`useLiveQuotes`); regime
   gate = `regime_daily` (read the latest COMPLETE row — VIX lags a day).
