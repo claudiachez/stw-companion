@@ -76,29 +76,59 @@ function grabLabel(text: string, label: string): number | null {
   return m ? parseReportNum(m[1]) : null;
 }
 
+/** Number stated immediately BEFORE a word, e.g. "7,496 Flip" / "7,600 Fortress Wall". */
+function grabBefore(text: string, wordPattern: string): number | null {
+  const m = text.match(new RegExp(`([~+\\-]?\\d[\\d,]*(?:\\.\\d+)?)\\s+(?:${wordPattern})`, 'i'));
+  return m ? parseReportNum(m[1]) : null;
+}
+/** Number stated immediately AFTER a word, e.g. "Above 7,496". */
+function grabAfter(text: string, wordPattern: string): number | null {
+  const m = text.match(new RegExp(`(?:${wordPattern})\\s+([~+\\-]?\\d[\\d,]*(?:\\.\\d+)?)`, 'i'));
+  return m ? parseReportNum(m[1]) : null;
+}
+/** Net GEX from the QUICK-READ line, honoring a K/M suffix: "GEX Status: … +135.8K" → 135800. */
+function grabQuickReadGex(text: string): number | null {
+  const m = text.match(/GEX[^+\-\d\n]{0,24}([~+\-]?\d[\d,]*(?:\.\d+)?)\s*([KMkm])?/);
+  if (!m) return null;
+  const v = parseReportNum(m[1]);
+  if (v == null) return null;
+  const suf = (m[2] || '').toUpperCase();
+  return Math.round(suf === 'K' ? v * 1000 : suf === 'M' ? v * 1_000_000 : v);
+}
+
 /**
  * Parse the SPX Gamma Edge report text (HTML already stripped to plain text) into
  * the structured levels. Every field is null-on-missing — the parser never
  * fabricates, so a wording/format drift degrades honestly to nulls (visible in
  * run_log + as em-dashes on the card) rather than a wrong number.
  *
- * Spot differs by report: premarket → `Implied Open`, EOD → `Session Close`;
- * both fall back to `Prior Close`.
+ * Handles BOTH report layouts:
+ *   • 2026-07 "QUICK READ" redesign — levels stated inline, e.g.
+ *     "Key Levels: 7,496 Flip | 7,550 Pin | 7,600 Fortress Wall", "Above 7,496",
+ *     "Key Signal: 7,600 Wall", "GEX Status: … +135.8K", "Positive/Negative Gamma".
+ *   • the older labeled "Structural Read" format (Gamma Flip:/Call Wall:/Implied Open: …).
+ * The redesign dropped a clean spot/open figure, so `spot` (and thus the cushion-based
+ * sleeve) is often null now — the card falls back to a live quote for the spot line.
  */
 export function parseGammaEdgeReport(text: string, kind: GammaEdgeKind): GammaEdgeReport {
   const priorClose = grabLabel(text, 'Prior Close');
   const spot = (kind === 'premarket' ? grabLabel(text, 'Implied Open') : grabLabel(text, 'Session Close')) ?? priorClose;
-  const netGex = grabLabel(text, 'Aggregate GEX');
-  const netGexLabel = netGex == null ? null : netGex >= 0 ? 'positive' : 'negative';
+  // Old labeled fields FIRST (precise), new-format inline patterns only as fallback —
+  // so an old-format report is unaffected and the greedy "N word" matchers can't override it.
+  const netGex = grabLabel(text, 'Aggregate GEX') ?? grabQuickReadGex(text);
+  const netGexLabel = netGex != null ? (netGex >= 0 ? 'positive' : 'negative')
+    : /negative gamma/i.test(text) ? 'negative'
+    : /positive gamma/i.test(text) ? 'positive'
+    : null;
   return {
     kind,
     spot,
-    gammaFlip: grabLabel(text, 'Gamma Flip'),
-    callWall: grabLabel(text, 'Call Wall'),
-    putWall: grabLabel(text, 'Support Shelf'),
+    gammaFlip: grabLabel(text, 'Gamma Flip') ?? grabBefore(text, 'Flip') ?? grabAfter(text, 'Above'),
+    callWall: grabLabel(text, 'Call Wall') ?? grabBefore(text, '(?:Fortress\\s+)?Wall'),
+    putWall: grabLabel(text, 'Support Shelf') ?? grabBefore(text, 'Support'),
     netGex,
     netGexLabel,
-    peakGamma: grabLabel(text, 'Peak Gamma') ?? grabLabel(text, 'Pin Node'),
+    peakGamma: grabLabel(text, 'Peak Gamma') ?? grabLabel(text, 'Pin Node') ?? grabBefore(text, 'Pin'),
     upperShelf: grabLabel(text, 'Upper Shelf'),
     priorClose,
   };
