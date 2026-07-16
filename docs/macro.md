@@ -50,9 +50,16 @@ Feed responsibilities, post-re-platform (full inventory: [`plans/20260707_data_f
   release fetches its latest TWO obs, so an UPCOMING row shows `previous` and a just-RELEASED row shows
   `actual` (latest) + `previous` (prior) — that's what makes a just-dropped CPI show its number.
   **`consensus` stays null** (no free feed) so `classifyEventRisk`'s surprise/shock path no-ops — but the
-  **reaction overlay fires on RELEASE TIME, not on `actual`** (a released event never vanishes; closest
-  major — just-released vs imminent — is the headline). Never fabricate a print; a null actual (FRED lag)
-  renders "—". **FOMC dates are a hardcoded best-effort list — verify against the Fed's schedule.**
+  **reaction overlay fires on RELEASE TIME, not on `actual`** (window **48h**; a released event never
+  vanishes; closest major — just-released vs imminent — is the headline). With no consensus, a released
+  print shows a **favorability arrow** instead of a surprise: `eventPrintTrend` (`@stw/shared`) compares
+  actual vs previous — glyph = the move, color = good/bad per the release's `lowerIsBetter` (inflation
+  green when falling; growth/jobs green when rising). Never fabricate a print; a null actual renders "—".
+  **FOMC dates are a hardcoded best-effort list — verify against the Fed's schedule.**
+- **Earnings Ahead** (`useEarningsCalendar` + `EarningsAheadCard`, Finnhub calendar): the coverage set is
+  the signed-in user's own positions ∪ STW holdings ∪ mega-cap movers, tagged **yours / STW / mkt mover**,
+  **open positions only** (closed STW holdings + zero-qty user positions excluded). Held tickers link to
+  their detail page; movers stay plain (no detail page).
 - **Macro recap** (`macro-recap-am/pm` scheduled fns + `macro-recap.ts` manual fn): a **daily** note, two
   sessions per weekday. **AM = 8:35 ET** — the cron fires `35 12,13 * * 1-5` (two UTC times bracketing
   8:35 ET across DST, since Netlify cron is UTC-only) and the recap's `minEtMinutes` gate writes only once
