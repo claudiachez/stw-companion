@@ -157,6 +157,17 @@ const handlerImpl: Handler = async () => {
     const snapshotDate = Number.isNaN(pub.getTime()) ? etDate(new Date()) : etDate(pub);
     const asOf = Number.isNaN(pub.getTime()) ? new Date().toISOString() : pub.toISOString();
 
+    // Freshness guard: the matched report MUST be from today's session. If the newest post
+    // matching the title is older, we've fallen through to a stale post — almost always because
+    // the newsletter changed its title/format — so REFUSE to write and fail loud in run_log,
+    // instead of silently upserting stale data tagged with an old date (the 2026-07-16
+    // "GEX stuck on Jul 13" incident). Weekends/holidays already skip via the trading-day guard.
+    if (snapshotDate !== todayET) {
+      const detail = `Stale ${kind} report: newest title-match is dated ${snapshotDate}, expected ${todayET} — the feed's title/format may have changed (${item.link})`;
+      await sbInsert(supabaseUrl, serviceKey, 'run_log', { ...runLogBase, status: 'error', messages_processed: 0, summary: detail });
+      return { statusCode: 200, body: JSON.stringify({ skipped: true, reason: detail }) };
+    }
+
     const upsertError = await sbUpsert(supabaseUrl, serviceKey, 'gex_snapshots', {
       snapshot_date: snapshotDate,
       session,

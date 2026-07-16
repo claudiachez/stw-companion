@@ -119,6 +119,13 @@ export function GexPositioningCard({ data, loading, threeDayDelta }: Props) {
   const raw = netGexRaw(data.netGex);
   const hint = raw ? `net GEX ${raw}` : 'SPX · tactical overlay';
 
+  // Staleness flag: GEX updates twice per trading day, so a snapshot older than ~3 days
+  // means the ingest has stopped writing — most likely the source feed changed format
+  // (see gex-snapshot's freshness guard). Surface it on the card so drift is caught on
+  // sight, not by noticing an old date. >3 days tolerates a normal Fri→Mon weekend gap.
+  const staleDays = data.asOf ? Math.floor((Date.now() - new Date(data.asOf).getTime()) / 86_400_000) : null;
+  const isStale = staleDays !== null && staleDays > 3;
+
   return (
     <div>
       <SleeveSummary score={score} label={label} hint={hint} delta={delta} />
@@ -128,6 +135,12 @@ export function GexPositioningCard({ data, loading, threeDayDelta }: Props) {
       <div style={{ marginTop: 12, fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.5 }}>
         <div><span style={{ color: 'var(--t3)', fontWeight: FONT_WEIGHT.semibold }}>Read:</span> {implication}</div>
       </div>
+
+      {isStale && (
+        <div style={{ marginTop: 10, fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold, color: 'var(--c3)' }}>
+          ⚠ Possibly stale — no fresh GEX report in {staleDays} days; the source feed may have changed.
+        </div>
+      )}
 
       <div style={{ marginTop: 10, fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', lineHeight: 1.4 }}>
         Levels via <a href="https://spxgammaedge.substack.com" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--t3)', textDecoration: 'underline' }}>SPX Gamma Edge</a> · SPX{data.asOf ? ` · Updated: ${fmtDateTime(data.asOf)}` : ''}
