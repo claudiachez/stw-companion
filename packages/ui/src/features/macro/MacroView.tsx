@@ -166,12 +166,23 @@ export function MacroView() {
   // Earnings calendar covers the signed-in user's OWN positions ∪ STW holdings ∪ the
   // mega-cap market-movers. On the subscriber web app `ownTickers` is their IBKR book;
   // on admin it's empty (no user_positions), so the set collapses to STW ∪ movers.
+  // Earnings only matters for positions you still HOLD — exclude closed ones on both
+  // sides (a closed STW holding = current_weight 0 / last_action Closed; a user position
+  // is open by construction but guard on non-zero qty anyway).
   const ownTickers = useMemo(
-    () => Array.from(new Set((userPositions ?? []).map((p) => p.underlying?.toUpperCase()).filter((t): t is string => !!t && t !== 'CASH'))),
+    () => Array.from(new Set(
+      (userPositions ?? [])
+        .filter((p) => (p.quantity ?? 0) !== 0)
+        .map((p) => p.underlying?.toUpperCase())
+        .filter((t): t is string => !!t && t !== 'CASH'),
+    )),
     [userPositions],
   );
   const stwTickers = useMemo(
-    () => (holdings ?? []).map((h) => h.ticker).filter((t): t is string => !!t && t !== 'CASH'),
+    () => (holdings ?? [])
+      .filter((h) => h.last_action !== 'Closed' && (h.current_weight ?? 0) > 0)
+      .map((h) => h.ticker)
+      .filter((t): t is string => !!t && t !== 'CASH'),
     [holdings],
   );
   const upcomingEarnings = useMemo(
