@@ -4,10 +4,18 @@ import { useAuthStore } from '../../store/auth';
 
 interface SyncResult {
   count: number;
+  /** Executions (fills) appended to user_executions this sync. 0 until the operator
+   * enables the Flex Trades section — the append-only log grows across syncs. */
+  executions: number;
   lastSyncedAt: string;
   /** The IBKR account the Flex Query resolved to — lets a save-time verification
    * echo a concrete fact instead of a bare position count. */
   accountId: string | null;
+  /** Live Net Liquidation Value written to risk_config, if the NAV section is enabled. */
+  nlv: number | null;
+  /** Non-fatal Flex-template config problems (a missing section/field) — the sync
+   * still succeeds, but these tell the user what to fix in their query. */
+  warnings: string[];
 }
 
 export function useSyncPortfolio() {
@@ -37,7 +45,11 @@ export function useSyncPortfolio() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
-      setLastResult({ count: json.count, lastSyncedAt: json.lastSyncedAt, accountId: json.accountId ?? null });
+      setLastResult({
+        count: json.count, executions: json.executions ?? 0, lastSyncedAt: json.lastSyncedAt,
+        accountId: json.accountId ?? null, nlv: json.nlv ?? null,
+        warnings: Array.isArray(json.warnings) ? json.warnings : [],
+      });
       await queryClient.invalidateQueries({ queryKey: ['user-positions', userId] });
     } catch (e) {
       setSyncError(e instanceof Error ? e.message : 'Sync failed');

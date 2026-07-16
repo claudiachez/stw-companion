@@ -114,7 +114,7 @@ describe('regimeExitAdvice', () => {
   });
   it('gives reduce-gross guidance on a double RED', () => {
     const gate = regimeGate({ close: 95, sma200: 100 }, { vixClose: 20, vix3mClose: 18 });
-    expect(regimeExitAdvice(gate, rule)).toBe('Reduce gross exposure to 30% — or trim each open position to 70% / tighten stops to 5%.');
+    expect(regimeExitAdvice(gate, rule)).toBe('Reduce gross exposure to 30% — i.e. trim each open position to ~30% of current size, or tighten stops to 5%.');
   });
   it('uses the supplied per-user numbers', () => {
     const gate = regimeGate({ close: 95, sma200: 100 }, { vixClose: 15, vix3mClose: 18 });

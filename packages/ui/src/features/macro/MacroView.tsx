@@ -1,7 +1,8 @@
 import { useMemo, type ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
-  environmentScore, regimeBand, trendSleeveScore, trendSleeveLabel, trendSubScore, gexScore,
-  gexBiasLabel, stressLabel, creditLabel, ratesDollarLabel, regimeDirectionLabel, FONT_SIZE,
+  environmentScore, regimeBand, trendSleeveScore, trendSleeveLabel, trendSubScore,
+  gexPositioningLabel, stressLabel, creditLabel, ratesDollarLabel, isTradingDay, MARKET_MOVERS, FONT_SIZE,
 } from '@stw/shared';
 import { useCapabilities } from '../../context/AppCapabilities';
 import { useAppConfig } from '../../hooks/useAppConfig';
@@ -16,10 +17,14 @@ import { useRatesDollar } from './useRatesDollar';
 import { useDailyRecap } from './useDailyRecap';
 import { useSectorRotation } from './useSectorRotation';
 import { useMacroPrefs } from './useMacroPrefs';
-import { useMacroTrendHistory } from './useMacroTrendHistory';
+import { useMacroTrendHistory, resolveDelta } from './useMacroTrendHistory';
+import { useGexExposure } from './useGexExposure';
 import { useMacroEvents } from './useMacroEvents';
+import { useEarningsCalendar } from '../earnings/useEarningsCalendar';
+import { useHoldings } from '../picks/useHoldings';
+import { useUserPositions } from '../portfolio/useUserPositions';
 import { useGraddox } from '../signals/useGraddox';
-import { RegimeBanner } from './components/RegimeBanner';
+import { RegimeCard } from './components/RegimeCard';
 import { ModuleScoreStrip } from './components/ModuleScoreStrip';
 import { MacroEventRiskCard } from './components/MacroEventRiskCard';
 import { TrendStructureTable } from './components/TrendStructureTable';
@@ -28,6 +33,7 @@ import { GexPositioningCard } from './components/GexPositioningCard';
 import { SentimentGauge } from './components/SentimentGauge';
 import { MacroRecapCard } from './components/MacroRecapCard';
 import { SectorRotationCard } from './components/SectorRotationCard';
+import { EarningsAheadCard, type EarningsCat } from './components/EarningsAheadCard';
 import { ModuleHeader } from './components/macroVisuals';
 
 // Concise "what is this / why it matters / how to read it" blurbs, shown via the
@@ -46,6 +52,7 @@ const HELP = {
     <Help>
       <div>Each sleeve's 0–100 score at a glance — <strong>higher = more risk-on</strong>.</div>
       <div style={dim}>Shows what's actually driving the regime: trend, stress, credit, rates or positioning.</div>
+      <div style={dim}>Refreshed: on load; underlying sleeves update daily after the close.</div>
     </Help>
   ),
   trend: (
@@ -54,6 +61,7 @@ const HELP = {
       <div><strong>Above all three</strong> — momentum.</div>
       <div><strong>Below the 200-day</strong> — risk-off.</div>
       <div><strong>Below the 200-day but bouncing above the short ones</strong> — a bear-market rally, not bullish.</div>
+      <div style={dim}>Refreshed: quotes live (≤15m); moving averages daily after the close.</div>
     </Help>
   ),
   internals: (
@@ -62,12 +70,16 @@ const HELP = {
       <div><strong>Credit / Liquidity</strong> — HY OAS spread vs its 50-day average. A widening spread warns of credit stress before stocks.</div>
       <div><strong>Rates + Dollar</strong> — 10-year yield + broad dollar. Both rising is a headwind for growth stocks (a yield drop during stress is flight-to-safety, not a tailwind).</div>
       <div style={dim}>Each sleeve is scored 0–100 — higher = more risk-on.</div>
+      <div style={dim}>Refreshed: daily after the close (FRED posts VIX/rates with a ~1-day lag).</div>
     </Help>
   ),
   gex: (
     <Help>
-      <div>STW Graddox's options-positioning read (dealer gamma exposure): <strong>Bullish / Flat / Conflicted / Bearish</strong>, with key SPY &amp; QQQ levels.</div>
-      <div style={dim}>A tactical overlay — helps time entries and spot pivots, but doesn't set the whole macro picture on its own.</div>
+      <div>Options-positioning read (dealer gamma exposure) for SPX, with the <strong>gamma flip</strong>, <strong>call wall</strong> and <strong>put wall</strong>.</div>
+      <div><strong>Above the flip</strong> — positive gamma: dealers dampen moves, dips tend to hold (a grind, not a chase).</div>
+      <div><strong>Below the flip</strong> — negative gamma: dealers amplify moves, breaks accelerate; keep size down.</div>
+      <div style={dim}>A tactical overlay — helps time entries and spot pivots. Levels via SPX Gamma Edge.</div>
+      <div style={dim}>Refreshed: twice each weekday — pre-market (~8:30am ET) and after the close (~4:30pm ET).</div>
     </Help>
   ),
   riskAppetite: (
@@ -75,19 +87,29 @@ const HELP = {
       <div>How much <strong>fear vs greed</strong> is priced right now (0 = extreme fear, 100 = extreme greed).</div>
       <div>Different from the regime: the regime is what the environment <em>is</em>; this is how emotional the tape is.</div>
       <div style={dim}>Built from momentum, VIX, IV premium, GEX, credit and breadth.</div>
+      <div style={dim}>Refreshed: quotes live (≤15m); daily metrics once per session.</div>
     </Help>
   ),
   recap: (
     <Help>
       <div>An AI note that turns all the module scores into a plain-English read plus a suggested trading mode.</div>
-      <div style={dim}>Auto-generates twice each weekday: pre-market at 8am ET, post-market at 4:30pm ET.</div>
+      <div style={dim}>Refreshed: twice each weekday — pre-market at 8am ET, post-market at 4:30pm ET.</div>
     </Help>
   ),
   eventRisk: (
     <Help>
-      <div>Scheduled macro events (CPI, PCE, jobs, FOMC, GDP, PPI) that could move the setup in the next day or two.</div>
+      <div>Scheduled macro events (CPI, PPI, PCE, jobs, GDP, retail sales, housing, sentiment, Philly Fed, FOMC) that could move the setup over the next few days.</div>
       <div>A temporary <strong>overlay</strong>, not a permanent regime change — it fades a few trading days after the print unless the structure actually shifted.</div>
-      <div style={dim}>Source: FRED economic-release calendar + the published FOMC schedule.</div>
+      <div style={dim}>Source: FRED economic-release calendar + the published FOMC schedule. Consensus isn't published on a public calendar, so it reads "—"; Previous is the last released print.</div>
+      <div style={dim}>Refreshed: hourly.</div>
+    </Help>
+  ),
+  earnings: (
+    <Help>
+      <div>Upcoming quarterly <strong>earnings reports</strong> — the biggest single-ticker volatility events. Covers <strong>your own positions</strong>, STW's holdings, and the mega-caps whose prints move the whole index.</div>
+      <div><strong>before open</strong> / <strong>after close</strong> tells you when the move lands; the EPS estimate is the consensus the print is judged against.</div>
+      <div style={dim}><span style={{ color: 'var(--acc)' }}>●</span> a name you hold · <span style={{ color: 'var(--c3)' }}>●</span> a name STW holds · ● a market-mover shown for index context.</div>
+      <div style={dim}>Refreshed: daily.</div>
     </Help>
   ),
   sectorRotation: (
@@ -96,15 +118,27 @@ const HELP = {
       <div><strong>Structure</strong> — the same 9/21/200-day trend bucketing as the Trend module.</div>
       <div><strong>Radar</strong> — each sector's RS vs SPY (percentage points) across Week/1M/3M/6M/1Y.</div>
       <div><strong>Leaders / Setting Up</strong> — names from that sector with confirmed bullish structure (Leaders) or turning positive on 1M RS (Setting Up).</div>
+      <div style={dim}>Refreshed: daily after the close.</div>
     </Help>
   ),
 };
 
 export function MacroView() {
-  const { finnhubKey, twelveDataKey, canEdit } = useCapabilities();
+  const { finnhubKey, twelveDataKey, canEdit, isAdmin } = useCapabilities();
+  const navigate = useNavigate();
+  // Held earnings tickers link to their detail page: a "yours" name → My Portfolio
+  // (web only — admin has no /portfolio, and its book ≈ STW's), everything else → Stock
+  // Picks. Market-movers aren't linked (no detail page); the card gates on category.
+  const openEarningsTicker = (symbol: string, cat: EarningsCat) => {
+    navigate(cat === 'yours' && !isAdmin ? `/portfolio?ticker=${symbol}` : `/picks?ticker=${symbol}`);
+  };
   const { regimeWeights } = useAppConfig();
   const { prefs, toggle } = useMacroPrefs();
+  // Graddox is retained only to ground the AI recap; the visible GEX card, the
+  // regime GEX sleeve and the score strip read the SPX Gamma Edge snapshot via
+  // useGexExposure.
   const { data: graddox } = useGraddox();
+  const { data: gex, loading: gexLoading } = useGexExposure();
 
   // Fetch the FULL trend set always (so the recap can speak to small-caps/
   // equal-weight rotation even when those rows are toggled off); the table and the
@@ -125,7 +159,36 @@ export function MacroView() {
   const { data: rates, loading: ratesLoading } = useRatesDollar(stressRising);
   const { score, loading: sentLoading } = useSentimentGauge(twelveDataKey);
   const { recap, recapDate, recapSession, loading: recapLoading, error: recapError, generate } = useDailyRecap();
-  const { read: eventsRead, loading: eventsLoading, error: eventsError, warning: eventsWarning } = useMacroEvents();
+  const { events: eventsList, read: eventsRead, loading: eventsLoading, error: eventsError, warning: eventsWarning } = useMacroEvents();
+  const { data: holdings } = useHoldings();
+  const { data: userPositions } = useUserPositions();
+  const { upcomingFor: upcomingEarningsFor, loading: earningsLoading } = useEarningsCalendar();
+  // Earnings calendar covers the signed-in user's OWN positions ∪ STW holdings ∪ the
+  // mega-cap market-movers. On the subscriber web app `ownTickers` is their IBKR book;
+  // on admin it's empty (no user_positions), so the set collapses to STW ∪ movers.
+  // Earnings only matters for positions you still HOLD — exclude closed ones on both
+  // sides (a closed STW holding = current_weight 0 / last_action Closed; a user position
+  // is open by construction but guard on non-zero qty anyway).
+  const ownTickers = useMemo(
+    () => Array.from(new Set(
+      (userPositions ?? [])
+        .filter((p) => (p.quantity ?? 0) !== 0)
+        .map((p) => p.underlying?.toUpperCase())
+        .filter((t): t is string => !!t && t !== 'CASH'),
+    )),
+    [userPositions],
+  );
+  const stwTickers = useMemo(
+    () => (holdings ?? [])
+      .filter((h) => h.last_action !== 'Closed' && (h.current_weight ?? 0) > 0)
+      .map((h) => h.ticker)
+      .filter((t): t is string => !!t && t !== 'CASH'),
+    [holdings],
+  );
+  const upcomingEarnings = useMemo(
+    () => upcomingEarningsFor([...ownTickers, ...stwTickers, ...MARKET_MOVERS]),
+    [upcomingEarningsFor, ownTickers, stwTickers],
+  );
   const { rows: sectorRows, loading: sectorLoading, asOf: sectorAsOf, constituents: sectorConstituents, constituentsLoading: sectorConstituentsLoading } = useSectorRotation(twelveDataKey);
 
   const visibleIndicators = indicators.filter((i) => visibleSymbols.includes(i.symbol));
@@ -137,7 +200,8 @@ export function MacroView() {
     () => trendSleeveScore(visibleIndicators.map((i) => i.bucket)),
     [visibleIndicators],
   );
-  const gexSleeve = gexScore(graddox?.bias);
+  const gexSleeve = gex?.sleeveScore ?? null;
+  const gexPositioning = gexPositioningLabel({ spot: gex?.spot ?? null, gammaFlip: gex?.gammaFlip ?? null });
 
   const regime = useMemo(() => {
     const env = environmentScore([
@@ -165,19 +229,31 @@ export function MacroView() {
     riskAppetite: score?.total ?? null,
     indicators: indicators.map((i) => ({ symbol: i.symbol, score: trendSubScore(i.bucket) })),
   });
-  const regimeDirection = dataReady ? regimeDirectionLabel(trendHistory.deltas.regime.direction) : null;
 
-  // Module 2: per-sleeve score strip. GEX uses a 3D delta (it moves fast); the
-  // rest use the standard 5D delta.
+  // Module 2: per-sleeve score strip. Every sleeve shows its best-available trend
+  // (5D, or 3D as a fallback while history is short) so none reads as "missing";
+  // GEX stays fixed on 3D (it moves fast — spec Module 8/2).
+  const trendD = resolveDelta(trendHistory.deltas.trend);
+  const volD = resolveDelta(trendHistory.deltas.volatility);
+  const creditD = resolveDelta(trendHistory.deltas.credit);
+  const ratesD = resolveDelta(trendHistory.deltas.rates_dollar);
   const stripItems = [
-    { key: 'trend',       title: 'Trend',     score: trendSleeve,                 detail: trendSleeveLabel(trendSleeve), fiveDayDelta: trendHistory.deltas.trend.fiveDayDelta },
-    { key: 'volatility',  title: 'Volatility', score: volatility?.sleeveScore ?? null, detail: stressLabel(volatility?.sleeveScore ?? null), fiveDayDelta: trendHistory.deltas.volatility.fiveDayDelta },
-    { key: 'credit',      title: 'Credit',    score: credit?.sleeveScore ?? null,  detail: creditLabel(credit?.sleeveScore ?? null), fiveDayDelta: trendHistory.deltas.credit.fiveDayDelta },
-    { key: 'rates',       title: 'Rates/USD', score: rates?.sleeveScore ?? null,   detail: ratesDollarLabel(rates?.sleeveScore ?? null), fiveDayDelta: trendHistory.deltas.rates_dollar.fiveDayDelta },
-    { key: 'gex',         title: 'GEX',       score: gexSleeve,                    detail: gexBiasLabel(graddox?.bias), fiveDayDelta: trendHistory.deltas.gex.threeDayDelta, deltaLabel: '3D' as const },
+    { key: 'trend',       title: 'Trend',     score: trendSleeve,                 detail: trendSleeveLabel(trendSleeve), delta: trendD.value, deltaLabel: trendD.label },
+    { key: 'volatility',  title: 'Volatility', score: volatility?.sleeveScore ?? null, detail: stressLabel(volatility?.sleeveScore ?? null), delta: volD.value, deltaLabel: volD.label },
+    { key: 'credit',      title: 'Credit',    score: credit?.sleeveScore ?? null,  detail: creditLabel(credit?.sleeveScore ?? null), delta: creditD.value, deltaLabel: creditD.label },
+    { key: 'rates',       title: 'Rates/USD', score: rates?.sleeveScore ?? null,   detail: ratesDollarLabel(rates?.sleeveScore ?? null), delta: ratesD.value, deltaLabel: ratesD.label },
+    { key: 'gex',         title: 'GEX',       score: gexSleeve,                    detail: gexPositioning, delta: trendHistory.deltas.gex.threeDayDelta, deltaLabel: '3D' as const },
   ];
 
   const updatedAt = useMemo(() => (indLoading ? null : new Date()), [indLoading]);
+
+  // On a non-trading day the live recompute drifts slightly from the last persisted
+  // snapshot (different sleeve reads / feed lag), so the headline (62) could disagree
+  // with the trajectory's newest lamp (63). Show the last COMPLETE session's regime
+  // when the market's closed, so the current-status score == the newest lamp.
+  const todayET = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  const lastSeriesScore = [...trendHistory.regimeSeries].reverse().find((p) => p.score !== null)?.score ?? null;
+  const displayRegime = (isTradingDay(todayET) || lastSeriesScore === null) ? regime : regimeBand(lastSeriesScore);
 
   function handleRefreshRecap(note?: string, session?: 'am' | 'pm') {
     if (!regime) return;
@@ -188,7 +264,7 @@ export function MacroView() {
         volatility:  { score: volatility?.sleeveScore ?? null, label: stressLabel(volatility?.sleeveScore ?? null), fiveDayDelta: trendHistory.deltas.volatility.fiveDayDelta },
         credit:      { score: credit?.sleeveScore ?? null, label: creditLabel(credit?.sleeveScore ?? null), fiveDayDelta: trendHistory.deltas.credit.fiveDayDelta },
         ratesDollar: { score: rates?.sleeveScore ?? null, label: ratesDollarLabel(rates?.sleeveScore ?? null), fiveDayDelta: trendHistory.deltas.rates_dollar.fiveDayDelta },
-        gex:         { score: gexSleeve, label: gexBiasLabel(graddox?.bias), fiveDayDelta: trendHistory.deltas.gex.threeDayDelta },
+        gex:         { score: gexSleeve, label: gexPositioning, fiveDayDelta: trendHistory.deltas.gex.threeDayDelta },
       },
       // Grounding context for a richer, non-fabricated weekly narrative.
       // Always pass the full trend set (incl. IWM/RSP/VEA) so the rotation/breadth
@@ -199,7 +275,14 @@ export function MacroView() {
         riskAppetite: score ? { total: score.total, inputs: score.inputs.map((x) => ({ label: x.label, score: x.score })) } : null,
         gex: graddox ? { bias: graddox.bias, biasNote: graddox.bias_note, lastUpdated: graddox.last_updated, spx: graddox.spx, qqq: graddox.qqq } : null,
       },
-      eventRisk: null,
+      eventRisk: eventsRead.event ? {
+        level: eventsRead.riskLevel,
+        event: eventsRead.event.eventName,
+        time: eventsRead.event.releaseTimeEt,
+        consensus: eventsRead.event.consensus ?? undefined,
+        previous: eventsRead.event.previous ?? undefined,
+        overlay: eventsRead.overlay,
+      } : null,
     }, note, session);
   }
 
@@ -223,10 +306,18 @@ export function MacroView() {
               <div>The overall market read — <strong>how aggressive to be right now</strong> — from weighted sleeve scores.</div>
               <div>75–100 <strong>Risk-On</strong> · 60–74 Constructive · 45–59 Cautious · 30–44 Defensive · 0–29 <strong>Risk-Off</strong>.</div>
               <div style={dim}>Weights: Trend {regimeWeights.trend}% · Volatility {regimeWeights.volatility}% · Credit {regimeWeights.credit}% · Rates+Dollar {regimeWeights.rates_dollar}% · GEX {regimeWeights.gex}%.</div>
+              <div>The <strong>arrow</strong> shows the 5-day direction — whether the regime is improving, deteriorating or mixed.</div>
+              <div>
+                The <strong>dots</strong> track the last 10 trading days (oldest → today):{' '}
+                <span style={{ color: 'var(--c5)' }}>green</span> risk-on ·{' '}
+                <span style={{ color: 'var(--c3)' }}>amber</span> neutral ·{' '}
+                <span style={{ color: 'var(--c1)' }}>red</span> risk-off. Read left → right to see if the backdrop is getting better or worse.
+              </div>
+              <div style={dim}>Refreshed: on load; underlying sleeves update daily after the close.</div>
             </Help>
           )}
         />
-        <RegimeBanner regime={dataReady ? regime : null} updatedAt={updatedAt} direction={regimeDirection} />
+        <RegimeCard regime={dataReady ? displayRegime : null} updatedAt={updatedAt} series={trendHistory.regimeSeries} />
       </section>
 
       {/* ── Module 2: Module Score Strip ───────────────────────────── */}
@@ -241,14 +332,25 @@ export function MacroView() {
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
           <MacroEventRiskCard
             read={eventsRead}
+            events={eventsList}
             loading={eventsLoading}
             error={eventsError}
             warning={eventsWarning}
             qqqBucket={qqqBucket}
             vix={volatility?.vix ?? null}
-            vixDelta5={volatility?.vixDelta5 ?? null}
+            vixDelta1={volatility?.vixDelta1 ?? null}
+            us10y={rates?.us10y ?? null}
+            us10yDelta1={rates?.us10yDelta1 ?? null}
             us10yDelta5={rates?.us10yDelta5 ?? null}
           />
+        </div>
+      </section>
+
+      {/* ── Module 3b: Earnings Ahead ──────────────────────────────── */}
+      <section>
+        <ModuleHeader title="Earnings Ahead" help={HELP.earnings} />
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
+          <EarningsAheadCard events={upcomingEarnings} ownTickers={ownTickers} stwTickers={stwTickers} loading={earningsLoading} onSelectTicker={openEarningsTicker} />
         </div>
       </section>
 
@@ -281,7 +383,7 @@ export function MacroView() {
       <section>
         <ModuleHeader title="GEX / Positioning" help={HELP.gex} />
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
-          <GexPositioningCard graddox={graddox} loading={!graddox} threeDayDelta={trendHistory.deltas.gex.threeDayDelta} />
+          <GexPositioningCard data={gex} loading={gexLoading} threeDayDelta={trendHistory.deltas.gex.threeDayDelta} />
         </div>
       </section>
 

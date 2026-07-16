@@ -18,6 +18,8 @@ import { Badge } from '../../../primitives/Badge';
 import { DetailPane, DetailPaneMetricLabel } from '../../../primitives/DetailPane';
 import { useUserPositions } from '../../portfolio/useUserPositions';
 import { cleanUnderlying } from '../../portfolio/api';
+import { useEarningsCalendar } from '../../earnings/useEarningsCalendar';
+import { EarningsBadge } from '../../earnings/EarningsBadge';
 import type { TickerRegime } from '../useTickerRegime';
 
 function PriceEmptyState({ fetchStatus }: { fetchStatus: string }) {
@@ -75,6 +77,9 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
   const { data: ownPositions = [] } = useUserPositions();
   const holdsOwn = !isAdmin && h.ticker !== 'CASH' && ownPositions.some((p) => cleanUnderlying(p.underlying) === h.ticker);
   const [editing, setEditing] = useState(false);
+
+  const { getNext: getNextEarnings } = useEarningsCalendar();
+  const nextEarnings = h.ticker !== 'CASH' ? getNextEarnings(h.ticker) : null;
 
   const quote       = useQuote(h.ticker);
   const fetchStatus = usePriceCacheStore((s) => s.fetchStatus);
@@ -471,6 +476,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
             </span>
             <Badge kind="tier" tier={h.conviction} />
             {h.ticker !== 'CASH' && <RegimeBadge regime={regime} />}
+            {nextEarnings && <EarningsBadge event={nextEarnings} />}
             {h.action_date && (
               <span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>
                 Last action {fmtDate(h.action_date)}

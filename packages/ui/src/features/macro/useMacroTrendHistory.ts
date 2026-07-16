@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { classifyTrendDirection } from '@stw/shared';
+import { classifyTrendDirection, isTradingDay } from '@stw/shared';
 import type { TrendDirection } from '@stw/shared';
 import { getSupabase } from '../../lib/supabase';
 
@@ -16,10 +16,11 @@ import { getSupabase } from '../../lib/supabase';
 // 5D deltas for the same market (the "Macro differs in app vs admin" bug,
 // 2026-07-07). A shared Supabase source makes every device/site agree.
 //
-// "N trading days ago" is approximated as "N snapshot-rows ago" (i.e. the Nth
-// most recent weekday a snapshot was written) rather than N calendar days —
-// close enough for a tool used on market days, and avoids needing a holiday
-// calendar. Deltas are legitimately null until enough rows accrue.
+// "N trading days ago" is "N snapshot-rows ago" (the Nth most recent trading day
+// a snapshot was written). Snapshot rows are filtered to ACTUAL trading days
+// (isTradingDay — no weekends, no NYSE holidays) before use, since the
+// macro-snapshot cron fires Mon–Fri regardless of holidays and can leave a
+// holiday-weekday row. Deltas are legitimately null until enough rows accrue.
 
 const HISTORY_LIMIT = 40; // covers the 20-trading-day lookback + buffer
 
@@ -78,6 +79,16 @@ function buildEntry(history: (number | null)[]): TrendHistoryEntry {
   };
 }
 
+/**
+ * Best-available lookback for a sleeve/indicator: prefer the 5D delta, fall back
+ * to 3D while history is still short (5D needs 6 rows, 3D needs 4). Keeps every
+ * module showing a real trend — not a blank — in the first days after a fresh
+ * start, instead of only GEX (which always uses 3D). Null only when even 3D isn't ready.
+ */
+export function resolveDelta(e: TrendHistoryEntry): { value: number | null; label: '3D' | '5D' } {
+  return e.fiveDayDelta != null ? { value: e.fiveDayDelta, label: '5D' } : { value: e.threeDayDelta, label: '3D' };
+}
+
 export interface MacroTrendHistoryInput {
   regime: number | null;
   trend: number | null;
@@ -91,9 +102,17 @@ export interface MacroTrendHistoryInput {
   ready: boolean;
 }
 
+/** One trading day's overall regime score, oldest → newest (last = today's live point when settled). */
+export interface RegimeSeriesPoint {
+  date: string;
+  score: number | null;
+}
+
 export interface MacroTrendHistoryResult {
   deltas: Record<ModuleSleeveKey, TrendHistoryEntry>;
   indicatorDeltas: Record<string, TrendHistoryEntry>;
+  /** Per-day regime scores for the trajectory lamps — oldest → newest. Empty until snapshots accrue. */
+  regimeSeries: RegimeSeriesPoint[];
 }
 
 const SLEEVE_KEYS: ModuleSleeveKey[] = ['regime', 'trend', 'volatility', 'credit', 'rates_dollar', 'gex', 'risk_appetite'];
@@ -101,6 +120,7 @@ const SLEEVE_KEYS: ModuleSleeveKey[] = ['regime', 'trend', 'volatility', 'credit
 const EMPTY_RESULT: MacroTrendHistoryResult = {
   deltas: Object.fromEntries(SLEEVE_KEYS.map((k) => [k, NULL_ENTRY])) as Record<ModuleSleeveKey, TrendHistoryEntry>,
   indicatorDeltas: {},
+  regimeSeries: [],
 };
 
 export function useMacroTrendHistory(input: MacroTrendHistoryInput): MacroTrendHistoryResult {
@@ -124,7 +144,7 @@ export function useMacroTrendHistory(input: MacroTrendHistoryInput): MacroTrendH
         if (cancelled || error || !data) return;
         const today = todayStr();
         const asc = (data as SnapshotRow[])
-          .filter((r) => r.snapshot_date < today)
+          .filter((r) => r.snapshot_date < today && isTradingDay(r.snapshot_date))
           .sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date));
         setRows(asc);
       });
@@ -139,21 +159,33 @@ export function useMacroTrendHistory(input: MacroTrendHistoryInput): MacroTrendH
       regime, trend, volatility, credit, rates_dollar: ratesDollar, gex, risk_appetite: riskAppetite,
     };
 
+    // Fold today's live score in as the current point once the sleeves settle —
+    // but only when today is an actual trading day (never a weekend/holiday, so
+    // the trajectory's newest lamp stays a real market session).
+    const foldToday = ready && isTradingDay(todayStr());
+
     const deltas = Object.fromEntries(SLEEVE_KEYS.map((key) => {
       const history = rows.map((r) => r.module_scores?.[key] ?? null);
-      // Fold today's live score in as the current point once the sleeves settle.
-      if (ready) history.push(liveModule[key]);
+      if (foldToday) history.push(liveModule[key]);
       return [key, buildEntry(history)];
     })) as Record<ModuleSleeveKey, TrendHistoryEntry>;
 
     const indicatorDeltas: Record<string, TrendHistoryEntry> = {};
     indicators.forEach((ind) => {
       const history = rows.map((r) => r.indicator_scores?.[ind.symbol] ?? null);
-      if (ready) history.push(ind.score);
+      if (foldToday) history.push(ind.score);
       indicatorDeltas[ind.symbol] = buildEntry(history);
     });
 
-    return { deltas, indicatorDeltas };
+    // Per-day regime scores for the trajectory lamps (oldest → newest). Today's
+    // live regime becomes the last point once the sleeves settle (trading days only).
+    const regimeSeries: RegimeSeriesPoint[] = rows.map((r) => ({
+      date: r.snapshot_date,
+      score: r.module_scores?.regime ?? null,
+    }));
+    if (foldToday) regimeSeries.push({ date: todayStr(), score: regime });
+
+    return { deltas, indicatorDeltas, regimeSeries };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, ready, regime, trend, volatility, credit, ratesDollar, gex, riskAppetite, indicatorsKey]);
 }

@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import {
-  evaluateRiskConfig,
-  type PositionInput, type ConcentrationViolation, type ViolationSeverity,
+  evaluateRiskConfig, cashflowAdjustedDrawdownPct, bindingGrossTarget,
+  type PositionInput, type ConcentrationViolation, type ViolationSeverity, type BindingGrossTarget,
 } from '@stw/shared';
 import { useAuthStore } from '../../store/auth';
 import { LoadingSpinner } from '../../primitives/LoadingSpinner';
+import { HelpToggle } from '../../primitives/HelpToggle';
 import { StatusPill, type StatusPillVariant } from '../../primitives/StatusPill';
 import { useUserPositions } from '../portfolio/useUserPositions';
 import { useSyncPortfolio } from '../portfolio/useSyncPortfolio';
@@ -64,7 +66,7 @@ function ViolationRow({
         </span>
         <div className="flex items-center gap-2">
           {!unevaluated && (
-            <span className="text-xs font-mono" style={{ color: SEVERITY_TEXT_COLOR[v.severity] }}>
+            <span className="text-xs tabular-nums" style={{ color: SEVERITY_TEXT_COLOR[v.severity] }}>
               {v.exposurePct.toFixed(1)}% / {v.limitPct}%
             </span>
           )}
@@ -91,31 +93,36 @@ function ViolationRow({
               <button onClick={() => setEditingGlide(true)} className="text-t3 hover:text-t2">Edit</button>
             </div>
           ) : editingGlide || status !== 'glide_path' ? (
-            <div className="flex flex-wrap items-center gap-2">
-              {status === 'new' && (
+            <div className="flex flex-col gap-1">
+              <div className="flex flex-wrap items-center gap-2">
+                {status === 'new' && (
+                  <button
+                    onClick={() => onAcknowledge('acknowledged')}
+                    className="text-xs px-2 py-1 rounded bg-s2 border border-border text-text"
+                  >
+                    Acknowledge
+                  </button>
+                )}
+                {status === 'acknowledged' && (
+                  <span className="text-[10px] text-t3 uppercase tracking-wide">Acknowledged</span>
+                )}
+                <input
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="Glide path"
+                  className="flex-1 min-w-[220px] bg-s2 border border-border rounded px-2 py-1 text-xs text-text"
+                />
                 <button
-                  onClick={() => onAcknowledge('acknowledged')}
-                  className="text-xs px-2 py-1 rounded bg-s2 border border-border text-text"
+                  onClick={() => { onAcknowledge('glide_path', note); setEditingGlide(false); }}
+                  disabled={!note.trim()}
+                  className="text-xs px-2 py-1 rounded bg-acc text-white disabled:opacity-40"
                 >
-                  Acknowledge
+                  Set glide path
                 </button>
-              )}
-              {status === 'acknowledged' && (
-                <span className="text-[10px] text-t3 uppercase tracking-wide">Acknowledged</span>
-              )}
-              <input
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="Glide path — e.g. no adds; reduce to 10% by 2026-08-01"
-                className="flex-1 min-w-[220px] bg-s2 border border-border rounded px-2 py-1 text-xs text-text"
-              />
-              <button
-                onClick={() => { onAcknowledge('glide_path', note); setEditingGlide(false); }}
-                disabled={!note.trim()}
-                className="text-xs px-2 py-1 rounded bg-acc text-white disabled:opacity-40"
-              >
-                Set glide path
-              </button>
+              </div>
+              {/* Format example as persistent helper text, not a placeholder that
+                  vanishes the moment you start typing (when it's most useful). */}
+              <span className="text-[10px] text-t3">e.g. “no adds; reduce to 10% by 2026-08-01”</span>
             </div>
           ) : null}
         </div>
@@ -124,32 +131,55 @@ function ViolationRow({
   );
 }
 
-function GrossExposureBar({ v, ladderTargetPct }: { v: ConcentrationViolation; ladderTargetPct: number | null }) {
+function GrossExposureBar({ v, binding }: { v: ConcentrationViolation; binding: BindingGrossTarget | null }) {
   const { exposurePct: pct, limitPct } = v;
+  const targetPct = binding?.targetPct ?? null;
   const scaleMax = Math.max(limitPct, pct, 100) * 1.05;
   const fillPct = Math.min(100, (pct / scaleMax) * 100);
   const limitMarkerPct = Math.min(100, (limitPct / scaleMax) * 100);
+  // The bar marker is the BINDING target (the number that actually governs), not the
+  // ladder alone — so a tighter double-RED regime target moves the mark too.
+  const ladderMarkerPct = targetPct !== null ? Math.min(100, (targetPct / scaleMax) * 100) : null;
   // At-limit (100%/100%) is `near` → amber, never green: a full bar you're trained
   // to see as "fine" defeats the point.
   const fill = SEVERITY_TEXT_COLOR[v.severity];
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-end text-xs">
-        <span className="font-mono" style={{ color: fill }}>
+        <span className="tabular-nums" style={{ color: fill }}>
           {pct.toFixed(1)}% / {limitPct}%
         </span>
       </div>
+      {/* Ticks on the track make "how far over" legible: a solid mark at the cap
+          (so an overshoot reads as distance past it, not a full bar) + a lighter
+          mark at the binding de-risk target. */}
       <div className="relative h-2.5 rounded-full bg-s2 border border-border overflow-hidden">
         <div className="h-full rounded-full" style={{ width: `${fillPct}%`, background: fill }} />
-        <div
-          className="absolute top-0 bottom-0 w-px bg-t3"
-          style={{ left: `${limitMarkerPct}%` }}
-          title={`Limit: ${limitPct}%`}
-        />
+        {ladderMarkerPct !== null && (
+          <div className="absolute top-0 bottom-0" style={{ left: `${ladderMarkerPct}%`, width: 1, background: 'var(--status-warning-text)', opacity: 0.7 }} title={`De-risk target: ${targetPct}%`} />
+        )}
+        <div className="absolute top-0 bottom-0" style={{ left: `${limitMarkerPct}%`, width: 2, background: 'var(--text)' }} title={`Cap: ${limitPct}%`} />
       </div>
-      {ladderTargetPct !== null && (
+      <div className="flex items-center gap-3 text-[10px] text-t3">
+        <span><span style={{ color: 'var(--text)' }}>▏</span> cap {limitPct}%</span>
+        {targetPct !== null && <span><span style={{ color: 'var(--status-warning-text)' }}>▏</span> target {targetPct}%</span>}
+      </div>
+      {binding && (
         <div className="text-xs text-[var(--status-warning-text)] bg-[var(--status-warning-bg)] border border-[var(--status-warning-border)] rounded px-3 py-2 mt-1">
-          Drawdown ladder target: reduce gross to {ladderTargetPct}%
+          {binding.source === 'both' ? (
+            <>
+              {/* Both de-risk triggers live at once — show the ONE binding number plus
+                  what it reconciles, so it's not read as two separate instructions. */}
+              <span className="block font-semibold">Binding target: reduce gross to {binding.targetPct}%</span>
+              <span className="block text-t3 mt-1" style={{ color: 'var(--t2)' }}>
+                The tighter of your drawdown ladder ({binding.ladderPct}%) and the double-RED regime rule ({binding.regimePct}%).
+              </span>
+            </>
+          ) : binding.source === 'ladder' ? (
+            <span className="block">Drawdown ladder target: reduce gross to {binding.targetPct}%</span>
+          ) : (
+            <span className="block">Regime rule (double-RED): reduce gross to {binding.targetPct}%</span>
+          )}
         </div>
       )}
     </div>
@@ -177,10 +207,12 @@ function sectionSummary(violations: ConcentrationViolation[]): string {
 }
 
 function BreachOnlyList({
-  title, description, violations, ackFor, onAcknowledge, unmappedNote, ackable = true, ackType = 'position',
+  title, description, help, violations, ackFor, onAcknowledge, unmappedNote, ackable = true, ackType = 'position',
 }: {
   title: string;
-  description: string;
+  description: ReactNode;
+  /** Optional deeper "what / why / how" shown behind an ⓘ next to the title. */
+  help?: ReactNode;
   violations: ConcentrationViolation[];
   ackFor?: (scope: string, type: ViolationType) => { status: AckStatus; glide_path_note: string | null } | undefined;
   onAcknowledge?: (scope: string, status: AckStatus, note?: string) => void;
@@ -199,7 +231,10 @@ function BreachOnlyList({
 
   return (
     <div className="bg-surface border border-border rounded-xl p-5">
-      <div className="text-text font-semibold text-sm">{title}</div>
+      <div className="text-text font-semibold text-sm flex items-center gap-1.5">
+        {title}
+        {help && <HelpToggle ariaLabel={`About ${title}`}>{help}</HelpToggle>}
+      </div>
       <div className="text-t3 text-xs mt-0.5" style={{ lineHeight: 1.5 }}>{description}</div>
       {violations.length > 0 && <div className="text-t3 text-xs mt-2 mb-2" style={{ color: 'var(--t2)' }}>{sectionSummary(violations)}</div>}
       {violations.length === 0 && <div className="text-t3 text-xs">No positions.</div>}
@@ -230,8 +265,21 @@ function BreachOnlyList({
   );
 }
 
-export function ViolationsSummary({ showSyncButton = false }: { showSyncButton?: boolean }) {
+export function ViolationsSummary({ showSyncButton = false, settingsTo, bindingGross }: {
+  showSyncButton?: boolean;
+  settingsTo?: string;
+  /** The reconciled ladder-vs-regime gross target from the parent's useBindingGrossTarget
+   * (so this card and the sibling RegimeLight show the identical binding number). When
+   * omitted, falls back to a ladder-only reconciliation from this card's own data. */
+  bindingGross?: BindingGrossTarget | null;
+}) {
   const userId = useAuthStore((s) => s.user?.id);
+
+  // "Settings" renders as a link when the host app provides a route (web → /settings);
+  // admin has no /settings route, so it falls back to plain text there.
+  const settingsRef: ReactNode = settingsTo
+    ? <Link to={settingsTo} style={{ color: 'var(--acc)', fontWeight: 600 }}>Settings</Link>
+    : 'Settings';
 
   const { data: positions, isLoading: positionsLoading } = useUserPositions();
   const { data: config, isLoading: configLoading } = useRiskConfig(userId);
@@ -252,14 +300,20 @@ export function ViolationsSummary({ showSyncButton = false }: { showSyncButton?:
     isOption: p.asset_class === 'OPT',
   }));
 
-  // Real account equity from RiskConfigForm (migration 059) — always set (DB defaults
-  // new rows to a $100,000 placeholder, flagged via config.is_placeholder below) rather
-  // than derived from the SAME positions being evaluated, which made gross exposure
-  // tautologically ~100% (numerator == denominator) before this fix.
-  const accountEquity = config.account_equity;
-  const drawdownPct = config.equity_peak
-    ? ((config.account_equity - config.equity_peak) / config.equity_peak) * 100
-    : null;
+  // Prefer the LIVE Net Liquidation Value from the IBKR NAV sync (migration 070) —
+  // the manual account_equity is only the fallback until the first NAV sync lands.
+  // A stale deposit figure is what made gross exposure read ~114% when the real
+  // number was far lower.
+  const accountEquity = config.ibkr_nlv ?? config.account_equity;
+  const usingLiveEquity = config.ibkr_nlv != null;
+  // Drawdown is measured NET OF CASH FLOWS off the live NLV against its cash-flow-
+  // adjusted peak (migration 071) — NOT (equity − equity_peak)/equity_peak off the
+  // manual placeholder, which lit up a phantom −60% (peak stuck at $100k, NLV ~$40k).
+  // Null (→ ladder silent) until a real NLV + peak exist; a ~$60k historical
+  // withdrawal no longer reads as a loss.
+  const drawdownPct = cashflowAdjustedDrawdownPct(
+    config.ibkr_nlv, config.equity_peak, config.cumulative_cashflow, config.equity_peak_cashflow,
+  );
 
   const result = evaluateRiskConfig(positionInputs, sectorMap ?? {}, accountEquity, {
     maxPositionPct: config.max_position_pct,
@@ -276,10 +330,14 @@ export function ViolationsSummary({ showSyncButton = false }: { showSyncButton?:
   const allViolations = [...result.positionViolations, ...result.optionViolations, ...result.sectorViolations, result.grossViolation];
   const totalBreaches = allViolations.filter((v) => v.severity === 'breach').length;
   const totalNear = allViolations.filter((v) => v.severity === 'near').length;
-  const summaryLine = `Gross ${result.grossViolation.exposurePct.toFixed(0)}% of ${result.grossViolation.limitPct}%`
-    + (totalBreaches ? ` · ${totalBreaches} breach${totalBreaches === 1 ? '' : 'es'}` : '')
-    + (totalNear ? ` · ${totalNear} near` : '')
-    + (totalBreaches === 0 && totalNear === 0 ? ' · all within limit' : '');
+  // Counts-only roll-up — the gross % lives in the Gross exposure card below, so the
+  // header no longer repeats it (was "Gross 116%…" here AND "115.9%…" in the card).
+  const summaryLine = totalBreaches === 0 && totalNear === 0
+    ? 'All within limit'
+    : [
+      totalBreaches ? `${totalBreaches} breach${totalBreaches === 1 ? '' : 'es'}` : '',
+      totalNear ? `${totalNear} near` : '',
+    ].filter(Boolean).join(' · ');
 
   const sectorDataMissing = !sectorMap || Object.keys(sectorMap).length === 0;
 
@@ -287,7 +345,9 @@ export function ViolationsSummary({ showSyncButton = false }: { showSyncButton?:
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0 flex-wrap">
-          <span className="text-text font-semibold text-sm shrink-0">Risk limits</span>
+          {/* Section header — larger/bolder than the card titles below so the
+              page reads as "one section governing four cards", not a flat stack. */}
+          <span className="text-text font-bold text-base shrink-0">Risk limits</span>
           <span className="text-t3 text-xs" style={{ color: totalBreaches > 0 ? 'var(--status-negative-text)' : totalNear > 0 ? 'var(--status-warning-text)' : 'var(--t3)' }}>{summaryLine}</span>
         </div>
         {showSyncButton && (
@@ -303,8 +363,9 @@ export function ViolationsSummary({ showSyncButton = false }: { showSyncButton?:
       </div>
 
       <div className="text-t3 text-xs" style={{ marginTop: -8, lineHeight: 1.5 }}>
-        Evaluates YOUR OWN IBKR book (synced via Flex Query) against your thresholds — set in
-        Settings. Nothing here blocks an order; breaches are flagged for you to act on.
+        We compare your own IBKR positions (synced from your account) against the limits you
+        set in {settingsRef}. It's a heads-up only — nothing here places or blocks a trade; it
+        just flags where you're over the line so you can decide what to do.
         {lastResult && ` Synced ${lastResult.count} position${lastResult.count !== 1 ? 's' : ''}.`}
       </div>
       {syncError && (
@@ -313,27 +374,47 @@ export function ViolationsSummary({ showSyncButton = false }: { showSyncButton?:
         </div>
       )}
 
+      {/* The four limit cards are one group — a subtle tinted container sets them
+          apart from the standalone Regime light card (same card style) above. */}
+      <div className="rounded-2xl border border-border p-3 flex flex-col gap-4" style={{ background: 'var(--s2)' }}>
       <div className="bg-surface border border-border rounded-xl p-5">
-        <div className="text-text font-semibold text-sm">Gross exposure</div>
+        <div className="text-text font-semibold text-sm flex items-center gap-1.5">
+          Gross exposure
+          <StatusPill variant={SEVERITY_PILL[result.grossViolation.severity].variant}>{SEVERITY_PILL[result.grossViolation.severity].label}</StatusPill>
+          <HelpToggle ariaLabel="About gross exposure">
+            <span className="block">Your total market value ÷ your account equity.</span>
+            <span className="block text-t3 mt-1">Above 100% means you're using leverage/margin, so a market drop hits your equity harder.</span>
+            <span className="block text-t3 mt-1">Keep it near or under your gross cap; as you draw down, the ladder auto-tightens the target.</span>
+          </HelpToggle>
+        </div>
         <div className="text-t3 text-xs mt-0.5 mb-3" style={{ lineHeight: 1.5 }}>
           Total market value of every position vs your account equity. Above 100% means you're
           using leverage/margin; the drawdown ladder can trim this target as you draw down.
         </div>
-        {config.is_placeholder && (
+        {usingLiveEquity ? (
+          <div className="text-t3 text-xs mb-2 tabular-nums">
+            vs live account equity {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(accountEquity)} — Net Liquidation Value from your last IBKR sync (incl. margin).
+          </div>
+        ) : config.is_placeholder && (
           <div className="text-t3 text-xs mb-2">
-            Using a default $100,000 account equity — set your real figure in Settings for
-            an accurate reading.
+            Using a default $100,000 account equity — connect IBKR (with the NAV section) so this reads
+            your live balance, or set a figure in Settings.
           </div>
         )}
         <GrossExposureBar
           v={result.grossViolation}
-          ladderTargetPct={result.ladderTargetGrossPct}
+          binding={bindingGross !== undefined ? bindingGross : bindingGrossTarget(result.ladderTargetGrossPct, null)}
         />
       </div>
 
       <BreachOnlyList
         title="Position concentration"
         description="Each ticker's share of your book vs your single-name cap — limits how much any one position can hurt you."
+        help={<>
+          <span className="block">Each ticker's market value as a % of your whole book, vs your single-name cap.</span>
+          <span className="block text-t3 mt-1">Caps how much any one position can hurt you if it gaps against you.</span>
+          <span className="block text-t3 mt-1">Over the line? Trim it, or set a glide path (a dated plan to reduce).</span>
+        </>}
         violations={result.positionViolations}
         ackType="position"
         ackFor={ackFor}
@@ -342,7 +423,12 @@ export function ViolationsSummary({ showSyncButton = false }: { showSyncButton?:
 
       <BreachOnlyList
         title="Option concentration"
-        description="Each ticker's OPTIONS exposure vs your option cap — options carry more risk per dollar (leverage, time decay), so this cap is usually tighter than the overall position cap. Set it under Settings → thresholds."
+        description={<>Each ticker's OPTIONS exposure vs your option cap — options carry more risk per dollar (leverage, time decay), so this cap is usually tighter than the overall position cap. Set it under {settingsRef} → thresholds.</>}
+        help={<>
+          <span className="block">Each underlying's OPTIONS exposure as a % of your book, vs your option cap.</span>
+          <span className="block text-t3 mt-1">Options carry more risk per dollar (leverage + time decay), so this cap is usually tighter than the overall position cap.</span>
+          <span className="block text-t3 mt-1">Set the cap under Settings → thresholds.</span>
+        </>}
         violations={result.optionViolations}
         ackable={false}
       />
@@ -350,12 +436,18 @@ export function ViolationsSummary({ showSyncButton = false }: { showSyncButton?:
       <BreachOnlyList
         title="Sector concentration"
         description="Each sector's share of your book vs your sector cap — limits thematic (correlated) risk when several names move together."
+        help={<>
+          <span className="block">Each sector's combined market value as a % of your book, vs your sector cap.</span>
+          <span className="block text-t3 mt-1">Limits correlated risk — when a whole theme sells off, names in it tend to move together.</span>
+          <span className="block text-t3 mt-1">Diversify or trim the heaviest sector to bring it back in line.</span>
+        </>}
         violations={result.sectorViolations}
         ackType="sector"
         ackFor={ackFor}
         onAcknowledge={(scope, status, note) => acknowledge.mutate({ scope, violationType: 'sector', status, glidePathNote: note })}
         unmappedNote={sectorDataMissing ? '(no sector data yet)' : undefined}
       />
+      </div>
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   positionMarketValue, rollupByUnderlying, grossExposure,
   positionConcentration, optionPositionConcentration, sectorConcentration, grossExposureViolation,
-  drawdownLadderTarget, evaluateRiskConfig, classifySeverity, UNMAPPED_SECTOR,
+  drawdownLadderTarget, cashflowAdjustedDrawdownPct, bindingGrossTarget, evaluateRiskConfig, classifySeverity, UNMAPPED_SECTOR,
   type PositionInput, type RiskConfig,
 } from './limits';
 
@@ -183,6 +183,74 @@ describe('drawdownLadderTarget — all four ladder cells + no-breach', () => {
   it('deeper step breached (-15 and beyond) → 50% target (the deepest applicable)', () => {
     expect(drawdownLadderTarget(OPERATOR_LADDER, -15)).toBe(50);
     expect(drawdownLadderTarget(OPERATOR_LADDER, -22)).toBe(50);
+  });
+});
+
+describe('cashflowAdjustedDrawdownPct — the phantom-drawdown fix', () => {
+  it('returns null when there is no live equity (nlv null) — ladder stays silent', () => {
+    expect(cashflowAdjustedDrawdownPct(null, 40_000, -60_000, -60_000)).toBeNull();
+  });
+  it('returns null when no peak is established yet (equityPeak null)', () => {
+    expect(cashflowAdjustedDrawdownPct(40_000, null, null, null)).toBeNull();
+  });
+
+  it('reads 0% at the high-water mark, with no cash-flow data', () => {
+    expect(cashflowAdjustedDrawdownPct(40_000, 40_000, null, null)).toBeCloseTo(0, 5);
+  });
+
+  it('a real loss below the peak is a real drawdown (no flows since peak)', () => {
+    // peak $40k, now $30k, no cash flow since → down 25% (NOT understated).
+    expect(cashflowAdjustedDrawdownPct(30_000, 40_000, -60_000, -60_000)).toBeCloseTo(-25, 5);
+  });
+
+  it('a historical withdrawal that predates the peak does NOT read as drawdown', () => {
+    // The ~$60k 2026-02-17 withdrawal is baked into BOTH cumulative and the peak's
+    // cash-flow context, so it cancels: current NLV == the re-based peak → 0%.
+    expect(cashflowAdjustedDrawdownPct(40_000, 40_000, -60_000, -60_000)).toBeCloseTo(0, 5);
+  });
+
+  it('a WITHDRAWAL since the peak lowers the bar, not counted as a loss', () => {
+    // peak $100k (cashflow 0 at peak), then withdraw $60k → NLV $40k, cumulative −60k.
+    // peakAdjustedToNow = 100k + (−60k − 0) = 40k → 0% drawdown, not −60%.
+    expect(cashflowAdjustedDrawdownPct(40_000, 100_000, -60_000, 0)).toBeCloseTo(0, 5);
+  });
+
+  it('a DEPOSIT since the peak raises the bar, not counted as a gain', () => {
+    // peak $40k (cashflow 0 at peak), then deposit $60k → NLV $100k, cumulative +60k.
+    // peakAdjustedToNow = 40k + (60k − 0) = 100k → 0% (the deposit is not a gain).
+    expect(cashflowAdjustedDrawdownPct(100_000, 40_000, 60_000, 0)).toBeCloseTo(0, 5);
+  });
+
+  it('a loss on top of a withdrawal since the peak reports only the loss', () => {
+    // peak $100k, withdraw $60k, then lose $10k → NLV $30k, cumulative −60k.
+    // peakAdjustedToNow = 100k + (−60k) = 40k; (30k − 40k)/40k = −25%.
+    expect(cashflowAdjustedDrawdownPct(30_000, 100_000, -60_000, 0)).toBeCloseTo(-25, 5);
+  });
+
+  it('returns null if the re-based peak is non-positive (degenerate)', () => {
+    // A withdrawal larger than the peak drives peakAdjustedToNow ≤ 0 → no meaningful %.
+    expect(cashflowAdjustedDrawdownPct(10_000, 40_000, -50_000, 0)).toBeNull();
+  });
+});
+
+describe('bindingGrossTarget — reconcile ladder vs regime double-RED', () => {
+  it('returns null when neither trigger is firing', () => {
+    expect(bindingGrossTarget(null, null)).toBeNull();
+  });
+  it('ladder only → that target, source "ladder"', () => {
+    expect(bindingGrossTarget(50, null)).toEqual({ targetPct: 50, ladderPct: 50, regimePct: null, source: 'ladder' });
+  });
+  it('regime only → that target, source "regime"', () => {
+    expect(bindingGrossTarget(null, 30)).toEqual({ targetPct: 30, ladderPct: null, regimePct: 30, source: 'regime' });
+  });
+  it('both firing → the tighter (lower) target binds, source "both"', () => {
+    // ladder 50%, regime 30% → 30% governs.
+    expect(bindingGrossTarget(50, 30)).toEqual({ targetPct: 30, ladderPct: 50, regimePct: 30, source: 'both' });
+    // ladder tighter than regime → ladder governs.
+    expect(bindingGrossTarget(20, 30)).toEqual({ targetPct: 20, ladderPct: 20, regimePct: 30, source: 'both' });
+  });
+  it('both equal → that shared value binds', () => {
+    expect(bindingGrossTarget(40, 40)?.targetPct).toBe(40);
   });
 });
 

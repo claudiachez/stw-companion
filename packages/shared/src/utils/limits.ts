@@ -200,6 +200,71 @@ export function drawdownLadderTarget(ladder: DrawdownStep[], drawdownPct: number
   return target;
 }
 
+/**
+ * Cash-flow-adjusted drawdown-from-peak, in percent (0 = at the high-water mark,
+ * negative = below it). Returns null when there isn't enough real data to compute
+ * a drawdown (no live equity, or no established peak) — the caller renders NOTHING
+ * in that case rather than a phantom number.
+ *
+ * Drawdown is measured NET OF EXTERNAL CASH FLOWS so a deposit/withdrawal — which
+ * moves NLV without being a gain or loss — is not mistaken for one. The peak is a
+ * raw NLV high-water mark (`equityPeak`) paired with the cumulative cash flow AS OF
+ * that high (`equityPeakCashflow`, maintained by fn_risk_config_track_equity_peak);
+ * only the flow SINCE the peak is applied, by re-basing the peak to "now":
+ *   peakAdjustedToNow = equityPeak + (cumulativeCashflow − equityPeakCashflow)
+ *   drawdownPct       = (nlv − peakAdjustedToNow) / peakAdjustedToNow × 100
+ * A net deposit since the peak RAISES the bar (more capital to protect); a net
+ * withdrawal LOWERS it. This is a first-order (additive) adjustment, not full
+ * time-weighted return — good enough for an advisory de-risk trigger.
+ *
+ * See migration 071 for the full rationale + the storage model.
+ */
+export function cashflowAdjustedDrawdownPct(
+  nlv: number | null,
+  equityPeak: number | null,
+  cumulativeCashflow: number | null,
+  equityPeakCashflow: number | null,
+): number | null {
+  if (nlv === null || equityPeak === null) return null;
+  const flowsSincePeak = (cumulativeCashflow ?? 0) - (equityPeakCashflow ?? 0);
+  const peakAdjustedToNow = equityPeak + flowsSincePeak;
+  if (peakAdjustedToNow <= 0) return null;
+  return ((nlv - peakAdjustedToNow) / peakAdjustedToNow) * 100;
+}
+
+/**
+ * The two independent de-risking triggers both cap the same lever — gross exposure:
+ *   - the drawdown ladder (keyed to YOUR account drawdown) → `ladderPct`
+ *   - the double-RED regime rule (keyed to the MARKET gate) → `regimePct`
+ * Each is null when not currently firing. When BOTH fire (common — a crash usually
+ * causes a drawdown too), the BINDING target is the tighter (lower) one — you obey the
+ * most conservative. This is the single reconciliation both surfaces (the gross-exposure
+ * card and the regime light) render, so they never show two different numbers.
+ * Returns null when neither is active (nothing to de-risk to).
+ */
+export interface BindingGrossTarget {
+  /** The governing target % — the lower of the two when both apply. */
+  targetPct: number;
+  /** Drawdown-ladder target %, or null if no rung is breached. */
+  ladderPct: number | null;
+  /** Double-RED regime target %, or null if the regime isn't double-RED. */
+  regimePct: number | null;
+  /** Which trigger(s) are active — drives the copy. */
+  source: 'ladder' | 'regime' | 'both';
+}
+
+export function bindingGrossTarget(
+  ladderPct: number | null,
+  regimePct: number | null,
+): BindingGrossTarget | null {
+  if (ladderPct !== null && regimePct !== null) {
+    return { targetPct: Math.min(ladderPct, regimePct), ladderPct, regimePct, source: 'both' };
+  }
+  if (ladderPct !== null) return { targetPct: ladderPct, ladderPct, regimePct: null, source: 'ladder' };
+  if (regimePct !== null) return { targetPct: regimePct, ladderPct: null, regimePct, source: 'regime' };
+  return null;
+}
+
 /** Runs all three concentration checks + the drawdown ladder in one call. */
 export function evaluateRiskConfig(
   positions: PositionInput[],

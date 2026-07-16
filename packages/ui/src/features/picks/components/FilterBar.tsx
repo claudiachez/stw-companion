@@ -1,6 +1,14 @@
 import type { Holding } from '../api';
 import { useFiltersStore, type SortMode } from '../useFilters';
-import { FONT_SIZE } from '@stw/shared';
+import { FONT_SIZE, TREND_BUCKET_META, TREND_BUCKET_ORDER } from '@stw/shared';
+import type { TrendBucket, SectorStanding } from '@stw/shared';
+
+// Sector-regime (rotation standing) options — labels mirror RegimeBadge's chips.
+const STANDING_OPTIONS: { value: SectorStanding; label: string }[] = [
+  { value: 'leader',     label: 'Sector Leader' },
+  { value: 'setting_up', label: 'Sector Setting Up' },
+  { value: 'laggard',    label: 'Sector Laggard' },
+];
 
 const SORT_OPTIONS: { value: SortMode; label: string }[] = [
   { value: 'conviction',  label: 'Sort: Conviction' },
@@ -33,15 +41,17 @@ const ctrlBorderClass = 'border border-[var(--border)] focus:outline-none focus:
 
 interface Props {
   holdings: Holding[];
+  sectors: string[];
   filtered: number;
 }
 
-export function FilterBar({ holdings, filtered }: Props) {
-  const { search, basket, tier, status, type, hideClosed, sort, setSearch, setBasket, setTier, setStatus, setType, setHideClosed, setSort, reset } =
+export function FilterBar({ holdings, sectors, filtered }: Props) {
+  const { search, basket, tier, status, type, structure, standing, sector, hideClosed, sort,
+    setSearch, setBasket, setTier, setStatus, setType, setStructure, setStanding, setSector, setHideClosed, setSort, reset } =
     useFiltersStore();
 
   const baskets = [...new Set(holdings.map((h) => h.basket).filter(Boolean))].sort();
-  const hasFilter = search || basket || tier || status || type || !hideClosed;
+  const hasFilter = search || basket || tier || status || type || structure || standing || sector || !hideClosed;
   // Denominator = the universe under the current closed-context (not all-time). CASH is a
   // balance, never counted. When "Show closed" is off, closed positions are excluded from the
   // total too — so it reads "34 positions" instead of the confusing "34 of 45". Mirrors the
@@ -94,6 +104,23 @@ export function FilterBar({ holdings, filtered }: Props) {
           <option value="options">Options</option>
           <option value="mixed">Mixed</option>
         </select>
+
+        <select value={structure} onChange={(e) => setStructure(e.target.value as TrendBucket | '')} className={ctrlBorderClass} style={ctrlStyle} title="Filter by the ticker's own 9/21/200 trend structure">
+          <option value="">All Structure</option>
+          {TREND_BUCKET_ORDER.map((b) => <option key={b} value={b}>{TREND_BUCKET_META[b].label}</option>)}
+        </select>
+
+        <select value={standing} onChange={(e) => setStanding(e.target.value as SectorStanding | '')} className={ctrlBorderClass} style={ctrlStyle} title="Filter by the ticker's sector rotation standing (sector regime)">
+          <option value="">All Sector Regime</option>
+          {STANDING_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+
+        {sectors.length > 0 && (
+          <select value={sector} onChange={(e) => setSector(e.target.value)} className={ctrlBorderClass} style={ctrlStyle} title="Filter by GICS market sector">
+            <option value="">All Sectors</option>
+            {sectors.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        )}
 
         <select value={sort} onChange={(e) => setSort(e.target.value as SortMode)} className={ctrlBorderClass} style={ctrlStyle}>
           {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}

@@ -67,6 +67,10 @@ only — see "Deployment note" below).
    `?before=` chunks if ever wanted; TwelveData's 5000-bar cap is the limiter, FRED has none).
    **Sandbox `regime_daily` left empty** (dev-only; the local env has only the sandbox anon key, which
    can't write past RLS).
+   > **SUPERSEDED 2026-07-10 (Week-2 Item 4, PR #89):** the ~2020-12 depth limit no longer holds —
+   > `regime_daily` was extended to **19,500 rows, IWM/SPY/QQQ 2000-09-01→present** via a new
+   > **Yahoo Finance** source (`?source=yahoo`, not TwelveData/Stooq — Stooq had walled off behind a
+   > proof-of-work challenge). Sandbox still empty. See `plans/20260709_regime_daily_depth_extension.md`.
 
 8. **Item 3 advisory light was never actually mounted in week-1.** The first report claimed
    `RegimeLight` was "wired into the Limits tab," but it was exported and mounted **nowhere**. This
@@ -100,15 +104,17 @@ only — see "Deployment note" below).
 
 11. **CCXI unresolved (adjacent, from PR #79's `sector-map-sync`).** `sector-map-sync` can't
     auto-classify CCXI (the Agility Robotics SPAC shell — Finnhub returns no industry). It correctly
-    leaves it `unevaluated` (never a breach). Fix pending: a `CCXI: 'Industrials'` `TICKER_GICS`
-    override.
+    leaves it `unevaluated` (never a breach). Fix: set it to `Industrials` via the **admin editor
+    Sector dropdown** (a `ticker_sector_map` data write). The earlier idea of a `CCXI: 'Industrials'`
+    `TICKER_GICS` code override is **dropped** — the dropdown supersedes it (no code change for a
+    one-off SPAC shell).
 
 ## Not yet live / outstanding
 
 - **Promote `staging → main`** (approval-gated) — activates the `regime-daily` cron and ships the
   per-user REGIME_EXIT feature + the mounted RegimeLight to production.
 - **In-browser verification** of the REGIME_EXIT feature on `staging` before promotion.
-- **CCXI → Industrials** GICS override.
+- **CCXI → Industrials** via the admin editor Sector dropdown (data write; the code-override idea is dropped).
 - Optional: sandbox `regime_daily` backfill (dev-only); a second-account DB multi-tenancy proof for
   Item 2; deeper `regime_daily` history.
 

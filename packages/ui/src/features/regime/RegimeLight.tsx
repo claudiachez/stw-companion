@@ -1,4 +1,5 @@
-import { regimeGate, regimeExitAdvice, formatDate, type RegimeExitRule } from '@stw/shared';
+import { regimeGate, regimeExitAdvice, formatDate, TREND_BUCKET_META, type RegimeExitRule, type TrendBucket, type BindingGrossTarget } from '@stw/shared';
+import { HelpToggle } from '../../primitives/HelpToggle';
 import { useLatestRegime } from './useLatestRegime';
 
 const STATE_COLOR: Record<'GREEN' | 'RED' | 'UNKNOWN', string> = {
@@ -7,16 +8,41 @@ const STATE_COLOR: Record<'GREEN' | 'RED' | 'UNKNOWN', string> = {
   UNKNOWN: 'var(--t3)',
 };
 
+const BUCKET_COLOR: Record<TrendBucket, string> = {
+  momentum: 'var(--c5)', healthy_pullback: 'var(--c5)', mid_caution: 'var(--c3)', bear_rally: 'var(--c3)', risk_off: 'var(--c1)',
+};
+
+/** The index's live 9/21/200 structure (from useTickerRegime), folded into this
+ *  one card so it isn't a second near-identical block with a conflicting close. */
+export interface RegimeStructure {
+  bucket: TrendBucket | null;
+  close: number | null;
+  ma9: number | null;
+  ma21: number | null;
+  ma200: number | null;
+}
+
 /**
  * Advisory regime light — plans/integrity-guardrails.md Item 3. Presentational:
  * visibility is decided by the mount site (My Portfolio → Risk tab for subscribers,
- * apps/admin's LimitsPanel for the operator), NOT a gate in here. Shows STW's proxy
- * instrument (traders.regime_proxy) by default, and — when `exitRule` is supplied
- * and the regime is RED — the viewer's OWN REGIME_EXIT de-risking rule (per-user,
- * migration 063). Purely informational: nothing here places, blocks, or adjusts an
- * order (the standing regime prohibition).
+ * apps/admin's LimitsPanel for the operator), NOT a gate in here.
+ *
+ * The GREEN/RED gate (trend + volatility + multiplier) comes from the frozen
+ * regime engine over `regime_daily` (its own daily-close pipeline). The optional
+ * `structure` is the index's LIVE 9/21/200 read (TwelveData) — when supplied it's
+ * shown as the single close + MA set, so the two sources' slightly different
+ * closes never appear side by side (they used to, in two separate cards). The
+ * gate verdicts stay authoritative; the live structure is the finer texture.
  */
-export function RegimeLight({ instrument = 'IWM', exitRule }: { instrument?: string; exitRule?: RegimeExitRule }) {
+export function RegimeLight({ instrument = 'IWM', exitRule, structure, bindingGross }: {
+  instrument?: string;
+  exitRule?: RegimeExitRule;
+  structure?: RegimeStructure | null;
+  /** Reconciled ladder-vs-regime gross target from the parent's useBindingGrossTarget.
+   * When BOTH triggers are firing, this card shows the same single binding number the
+   * gross-exposure card shows, so the two surfaces never disagree. */
+  bindingGross?: BindingGrossTarget | null;
+}) {
   const { data: row, isLoading } = useLatestRegime(instrument);
 
   if (isLoading) return null;
@@ -34,32 +60,68 @@ export function RegimeLight({ instrument = 'IWM', exitRule }: { instrument?: str
     { vixClose: row.vix_close, vix3mClose: row.vix3m_close },
   );
   const advice = exitRule ? regimeExitAdvice(gate, exitRule) : null;
+  const hasStructure = !!structure && structure.bucket !== null && structure.close !== null;
+
+  const maCell = (label: string, ma: number | null) => {
+    if (ma === null || !structure) return <span className="text-t3">{label} —</span>;
+    const above = (structure.close ?? 0) > ma;
+    return <span style={{ color: above ? 'var(--c5)' : 'var(--c1)' }}>{label} {ma.toFixed(2)} {above ? '▲' : '▼'}</span>;
+  };
 
   return (
     <div className="bg-surface border border-border rounded-xl p-4 flex flex-col gap-3">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <span className="text-text font-semibold text-sm">Regime light — {instrument}</span>
+        <span className="text-text font-semibold text-sm flex items-center gap-1.5">
+          Regime light — {instrument}
+          <HelpToggle ariaLabel="About the regime light">
+            <span className="block">A read of the broad backdrop from {instrument}: the GREEN/RED gate (trend = price vs its 200-day average; volatility = VIX vs 3-month VIX) plus its finer 9/21/200 structure.</span>
+            <span className="block text-t3 mt-1">GREEN = supportive, RED = fragile. The multiplier is a suggested size scale.</span>
+            <span className="block text-t3 mt-1">The coarse <strong>200-day gate</strong> and the finer <strong>structure</strong> (e.g. "Healthy Pullback") are different lenses — a name can be in a healthy pullback while the 200-day backdrop is still GREEN.</span>
+            <span className="block text-t3 mt-1">The gate is the frozen daily-close engine; the structure numbers are the live intraday read of the same index.</span>
+            <span className="block text-t3 mt-1">Advisory only — nothing here places or blocks a trade. When RED, your own REGIME_EXIT rule (set in Settings) suggests how to de-risk.</span>
+          </HelpToggle>
+        </span>
         <span className="text-t3 text-[10px]">{formatDate(row.trading_date)}</span>
       </div>
 
       <div className="flex items-center gap-4 flex-wrap">
-        <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full" style={{ background: STATE_COLOR[gate.trend_state] }} />
-          <span className="text-t2 text-xs">Trend: {gate.trend_state}</span>
-        </div>
+        {/* Trend read = the finer 9/21/200 structure bucket when available (host
+            2026-07-11 — replaces the coarse 200-day GREEN/RED gate line). The gate's
+            trend_state still drives the multiplier + REGIME_EXIT advice internally. */}
+        {hasStructure && structure?.bucket ? (
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full" style={{ background: BUCKET_COLOR[structure.bucket] }} />
+            <span className="text-t2 text-xs">Trend: <span className="font-semibold" style={{ color: BUCKET_COLOR[structure.bucket] }}>{TREND_BUCKET_META[structure.bucket].label}</span></span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full" style={{ background: STATE_COLOR[gate.trend_state] }} />
+            <span className="text-t2 text-xs">Trend (200D): {gate.trend_state}</span>
+          </div>
+        )}
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full" style={{ background: STATE_COLOR[gate.vol_state] }} />
-          <span className="text-t2 text-xs">Vol: {gate.vol_state}</span>
+          <span className="text-t2 text-xs">Volatility: {gate.vol_state}</span>
         </div>
-        <span className="text-text text-xs font-mono font-semibold">
+        <span className="text-text text-xs tabular-nums font-semibold">
           Multiplier: {gate.risk_multiplier === null ? '—' : gate.risk_multiplier.toFixed(1)}
         </span>
       </div>
 
-      <div className="text-t3 text-xs font-mono">
-        close {row.close?.toFixed(2) ?? '—'} vs 200SMA {row.sma200?.toFixed(2) ?? '—'}
-        {' · '}VIX {row.vix_close?.toFixed(2) ?? '—'} vs VIX3M {row.vix3m_close?.toFixed(2) ?? '—'}
-      </div>
+      {hasStructure && structure ? (
+        <div className="text-t2 text-xs tabular-nums flex flex-wrap gap-x-3 gap-y-1">
+          <span>Close {structure.close?.toFixed(2) ?? '—'}</span>
+          {maCell('9MA', structure.ma9)}
+          {maCell('21MA', structure.ma21)}
+          {maCell('200MA', structure.ma200)}
+          <span className="text-t3">· VIX {row.vix_close?.toFixed(2) ?? '—'} vs VIX3M {row.vix3m_close?.toFixed(2) ?? '—'}</span>
+        </div>
+      ) : (
+        <div className="text-t3 text-xs tabular-nums">
+          close {row.close?.toFixed(2) ?? '—'} vs 200SMA {row.sma200?.toFixed(2) ?? '—'}
+          {' · '}VIX {row.vix_close?.toFixed(2) ?? '—'} vs VIX3M {row.vix3m_close?.toFixed(2) ?? '—'}
+        </div>
+      )}
 
       {advice && (
         <div
@@ -70,7 +132,25 @@ export function RegimeLight({ instrument = 'IWM', exitRule }: { instrument?: str
         </div>
       )}
 
-      <div className="text-[10px] uppercase tracking-wide font-semibold text-[var(--status-warning-text)]">
+      {/* The advice above already states the regime's gross target. Add a line ONLY when
+          the drawdown ladder binds even TIGHTER than it — the one case where the number
+          above isn't the operative one — so the two surfaces never disagree. In a coherent
+          config (double-RED ≤ ladder floor) the regime target binds and this stays hidden;
+          it surfaces the misconfig the Settings warning also flags. */}
+      {bindingGross?.source === 'both'
+        && bindingGross.ladderPct !== null && bindingGross.regimePct !== null
+        && bindingGross.ladderPct < bindingGross.regimePct && (
+        <div
+          className="text-t2 text-xs"
+          style={{ borderLeft: '2px solid var(--status-warning-text)', paddingLeft: 8 }}
+        >
+          Your drawdown ladder binds tighter — reduce gross to <span className="font-semibold">{bindingGross.ladderPct}%</span>, not the {bindingGross.regimePct}% above.
+        </div>
+      )}
+
+      {/* Disclaimer, set apart with a divider + spacing so it reads as a different
+          kind of statement, not one more data line. */}
+      <div className="text-[10px] uppercase tracking-wide font-semibold text-[var(--status-warning-text)] mt-1 pt-3 border-t border-bsub">
         Advisory — under forward validation. Not a trade signal.
       </div>
     </div>

@@ -60,6 +60,83 @@ function todayEt(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD
 }
 
+// ── Catalysts (scheduled economic releases) ────────────────────────────────────
+// Grounds the recap in the REAL upcoming FRED calendar so the note can speak to
+// imminent catalysts (size discipline into CPI, etc.) without fabrication. Fetched
+// from the already-deployed macro-events function — same no-duplication pattern as
+// macro-snapshot's fetchEventRisk (process.env.URL is the Netlify site URL at runtime).
+
+interface CatalystRow { eventName: string; releaseTimeEt: string; importance: string; actual: string | null; previous: string | null }
+
+/** Minutes since ET midnight, e.g. 8:35am → 515. Drives the AM release gate. */
+function etMinutesNow(): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(new Date());
+  const h = parseInt(parts.find((p) => p.type === 'hour')!.value, 10) % 24;
+  const m = parseInt(parts.find((p) => p.type === 'minute')!.value, 10);
+  return h * 60 + m;
+}
+
+/** True if the calendar has a HIGH/VERY-HIGH release scheduled for `dateEt` in the
+ *  morning (before noon ET) — the AM gate uses this to hold the note until 8:33 ET
+ *  on a CPI/PPI/PCE/NFP/GDP day so it can lead with the print, and publish early
+ *  (7:50 ET) on a quiet morning. */
+function isEconReleaseMorning(catalysts: CatalystRow[], dateEt: string): boolean {
+  return catalysts.some((c) => {
+    const t = new Date(c.releaseTimeEt);
+    if (Number.isNaN(t.getTime())) return false;
+    if (c.importance !== 'very_high' && c.importance !== 'high') return false;
+    const cDate = t.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    if (cDate !== dateEt) return false;
+    const hourEt = parseInt(
+      new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', hour12: false }).format(t),
+      10,
+    ) % 24;
+    return hourEt < 12;
+  });
+}
+
+/** Compact ET stamp for a catalyst line, e.g. "Jul 14 · 8:30 AM ET". */
+function catalystStamp(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ' ET';
+}
+
+/** Upcoming scheduled releases in the next 7 days (soonest-first, capped). */
+async function fetchCatalysts(): Promise<CatalystRow[]> {
+  const base = (process.env.URL ?? process.env.DEPLOY_URL ?? '').trim();
+  if (!base) return [];
+  try {
+    const res = await fetch(`${base.replace(/\/$/, '')}/.netlify/functions/macro-events`);
+    if (!res.ok) return [];
+    const d = await res.json() as { events?: CatalystRow[] };
+    const cutoff = Date.now() + 7 * 86_400_000;
+    return (d.events ?? [])
+      .filter((e) => { const t = new Date(e.releaseTimeEt).getTime(); return !Number.isNaN(t) && t >= Date.now() - 86_400_000 && t <= cutoff; })
+      .slice(0, 8);
+  } catch { return []; }
+}
+
+/** Prompt block: recently-released prints (with the actual number) + upcoming
+ *  catalysts — all real FRED data, never invented. */
+function catalystBlock(rows: CatalystRow[]): string {
+  if (!rows.length) return 'Economic calendar: nothing released or scheduled in the ±window.';
+  const nowMs = Date.now();
+  const lines = rows.map((e) => {
+    const impact = e.importance.replace('_', ' ');
+    const released = new Date(e.releaseTimeEt).getTime() <= nowMs;
+    if (released) {
+      // Just-released: lead with the ACTUAL print (the number the host wants to see).
+      const val = e.actual ? `actual ${e.actual}${e.previous ? `, prev ${e.previous}` : ''}` : 'print pending';
+      return `- ${catalystStamp(e.releaseTimeEt)} — ${e.eventName} (${impact} impact): RELEASED — ${val}`;
+    }
+    return `- ${catalystStamp(e.releaseTimeEt)} — ${e.eventName} (${impact} impact): due${e.previous ? `, previous ${e.previous}` : ''}`;
+  }).join('\n');
+  return `Economic calendar (real, from FRED — recently released prints + upcoming catalysts; factor imminent high-impact ones into the read, and speak to any just-released number):\n${lines}`;
+}
+
 // ── Prompt builders ────────────────────────────────────────────────────────────
 
 interface RecapModule { score: number | null; label: string }
@@ -72,6 +149,7 @@ interface RecapBody {
     volatility: { vix: number | null; ivPremium: null };
     gex: { bias: string; biasNote: string; lastUpdated: string; spx: LevelSet | null; qqq: LevelSet | null } | null;
   };
+  catalysts: CatalystRow[];
 }
 
 function moduleLine(name: string, m: RecapModule): string {
@@ -89,7 +167,7 @@ function levelLine(name: string, ls: LevelSet | null): string {
 }
 
 function buildAmPrompt(body: RecapBody): string {
-  const { regime, modules, context } = body;
+  const { regime, modules, context, catalysts } = body;
   const indicatorLines = context.indicators
     .map((i) => `- ${i.symbol} (${i.name}): ${i.bucket ?? 'n/a'}${i.chgPct != null ? `, ${i.chgPct >= 0 ? '+' : ''}${i.chgPct.toFixed(2)}% yesterday` : ''}`)
     .join('\n');
@@ -109,6 +187,9 @@ CRITICAL GROUNDING RULES:
 - If the data is thin, write a shorter note rather than padding with invented detail.
 - Quote price levels exactly as given (SPX/QQQ levels are in index points).
 - This is a MORNING note — frame it as "what to watch today" and "how to set up", not a recap of what happened.
+- ECONOMIC CALENDAR: the list below is real FRED data. A "RELEASED" line already carries today's ACTUAL print — lead the read with it where it's high-impact (e.g. what a hot/cool CPI means for the session). A "due" line is upcoming — factor imminent high-impact ones into the setup (size discipline into the print). The only known numbers are the actual + previous shown; NEVER invent a consensus/expectation or predict an unreleased number.
+
+NO REPETITION — each field has a DISTINCT job. Do not restate the same point, phrase, or number in more than one field. If two fields would say the same thing, cut one down to its unique angle. Price levels appear ONLY in "watching". "verdict" describes the setup; "playbook" prescribes actions — keep those two from overlapping.
 
 DATA
 Market Regime: ${regime.score ?? 'n/a'}/100 — ${regime.label}. Trading-mode guidance: ${regime.tradingMode}.
@@ -122,20 +203,20 @@ Index structure (vs 9/21/200-day MAs):
 ${indicatorLines || '- n/a'}
 VIX ${context.volatility.vix ?? 'n/a'}
 ${gexBlock}
+${catalystBlock(catalysts)}
 
 Respond with ONLY a JSON object (no markdown fences) with exactly these fields:
-- headline: a punchy one-line hook for today's pre-market setup / theme to watch
-- verdict: 2-3 short paragraphs (separate with \\n\\n) — the morning read: what the structure is telling you heading into the session
-- bigStory: 1 paragraph on the single most important thing to watch or understand for today
-- scenarios: an object { "bull": "...", "base": "...", "bear": "..." } — one tight sentence each for TODAY's session
-- playbook: 1-2 paragraphs on how to approach today — what setups, what to avoid, when to act
-- watching: one line naming the key levels that decide today's tone, e.g. "Hold above 5,435 = bulls in control; lose it and 5,339 is next."
+- headline: ONE line — the single theme/hook for today. No price levels, no numbers.
+- verdict: 2-3 short paragraphs (separate with \\n\\n) — the READ: what the structure and positioning are telling you heading into the session, and WHY. Describe the setup; do NOT list levels or prescribe actions here.
+- scenarios: an object { "bull": "...", "base": "...", "bear": "..." } — one tight sentence each, three genuinely DISTINCT paths for today (up / chop / down), no overlap between them.
+- playbook: 1-2 paragraphs of ACTIONS only — what setups to take, how to size, what to avoid, when to wait. Not market description (that is the verdict's job).
+- watching: one line naming the key levels that decide today's tone, e.g. "Hold above 5,435 = bulls in control; lose it and 5,339 is next." Levels appear ONLY here.
 - tradingMode: a short action label consistent with the regime ("Risk-On", "Selective", "Defensive", "Risk-Off")
-- finalWord: a short, memorable line to carry into the session`;
+- finalWord: ONE short, memorable discipline/mindset line to carry into the session — NOT a restatement of the headline or verdict.`;
 }
 
 function buildPmPrompt(body: RecapBody): string {
-  const { regime, modules, context } = body;
+  const { regime, modules, context, catalysts } = body;
   const indicatorLines = context.indicators
     .map((i) => `- ${i.symbol} (${i.name}): ${i.bucket ?? 'n/a'}${i.chgPct != null ? `, ${i.chgPct >= 0 ? '+' : ''}${i.chgPct.toFixed(2)}% on the day` : ''}`)
     .join('\n');
@@ -155,6 +236,9 @@ CRITICAL GROUNDING RULES:
 - If the data is thin, write a shorter note rather than padding with invented detail.
 - Quote price levels exactly as given (SPX/QQQ levels are in index points).
 - This is an EVENING note — frame it as "what happened" and "what to set up for tomorrow".
+- ECONOMIC CALENDAR: the list below is real FRED data. A "RELEASED" line carries today's ACTUAL print — speak to any high-impact one that dropped. A "due" line is upcoming — factor imminent high-impact ones into tomorrow's setup (size discipline into the print). The only known numbers are the actual + previous shown; NEVER invent a consensus/expectation or predict an unreleased number.
+
+NO REPETITION — each field has a DISTINCT job. Do not restate the same point, phrase, or number in more than one field. If two fields would say the same thing, cut one down to its unique angle. Price levels appear ONLY in "watching". "verdict" explains what happened; "playbook" prescribes tomorrow's actions — keep those two from overlapping.
 
 DATA
 Market Regime: ${regime.score ?? 'n/a'}/100 — ${regime.label}. Trading-mode guidance: ${regime.tradingMode}.
@@ -168,21 +252,32 @@ Index structure (vs 9/21/200-day MAs):
 ${indicatorLines || '- n/a'}
 VIX ${context.volatility.vix ?? 'n/a'}
 ${gexBlock}
+${catalystBlock(catalysts)}
 
 Respond with ONLY a JSON object (no markdown fences) with exactly these fields:
-- headline: a punchy one-line hook capturing today's defining theme or move
-- verdict: 2-3 short paragraphs (separate with \\n\\n) — what happened beneath the surface, what's driving it
-- bigStory: 1 paragraph on the single dominant theme of the session (rotation, VIX move, dealer positioning, etc.)
-- scenarios: an object { "bull": "...", "base": "...", "bear": "..." } — one tight sentence each for TOMORROW's session
-- playbook: 1-2 paragraphs on the next-day setup — what followed through, what failed, how to position overnight
-- watching: one line naming the key levels for tomorrow, e.g. "Watch 5,435 above and 5,339 below."
+- headline: ONE line capturing today's defining theme or move. No price levels, no numbers.
+- verdict: 2-3 short paragraphs (separate with \\n\\n) — what happened beneath the surface and what's driving it. Explain the session; do NOT list levels or prescribe tomorrow's actions here.
+- scenarios: an object { "bull": "...", "base": "...", "bear": "..." } — one tight sentence each, three genuinely DISTINCT paths for tomorrow, no overlap between them.
+- playbook: 1-2 paragraphs of ACTIONS only for the next session — what to press, what to cut, how to position overnight. Not a recap (that is the verdict's job).
+- watching: one line naming the key levels for tomorrow, e.g. "Watch 5,435 above and 5,339 below." Levels appear ONLY here.
 - tradingMode: a short action label consistent with the regime ("Risk-On", "Selective", "Defensive", "Risk-Off")
-- finalWord: a short, memorable closing line`;
+- finalWord: ONE short, memorable discipline/mindset closing line — NOT a restatement of the headline or verdict.`;
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-export async function generateDailyRecap(tag: string, session: 'am' | 'pm'): Promise<void> {
+export async function generateDailyRecap(
+  tag: string,
+  session: 'am' | 'pm',
+  opts: {
+    /** Fixed gate minute (minutes since ET midnight) — used by the PM run. */
+    minEtMinutes?: number;
+    /** AM run only: publish EARLY on a quiet day, but wait for the 8:30 release on an
+     *  econ-release day so the note can report the print. `normalEtMin` fires on a day
+     *  with no morning high-impact release; `eventEtMin` on a day that has one (CPI/PPI/…). */
+    amDynamicGate?: { normalEtMin: number; eventEtMin: number };
+  } = {},
+): Promise<void> {
   const supabaseUrl  = (process.env.VITE_SUPABASE_URL ?? process.env.SUPABASE_URL ?? '').trim();
   const serviceKey   = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim();
   const anthropicKey = (process.env.ANTHROPIC_API_KEY ?? '').trim();
@@ -195,12 +290,32 @@ export async function generateDailyRecap(tag: string, session: 'am' | 'pm'): Pro
 
   const date = todayEt();
 
-  // Idempotency — skip if today's session recap already exists.
+  // Idempotency — skip if today's session recap already exists. Checked BEFORE the gate
+  // so a later/duplicate fire (both runs fire at several UTC times to bracket DST) no-ops
+  // cheaply without touching the calendar.
   const existing = await sbSelect<{ date: string }>(
     supabaseUrl, serviceKey, 'macro_daily_recaps', `select=date&date=eq.${date}&session=eq.${session}`,
   );
   if (existing) {
     console.log(`${tag}: recap for ${date}/${session} already exists — skipping`);
+    return;
+  }
+
+  // Release gate. Both runs fire at multiple UTC times (to bracket their ET target across
+  // DST, since Netlify cron is UTC-only) and write only once it's ≥ the gate minute in ET;
+  // earlier fires defer, later duplicate fires no-op via the idempotency check above.
+  //   • PM: fixed gate (4:30pm ET) — fires 20:30 + 21:30 UTC.
+  //   • AM: publish early (7:50 ET) on a quiet morning, but hold until 8:33 ET on a day
+  //     with a morning high-impact econ release so the note can lead with the print.
+  //     Fires 33/50 past 11/12/13 UTC to cover both targets across DST.
+  let catalysts: CatalystRow[] | null = null;
+  let gate = opts.minEtMinutes ?? null;
+  if (opts.amDynamicGate) {
+    catalysts = await fetchCatalysts();
+    gate = isEconReleaseMorning(catalysts, date) ? opts.amDynamicGate.eventEtMin : opts.amDynamicGate.normalEtMin;
+  }
+  if (gate != null && etMinutesNow() < gate) {
+    console.log(`${tag}: ${etMinutesNow()}min ET < gate ${gate} — deferring to a later fire`);
     return;
   }
 
@@ -262,6 +377,8 @@ export async function generateDailyRecap(tag: string, session: 'am' | 'pm'): Pro
   const regime = regimeBand(envScore);
   const spyChg = spyCloses.length >= 2 ? ((spyCloses.at(-1)! / spyCloses.at(-2)!) - 1) * 100 : null;
   const qqqChg = qqqCloses.length >= 2 ? ((qqqCloses.at(-1)! / qqqCloses.at(-2)!) - 1) * 100 : null;
+  // Reuse the calendar already fetched by the AM gate; PM fetches it here.
+  catalysts = catalysts ?? await fetchCatalysts();
 
   const body: RecapBody = {
     regime: { score: regime.score, label: regime.label, tradingMode: regime.tradingMode },
@@ -286,6 +403,7 @@ export async function generateDailyRecap(tag: string, session: 'am' | 'pm'): Pro
         qqq:         (signalRow.qqq as LevelSet | null) ?? null,
       } : null,
     },
+    catalysts,
   };
 
   const prompt = session === 'am' ? buildAmPrompt(body) : buildPmPrompt(body);

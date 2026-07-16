@@ -61,11 +61,18 @@ export function ModuleHeader({ title, color = 'var(--t3)', help }: { title: stri
  * through (date-only is correct — a daily bar has no time-of-day). `updatedAt` is
  * when we last refreshed it — a real datetime, shown via fmtDateTime so every
  * module carries a full "Updated: … ET" stamp, not just a bare date.
+ *
+ * `href` makes the source label a link out to the data provider — every module
+ * footer is a clickable source, matching the GEX card (host: consistency across
+ * the board, 2026-07-13).
  */
-export function SourceNote({ source, asOf, updatedAt }: { source: string; asOf?: string | null; updatedAt?: Date | string | null }) {
+export function SourceNote({ source, href, asOf, updatedAt }: { source: string; href?: string; asOf?: string | null; updatedAt?: Date | string | null }) {
   return (
     <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 10, lineHeight: 1.4 }}>
-      {source}{asOf ? ` · data through ${formatDate(asOf)}` : ''}{updatedAt ? ` · Updated: ${fmtDateTime(updatedAt)}` : ''}
+      {href
+        ? <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--t3)', textDecoration: 'underline' }}>{source}</a>
+        : source}
+      {asOf ? ` · data through ${formatDate(asOf)}` : ''}{updatedAt ? ` · Updated: ${fmtDateTime(updatedAt)}` : ''}
     </div>
   );
 }

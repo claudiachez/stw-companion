@@ -1,11 +1,13 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { TIERS, fmtDateTime, sizingTone, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, SPACE, regimeGate, regimeExitAdvice } from '@stw/shared';
+import { TIERS, fmtDateTime, sizingTone, matchConvictionBand, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, SPACE } from '@stw/shared';
 import { useUserPositions, useIbkrSettings } from './useUserPositions';
 import { useSyncPortfolio } from './useSyncPortfolio';
 import { useHoldings } from '../picks/useHoldings';
 import { useConvictionChanges, type HoldingRef } from '../picks/useConvictionChanges';
 import { ConvictionBadge } from '../picks/components/ConvictionBadge';
+import { useTickerRegime, type TickerRegime } from '../picks/useTickerRegime';
+import { RegimeBadge } from '../picks/components/RegimeBadge';
 import { LoadingSpinner } from '../../primitives/LoadingSpinner';
 import { TickerLink } from '../../primitives/TickerLink';
 import { Badge } from '../../primitives/Badge';
@@ -17,11 +19,13 @@ import { AccordionList } from '../../primitives/AccordionList';
 import { SubNav } from '../../primitives/SubNav';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useCapabilities } from '../../context/AppCapabilities';
+import { useLiveQuotes } from '../../hooks/useLiveQuotes';
 import { ViolationsSummary } from '../limits/ViolationsSummary';
+import { useBindingGrossTarget } from '../limits/useBindingGrossTarget';
 import { useSectorMap, useRiskConfig } from '../limits/useRiskConfig';
 import { DEFAULT_RISK_CONFIG } from '../limits/api';
-import { useLatestRegime } from '../regime/useLatestRegime';
 import { RegimeLight } from '../regime/RegimeLight';
+import { useRegimeInstrumentStore, REGIME_INSTRUMENTS } from '../regime/useRegimeInstrument';
 import { useAuthStore } from '../../store/auth';
 import { PortfolioPositionDetail, type DetailGroup } from './PortfolioPositionDetail';
 import {
@@ -138,16 +142,18 @@ interface LegRowData {
   conviction: number | null;
 }
 
-function FlatLegRow({ row, onSelectTicker, showPnl, isMobile, portfolioValue }: { row: LegRowData; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean; portfolioValue: number }) {
+function FlatLegRow({ row, onSelectTicker, showPnl, isMobile, portfolioValue, regime }: { row: LegRowData; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean; portfolioValue: number; regime?: TickerRegime }) {
   const { p, underlying, isTailed, traders } = row;
   const weightPct = portfolioValue > 0 ? (posMV(p) / portfolioValue) * 100 : null;
   return (
     <tr>
       <td style={td}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           {/* Every position opens its own detail pane, tailed or not (host, 2026-07-08). */}
           <TickerLink ticker={underlying} onSelect={onSelectTicker} />
           {isTailed && traders.map((t) => <Badge key={t} kind="source" trader={t} />)}
+          {/* Compact = trend-structure chip only (matches the Stock Picks list rows). */}
+          <RegimeBadge regime={regime} compact />
         </div>
         <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 1 }}>{instrumentLabel(p)}</div>
       </td>
@@ -161,7 +167,7 @@ function FlatLegRow({ row, onSelectTicker, showPnl, isMobile, portfolioValue }: 
   );
 }
 
-function FlatTable({ rows, onSelectTicker, showPnl, isMobile, portfolioValue }: { rows: LegRowData[]; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean; portfolioValue: number }) {
+function FlatTable({ rows, onSelectTicker, showPnl, isMobile, portfolioValue, regimes }: { rows: LegRowData[]; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean; portfolioValue: number; regimes: Record<string, TickerRegime> }) {
   return (
     <div style={{ overflowX: 'auto', paddingBottom: 9 }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: FONT_SIZE.xs }}>
@@ -177,7 +183,7 @@ function FlatTable({ rows, onSelectTicker, showPnl, isMobile, portfolioValue }: 
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => <FlatLegRow key={r.p.id} row={r} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} portfolioValue={portfolioValue} />)}
+          {rows.map((r) => <FlatLegRow key={r.p.id} row={r} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} portfolioValue={portfolioValue} regime={regimes[r.underlying]} />)}
         </tbody>
       </table>
     </div>
@@ -236,8 +242,8 @@ function PositionMetrics({ group, portfolioValue, showPnl }: { group: PortfolioG
 
 // header content for a group's accordion row (ticker/badges/composition + P&L columns) —
 // the AccordionList call site below supplies this as `renderHeader`.
-function GroupHeader({ group, onSelectTicker, showPnl, isMobile, portfolioValue }: {
-  group: PortfolioGroup; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean; portfolioValue: number;
+function GroupHeader({ group, onSelectTicker, showPnl, isMobile, portfolioValue, regime }: {
+  group: PortfolioGroup; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean; portfolioValue: number; regime?: TickerRegime;
 }) {
   const { underlying, netPnl, marketValue, isTailed, traders, conviction } = group;
   const weightPct = portfolioValue > 0 ? (marketValue / portfolioValue) * 100 : null;
@@ -251,6 +257,8 @@ function GroupHeader({ group, onSelectTicker, showPnl, isMobile, portfolioValue 
           </span>
           {isTailed && traders.map((t) => <Badge key={t} kind="source" trader={t} />)}
           {conviction !== null && <ConvictionBadge level={conviction} />}
+          {/* Compact = trend-structure chip only (matches the Stock Picks list rows). */}
+          <RegimeBadge regime={regime} compact />
         </div>
         <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{composition(group)}</div>
       </div>
@@ -289,11 +297,10 @@ function SummaryChip({ severity, onClick, children }: { severity: 'info' | 'warn
   );
 }
 
-function PortfolioSummary({ groups, showPnl, regimeAdvisory, regimeAdviceText, onOpenTailing }: {
+function PortfolioSummary({ groups, showPnl, onOpenTailing, onOpenLowConviction }: {
   groups: PortfolioGroup[]; showPnl: boolean;
-  regimeAdvisory: ReturnType<typeof regimeGate> | null;
-  regimeAdviceText: string | null;
   onOpenTailing: () => void;
+  onOpenLowConviction: () => void;
 }) {
   const t = useMemo(() => {
     let mv = 0, pnl = 0, cost = 0, legs = 0, sharesVal = 0, optVal = 0, optRisk = 0, tailed = 0, low = 0;
@@ -322,6 +329,9 @@ function PortfolioSummary({ groups, showPnl, regimeAdvisory, regimeAdviceText, o
 
   return (
     <>
+      {/* Regime read lives on the Risk tab (RegimeLight) — removed from Overview
+          (host 2026-07-11) to keep the header to the KPI row. */}
+
       {/* Every card reads the same: hero number · qualifier (delta) · uppercase label. */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         <div style={{ flex: 1, minWidth: 104 }} title="Open positions, grouped by underlying">
@@ -354,14 +364,6 @@ function PortfolioSummary({ groups, showPnl, regimeAdvisory, regimeAdviceText, o
             primaryValue={t.equityPct !== null ? `${t.equityPct}%` : '—'}
             secondaryValue={t.optionsPct !== null ? `/ ${t.optionsPct}%` : undefined}
           />
-          {regimeAdvisory && regimeAdvisory.trend_state !== 'UNKNOWN' && (
-            <div
-              style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[1.5], fontStyle: 'italic' }}
-              title="Advisory — under forward validation. Not a trade signal."
-            >
-              Regime: {regimeAdvisory.trend_state}{regimeAdviceText ? ` · ${regimeAdviceText}` : ''}
-            </div>
-          )}
         </div>
         {showPnl && (
           <div
@@ -383,7 +385,7 @@ function PortfolioSummary({ groups, showPnl, regimeAdvisory, regimeAdviceText, o
             <span><strong style={{ color: 'var(--text)' }}>{t.tailed}</strong> of {positionCount} tailed{traderSummary ? ` · ${traderSummary}` : ''}</span>
           </SummaryChip>
           {t.low > 0 && (
-            <SummaryChip severity="warning" onClick={onOpenTailing}>
+            <SummaryChip severity="warning" onClick={onOpenLowConviction}>
               <span>⚠ {t.low} with low / declining conviction</span>
             </SummaryChip>
           )}
@@ -590,7 +592,12 @@ export function PortfolioPage() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [showPnl, setShowPnl] = useState(true);
   const [filters, setFilters] = useState<PortfolioFilters>(DEFAULT_PORTFOLIO_FILTERS);
-  const [activeTab, setActiveTab] = useState<PortfolioTab>('overview');
+  // Persist the sub-tab in the URL (?tab=) so a refresh keeps you where you were,
+  // instead of snapping back to Overview.
+  const [activeTab, setActiveTab] = useState<PortfolioTab>(() => {
+    const t = new URLSearchParams(window.location.search).get('tab');
+    return PORTFOLIO_TABS.some((x) => x.value === t) ? (t as PortfolioTab) : 'overview';
+  });
   const capabilities = useCapabilities();
 
   // Own-position detail pane (list+detail pattern, mirroring PicksView.tsx) — desktop
@@ -632,15 +639,11 @@ export function PortfolioPage() {
     [convictionBatch, pickMap, heldUnderlyings],
   );
 
-  // Advisory regime note (value-add) — same STW→IWM proxy + regimeGate() as the admin's
-  // RegimeLight, framed identically as advisory-only, never an instruction.
-  const { data: regimeRow } = useLatestRegime('IWM');
-  const regimeAdvisory = regimeRow ? regimeGate(
-    { close: regimeRow.close, sma200: regimeRow.sma200 },
-    { vixClose: regimeRow.vix_close, vix3mClose: regimeRow.vix3m_close },
-  ) : null;
-  // The viewer's own REGIME_EXIT rule (per-user, migration 063) — falls back to the
-  // shared defaults for a user without a config row yet. Advisory / display-only.
+  // The viewer's regime-light index (default IWM = STW's proxy; user can prefer
+  // SPY/QQQ) + their own REGIME_EXIT rule (migration 063) — both used by the
+  // Risk-tab RegimeLight below. Advisory / display-only.
+  const regimeInstrument = useRegimeInstrumentStore((s) => s.instrument);
+  const setRegimeInstrument = useRegimeInstrumentStore((s) => s.setInstrument);
   const regimeUserId = useAuthStore((s) => s.user?.id);
   const { data: regimeRiskConfig } = useRiskConfig(regimeUserId);
   const regimeExitRule = {
@@ -648,7 +651,10 @@ export function PortfolioPage() {
     stopPct: regimeRiskConfig?.regime_stop_pct ?? DEFAULT_RISK_CONFIG.regime_stop_pct,
     doubleRedGrossPct: regimeRiskConfig?.regime_doublered_gross_pct ?? DEFAULT_RISK_CONFIG.regime_doublered_gross_pct,
   };
-  const regimeAdviceText = regimeAdvisory ? regimeExitAdvice(regimeAdvisory, regimeExitRule) : null;
+  // One reconciliation of the drawdown ladder vs the double-RED regime target, computed
+  // once here and passed to BOTH the RegimeLight and ViolationsSummary so they show the
+  // identical binding gross number (never two conflicting targets).
+  const bindingGross = useBindingGrossTarget(regimeRiskConfig, regimeInstrument);
 
   const allGroups = useMemo<PortfolioGroup[]>(() => {
     const map = new Map<string, UserPosition[]>();
@@ -684,6 +690,26 @@ export function PortfolioPage() {
 
   const portfolioValue = useMemo(() => allGroups.reduce((s, g) => s + g.marketValue, 0), [allGroups]);
 
+  // Per-ticker technical read (own 9/21/200 trend structure + sector-rotation
+  // standing) — the same RegimeBadge shown on the Stock Picks list/detail, now on
+  // the list rows (compact = trend chip) + the detail pane header. One batched
+  // TwelveData/Finnhub pass for the held underlyings (same pattern as PicksView).
+  const portfolioTickers = useMemo(
+    () => [...new Set(positions.map((p) => cleanUnderlying(p.underlying)))].filter((t) => t !== 'CASH'),
+    [positions],
+  );
+  // Populate the shared live-price cache for the held book so the Positions list + the
+  // detail pane's Current Price read Finnhub, not the stored IBKR mark (same source as
+  // Stock Picks — the page just wasn't fetching quotes before).
+  useLiveQuotes(portfolioTickers, capabilities.finnhubKey);
+  // Include the chosen regime index so the Risk tab can show ITS 9/21/200 structure
+  // (the same batched pass; the index just isn't a list row).
+  const regimeTickers = useMemo(
+    () => [...new Set([regimeInstrument, ...portfolioTickers])],
+    [regimeInstrument, portfolioTickers],
+  );
+  const { regimes } = useTickerRegime(regimeTickers, capabilities.finnhubKey, capabilities.twelveDataKey);
+
   // Heatmap cells — box ∝ market value, colored by total unrealized return. No "Today"
   // mode: the subscriber Flex feed carries no day-change field (positions render from the
   // stored sync, not a live quote). Untailed names group under "Other" in By-Basket view;
@@ -706,20 +732,34 @@ export function PortfolioPage() {
     if (allGroups.some((g) => g.underlying === upper)) {
       setSelected(upper);
       setActiveTab('positions');
+      setSearchParams({ tab: 'positions' }, { replace: true }); // drop ?ticker, keep the tab
+      return;
     }
-    setSearchParams({}, { replace: true });
+    setSearchParams((prev) => { const p = new URLSearchParams(prev); p.delete('ticker'); return p; }, { replace: true });
   }, [searchParams, allGroups, setSearchParams]);
   const baskets = useMemo(
     () => [...new Set(allGroups.filter((g) => g.isTailed && g.basket).map((g) => g.basket))].sort(),
     [allGroups],
   );
+  // GICS market sectors present in the held book (from the shared ticker_sector_map).
+  const sectors = useMemo(
+    () => [...new Set(allGroups.map((g) => sectorMap?.[g.underlying]).filter((s): s is string => !!s))].sort(),
+    [allGroups, sectorMap],
+  );
 
-  const matchFilters = (underlying: string, isTailed: boolean, basket: string, isOpt: boolean) => {
+  const matchFilters = (underlying: string, isTailed: boolean, basket: string, isOpt: boolean, conviction: number | null, regime: TickerRegime | undefined) => {
     const q = filters.search.trim().toUpperCase();
     if (filters.tailedOnly && !isTailed) return false;
     if (filters.type === 'stocks' && isOpt) return false;
     if (filters.type === 'options' && !isOpt) return false;
     if (filters.basket && basket !== filters.basket) return false;
+    if (!matchConvictionBand(conviction, filters.conviction)) return false;
+    if (filters.sector && (sectorMap?.[underlying] ?? '') !== filters.sector) return false;
+    // Trend structure + sector-regime read from the per-ticker technical pass. When a
+    // band is chosen and the regime is still loading/unknown, the row is excluded (it
+    // genuinely isn't a match yet) — the count reflects only confirmed matches.
+    if (filters.structure && regime?.bucket !== filters.structure) return false;
+    if (filters.standing && regime?.standing !== filters.standing) return false;
     if (q && !underlying.toUpperCase().includes(q)) return false;
     return true;
   };
@@ -728,7 +768,7 @@ export function PortfolioPage() {
 
   // grouped view rows
   const visibleGroups = useMemo<PortfolioGroup[]>(() => {
-    const filtered = allGroups.filter((g) => matchFilters(g.underlying, g.isTailed, g.basket, g.hasOption && !g.hasStock));
+    const filtered = allGroups.filter((g) => matchFilters(g.underlying, g.isTailed, g.basket, g.hasOption && !g.hasStock, g.conviction, regimes[g.underlying]));
     return [...filtered].sort((a, b) => {
       switch (filters.sort) {
         case 'pnl_desc': case 'pnl_asc': return (a.netPnl - b.netPnl) * dir;
@@ -740,7 +780,7 @@ export function PortfolioPage() {
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allGroups, filters]);
+  }, [allGroups, filters, regimes, sectorMap]);
 
   // flat per-leg rows (default view)
   const visibleLegs = useMemo<LegRowData[]>(() => {
@@ -748,7 +788,7 @@ export function PortfolioPage() {
       const underlying = cleanUnderlying(p.underlying);
       const pick = pickMap.get(underlying);
       return { p, underlying, isTailed: !!pick, traders: pick?.traders ?? [], conviction: pick?.conviction ?? null, basket: pick?.basket ?? '' };
-    }).filter((r) => matchFilters(r.underlying, r.isTailed, r.basket, r.p.asset_class === 'OPT'));
+    }).filter((r) => matchFilters(r.underlying, r.isTailed, r.basket, r.p.asset_class === 'OPT', r.conviction, regimes[r.underlying]));
     return rows.sort((a, b) => {
       switch (filters.sort) {
         case 'pnl_desc': case 'pnl_asc': return (nl(a.p.unrealized_pnl) - nl(b.p.unrealized_pnl)) * dir;
@@ -760,7 +800,7 @@ export function PortfolioPage() {
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [positions, pickMap, filters]);
+  }, [positions, pickMap, filters, regimes, sectorMap]);
 
   const lastSynced = useMemo(() => {
     if (lastResult) return lastResult.lastSyncedAt;
@@ -824,6 +864,7 @@ export function PortfolioPage() {
         ownPortfolioPct={portfolioValue > 0 ? (selectedGroup.marketValue / portfolioValue) * 100 : null}
         stwWeight={pickMap.get(selectedGroup.underlying)?.stwWeight ?? null}
         showPnl={showPnl}
+        tickerRegime={regimes[selectedGroup.underlying]}
         onClose={() => setSelected(null)}
         onViewStwPosition={onViewStwPosition}
       />
@@ -832,10 +873,11 @@ export function PortfolioPage() {
 
   const changeTab = (t: PortfolioTab) => {
     setActiveTab(t);
+    setSearchParams((prev) => { const p = new URLSearchParams(prev); p.set('tab', t); return p; }, { replace: true });
     if (t !== 'positions') setSelected(null); // the detail pane belongs to Positions only
   };
   // From Overview's top-movers: jump to the position's detail on the Positions tab.
-  const openPosition = (ticker: string) => { setSelected(ticker); setActiveTab('positions'); };
+  const openPosition = (ticker: string) => { setSelected(ticker); changeTab('positions'); };
 
   // Global controls — sync status + P&L visibility + Sync — available on every tab.
   const globalControls = (
@@ -903,7 +945,17 @@ export function PortfolioPage() {
           ⚠ {decliningTailed.length} tailed position{decliningTailed.length !== 1 ? 's have' : ' has'} declining STW conviction: {decliningTailed.map((c) => c.ticker).join(', ')}
         </div>
       )}
-      <PortfolioSummary groups={allGroups} showPnl={showPnl} regimeAdvisory={regimeAdvisory} regimeAdviceText={regimeAdviceText} onOpenTailing={() => changeTab('tailing')} />
+      <PortfolioSummary
+        groups={allGroups}
+        showPnl={showPnl}
+        onOpenTailing={() => changeTab('tailing')}
+        onOpenLowConviction={() => {
+          // Jump to Positions with the conviction filter pre-applied to exactly the
+          // chip's set (tiers 1–2), so the user lands on the flagged positions.
+          setFilters({ ...DEFAULT_PORTFOLIO_FILTERS, conviction: 'low' });
+          changeTab('positions');
+        }}
+      />
       {showPnl && <TopMovers groups={allGroups} onOpenPosition={openPosition} />}
       {/* Heatmap colors by return, so it follows the P&L-visibility toggle like Top Movers. */}
       {showPnl && heatmapCells.length > 0 && (
@@ -916,13 +968,36 @@ export function PortfolioPage() {
 
   const riskBody = (
     <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)', padding: pad }}>
-      {/* Advisory regime light — shown to every portfolio user (defaults until they set
-          their own rule in Settings), above the Premium-gated limits below. */}
-      <div style={{ marginBottom: SPACE[4] }}>
-        <RegimeLight instrument="IWM" exitRule={regimeExitRule} />
+      {/* Advisory regime light — shown to every portfolio user, driven by their
+          chosen index (default IWM = STW's proxy; picker below persists per-user). */}
+      <div style={{ marginBottom: SPACE[4], display: 'flex', flexDirection: 'column', gap: SPACE[2] }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>Regime index</span>
+          {/* Chips (same style as the Trend / Market Structure indicator toggles), not a dropdown. */}
+          {REGIME_INSTRUMENTS.map((o) => {
+            const active = regimeInstrument === o.value;
+            return (
+              <button
+                key={o.value}
+                onClick={() => setRegimeInstrument(o.value)}
+                title={o.label}
+                style={{
+                  fontSize: FONT_SIZE.xs, padding: '2px 10px', borderRadius: 4, border: '1px solid var(--border)',
+                  background: active ? 'var(--acc)' : 'transparent',
+                  color: active ? 'var(--text-inverse)' : 'var(--t2)', cursor: 'pointer', fontWeight: FONT_WEIGHT.semibold,
+                }}
+              >
+                {o.value}
+              </button>
+            );
+          })}
+        </div>
+        {/* One consolidated card: the frozen gate + the index's live 9/21/200
+            structure, so there's no second block with a conflicting close. */}
+        <RegimeLight instrument={regimeInstrument} exitRule={regimeExitRule} structure={regimes[regimeInstrument]} bindingGross={bindingGross} />
       </div>
       {capabilities.canUseLimits ? (
-        <ViolationsSummary />
+        <ViolationsSummary settingsTo="/settings" bindingGross={bindingGross} />
       ) : (
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '12px 16px', fontSize: FONT_SIZE.sm, color: 'var(--t3)' }}>
           <strong style={{ color: 'var(--text)' }}>Risk limits 🔒</strong> — flag concentration and
@@ -943,7 +1018,7 @@ export function PortfolioPage() {
       {/* Filter toolbar — scoped to Positions only */}
       <div style={{ display: 'flex', alignItems: 'center', background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', flexShrink: 0, overflowX: 'auto', WebkitOverflowScrolling: 'touch' as never }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', minWidth: 'max-content' }}>
-          <PortfolioFilterBar filters={filters} onChange={setFilters} baskets={baskets} filtered={visibleCount} total={totalCount} />
+          <PortfolioFilterBar filters={filters} onChange={setFilters} baskets={baskets} sectors={sectors} filtered={visibleCount} total={totalCount} />
         </div>
       </div>
       <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)', padding: pad }}>
@@ -973,7 +1048,7 @@ export function PortfolioPage() {
                 onToggle={toggleGroup}
                 accentColor={(g) => (g.conviction !== null ? (TIERS[g.conviction]?.color ?? 'var(--border)') : 'var(--border)')}
                 renderHeader={(g) => (
-                  <GroupHeader group={g} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} portfolioValue={portfolioValue} />
+                  <GroupHeader group={g} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} portfolioValue={portfolioValue} regime={regimes[g.underlying]} />
                 )}
                 renderExpanded={(g) => (
                   <>
@@ -984,7 +1059,7 @@ export function PortfolioPage() {
               />
             </>
           ) : (
-            <FlatTable rows={visibleLegs} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} portfolioValue={portfolioValue} />
+            <FlatTable rows={visibleLegs} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} portfolioValue={portfolioValue} regimes={regimes} />
           )}
         </div>
       </div>

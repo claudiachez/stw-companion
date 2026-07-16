@@ -11,6 +11,7 @@ import { fredBatch, loadFredLastDate } from './fredCache';
 
 export interface RatesDollar {
   us10y: number | null;        // yield %
+  us10yDelta1: number | null;  // yield points vs yesterday's close
   us10yDelta5: number | null;  // yield points over 5 trading days
   dollar: number | null;       // broad dollar index level
   dollarAbove9: boolean | null;
@@ -35,6 +36,7 @@ export function useRatesDollar(stressRising: boolean) {
       // US10Y via FRED DGS10 (yield %, no normalization needed).
       const tnxCloses = closes[FRED_SERIES.us10y] ?? [];
       const us10y = tnxCloses.length ? tnxCloses[tnxCloses.length - 1] : null;
+      const us10yDelta1 = tnxCloses.length >= 2 ? tnxCloses[tnxCloses.length - 1] - tnxCloses[tnxCloses.length - 2] : null;
       const us10yDelta5 = tnxCloses.length >= 6 ? tnxCloses[tnxCloses.length - 1] - tnxCloses[tnxCloses.length - 6] : null;
 
       // Dollar via FRED DTWEXBGS broad index vs its 9/21D MAs.
@@ -52,7 +54,7 @@ export function useRatesDollar(stressRising: boolean) {
       const sleeveScore = ratesDollarScore([subScores.us10y, subScores.dollar]);
 
       if (!cancelled) {
-        setData({ us10y, us10yDelta5, dollar, dollarAbove9, dollarAbove21, subScores, sleeveScore, asOf: loadFredLastDate(FRED_SERIES.us10y), updatedAt: new Date().toISOString() });
+        setData({ us10y, us10yDelta1, us10yDelta5, dollar, dollarAbove9, dollarAbove21, subScores, sleeveScore, asOf: loadFredLastDate(FRED_SERIES.us10y), updatedAt: new Date().toISOString() });
         setLoading(false);
       }
     }

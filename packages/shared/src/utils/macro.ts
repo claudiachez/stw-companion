@@ -1,6 +1,6 @@
 import type {
   TrendBucket, RegimeSleeveKey, RegimeLabel, RegimeRead, TrendDirection,
-  MacroEvent, EventImportance, EventRiskLevel, EventOverlayState, EventRiskRead,
+  MacroEvent, EventImportance, EventOverlayState, EventRiskRead,
   SectorRotationRow,
 } from '../types/macro';
 
@@ -422,10 +422,11 @@ export function eventImportance(eventName: string): EventImportance {
   return 'low';
 }
 
-/** First numeric token in a calendar print, e.g. "0.4%" → 0.4, "175K" → 175. */
+/** First numeric token in a calendar print, e.g. "0.4%" → 0.4, "175K" → 175,
+ *  "1,400K" → 1400 (thousands separators stripped first). */
 function parseEventValue(s: string | null | undefined): number | null {
   if (!s) return null;
-  const m = s.match(/-?\d+(\.\d+)?/);
+  const m = s.replace(/,/g, '').match(/-?\d+(\.\d+)?/);
   return m ? parseFloat(m[0]) : null;
 }
 
@@ -436,9 +437,40 @@ export function eventSurprise(actual: string | null, consensus: string | null): 
   return a === null || c === null ? null : a - c;
 }
 
+export type EventPrintDir = 'up' | 'down' | 'flat';
+export interface EventPrintTrend {
+  /** Which way the number moved vs the previous print — drives the arrow glyph. */
+  dir: EventPrintDir;
+  /** Whether that move is favorable for markets — drives the arrow COLOR. `neutral`
+   *  when the move is flat or the metric carries no favorability convention. */
+  favorable: 'good' | 'bad' | 'neutral';
+}
+
+/**
+ * Compare a released print's actual vs its previous value into a direction + favorability,
+ * WITHOUT a consensus (FRED publishes none). `lowerIsBetter` encodes the metric's market
+ * read: inflation prints improve when they FALL; growth/jobs/sentiment when they RISE.
+ * The arrow points the way the number moved; the color says whether that's good or bad.
+ * Returns null when either value is missing or non-numeric (e.g. FOMC, pre-release).
+ */
+export function eventPrintTrend(
+  actual: string | null | undefined,
+  previous: string | null | undefined,
+  lowerIsBetter: boolean | undefined,
+): EventPrintTrend | null {
+  const a = parseEventValue(actual ?? null);
+  const p = parseEventValue(previous ?? null);
+  if (a === null || p === null) return null;
+  if (a === p) return { dir: 'flat', favorable: 'neutral' };
+  const dir: EventPrintDir = a > p ? 'up' : 'down';
+  if (lowerIsBetter === undefined) return { dir, favorable: 'neutral' };
+  const improved = lowerIsBetter ? a < p : a > p;
+  return { dir, favorable: improved ? 'good' : 'bad' };
+}
+
 const EVENT_WATCH_HOURS = 48;
 const HIGH_RISK_HOURS = 24;
-const REACTION_OVERLAY_HOURS = 72; // ~1-3 trading days; fades after unless structure changed
+const REACTION_OVERLAY_HOURS = 48; // ~2 trading days post-release; fades after unless structure changed
 const SHOCK_RELATIVE_SURPRISE = 0.2; // |surprise| ≥ 20% of |consensus| reads as a meaningful beat/miss
 
 function hoursBetween(aIso: string, bMs: number): number {
@@ -447,46 +479,58 @@ function hoursBetween(aIso: string, bMs: number): number {
 
 /**
  * Classify the current event-risk overlay from a list of calendar rows.
- * A released event (has `actual`) drives a Reaction Overlay for up to ~3
- * trading days; otherwise the nearest upcoming Very-High/High event sets
- * Event Watch (24-48h out) or High Event Risk (within 24h). No major event
- * within 48h → 'none'/'low'.
+ *
+ * A just-released major event drives a **Reaction Overlay** for up to ~48h (~2
+ * trading days) — this fires on the release TIME passing, NOT on an `actual` value being
+ * present (the FRED calendar publishes dates only; the print is attached
+ * separately and may lag the release by minutes). Otherwise the nearest upcoming
+ * Very-High/High event sets High Event Risk (≤24h) or Event Watch (≤48h).
+ *
+ * When both a just-released and an upcoming major exist, the temporally CLOSEST
+ * one is the headline (CPI 30 min ago beats NFP 20h out; NFP in 3h beats CPI 2
+ * days ago) — so the card tracks whatever the market is actually reacting to or
+ * bracing for right now. No major within the windows → nearest upcoming any /
+ * 'none'.
  */
 export function classifyEventRisk(events: MacroEvent[], now: Date = new Date()): EventRiskRead {
   const nowMs = now.getTime();
+  const isMajor = (e: MacroEvent) => e.importance === 'very_high' || e.importance === 'high';
+  const withDist = events.map((e) => ({ e, hoursOut: hoursBetween(e.releaseTimeEt, nowMs) }));
 
-  const releasedRecent = events
-    .filter((e) => e.actual !== null && e.actual !== '')
-    .map((e) => ({ e, ageHours: -hoursBetween(e.releaseTimeEt, nowMs) }))
-    .filter((x) => x.ageHours >= 0 && x.ageHours <= REACTION_OVERLAY_HOURS)
-    .sort((a, b) => a.ageHours - b.ageHours);
+  // Most-recently-released major, within the reaction window (release time passed).
+  const recentMajor = withDist
+    .filter((x) => isMajor(x.e) && x.hoursOut <= 0 && -x.hoursOut <= REACTION_OVERLAY_HOURS)
+    .sort((a, b) => b.hoursOut - a.hoursOut)[0]; // hoursOut ≤ 0; nearest to 0 = most recent
+  // Soonest upcoming major within the watch window.
+  const nextMajor = withDist
+    .filter((x) => isMajor(x.e) && x.hoursOut >= 0 && x.hoursOut <= EVENT_WATCH_HOURS)
+    .sort((a, b) => a.hoursOut - b.hoursOut)[0];
 
-  if (releasedRecent.length > 0) {
-    const { e } = releasedRecent[0];
+  const pastDist = recentMajor ? -recentMajor.hoursOut : Infinity;   // hours since release
+  const futureDist = nextMajor ? nextMajor.hoursOut : Infinity;      // hours until release
+
+  // Whichever major is temporally closest is the headline.
+  if (recentMajor && pastDist <= futureDist) {
+    const e = recentMajor.e;
     const surprise = eventSurprise(e.actual, e.consensus);
     const consensusVal = parseEventValue(e.consensus);
     const relSurprise = surprise !== null && consensusVal !== null
       ? Math.abs(surprise) / Math.max(Math.abs(consensusVal), 0.01)
       : null;
     const isShock = relSurprise !== null && relSurprise >= SHOCK_RELATIVE_SURPRISE;
-    const riskLevel: EventRiskLevel = isShock ? 'shock' : e.importance === 'very_high' || e.importance === 'high' ? 'high' : 'medium';
-    return { overlay: 'reaction_overlay', riskLevel, event: e, surprise };
+    return { overlay: 'reaction_overlay', riskLevel: isShock ? 'shock' : 'high', event: e, surprise };
   }
-
-  const upcoming = events
-    .filter((e) => e.actual === null || e.actual === '')
-    .map((e) => ({ e, hoursOut: hoursBetween(e.releaseTimeEt, nowMs) }))
-    .filter((x) => x.hoursOut >= 0)
-    .sort((a, b) => a.hoursOut - b.hoursOut);
-
-  const nextMajor = upcoming.find((x) => x.e.importance === 'very_high' || x.e.importance === 'high');
-  if (nextMajor && nextMajor.hoursOut <= HIGH_RISK_HOURS) {
+  if (nextMajor && futureDist <= HIGH_RISK_HOURS) {
     return { overlay: 'high_event_risk', riskLevel: 'high', event: nextMajor.e, surprise: null };
   }
-  if (nextMajor && nextMajor.hoursOut <= EVENT_WATCH_HOURS) {
+  if (nextMajor) {
     return { overlay: 'event_watch', riskLevel: 'medium', event: nextMajor.e, surprise: null };
   }
-  const nextAny = upcoming[0] ?? null;
+
+  // No major in the windows — surface the nearest upcoming event (any importance).
+  const nextAny = withDist
+    .filter((x) => x.hoursOut >= 0)
+    .sort((a, b) => a.hoursOut - b.hoursOut)[0] ?? null;
   if (nextAny && nextAny.hoursOut <= EVENT_WATCH_HOURS) {
     return { overlay: 'event_watch', riskLevel: 'medium', event: nextAny.e, surprise: null };
   }

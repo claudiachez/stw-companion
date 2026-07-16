@@ -124,17 +124,21 @@ Event-sourced positions: **`leg_transactions`** (the diary — the only hand-wri
 | `leg_transactions` / `legs` | routines + admin ledger (write only `leg_transactions`; `legs` is trigger-derived) | Transaction History ledger, per-leg P&L split (shares vs options) |
 | `holding_transactions` | **DB trigger** (migration 033) — never written directly | audit trail |
 | `conviction_comments` | routines + `stw-transcripts` (explicit appends; `source` = `discord`/`streaming`); users can add notes | Ticker Details — Commentary |
-| `signals` | **morning routine** (Graddox step) | GEX signals panel + Macro GEX module |
+| `signals` | **morning routine** (Graddox step) | GEX Signals panel (Signals tab) |
+| `gex_snapshots` | **`gex-snapshot`** scheduled fn (web, FlashAlpha SPY, migration 067) | Macro GEX / Positioning module (replaced Graddox there 2026-07-10) |
 | `run_log` | routines + scheduled Netlify writers | "Latest Portfolio Changes"; ingestion audit |
 | `ticker_sector_map` | **`sector-map-sync`** fn + one-off migration | GICS sector (Risk concentration, heatmap, detail pane) |
 | `macro_daily_snapshots` / `macro_daily_recaps` / `regime_daily` | scheduled Netlify fns | Macro 5D engine / recap / regime gate |
-| `risk_config` / `risk_violation_acks` | subscriber Settings | My Portfolio Risk tab |
-| `user_positions` | web `ibkr-flex.ts` (user-owned RLS) | My Portfolio |
+| `risk_config` / `risk_violation_acks` | subscriber Settings; **`ibkr_nlv` written by the Flex sync** (NAV section) | My Portfolio Risk tab |
+| `user_positions` | web IBKR Flex pipeline — `_lib/flex-core.ts` via `ibkr-flex.ts` (interactive) + `ibkr-sync-cron.ts` (nightly, prod-only) (user-owned RLS) | My Portfolio |
+| `user_executions` | same pipeline `<Trades>` (append-only), **plus `ibkr-import.ts`** one-time XML upload in *refresh* mode (updates existing fills, e.g. backfills prices) (user-owned RLS) | TCA (`scripts/tca.mjs`, admin/CLI) |
+| `regime_exit_audit` | `risk_config` trigger (user-owned RLS) | audit trail of REGIME_EXIT edits |
 | `profiles` / `tiers` | auth + Settings | AccessGate paywall, Settings |
 | `app_config` | admin Config page | sizing/capital defaults, IBKR kill switch, regime sleeve weights |
 
 **RLS:** `holdings`/`signals` writes restricted to `cc@claudiachez.com` (routines bypass via
-service-role key). `user_positions` / `risk_config` are user-owned.
+service-role key). `user_positions` / `user_executions` / `risk_config` / `regime_exit_audit` are
+user-owned (DB-layer multi-tenancy proven on PROD 2026-07-10 — see `docs/launch_gates.md`).
 
 ---
 
@@ -142,7 +146,8 @@ service-role key). `user_positions` / `risk_config` are user-owned.
 
 A weighted **Market Regime** read (Trend 30% · Volatility 20% · Credit 15% · Rates+Dollar 15% · GEX 20%,
 admin-configurable) plus supporting modules. Macro **index** indicators come from **FRED** (VIX, VIX3M,
-US10Y, HY-OAS credit, dollar) via a server-side proxy; equity closes from TwelveData; GEX from `signals`.
+US10Y, HY-OAS credit, dollar) via a server-side proxy; equity closes from TwelveData; GEX from
+`gex_snapshots` (FlashAlpha SPY, written by the `gex-snapshot` scheduled fn — replaced Graddox 2026-07-10).
 Event Risk uses FRED's release calendar + a static FOMC list. Full feed detail:
 [`docs/feeds.md`](feeds.md); subscriber help: `docs/macro_dashboard_guide.md`.
 

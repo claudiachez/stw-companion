@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@stw/functions": "workspace:*",
     "@stw/shared": "workspace:*",
     "@stw/ui": "workspace:*",
     "@supabase/supabase-js": "^2.45.4",

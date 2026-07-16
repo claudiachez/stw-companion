@@ -48,7 +48,7 @@ import { schedule } from '@netlify/functions';
 import {
   trendBucket, trendSleeveScore, environmentScore,
   vixScore, ivPremiumScore, vixDirectionScore, volatilityStressScore, hv30,
-  creditOasScore, us10yScore, uupScore, ratesDollarScore, gexScore, breadthScore,
+  creditOasScore, us10yScore, uupScore, ratesDollarScore, breadthScore,
   classifyEventRisk, riskAppetiteScore, SLEEVE_WEIGHTS,
   buildFredUrl, parseFredObservations, runPaced, FEED_LIMITS, FRED_SERIES,
 } from '@stw/shared';
@@ -185,6 +185,22 @@ async function sbInsert(url: string, key: string, table: string, row: Record<str
   } catch { /* run_log is best-effort — never let a logging failure mask the real result */ }
 }
 
+// Trading-day guard — the shared market calendar (migration 068) via the
+// is_trading_day RPC. Weekends are already excluded by the cron (`* 1-5`); this
+// catches NYSE holidays. Fails OPEN (returns true) if the RPC is unavailable — a
+// calendar outage must never silently stop writing market data.
+async function isTradingDay(url: string, key: string, dateStr: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${url.replace(/\/$/, '')}/rest/v1/rpc/is_trading_day`, {
+      method: 'POST',
+      headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ d: dateStr }),
+    });
+    if (!res.ok) return true;
+    return (await res.json()) !== false;
+  } catch { return true; }
+}
+
 // 2.0.0: macro indices moved to FRED (VIX/US10Y/dollar) + real HY OAS credit,
 // VVIX removed — a stored score's provenance changes, so the version bumps.
 const ENGINE_VERSION = 'macro-snapshot-2.0.0';
@@ -203,6 +219,14 @@ const handlerImpl: Handler = async () => {
   }
 
   const runLogBase = { run_type: 'macro-snapshot' };
+
+  // Don't write a snapshot on a market holiday (the trajectory reader also filters
+  // these, but the writer shouldn't create them in the first place).
+  const todayET = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  if (!(await isTradingDay(supabaseUrl, serviceKey, todayET))) {
+    await sbInsert(supabaseUrl, serviceKey, 'run_log', { ...runLogBase, status: 'ok', messages_processed: 0, summary: `skipped ${todayET} — not a trading day` });
+    return { statusCode: 200, body: JSON.stringify({ skipped: todayET, reason: 'not a trading day' }) };
+  }
 
   try {
   // ── Fetch equity trend ETFs from TwelveData (paced ≤8/65s) and the macro
@@ -266,16 +290,14 @@ const handlerImpl: Handler = async () => {
     dollarAbove9 !== null && dollarAbove21 !== null ? uupScore(dollarAbove9, dollarAbove21) : null,
   ]);
 
-  // ── Module 8: GEX (from Supabase signals, written by the morning routine) ──
-  let gexBias: string | null = null;
-  try {
-    const trader = await sbGet<{ id: string }>(supabaseUrl, serviceKey, 'traders', 'select=id&name=eq.Graddox');
-    if (trader?.id) {
-      const signal = await sbGet<{ bias: string }>(supabaseUrl, serviceKey, 'signals', `select=bias&trader_id=eq.${trader.id}&order=date.desc`);
-      gexBias = signal?.bias ?? null;
-    }
-  } catch { /* ignore — gexScore(null) below */ }
-  const gexSc = gexScore(gexBias);
+  // ── Module 8: GEX (from gex_snapshots, written by the gex-snapshot fn from
+  //    the SPX Gamma Edge newsletter) — read the persisted sleeve score so this
+  //    stored history and the live UI agree on the same number. ──
+  const gexRow = await sbGet<{ sleeve_score: number | null }>(
+    supabaseUrl, serviceKey, 'gex_snapshots',
+    'select=sleeve_score&symbol=eq.SPX&order=snapshot_date.desc,session.desc',
+  );
+  const gexSc = gexRow?.sleeve_score ?? null;
 
   // ── Module 9: Risk Appetite gauge — same weighted inputs as
   //    useSentimentGauge.ts, via the shared riskAppetiteScore() so the

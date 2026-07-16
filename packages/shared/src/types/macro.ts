@@ -86,6 +86,11 @@ export interface MacroEvent {
   actual: string | null;
   consensus: string | null;
   previous: string | null;
+  /** Market read of the metric's direction: true = a LOWER print is better (inflation),
+   *  false = a HIGHER print is better (growth/jobs/sentiment). Undefined when the metric
+   *  has no clear favorability (or no numeric print, e.g. FOMC). Drives the actual-vs-
+   *  previous favorability arrow, since FRED gives no consensus to compute a surprise. */
+  lowerIsBetter?: boolean;
   importance: EventImportance;
   /** Where this row was scraped from, e.g. "MarketWatch", "FXStreet". */
   source: string;
@@ -125,8 +130,8 @@ export interface MacroDailyRecap {
   headline: string;
   /** Main narrative — 2–3 paragraphs separated by blank lines. */
   verdict: string;
-  /** The dominant story / rotation / setup. */
-  bigStory: string;
+  /** @deprecated No longer generated or rendered (removed 2026-07-15). Kept optional so stored recaps still type-check. */
+  bigStory?: string;
   /** Bull / base / bear reads for the session or next day ahead. */
   scenarios: { bull: string; base: string; bear: string };
   /** Actionable game plan — levels to watch, setups in play. */

@@ -11,12 +11,24 @@ export interface RiskConfigRow {
   is_placeholder: boolean;
   /** Account Net Liquidation Value (or equivalent) — DB defaults to a $100,000 placeholder (migration 059), flagged via is_placeholder until the user overrides it. */
   account_equity: number;
-  /** Trigger-maintained high-water mark of account_equity — never decreases (migration 059). */
+  /** RAW ibkr_nlv at the cash-flow-adjusted high-water mark — driven by live broker equity, NOT account_equity (migration 071, rebuilt from 059). Null until the first NAV sync. */
   equity_peak: number | null;
+  /** cumulative_cashflow as of when equity_peak was set — lets drawdown count only cash flow SINCE the peak (migration 071). */
+  equity_peak_cashflow: number | null;
+  /** Running net external cash flow (deposits +, withdrawals −) from ChangeInNAV, written by the full-history import only (migration 071). Null until an import lands. */
+  cumulative_cashflow: number | null;
+  cumulative_cashflow_at: string | null;
+  /** Live account equity (Net Liquidation Value, incl. margin) from the IBKR Flex NAV sync — the PREFERRED limits denominator (migration 070). Null until the first NAV sync lands. */
+  ibkr_nlv: number | null;
+  ibkr_nlv_at: string | null;
   /** Per-user REGIME_EXIT rule (advisory, migration 063): single-RED → trim to this % / tighten stops to regime_stop_pct; double-RED → reduce gross to regime_doublered_gross_pct. Display-only. */
   regime_trim_to_pct: number;
   regime_stop_pct: number;
   regime_doublered_gross_pct: number;
+  /** Vol-targeted sizing config (advisory, migration 065): scalar = vol_target_pct / rv20_annualized, clamped to [floor, cap]. Display-only, consumed by nothing. */
+  vol_target_pct: number;
+  vol_target_cap: number;
+  vol_target_floor: number;
   updated_at: string;
 }
 
@@ -58,6 +70,9 @@ export const DEFAULT_RISK_CONFIG = {
   regime_trim_to_pct: 70,
   regime_stop_pct: 5,
   regime_doublered_gross_pct: 30,
+  vol_target_pct: 15,
+  vol_target_cap: 1.5,
+  vol_target_floor: 0.3,
 };
 
 /** Creates a default risk_config row for a user who doesn't have one yet. No-op if one exists. */

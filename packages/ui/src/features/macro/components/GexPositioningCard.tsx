@@ -1,86 +1,136 @@
-import { gexScore, gexBiasLabel, gexImplication, fmtDateTime, FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
-import type { GraddoxData } from '@stw/shared';
+import {
+  gexSleeveScore, gexPositioningLabel, gexPositioningImplication, fmtDateTime, FONT_SIZE, FONT_WEIGHT,
+} from '@stw/shared';
+import type { GexExposureRead } from '../useGexExposure';
+import { useLiveSpxSpot } from '../useLiveSpxSpot';
 import { SleeveSummary } from './macroVisuals';
 
 interface Props {
-  graddox: GraddoxData | null | undefined;
+  data: GexExposureRead | null;
   loading: boolean;
-  /** 3D bias-score delta from the P2 trend engine (GEX moves fast, so it uses 3D not 5D); null until ~3 days of history accrue. */
+  /** 3D sleeve-score delta from the P2 trend engine (GEX moves fast → 3D not 5D); null until history accrues. */
   threeDayDelta?: number | null;
 }
 
-// SPX levels render on the SPY scale (÷10), matching the Signals view convention.
-function spy(v: number | null | undefined): number | null {
-  return v === null || v === undefined ? null : v / 10;
+/** Price format: thousands comma, and no decimals when the value is whole
+ *  (7527.00 → "7,527"; 7543.64 → "7,543.64"). */
+function fmtLevel(v: number): string {
+  return Number.isInteger(v)
+    ? v.toLocaleString('en-US')
+    : v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-// Not KpiCard: a small dense reference tile (18px value, 8px/12px padding) inside a
-// multi-tile grid, not a page-level hero stat — KpiCard's fixed 26px primaryValue would
-// look oversized here relative to its own compact card chrome.
-function LevelTile({ label, value }: { label: string; value: number | null }) {
+/** Signed aggregate-GEX value, e.g. "+101,111" (the newsletter's index-scaled
+ *  units, not dollars). Polarity already lives in the "Positive/Negative γ" label. */
+function netGexRaw(netGex: number | null): string | null {
+  if (netGex === null) return null;
+  return `${netGex >= 0 ? '+' : '−'}${Math.abs(netGex).toLocaleString('en-US')}`;
+}
+
+/** Compact intraday time tag, e.g. "@ 9:40 AM ET" (allowed non-fmtDateTime tag). */
+function timeTag(ms: number): string {
+  return '@ ' + new Date(ms).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York' }) + ' ET';
+}
+
+// Horizontal price track (number line) — plots the levels at their true relative
+// positions so you SEE where spot sits between support (put wall, left/green) and
+// resistance (call wall, right/red), with the gamma flip (amber) as the pivot. The
+// live Spot is the prominent marker above the line; the walls + flip label below.
+function PriceTrack({ callWall, spot, gammaFlip, putWall, spotSub }: {
+  callWall: number | null; spot: number | null; gammaFlip: number | null; putWall: number | null; spotSub?: string;
+}) {
+  const vals = [callWall, spot, gammaFlip, putWall].filter((v): v is number => v != null);
+  const lo = Math.min(...vals);
+  const hi = Math.max(...vals);
+  const pad = (hi - lo) * 0.08 || 1; // breathing room so edge markers aren't flush
+  const dmin = lo - pad;
+  const span = (hi + pad) - dmin || 1;
+  const pos = (v: number) => ((v - dmin) / span) * 100;
+  // Keep edge labels from overflowing the card.
+  const tx = (pct: number) => (pct < 14 ? '0%' : pct > 86 ? '-100%' : '-50%');
+
+  const refs = ([
+    callWall != null ? { price: callWall, label: 'Call Wall', color: 'var(--c1)' } : null,
+    gammaFlip != null ? { price: gammaFlip, label: 'Gamma Flip', color: 'var(--c3)' } : null,
+    putWall != null ? { price: putWall, label: 'Put Wall', color: 'var(--c5)' } : null,
+  ].filter(Boolean) as { price: number; label: string; color: string }[]);
+
   return (
-    <div style={{ background: 'var(--s2)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 12px' }}>
-      <div style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.semibold, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--t3)' }}>{label}</div>
-      <div style={{ fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)', marginTop: 2 }}>
-        {value !== null ? value.toFixed(0) : '—'}
+    <div style={{ margin: '16px 0 4px' }}>
+      {/* Spot marker (above the line) — the cushion + live tag ride WITH the spot
+          label at spot's x (not floating centered in the card). */}
+      <div style={{ position: 'relative', height: 46 }}>
+        {spot != null && (
+          <div style={{ position: 'absolute', left: `${pos(spot)}%`, transform: `translateX(${tx(pos(spot))})`, textAlign: 'center', whiteSpace: 'nowrap', lineHeight: 1.15 }}>
+            <div style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>Spot {fmtLevel(spot)}</div>
+            {spotSub && <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t2)' }}>{spotSub}</div>}
+            <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--text)' }}>▼</div>
+          </div>
+        )}
+      </div>
+      {/* Track: green (support) → amber (pivot) → red (resistance) */}
+      <div style={{ position: 'relative', height: 8, borderRadius: 4, background: 'linear-gradient(90deg, color-mix(in srgb, var(--c5) 45%, transparent), color-mix(in srgb, var(--c3) 45%, transparent), color-mix(in srgb, var(--c1) 45%, transparent))' }}>
+        {refs.map((r) => (
+          <div key={r.label} style={{ position: 'absolute', left: `${pos(r.price)}%`, top: -2, bottom: -2, width: 2, transform: 'translateX(-1px)', background: r.color }} title={`${r.label} ${fmtLevel(r.price)}`} />
+        ))}
+        {spot != null && <div style={{ position: 'absolute', left: `${pos(spot)}%`, top: -3, bottom: -3, width: 2, transform: 'translateX(-1px)', background: 'var(--text)' }} />}
+      </div>
+      {/* Wall/flip labels (below the line) */}
+      <div style={{ position: 'relative', height: 34, marginTop: 5 }}>
+        {refs.map((r) => {
+          const pct = pos(r.price);
+          return (
+            <div key={r.label} style={{ position: 'absolute', left: `${pct}%`, transform: `translateX(${tx(pct)})`, textAlign: 'center', whiteSpace: 'nowrap', lineHeight: 1.15 }}>
+              <div style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold, color: r.color, fontVariantNumeric: 'tabular-nums' }}>{fmtLevel(r.price)}</div>
+              <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>{r.label}</div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function LevelGroup({ name, resistance, gex1, putSupport }: { name: string; resistance: number | null; gex1: number | null; putSupport: number | null }) {
-  return (
-    <div>
-      <div style={{ fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold, color: 'var(--t2)', margin: '0 0 6px 2px' }}>{name}</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 8 }}>
-        <LevelTile label="Resistance" value={resistance} />
-        <LevelTile label="GEX1 (pivot)" value={gex1} />
-        <LevelTile label="Put Support" value={putSupport} />
-      </div>
-    </div>
-  );
-}
+export function GexPositioningCard({ data, loading, threeDayDelta }: Props) {
+  const live = useLiveSpxSpot();
 
-export function GexPositioningCard({ graddox, loading, threeDayDelta }: Props) {
-  if (loading && !graddox) return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>Loading positioning…</div>;
-  if (!graddox) return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>No GEX signal available.</div>;
+  if (loading && !data) return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>Loading positioning…</div>;
+  if (!data) return <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>No GEX snapshot available yet.</div>;
 
-  const score = gexScore(graddox.bias);
-  const label = gexBiasLabel(graddox.bias);
+  // The sleeve score / label stay on the report spot — they're the regime-sleeve
+  // contribution (matching the persisted composite score + the 3D delta), not a
+  // live-drifting number. The track's Spot is the LIVE quote (host ask).
+  const spot = live?.spx ?? data.spot;
+  const liveTag = live ? `live ${timeTag(live.at)}` : data.asOf ? 'as of report' : null;
+
+  const score = gexSleeveScore(data.spot, data.gammaFlip);
+  const label = gexPositioningLabel({ spot: data.spot, gammaFlip: data.gammaFlip });
+  const implication = gexPositioningImplication({ spot: data.spot, gammaFlip: data.gammaFlip });
   const delta = threeDayDelta === null || threeDayDelta === undefined
     ? null
     : `3D ${threeDayDelta >= 0 ? '+' : ''}${Math.round(threeDayDelta)}`;
-  // SPY = SPX ÷ 10; QQQ levels are already in QQQ price terms (no scaling).
-  const spyGex1 = spy(graddox.spx?.gex1);
-  const spyPut = spy(graddox.spx?.put_support);
 
-  const trigger = label === 'Bearish' && spyGex1 !== null
-    ? `Reclaim above GEX1 (SPY ${spyGex1.toFixed(0)}) flips the read neutral.`
-    : label === 'Bullish' && spyPut !== null
-      ? `Hold above put support (SPY ${spyPut.toFixed(0)}) keeps the bid intact.`
-      : 'Watch the GEX pivot for a regime flip.';
+  // Cushion phrased from SPOT's perspective (spot is N above/below the flip).
+  const cushion = spot !== null && data.gammaFlip !== null ? spot - data.gammaFlip : null;
+  const cushionText = cushion === null ? null
+    : cushion >= 0 ? `+${fmtLevel(cushion)} above flip` : `${fmtLevel(Math.abs(cushion))} below flip`;
+  const spotSub = [cushionText, liveTag].filter(Boolean).join(' · ') || undefined;
+
+  const raw = netGexRaw(data.netGex);
+  const hint = raw ? `net GEX ${raw}` : 'SPX · tactical overlay';
 
   return (
     <div>
-      <SleeveSummary score={score} label={label} hint="tactical overlay" delta={delta} />
+      <SleeveSummary score={score} label={label} hint={hint} delta={delta} />
 
-      {/* Key levels — SPY (SPX ÷10) and QQQ */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
-        <LevelGroup name="SPY" resistance={spy(graddox.spx?.resistance)} gex1={spyGex1} putSupport={spyPut} />
-        <LevelGroup name="QQQ" resistance={graddox.qqq?.resistance ?? null} gex1={graddox.qqq?.gex1 ?? null} putSupport={graddox.qqq?.put_support ?? null} />
-      </div>
+      <PriceTrack callWall={data.callWall} spot={spot} gammaFlip={data.gammaFlip} putWall={data.putWall} spotSub={spotSub} />
 
-      {/* Trigger + implication */}
       <div style={{ marginTop: 12, fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.5 }}>
-        <div><span style={{ color: 'var(--t3)', fontWeight: FONT_WEIGHT.semibold }}>Trigger:</span> {trigger}</div>
-        <div><span style={{ color: 'var(--t3)', fontWeight: FONT_WEIGHT.semibold }}>Implication:</span> {gexImplication(graddox.bias)}</div>
-        {graddox.bias_note && (
-          <div style={{ marginTop: 4, color: 'var(--t3)' }}>{graddox.bias_note}</div>
-        )}
+        <div><span style={{ color: 'var(--t3)', fontWeight: FONT_WEIGHT.semibold }}>Read:</span> {implication}</div>
       </div>
 
       <div style={{ marginTop: 10, fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', lineHeight: 1.4 }}>
-        STW Graddox GEX signal{graddox.last_updated ? ` · updated ${fmtDateTime(graddox.last_updated)}` : ''}
+        Levels via <a href="https://spxgammaedge.substack.com" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--t3)', textDecoration: 'underline' }}>SPX Gamma Edge</a> · SPX{data.asOf ? ` · Updated: ${fmtDateTime(data.asOf)}` : ''}
       </div>
     </div>
   );

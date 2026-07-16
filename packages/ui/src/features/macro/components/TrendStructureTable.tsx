@@ -1,7 +1,7 @@
 import type { MacroIndicator, TrendBucket } from '@stw/shared';
 import { TREND_BUCKET_META, TREND_BUCKET_ORDER, trendDirectionArrow, trendDirectionPhrase, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING } from '@stw/shared';
 import { ALL_INDICATORS, EXPERT_TREND_SYMBOLS } from '../useMacroIndicators';
-import type { TrendHistoryEntry } from '../useMacroTrendHistory';
+import { resolveDelta, type TrendHistoryEntry } from '../useMacroTrendHistory';
 import { SourceNote } from './macroVisuals';
 
 // Not DataTable: this table's rows are interleaved with full-width bucket-group header
@@ -59,15 +59,28 @@ function MaCell({ close, ma }: { close: number | null; ma: number | null }) {
 }
 
 function TrendBadge({ entry }: { entry: TrendHistoryEntry | undefined }) {
-  if (!entry || entry.fiveDayDelta === null) {
+  // Prefer the 5D read (with its direction phrase); fall back to the 3D delta
+  // while history is still short so the column isn't a blank em-dash for days.
+  const resolved = entry ? resolveDelta(entry) : { value: null, label: '5D' as const };
+  if (!entry || resolved.value === null) {
     return <td style={{ padding: '6px 8px', fontSize: FONT_SIZE.sm, color: 'var(--t3)', whiteSpace: 'nowrap' }}>—</td>;
   }
-  const arrow = trendDirectionArrow(entry.direction);
-  const color = arrow === '↑' ? 'var(--c5)' : arrow === '↓' ? 'var(--c1)' : 'var(--t2)';
-  const delta = entry.fiveDayDelta;
+  if (entry.fiveDayDelta !== null) {
+    const arrow = trendDirectionArrow(entry.direction);
+    const color = arrow === '↑' ? 'var(--c5)' : arrow === '↓' ? 'var(--c1)' : 'var(--t2)';
+    return (
+      <td style={{ padding: '6px 8px', fontSize: FONT_SIZE.sm, color, whiteSpace: 'nowrap' }}>
+        {arrow} {trendDirectionPhrase(entry.direction)} ({entry.fiveDayDelta >= 0 ? '+' : ''}{Math.round(entry.fiveDayDelta)})
+      </td>
+    );
+  }
+  // 3D fallback — no classified direction, so read the arrow off the sign.
+  const n = Math.round(resolved.value);
+  const arrow = n > 0 ? '↑' : n < 0 ? '↓' : '→';
+  const color = n > 0 ? 'var(--c5)' : n < 0 ? 'var(--c1)' : 'var(--t2)';
   return (
     <td style={{ padding: '6px 8px', fontSize: FONT_SIZE.sm, color, whiteSpace: 'nowrap' }}>
-      {arrow} {trendDirectionPhrase(entry.direction)} ({delta >= 0 ? '+' : ''}{Math.round(delta)})
+      {arrow} 3D {n >= 0 ? '+' : ''}{n}
     </td>
   );
 }
@@ -129,7 +142,7 @@ export function TrendStructureTable({ indicators, visibleSymbols, onToggle, asOf
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: FONT_SIZE.sm }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border)' }}>
-              {['Symbol', 'Name', 'Close', 'Chg', 'Chg%', 'vs 9d MA', 'vs 21d MA', 'vs 200d MA', 'Structure', '5D Trend'].map((h) => (
+              {['Symbol', 'Name', 'Close', 'Chg', 'Chg%', 'vs 9d MA', 'vs 21d MA', 'vs 200d MA', 'Structure', 'Trend'].map((h) => (
                 <th key={h} style={{ padding: '6px 8px', textAlign: 'left', fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.semibold, letterSpacing: LETTER_SPACING.label, textTransform: 'uppercase', color: 'var(--t3)', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
@@ -151,7 +164,7 @@ export function TrendStructureTable({ indicators, visibleSymbols, onToggle, asOf
           </tbody>
         </table>
       </div>
-      <SourceNote source="Quotes: Finnhub (live, ≤15m) · MAs: TwelveData daily" asOf={asOf} updatedAt={updatedAt} />
+      <SourceNote source="Quotes: Finnhub (live, ≤15m) · MAs: TwelveData daily" href="https://twelvedata.com" asOf={asOf} updatedAt={updatedAt} />
     </div>
   );
 }

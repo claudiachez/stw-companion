@@ -93,13 +93,6 @@ export function MacroRecapCard({ recap, recapDate, recapSession, loading, error,
             <Paragraphs text={recap.verdict} />
           </div>
 
-          {recap.bigStory && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: '1px solid var(--bsub)', paddingTop: 12 }}>
-              <SubHeader>The Big Story</SubHeader>
-              <Paragraphs text={recap.bigStory} size={FONT_SIZE.base} color="var(--t2)" />
-            </div>
-          )}
-
           {recap.scenarios && (recap.scenarios.bull || recap.scenarios.base || recap.scenarios.bear) && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: '1px solid var(--bsub)', paddingTop: 12 }}>
               <SubHeader>{recapSession === 'am' ? "Today's Scenarios" : "Tomorrow's Scenarios"}</SubHeader>
@@ -136,7 +129,7 @@ export function MacroRecapCard({ recap, recapDate, recapSession, loading, error,
       )}
 
       {!recap && !loading && !error && (
-        <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>No note yet today — auto-generates at 8am and 4:30pm ET on weekdays.</div>
+        <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>No note yet today — auto-generates pre-market (~7:50am, or ~8:33am after a data release) and post-market (~4:30pm ET) on weekdays.</div>
       )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>

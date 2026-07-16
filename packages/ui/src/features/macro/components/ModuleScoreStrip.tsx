@@ -6,9 +6,9 @@ export interface ModuleStripItem {
   title: string;
   score: number | null;
   detail: string;
-  /** Score delta over the lookback window (P2 trend engine); null until enough history exists. */
-  fiveDayDelta?: number | null;
-  /** Lookback label for the delta above — defaults to 5D. GEX uses 3D (it moves fast). */
+  /** Score delta over the best-available lookback (P2 trend engine); null until enough history exists. */
+  delta?: number | null;
+  /** Lookback label for the delta — 5D when history allows, else 3D (fallback). */
   deltaLabel?: '3D' | '5D';
 }
 
@@ -16,9 +16,16 @@ interface Props {
   items: ModuleStripItem[];
 }
 
-function deltaText(d: number | null | undefined, label: '3D' | '5D' = '5D'): string | null {
-  if (d === null || d === undefined) return null;
-  return `${label} ${d >= 0 ? '+' : ''}${Math.round(d)}`;
+// A signed delta reads as improving (green ↑), deteriorating (red ↓) or flat
+// (muted →) at a glance — the whole point of the strip is to show direction.
+// Until enough daily history accrues the delta is null; show a muted "5D —" so it
+// reads as pending, not missing (a blank looked like a bug to the user).
+function deltaChip(d: number | null | undefined, label: '3D' | '5D' = '5D'): { text: string; color: string } {
+  if (d === null || d === undefined) return { text: `${label} —`, color: 'var(--t3)' };
+  const n = Math.round(d);
+  const arrow = n > 0 ? '↑' : n < 0 ? '↓' : '→';
+  const color = n > 0 ? 'var(--c5)' : n < 0 ? 'var(--c1)' : 'var(--t3)';
+  return { text: `${label} ${arrow} ${n >= 0 ? '+' : ''}${n}`, color };
 }
 
 export function ModuleScoreStrip({ items }: Props) {
@@ -27,7 +34,7 @@ export function ModuleScoreStrip({ items }: Props) {
     <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4 }}>
       {items.map((it) => {
         const color = scoreColor(it.score);
-        const delta = deltaText(it.fiveDayDelta, it.deltaLabel);
+        const delta = deltaChip(it.delta, it.deltaLabel);
         return (
           <div
             key={it.key}
@@ -48,7 +55,7 @@ export function ModuleScoreStrip({ items }: Props) {
               <span style={{ fontSize: FONT_SIZE.display, fontWeight: FONT_WEIGHT.bold, color }}>{it.score ?? '—'}</span>
               <span style={{ fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold, color }}>{it.detail}</span>
             </div>
-            {delta && <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 1 }}>{delta}</div>}
+            {delta && <div style={{ fontSize: FONT_SIZE['2xs'], color: delta.color, marginTop: 1 }}>{delta.text}</div>}
           </div>
         );
       })}
