@@ -1,35 +1,27 @@
 /**
- * Macro weekly recap generator.
+ * Macro daily recap generator (manual "Regenerate", editor-only).
  *
- * Produces a week-close note + next-week expectations from the macro module
- * scores and the grounding context (GEX read, trend structure, breadth, VIX).
- * The model is instructed to use ONLY the provided data — never fabricate
- * figures it wasn't given.
+ * Builds the AM/PM daily note from the macro module scores + grounding context (GEX,
+ * trend structure, breadth, VIX, event risk) and upserts it into macro_daily_recaps
+ * (migration 051), keyed by (date, session) — the cross-device row every user reads.
+ * Grounded ONLY in the data passed; never fabricates figures. An optional `note`
+ * steers the rewrite's angle. Editor-gated by a hard 403 (a real, costly Anthropic call).
  *
- * Uses direct fetch() to the Anthropic API (NOT @anthropic-ai/sdk — the SDK has
- * ESM/CJS bundling issues in the Netlify Functions runtime that produce 502s;
- * see CLAUDE.md → Conventions). Prefers Sonnet for narrative quality, falls back
- * to Haiku if the key lacks access; override with MACRO_RECAP_MODEL.
+ * SITE-SCOPED: a byte-identical copy lives in apps/web AND apps/admin (a function on one
+ * site isn't callable from the other domain). Keep them identical — `pnpm check:fn-parity`.
  *
- * Result is upserted into `macro_daily_recaps` (migration 051), keyed by (date,
- * session) — a cross-device row every user reads. Only the editor
- * (cc@claudiachez.com) may trigger a regeneration — this is a real, costly
- * Anthropic call, so the check is a hard 403, not the best-effort warn this
- * function used to do. An optional `note` in the request body lets the editor
- * steer the angle of the rewrite; it's folded into the prompt.
+ * Uses direct fetch() to the Anthropic API (NOT @anthropic-ai/sdk — ESM/CJS bundling
+ * issues in the Netlify runtime produce 502s; see CLAUDE.md). Sonnet → Haiku fallback.
  *
- * Required Netlify env vars:
- *   VITE_SUPABASE_URL  (or SUPABASE_URL)
- *   SUPABASE_SERVICE_ROLE_KEY
- *   ANTHROPIC_API_KEY
- * Optional:
- *   MACRO_RECAP_MODEL  (defaults to claude-sonnet-4-6, then claude-haiku-4-5-20251001)
+ * Required Netlify env vars: VITE_SUPABASE_URL (or SUPABASE_URL), SUPABASE_SERVICE_ROLE_KEY,
+ * ANTHROPIC_API_KEY. Optional: MACRO_RECAP_MODEL (default claude-sonnet-4-6 → claude-haiku-4-5-20251001).
  */
 import type { Handler } from '@netlify/functions';
 
-// Use direct REST calls instead of @supabase/supabase-js to avoid the
-// Realtime client's Node 20 WebSocket error (supabase-js 2.100+ throws on
-// createClient when native WebSocket is absent, crashing the function).
+// Decode the Supabase JWT locally — avoids a round-trip to /auth/v1/user and
+// the API-key mismatch (service role key is rejected as apikey on that endpoint).
+// Safe for an editor-only gate: worst-case bypass is a fake recap write, not a
+// data leak; Supabase RLS is the real security boundary.
 function jwtEmail(token: string): string | null {
   try {
     const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString('utf8')) as Record<string, unknown>;
@@ -47,7 +39,7 @@ async function sbUpsert(url: string, serviceKey: string, table: string, row: Rec
       apikey: serviceKey,
       Authorization: `Bearer ${serviceKey}`,
       'Content-Type': 'application/json',
-      Prefer: 'resolution=merge-duplicates,return=minimal',
+      Prefer: `resolution=merge-duplicates,return=minimal`,
     },
     body: JSON.stringify(row),
   });
@@ -74,7 +66,6 @@ interface RecapRequest {
   };
   eventRisk?: { level: string; event: string; time: string; consensus?: string; previous?: string; overlay?: string } | null;
   note?: string;
-  /** Which session to regenerate — defaults to 'pm' if omitted. */
   session?: 'am' | 'pm';
 }
 
@@ -98,10 +89,10 @@ function levelLine(name: string, ls: LevelSet | null | undefined): string {
 
 function buildPrompt(body: RecapRequest, session: 'am' | 'pm' = 'pm'): string {
   const { regime, modules, context, eventRisk } = body;
+  const ctx = context ?? {};
   const sessionFrame = session === 'am'
     ? 'PRE-MARKET note for active traders — what to watch and how to think about TODAY\'s session before the open. Frame as "what to watch today" and "how to set up", not a recap.'
     : 'POST-MARKET recap for active traders — what happened today and what it means for TOMORROW\'s setup. Frame as "what happened" and "what to set up for tomorrow".';
-  const ctx = context ?? {};
 
   const indicatorLines = (ctx.indicators ?? [])
     .map((i) => `- ${i.symbol} (${i.name}): ${i.bucket ?? 'n/a'}${i.chgPct != null ? `, ${i.chgPct >= 0 ? '+' : ''}${i.chgPct.toFixed(2)}% on the day` : ''}`)
@@ -154,8 +145,8 @@ ${gexBlock}
 ${eventLine}
 
 Respond with ONLY a JSON object (no markdown fences) with exactly these fields:
-- headline: a punchy one-line hook capturing the week's defining theme/contradiction
-- verdict: 2-4 short paragraphs (separate with \\n\\n) — the weekly read: what happened beneath the surface, what's driving it
+- headline: a punchy one-line hook capturing today's defining theme
+- verdict: 2-3 short paragraphs (separate with \\n\\n) — the read: what's happening beneath the surface, what's driving it
 - scenarios: an object { "bull": "...", "base": "...", "bear": "..." } — one tight sentence each for the ${session === 'am' ? 'current session' : 'next session'}
 - playbook: 1-2 paragraphs on ${session === 'am' ? 'how to approach today — what setups, what to avoid' : 'next-day setup — what followed through, how to position overnight'}
 - watching: one line naming the key levels${session === 'am' ? ' that decide today\'s tone' : ' for tomorrow'}, e.g. "Watch 5,435 above and 5,339 below."
@@ -176,6 +167,15 @@ async function callAnthropic(apiKey: string, model: string, prompt: string): Pro
 }
 
 export const handler: Handler = async (event) => {
+  try {
+    return await _handler(event);
+  } catch (e) {
+    console.error('macro-recap uncaught error:', e);
+    return err(500, `Uncaught error: ${e instanceof Error ? e.message : String(e)}`);
+  }
+};
+
+async function _handler(event: Parameters<Handler>[0]): ReturnType<Handler> {
   if (event.httpMethod !== 'POST') return err(405, 'Method not allowed');
 
   const authHeader = event.headers.authorization ?? event.headers.Authorization ?? '';
@@ -185,12 +185,10 @@ export const handler: Handler = async (event) => {
   const serviceKey   = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim();
   const anthropicKey = (process.env.ANTHROPIC_API_KEY ?? '').trim();
 
-  if (!supabaseUrl || !serviceKey) return err(500, 'Server config error');
-  if (!anthropicKey) return err(500, 'AI service not configured');
+  if (!supabaseUrl) return err(500, 'Server config error: VITE_SUPABASE_URL (or SUPABASE_URL) not set on this Netlify site');
+  if (!serviceKey) return err(500, 'Server config error: SUPABASE_SERVICE_ROLE_KEY not set on this Netlify site');
+  if (!anthropicKey) return err(500, 'AI service not configured: ANTHROPIC_API_KEY not set on this Netlify site');
 
-  // Hard gate: this triggers a real, costly Anthropic call and writes the shared
-  // cross-device recap every subscriber reads, so unlike the read side, regeneration
-  // is editor-only — never a best-effort warn.
   if (!token) return err(401, 'Authentication required to regenerate the recap');
   let callerEmail: string | undefined;
   callerEmail = jwtEmail(token) ?? undefined;
@@ -207,7 +205,6 @@ export const handler: Handler = async (event) => {
   const session: 'am' | 'pm' = body.session === 'am' ? 'am' : 'pm';
   const prompt = buildPrompt(body, session);
 
-  // Prefer Sonnet for narrative quality; fall back to Haiku if the key lacks access.
   const models = [...new Set([
     process.env.MACRO_RECAP_MODEL || 'claude-sonnet-4-6',
     'claude-haiku-4-5-20251001',
@@ -230,11 +227,13 @@ export const handler: Handler = async (event) => {
           model,
           generated_at: generatedAt,
         }, 'date,session');
-        if (upsertError) console.error('macro-recap: failed to persist recap:', upsertError);
+        if (upsertError) {
+          console.error('macro-recap: failed to persist recap:', upsertError);
+          return err(500, `Generated but failed to save: ${upsertError}`);
+        }
         return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...recap, generatedAt }) };
       }
       lastErr = { status: r.status, detail: r.detail };
-      // Only fall through to the next model when this one isn't available.
       if (r.status !== 404 && r.status !== 403 && r.status !== 400) break;
       console.warn(`macro-recap: model ${model} unavailable (${r.status}), trying next`);
     }
