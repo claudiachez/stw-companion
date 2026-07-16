@@ -37,7 +37,7 @@ function EarningsRow({ e, cat, onSelectTicker }: { e: EarningsEvent; cat: Earnin
         <button
           type="button"
           onClick={() => onSelectTicker!(e.symbol, cat)}
-          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontWeight: FONT_WEIGHT.semibold, color: 'var(--acc)', textDecoration: 'underline', fontSize: FONT_SIZE.sm }}
+          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontWeight: FONT_WEIGHT.semibold, color: 'var(--acc)', fontSize: FONT_SIZE.sm }}
         >
           {e.symbol}
         </button>

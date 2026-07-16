@@ -13,7 +13,7 @@ import { useEarningsCalendar } from '../earnings/useEarningsCalendar';
 import { EarningsBadge } from '../earnings/EarningsBadge';
 import type { TickerRegime } from '../picks/useTickerRegime';
 import { useUserExecutions } from './useUserPositions';
-import type { UserPosition } from './api';
+import type { UserPosition, UserExecution } from './api';
 
 const STATE_COLOR: Record<'GREEN' | 'RED' | 'UNKNOWN', string> = {
   GREEN: 'var(--acc)',
@@ -50,6 +50,40 @@ function instrumentLabel(x: { asset_class: string; strike: number | null; put_ca
     return `$${x.strike}${x.put_call}${exp ? ` ${exp}` : ''}`;
   }
   return 'Shares';
+}
+
+interface ExecGroup {
+  key: string;
+  label: string;
+  fills: UserExecution[]; // newest-first
+  netQty: number;
+  realized: number;       // Σ proceeds + Σ commission — exact realized P&L once closed
+  costBasis: number;      // total cash paid on buys (for the return %)
+  closed: boolean;
+}
+
+/**
+ * Group fills into the position they belong to (one option contract, or all shares of
+ * the underlying) so the ledger answers "what happened", not just "what filled". A
+ * closed group's realized P&L is proceeds-exact (Σ proceeds + Σ commission); an open
+ * group's Σ proceeds still carries the cost of held units, so we show status only there
+ * and leave the live number to the P&L section above.
+ */
+function buildExecGroups(execs: UserExecution[]): ExecGroup[] {
+  const map = new Map<string, UserExecution[]>();
+  for (const x of execs) {
+    const key = x.asset_class === 'OPT' ? x.symbol : `${x.underlying}:STK`;
+    const arr = map.get(key);
+    if (arr) arr.push(x); else map.set(key, [x]);
+  }
+  const groups: ExecGroup[] = [];
+  for (const [key, fills] of map) {
+    const netQty = fills.reduce((s, f) => s + (f.quantity ?? 0), 0);
+    const realized = fills.reduce((s, f) => s + (f.proceeds ?? 0) + (f.commission ?? 0), 0);
+    const costBasis = fills.reduce((s, f) => s + Math.max(0, -(f.proceeds ?? 0)), 0);
+    groups.push({ key, label: instrumentLabel(fills[0]), fills, netQty, realized, costBasis, closed: Math.abs(netQty) < 1e-6 });
+  }
+  return groups.sort((a, b) => (a.fills[0].executed_at < b.fills[0].executed_at ? 1 : -1));
 }
 
 export interface DetailGroup {
@@ -125,6 +159,7 @@ export function PortfolioPositionDetail({
   const nextEarnings = getNextEarnings(group.underlying);
   const { data: allExecutions } = useUserExecutions();
   const execs = (allExecutions ?? []).filter((x) => x.underlying?.toUpperCase() === group.underlying.toUpperCase());
+  const execGroups = buildExecGroups(execs);
 
   const sizeDelta = ownPortfolioPct !== null && stwWeight !== null ? ownPortfolioPct - stwWeight : null;
 
@@ -302,29 +337,54 @@ export function PortfolioPositionDetail({
         )) : <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)' }}>Hidden</div>}
       </Section>
 
-      {/* Transaction History — the user's OWN fills for this ticker (user_executions),
-          the same dated-ledger idea as Stock Picks' Transaction History. Read-only;
-          newest-first. Covers buys AND sells, so it also surfaces closed/trimmed legs. */}
+      {/* Transaction History — the user's OWN fills, GROUPED into the position each
+          belongs to (a contract, or all shares) so every group states its outcome:
+          a closed group shows realized P&L, an open one shows it's still on. The fills
+          nest underneath. From user_executions; the entry-history equivalent of Stock
+          Picks' Transaction History. */}
       <Section title="Transaction History">
-        {execs.length === 0 ? (
+        {execGroups.length === 0 ? (
           <EmptyState
             icon="🧾"
             message="No synced fills for this position yet. Import your IBKR trade history from Settings to see your transactions here."
           />
         ) : (
-          <div>
-            {execs.map((x) => (
-              <div key={x.id} style={{ display: 'flex', alignItems: 'baseline', gap: SPACE[2], flexWrap: 'wrap', padding: '6px 0', borderTop: '1px solid var(--bsub)', fontSize: FONT_SIZE.sm }}>
-                <span style={{ fontWeight: FONT_WEIGHT.semibold, color: x.side === 'SELL' ? 'var(--pnl-loss)' : 'var(--acc)', minWidth: 30 }}>
-                  {x.side === 'SELL' ? 'Sell' : 'Buy'}
-                </span>
-                <span style={{ color: 'var(--text)' }}>{instrumentLabel(x)}</span>
-                <span style={{ color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>
-                  {x.quantity !== null ? Math.abs(x.quantity) : '—'} @ {x.price !== null ? `$${x.price.toFixed(2)}` : '—'}
-                </span>
-                <span style={{ marginLeft: 'auto', color: 'var(--t3)' }}>{fmtDateTime(x.executed_at)}</span>
-              </div>
-            ))}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE[2] }}>
+            {execGroups.map((g) => {
+              const retPct = g.closed && g.costBasis > 0 ? (g.realized / g.costBasis) * 100 : null;
+              return (
+                <div key={g.key} style={{ borderTop: '1px solid var(--bsub)', paddingTop: SPACE[1.5] }}>
+                  {/* Outcome header */}
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: SPACE[2], flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>{g.label}</span>
+                    <span style={{
+                      fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: LETTER_SPACING.label,
+                      textTransform: 'uppercase', color: 'var(--t3)', background: 'var(--s2)',
+                      border: '1px solid var(--border)', borderRadius: RADIUS.DEFAULT, padding: '1px 6px',
+                    }}>
+                      {g.closed ? 'Closed' : `Open · ${Math.abs(g.netQty)}`}
+                    </span>
+                    {g.closed && showPnl && (
+                      <span style={{ marginLeft: 'auto', color: pnlColor(g.realized), fontWeight: FONT_WEIGHT.semibold, fontVariantNumeric: 'tabular-nums' }}>
+                        {g.realized >= 0 ? '+' : ''}{fmtMoney(g.realized)}{retPct !== null ? ` (${fmtPct(retPct)})` : ''}
+                      </span>
+                    )}
+                  </div>
+                  {/* Fills that make up the group (newest-first) */}
+                  {g.fills.map((x) => (
+                    <div key={x.id} style={{ display: 'flex', alignItems: 'baseline', gap: SPACE[2], flexWrap: 'wrap', padding: '2px 0', fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>
+                      <span style={{ fontWeight: FONT_WEIGHT.semibold, color: x.side === 'SELL' ? 'var(--pnl-loss)' : 'var(--acc)', minWidth: 26 }}>
+                        {x.side === 'SELL' ? 'Sell' : 'Buy'}
+                      </span>
+                      <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+                        {x.quantity !== null ? Math.abs(x.quantity) : '—'} @ {x.price !== null ? `$${x.price.toFixed(2)}` : '—'}
+                      </span>
+                      <span style={{ marginLeft: 'auto' }}>{fmtDateTime(x.executed_at)}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
           </div>
         )}
       </Section>

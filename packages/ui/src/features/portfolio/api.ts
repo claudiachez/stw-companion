@@ -54,6 +54,7 @@ export interface UserExecution {
   side:         string;        // 'BUY' | 'SELL'
   quantity:     number | null; // signed (sells negative)
   price:        number | null; // fill price
+  proceeds:     number | null; // signed cash flow: buys negative, sells positive
   commission:   number | null;
   strike:       number | null;
   put_call:     string | null;
@@ -65,7 +66,7 @@ export interface UserExecution {
 export async function fetchUserExecutions(userId: string): Promise<UserExecution[]> {
   const { data, error } = await getSupabase()
     .from('user_executions')
-    .select('id,underlying,symbol,asset_class,side,quantity,price,commission,strike,put_call,expiry,multiplier,executed_at')
+    .select('id,underlying,symbol,asset_class,side,quantity,price,proceeds,commission,strike,put_call,expiry,multiplier,executed_at')
     .eq('user_id', userId)
     .order('executed_at', { ascending: false });
   if (error) throw error;
