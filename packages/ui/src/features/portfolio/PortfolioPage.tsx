@@ -19,6 +19,7 @@ import { AccordionList } from '../../primitives/AccordionList';
 import { SubNav } from '../../primitives/SubNav';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useCapabilities } from '../../context/AppCapabilities';
+import { useLiveQuotes } from '../../hooks/useLiveQuotes';
 import { ViolationsSummary } from '../limits/ViolationsSummary';
 import { useBindingGrossTarget } from '../limits/useBindingGrossTarget';
 import { useSectorMap, useRiskConfig } from '../limits/useRiskConfig';
@@ -697,6 +698,10 @@ export function PortfolioPage() {
     () => [...new Set(positions.map((p) => cleanUnderlying(p.underlying)))].filter((t) => t !== 'CASH'),
     [positions],
   );
+  // Populate the shared live-price cache for the held book so the Positions list + the
+  // detail pane's Current Price read Finnhub, not the stored IBKR mark (same source as
+  // Stock Picks — the page just wasn't fetching quotes before).
+  useLiveQuotes(portfolioTickers, capabilities.finnhubKey);
   // Include the chosen regime index so the Risk tab can show ITS 9/21/200 structure
   // (the same batched pass; the index just isn't a list row).
   const regimeTickers = useMemo(
