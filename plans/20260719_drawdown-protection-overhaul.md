@@ -82,12 +82,17 @@ The thing that would've flagged TE −32% directly. A full ladder (host), not a 
   (numeric, default 2 — the Item-1 near band, now the user's to set). One migration, Claude-authors/
   host-applies. `RiskConfigForm` gains both editors.
 
-## Item 3 — Alerts  [DECIDED: in-app + email; Discord-bot DM under consideration]
-Host chose in-app + email (#2 + #1). A Discord bot DM is per-user (unlike the broadcast channels)
-so it could deliver the off-app reach email does — worth scoping as a possible unifier. Scheduled
-fn (post-sync) evaluates each user's account ladder + per-stock ladder, alerts on cross/approach
-with de-dup (reuse the `alreadyComplies` / ack state so it doesn't cry wolf). Own scoping plan
-before building the infra.
+## Item 3 — Alerts  [BUILT: in-app + email (Resend); Discord-bot DM still an option]
+- **In-app**: Overview chips surface the account-drawdown state + a count of names near/past a
+  per-stock stop, linking to the Risk tab / stop-filtered Positions (so warnings aren't buried).
+- **Email**: `apps/web/netlify/functions/drawdown-alerts-cron.ts` (web-only, `30 8 * * 2-6`, after
+  ibkr-sync-cron) evaluates each user's account + per-stock ladders on synced data and emails a
+  summary via Resend on ESCALATION only. De-dup via `risk_alert_state` (migration 073): a monotonic
+  `last_level` per (user, kind, scope) — send only when it increases, delete on recovery. Reuses the
+  `@stw/shared` engine (cron ↔ screen agree). Respects `preferences.drawdownAlertsOptOut` + active status.
+  **Dormant until `RESEND_API_KEY` + `ALERT_FROM_EMAIL` are set on the web site** (optional `APP_URL`).
+- **Still open**: a Discord-bot DM channel (per-user, off-app) as an alternative/addition; a Settings
+  toggle for the opt-out (the fn already honors the flag). Not built.
 
 ## Standing constraints
 Advisory/display-only (never blocks). Regime gate frozen at engine 1.1.0; gate ↔ Macro
