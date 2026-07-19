@@ -156,11 +156,11 @@ function DrawdownCard({ status, nlv, asOf }: {
   return (
     <div className="bg-surface border border-border rounded-xl p-5">
       <div className="text-text font-semibold text-sm flex items-center gap-1.5">
-        Drawdown
+        Portfolio drawdown
         <StatusPill variant={pill.variant}>{pill.label}</StatusPill>
-        <HelpToggle ariaLabel="About drawdown">
-          <span className="block">How far your account is below its high-water mark, adjusted for your deposits and withdrawals so a transfer isn't mistaken for a gain or loss.</span>
-          <span className="block text-t3 mt-1">As you draw down, the ladder tightens your gross-exposure target — the rungs below show at what depth.</span>
+        <HelpToggle ariaLabel="About portfolio drawdown">
+          <span className="block">How far your <strong>whole account</strong> is below its high-water mark — not any single position — adjusted for your deposits and withdrawals so a transfer isn't mistaken for a gain or loss.</span>
+          <span className="block text-t3 mt-1">As you draw down, the ladder tightens your gross-exposure target — the rungs below show at what depth. This is reconciled with the market-regime rule above: whichever is tighter binds.</span>
           <span className="block text-t3 mt-1">Amber "near" means you're within {DRAWDOWN_NEAR_BAND_PP} points of the next rung; red means a rung is crossed. Advisory only — nothing here places or blocks a trade.</span>
         </HelpToggle>
       </div>
