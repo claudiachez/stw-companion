@@ -2,7 +2,9 @@ import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
   evaluateRiskConfig, cashflowAdjustedDrawdownPct, bindingGrossTarget,
+  drawdownLadderStatus, DRAWDOWN_NEAR_BAND_PP, fmtDateTime,
   type PositionInput, type ConcentrationViolation, type ViolationSeverity, type BindingGrossTarget,
+  type DrawdownLadderStatus,
 } from '@stw/shared';
 import { useAuthStore } from '../../store/auth';
 import { LoadingSpinner } from '../../primitives/LoadingSpinner';
@@ -127,6 +129,82 @@ function ViolationRow({
           ) : null}
         </div>
       )}
+    </div>
+  );
+}
+
+const fmtEquity = (n: number) =>
+  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
+
+/**
+ * Always-on drawdown read (plans/20260719 Item 1) — the fix for "the ladder was
+ * silent until it fired". Renders whenever a real drawdown exists (a null drawdown
+ * = no NLV+peak yet stays hidden, per the plan), showing the current % + where it
+ * sits on the ladder + an amber NEAR the moment it's within the band of the next
+ * rung — so the de-risk warning arrives BEFORE the rung, not after. Advisory only.
+ */
+function DrawdownCard({ status, nlv, asOf }: {
+  status: DrawdownLadderStatus;
+  nlv: number | null;
+  asOf: string | null;
+}) {
+  const pill = SEVERITY_PILL[status.severity];
+  // An `ok` drawdown reads neutral (a small red-number-in-green would jar); only a
+  // NEAR/breach takes the amber/red status color so attention tracks real proximity.
+  const numColor = status.severity === 'ok' ? 'var(--text)' : SEVERITY_TEXT_COLOR[status.severity];
+  const { activeStep, nextStep, distanceToNextPp } = status;
+  return (
+    <div className="bg-surface border border-border rounded-xl p-5">
+      <div className="text-text font-semibold text-sm flex items-center gap-1.5">
+        Portfolio drawdown
+        <StatusPill variant={pill.variant}>{pill.label}</StatusPill>
+        <HelpToggle ariaLabel="About portfolio drawdown">
+          <span className="block">How far your <strong>whole account</strong> is below its high-water mark — not any single position — adjusted for your deposits and withdrawals so a transfer isn't mistaken for a gain or loss.</span>
+          <span className="block text-t3 mt-1">As you draw down, the ladder tightens your gross-exposure target — the rungs below show at what depth. This is reconciled with the market-regime rule above: whichever is tighter binds.</span>
+          <span className="block text-t3 mt-1">Amber "near" means you're within {DRAWDOWN_NEAR_BAND_PP} points of the next rung; red means a rung is crossed. Advisory only — nothing here places or blocks a trade.</span>
+        </HelpToggle>
+      </div>
+
+      <div className="flex items-baseline gap-2 mt-2">
+        <span className="text-2xl font-semibold tabular-nums" style={{ color: numColor }}>
+          {status.drawdownPct >= 0 ? '+' : '−'}{Math.abs(status.drawdownPct).toFixed(2)}%
+        </span>
+        <span className="text-t3 text-xs">from peak</span>
+      </div>
+
+      {/* Where you sit on the ladder — always shown, breach or not. */}
+      <div className="text-t2 text-xs mt-2" style={{ lineHeight: 1.5 }}>
+        {activeStep ? (
+          <>
+            <span style={{ color: SEVERITY_TEXT_COLOR.breach }}>
+              Rung crossed at {activeStep.drawdownPct}% — de-risk gross to {activeStep.targetGrossPct}%.
+            </span>
+            {nextStep && (
+              <span className="text-t3">
+                {' '}Next rung {nextStep.drawdownPct}% → {nextStep.targetGrossPct}% gross
+                {distanceToNextPp !== null && `, ${distanceToNextPp.toFixed(1)}pp away`}.
+              </span>
+            )}
+          </>
+        ) : nextStep ? (
+          <span>
+            Next rung <span className="font-medium text-text">{nextStep.drawdownPct}% → {nextStep.targetGrossPct}% gross</span>
+            {distanceToNextPp !== null && (
+              <span style={{ color: status.severity === 'near' ? SEVERITY_TEXT_COLOR.near : 'var(--t3)' }}>
+                {' '}· {distanceToNextPp.toFixed(1)}pp away
+              </span>
+            )}
+          </span>
+        ) : (
+          <span className="text-t3">No de-risk rungs configured.</span>
+        )}
+      </div>
+
+      {/* Source + as-of, per convention. Item 1 reads off the last synced IBKR Net Liq;
+          Item 2 will drive this off live prices. */}
+      <div className="text-t3 text-[10px] mt-2 tabular-nums">
+        vs your cash-flow-adjusted peak{nlv != null ? ` · account Net Liq ${fmtEquity(nlv)}` : ''} · Source: IBKR{asOf ? ` · as of ${fmtDateTime(asOf)}` : ''}
+      </div>
     </div>
   );
 }
@@ -314,6 +392,8 @@ export function ViolationsSummary({ showSyncButton = false, settingsTo, bindingG
   const drawdownPct = cashflowAdjustedDrawdownPct(
     config.ibkr_nlv, config.equity_peak, config.cumulative_cashflow, config.equity_peak_cashflow,
   );
+  // Always-on drawdown read for the card below (Item 1): null → silent (no NLV+peak yet).
+  const ladderStatus = drawdownPct === null ? null : drawdownLadderStatus(config.ladder, drawdownPct);
 
   const result = evaluateRiskConfig(positionInputs, sectorMap ?? {}, accountEquity, {
     maxPositionPct: config.max_position_pct,
@@ -377,6 +457,10 @@ export function ViolationsSummary({ showSyncButton = false, settingsTo, bindingG
       {/* The four limit cards are one group — a subtle tinted container sets them
           apart from the standalone Regime light card (same card style) above. */}
       <div className="rounded-2xl border border-border p-3 flex flex-col gap-4" style={{ background: 'var(--s2)' }}>
+      {/* Drawdown first — it drives the gross-exposure target the next card renders. */}
+      {ladderStatus && (
+        <DrawdownCard status={ladderStatus} nlv={config.ibkr_nlv} asOf={config.ibkr_nlv_at} />
+      )}
       <div className="bg-surface border border-border rounded-xl p-5">
         <div className="text-text font-semibold text-sm flex items-center gap-1.5">
           Gross exposure

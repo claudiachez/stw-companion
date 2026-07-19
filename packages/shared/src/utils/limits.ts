@@ -201,6 +201,62 @@ export function drawdownLadderTarget(ladder: DrawdownStep[], drawdownPct: number
 }
 
 /**
+ * Default "near" band for the drawdown ladder: the current drawdown is flagged
+ * `near` (amber early warning) when it sits within this many percentage points of
+ * the next, not-yet-breached rung. Distinct from NEAR_LIMIT_FRACTION (a % of the
+ * limit, used by the concentration checks) — the ladder's rungs are absolute
+ * drawdown levels, so proximity is measured in percentage points, not a ratio.
+ * Host to confirm the band; 2pp is the plan's default (plans/20260719...).
+ */
+export const DRAWDOWN_NEAR_BAND_PP = 2;
+
+export interface DrawdownLadderStatus {
+  /** Current drawdown %, negative (mirrors the input; 0 = at the high-water mark). */
+  drawdownPct: number;
+  /** The deepest rung currently breached, or null if none is breached. */
+  activeStep: DrawdownStep | null;
+  /** The next, not-yet-breached (deeper) rung, or null once the deepest rung is breached. */
+  nextStep: DrawdownStep | null;
+  /** Percentage points from the current drawdown to `nextStep`'s threshold (positive =
+   *  still above it). Null when there's no next rung. */
+  distanceToNextPp: number | null;
+  /** `breach` if any rung is breached; else `near` within the band of the next rung; else `ok`.
+   *  Never `unevaluated` — a null drawdown is handled by the caller (renders nothing). */
+  severity: ViolationSeverity;
+}
+
+/**
+ * The always-on drawdown read for the Risk tab (plans/20260719 Item 1) — turns a bare
+ * drawdown % into "where am I on the ladder?": the deepest rung breached (if any), the
+ * next rung ahead, how far off it is, and a `ok|near|breach` severity so a NEAR reads
+ * amber BEFORE a rung fires (the whole point — the ladder was silent until it fired).
+ *
+ * `drawdownPct` is negative (e.g. -8.85 = down 8.85% from the cash-flow-adjusted peak).
+ * Rungs are absolute drawdown levels (e.g. -10, -15), so proximity is measured in
+ * percentage points against `nearBandPp`, NOT as a fraction of a limit.
+ */
+export function drawdownLadderStatus(
+  ladder: DrawdownStep[],
+  drawdownPct: number,
+  nearBandPp: number = DRAWDOWN_NEAR_BAND_PP,
+): DrawdownLadderStatus {
+  // Shallowest → deepest (e.g. -10 before -15) so the first unbreached rung we hit is
+  // the nearest one ahead, and the last breached one we see is the deepest active.
+  const sorted = [...ladder].sort((a, b) => b.drawdownPct - a.drawdownPct);
+  let activeStep: DrawdownStep | null = null;
+  let nextStep: DrawdownStep | null = null;
+  for (const step of sorted) {
+    if (drawdownPct <= step.drawdownPct) activeStep = step;
+    else if (nextStep === null) nextStep = step;
+  }
+  const distanceToNextPp = nextStep === null ? null : drawdownPct - nextStep.drawdownPct;
+  let severity: ViolationSeverity = 'ok';
+  if (activeStep !== null) severity = 'breach';
+  else if (distanceToNextPp !== null && distanceToNextPp <= nearBandPp) severity = 'near';
+  return { drawdownPct, activeStep, nextStep, distanceToNextPp, severity };
+}
+
+/**
  * Cash-flow-adjusted drawdown-from-peak, in percent (0 = at the high-water mark,
  * negative = below it). Returns null when there isn't enough real data to compute
  * a drawdown (no live equity, or no established peak) — the caller renders NOTHING
