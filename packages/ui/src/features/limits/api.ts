@@ -1,3 +1,4 @@
+import { DEFAULT_PER_STOCK_LADDER, DRAWDOWN_NEAR_BAND_PP } from '@stw/shared';
 import { getSupabase } from '../../lib/supabase';
 
 export interface RiskConfigRow {
@@ -8,6 +9,10 @@ export interface RiskConfigRow {
   max_sector_pct: number;
   max_gross_pct: number;
   ladder: { drawdownPct: number; targetGrossPct: number }[];
+  /** Per-stock drawdown ladder (migration 072): reduce-to % of PEAK size at each drawdown-from-entry rung. */
+  per_stock_ladder: { drawdownPct: number; holdFractionPct: number }[];
+  /** Percentage-point band for the amber "near" warning on BOTH ladders (migration 072, default 2). */
+  drawdown_near_band_pp: number;
   is_placeholder: boolean;
   /** Account Net Liquidation Value (or equivalent) — DB defaults to a $100,000 placeholder (migration 059), flagged via is_placeholder until the user overrides it. */
   account_equity: number;
@@ -66,6 +71,8 @@ export const DEFAULT_RISK_CONFIG = {
   max_sector_pct: 25,
   max_gross_pct: 100,
   ladder: [{ drawdownPct: -10, targetGrossPct: 70 }, { drawdownPct: -15, targetGrossPct: 50 }],
+  per_stock_ladder: DEFAULT_PER_STOCK_LADDER,
+  drawdown_near_band_pp: DRAWDOWN_NEAR_BAND_PP,
   account_equity: 100000,
   regime_trim_to_pct: 70,
   regime_stop_pct: 5,
@@ -91,7 +98,7 @@ export async function ensureRiskConfig(userId: string): Promise<RiskConfigRow> {
 
 export async function saveRiskConfig(
   userId: string,
-  patch: Partial<Pick<RiskConfigRow, 'max_position_pct' | 'max_option_position_pct' | 'max_sector_pct' | 'max_gross_pct' | 'ladder' | 'account_equity' | 'regime_trim_to_pct' | 'regime_stop_pct' | 'regime_doublered_gross_pct'>>,
+  patch: Partial<Pick<RiskConfigRow, 'max_position_pct' | 'max_option_position_pct' | 'max_sector_pct' | 'max_gross_pct' | 'ladder' | 'per_stock_ladder' | 'drawdown_near_band_pp' | 'account_equity' | 'regime_trim_to_pct' | 'regime_stop_pct' | 'regime_doublered_gross_pct'>>,
 ): Promise<void> {
   const { error } = await getSupabase()
     .from('risk_config')

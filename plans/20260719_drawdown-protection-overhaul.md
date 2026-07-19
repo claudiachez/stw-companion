@@ -57,13 +57,37 @@ Reaches the user off the Risk tab.
   cross/approach, with de-dup (don't re-alert the same rung daily). Store last-alerted state.
 - Advisory copy only; never implies an executed action.
 
-## Item 4 — Per-position stop alerts  [distinct from the account ladder]
-The thing that would've flagged TE −32% directly.
-- New per-user setting: flag a position down > X% from entry (advisory). Entry = `avg_cost`
-  from `user_positions` (subscriber) — note the subscriber feed has no return %, so compute
-  from `mark_price` vs `avg_cost`.
-- Surface on My Portfolio (the position row / detail) + optionally roll into Item 3 alerts.
-- Independent of the account ladder; purely advisory.
+## Item 4 — Per-stock drawdown LADDER  [distinct from the account ladder]  — DESIGN LOCKED (host 2026-07-19)
+The thing that would've flagged TE −32% directly. A full ladder (host), not a single stop.
+- **Trigger** = drawdown-from-entry per STOCK position: `(mark_price − avg_cost)/avg_cost`,
+  from `user_positions` (stable — a trim doesn't change the remaining shares' avg_cost).
+  Scoped to STK legs for v1 (options have their own leverage/decay risk lens — out of scope).
+- **Rung action = reduce-to a fraction of PEAK size** (host: "trim ¼ each"). Default ladder:
+  `[{-5→75}, {-10→50}, {-15→25}, {-20→0}]` = hold ≤ 75/50/25/0 % of peak. Per-user, retunable.
+- **Trim-aware via `user_executions`, NOT a new baseline table** (host asked; confirmed the data
+  exists). Reconstruct the current open episode's PEAK quantity by cumulative-summing signed fills
+  per underlying (append-only log survives a full close). `alreadyComplies = |curQty|/|peakQty| ≤
+  target` → idempotent (a rung goes quiet once you've trimmed to it; no nagging, and Item 3 alerts
+  only fire when NOT complied). **Completeness guard:** reconcile Σ(signed fills) against
+  `user_positions.quantity`; on mismatch (pre-window/pre-sync fills missing) fall back to
+  peak = current qty ("history incomplete"), never a wrong number.
+- **Shared logic** (`@stw/shared`): `reconstructPositionEpisode(fills)` → `{peakQty, entryQty,
+  reconciles}`; `perStockLadderStatus(drawdownPct, curQty, peakQty, ladder, nearBandPp)` →
+  `{severity, activeRung, nextRung, targetHoldPct, alreadyComplies, distanceToNextPp}`. Same
+  `ok|near|breach` + NEAR band vocabulary as the account ladder.
+- **UI:** My Portfolio position row (chip) + detail pane section, CLEARLY distinguished from the
+  account "Portfolio drawdown" card (host: three concepts must be visually distinct). Independent
+  axis — flags a NAME, sets no gross target, so it cannot contradict the regime/portfolio ladder.
+- **Settings + migration:** `risk_config` gains `per_stock_ladder` (jsonb) + `drawdown_near_band_pp`
+  (numeric, default 2 — the Item-1 near band, now the user's to set). One migration, Claude-authors/
+  host-applies. `RiskConfigForm` gains both editors.
+
+## Item 3 — Alerts  [DECIDED: in-app + email; Discord-bot DM under consideration]
+Host chose in-app + email (#2 + #1). A Discord bot DM is per-user (unlike the broadcast channels)
+so it could deliver the off-app reach email does — worth scoping as a possible unifier. Scheduled
+fn (post-sync) evaluates each user's account ladder + per-stock ladder, alerts on cross/approach
+with de-dup (reuse the `alreadyComplies` / ack state so it doesn't cry wolf). Own scoping plan
+before building the infra.
 
 ## Standing constraints
 Advisory/display-only (never blocks). Regime gate frozen at engine 1.1.0; gate ↔ Macro

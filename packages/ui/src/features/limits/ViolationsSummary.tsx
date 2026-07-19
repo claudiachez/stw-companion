@@ -404,7 +404,10 @@ export function ViolationsSummary({ showSyncButton = false, settingsTo, bindingG
     ddNlv, config.equity_peak, config.cumulative_cashflow, config.equity_peak_cashflow,
   );
   // Always-on drawdown read for the card below (Item 1): null → silent (no NLV+peak yet).
-  const ladderStatus = drawdownPct === null ? null : drawdownLadderStatus(config.ladder, drawdownPct);
+  // The NEAR band is the user's setting (migration 072), defaulting to the shared constant
+  // when the column isn't present yet (migration applied separately from the deploy).
+  const nearBand = config.drawdown_near_band_pp ?? DRAWDOWN_NEAR_BAND_PP;
+  const ladderStatus = drawdownPct === null ? null : drawdownLadderStatus(config.ladder, drawdownPct, nearBand);
 
   const result = evaluateRiskConfig(positionInputs, sectorMap ?? {}, accountEquity, {
     maxPositionPct: config.max_position_pct,
