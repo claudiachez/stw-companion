@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { TIERS, fmtDateTime, sizingTone, matchConvictionBand, DEFAULT_PER_STOCK_LADDER, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, SPACE } from '@stw/shared';
+import { TIERS, fmtDateTime, sizingTone, matchConvictionBand, DEFAULT_PER_STOCK_LADDER, cashflowAdjustedDrawdownPct, drawdownLadderStatus, DRAWDOWN_NEAR_BAND_PP, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, SPACE } from '@stw/shared';
 import { useUserPositions, useIbkrSettings, useUserExecutions } from './useUserPositions';
 import { usePerStockLadders, type PerStockLadderInfo } from './usePerStockLadders';
 import { PerStockLadderChip } from './PerStockLadder';
@@ -287,10 +287,23 @@ function GroupHeader({ group, onSelectTicker, showPnl, isMobile, portfolioValue,
 
 // ── summary stat cards ────────────────────────────────────────
 
-// §2.3 — a clickable pill for the two Overview alerts, each jumping to the
-// relevant filtered view. Two severities: neutral info vs amber warning.
-function SummaryChip({ severity, onClick, children }: { severity: 'info' | 'warning'; onClick: () => void; children: React.ReactNode }) {
-  const c = severity === 'warning'
+// Risk warnings surfaced on Overview (Item 3 in-app) — the account drawdown state + a
+// count of names near/past a per-stock stop, so the warnings aren't buried on the Risk tab.
+interface OverviewWarnings {
+  drawdownSeverity: 'near' | 'breach' | null;
+  drawdownPct: number | null;
+  /** Names near OR past a per-stock stop (needs attention). */
+  stopAttention: number;
+  /** Subset past a stop and not yet trimmed (breach). */
+  stopBreach: number;
+}
+
+// §2.3 — a clickable pill for the Overview alerts, each jumping to the relevant view.
+// Severities: neutral info · amber warning · red negative (a live breach).
+function SummaryChip({ severity, onClick, children }: { severity: 'info' | 'warning' | 'negative'; onClick: () => void; children: React.ReactNode }) {
+  const c = severity === 'negative'
+    ? { fg: 'var(--status-negative-text)', bg: 'var(--status-negative-bg)', bd: 'var(--status-negative-border)' }
+    : severity === 'warning'
     ? { fg: 'var(--status-warning-text)', bg: 'var(--status-warning-bg)', bd: 'var(--status-warning-border)' }
     : { fg: 'var(--t2)', bg: 'var(--s2)', bd: 'var(--border)' };
   return (
@@ -304,14 +317,18 @@ function SummaryChip({ severity, onClick, children }: { severity: 'info' | 'warn
   );
 }
 
-function PortfolioSummary({ groups, showPnl, nlv, nlvAt, onOpenTailing, onOpenLowConviction }: {
+function PortfolioSummary({ groups, showPnl, nlv, warnings, onOpenTailing, onOpenLowConviction, onOpenRisk, onOpenStops }: {
   groups: PortfolioGroup[]; showPnl: boolean;
-  /** Account Net Liquidation Value from IBKR (risk_config.ibkr_nlv) + its as-of stamp —
-   *  positions market value + cash/margin, so the header reconciles to what IBKR shows. */
+  /** Account Net Liquidation Value from IBKR (risk_config.ibkr_nlv) — positions market
+   *  value + cash/margin, shown as the hero Account Value card with the split as its qualifier. */
   nlv: number | null;
-  nlvAt: string | null;
+  /** Risk warnings to surface on Overview (Item 3 in-app): the account-drawdown state +
+   *  count of stock names near/past a per-stock stop. Chips link to the relevant surface. */
+  warnings: OverviewWarnings;
   onOpenTailing: () => void;
   onOpenLowConviction: () => void;
+  onOpenRisk: () => void;
+  onOpenStops: () => void;
 }) {
   const t = useMemo(() => {
     let mv = 0, pnl = 0, cost = 0, legs = 0, sharesVal = 0, optVal = 0, optRisk = 0, tailed = 0, low = 0;
@@ -349,9 +366,22 @@ function PortfolioSummary({ groups, showPnl, nlv, nlvAt, onOpenTailing, onOpenLo
           <KpiCard label="Positions" primaryValue={positionCount} delta={{ value: `${t.legs} leg${t.legs === 1 ? '' : 's'}`, direction: 'flat' }} />
         </div>
         {showPnl && (
-          <div style={{ flex: 1, minWidth: 104 }} title="Total market value of your open positions">
-            <KpiCard label="Market Value" primaryValue={fmtMoneyCompact(t.mv)} />
-          </div>
+          nlv != null ? (
+            // Account Value (NLV) is the hero — positions + cash/margin — with the split as
+            // its qualifier. Replaces the standalone reconciliation line that used to sit
+            // below the KPI row (host, 2026-07-19); the market value now lives in the split.
+            <div style={{ flex: 1, minWidth: 104 }} title="Your IBKR account Net Liquidation Value — open positions plus cash (or minus margin).">
+              <KpiCard
+                label="Account Value"
+                primaryValue={fmtMoneyCompact(nlv)}
+                delta={{ value: `${fmtMoneyCompact(t.mv)} positions ${nlv - t.mv >= 0 ? '+' : '−'} ${fmtMoneyCompact(Math.abs(nlv - t.mv))} ${nlv - t.mv >= 0 ? 'cash' : 'margin'}`, direction: 'flat' }}
+              />
+            </div>
+          ) : (
+            <div style={{ flex: 1, minWidth: 104 }} title="Total market value of your open positions">
+              <KpiCard label="Market Value" primaryValue={fmtMoneyCompact(t.mv)} />
+            </div>
+          )
         )}
         {showPnl && (
           <div
@@ -390,23 +420,27 @@ function PortfolioSummary({ groups, showPnl, nlv, nlvAt, onOpenTailing, onOpenLo
         )}
       </div>
 
-      {/* Reconcile to IBKR: the KPI "Market Value" is positions only; the account's
-          Net Liq (from the IBKR sync) also includes cash/margin — so this line ties the
-          positions total out to the ~NLV the user sees in IBKR. Carries its own source +
-          as-of stamp (the NLV updates on IMPORT, a separate, often-older sync than positions). */}
-      {showPnl && nlv != null && (
-        <div style={{ marginTop: 12, fontSize: FONT_SIZE.xs, color: 'var(--t2)', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'baseline' }}>
-          <span style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: LETTER_SPACING.label, textTransform: 'uppercase', color: 'var(--t3)' }}>Account value</span>
-          <span style={{ color: 'var(--text)', fontWeight: FONT_WEIGHT.semibold, fontVariantNumeric: 'tabular-nums' }}>{fmtMoneyCompact(nlv)}</span>
-          <span style={{ color: 'var(--t3)' }}>
-            = {fmtMoneyCompact(t.mv)} positions {nlv - t.mv >= 0 ? '+' : '−'} {fmtMoneyCompact(Math.abs(nlv - t.mv))} {nlv - t.mv >= 0 ? 'cash' : 'margin'}
-          </span>
-          <span style={{ color: 'var(--t3)' }}>· Source: IBKR Net Liq{nlvAt ? ` · as of ${fmtDateTime(nlvAt)}` : ''}</span>
-        </div>
-      )}
-
       {positionCount > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+          {/* Risk warnings first — the account drawdown state + per-stock stops needing
+              action, so they're seen on Overview, not only the Risk tab (host, 2026-07-19). */}
+          {warnings.drawdownSeverity && (
+            <SummaryChip severity={warnings.drawdownSeverity === 'breach' ? 'negative' : 'warning'} onClick={onOpenRisk}>
+              <span>
+                {warnings.drawdownSeverity === 'breach' ? '● ' : '⚠ '}
+                Portfolio drawdown {warnings.drawdownPct != null ? `${warnings.drawdownPct >= 0 ? '+' : '−'}${Math.abs(warnings.drawdownPct).toFixed(1)}%` : ''}
+                {warnings.drawdownSeverity === 'breach' ? ' · rung crossed' : ' · near a rung'}
+              </span>
+            </SummaryChip>
+          )}
+          {warnings.stopAttention > 0 && (
+            <SummaryChip severity={warnings.stopBreach > 0 ? 'negative' : 'warning'} onClick={onOpenStops}>
+              <span>
+                {warnings.stopBreach > 0 ? '● ' : '⚠ '}
+                {warnings.stopAttention} position{warnings.stopAttention === 1 ? '' : 's'} near / past a stop
+              </span>
+            </SummaryChip>
+          )}
           <SummaryChip severity="info" onClick={onOpenTailing}>
             <span><strong style={{ color: 'var(--text)' }}>{t.tailed}</strong> of {positionCount} tailed{traderSummary ? ` · ${traderSummary}` : ''}</span>
           </SummaryChip>
@@ -687,6 +721,25 @@ export function PortfolioPage() {
   // once here; the map feeds both the row chips and the detail-pane section (one source).
   const { data: executions = [] } = useUserExecutions();
   const perStockLadders = usePerStockLadders(positions, executions, regimeRiskConfig);
+
+  // Risk warnings for the Overview chips (Item 3 in-app): the account-drawdown state off
+  // the SAME live NLV the Risk tab uses (one source of inputs → same verdict), plus how many
+  // stock names are near/past a per-stock stop. Advisory — the chips just link to the detail.
+  const overviewWarnings = useMemo<OverviewWarnings>(() => {
+    const ddPct = regimeRiskConfig
+      ? cashflowAdjustedDrawdownPct(liveNlv.nlv, regimeRiskConfig.equity_peak, regimeRiskConfig.cumulative_cashflow, regimeRiskConfig.equity_peak_cashflow)
+      : null;
+    const ddStatus = ddPct === null || !regimeRiskConfig
+      ? null
+      : drawdownLadderStatus(regimeRiskConfig.ladder, ddPct, regimeRiskConfig.drawdown_near_band_pp ?? DRAWDOWN_NEAR_BAND_PP);
+    const stops = [...perStockLadders.values()];
+    return {
+      drawdownSeverity: ddStatus && (ddStatus.severity === 'near' || ddStatus.severity === 'breach') ? ddStatus.severity : null,
+      drawdownPct: ddStatus ? ddStatus.drawdownPct : null,
+      stopAttention: stops.filter((i) => i.status.severity === 'near' || i.status.severity === 'breach').length,
+      stopBreach: stops.filter((i) => i.status.severity === 'breach').length,
+    };
+  }, [regimeRiskConfig, liveNlv.nlv, perStockLadders]);
   // One reconciliation of the drawdown ladder vs the double-RED regime target, computed
   // once here and passed to BOTH the RegimeLight and ViolationsSummary so they show the
   // identical binding gross number (never two conflicting targets). The ladder side reads
@@ -1005,12 +1058,18 @@ export function PortfolioPage() {
         groups={allGroups}
         showPnl={showPnl}
         nlv={regimeRiskConfig?.ibkr_nlv ?? null}
-        nlvAt={regimeRiskConfig?.ibkr_nlv_at ?? null}
+        warnings={overviewWarnings}
         onOpenTailing={() => changeTab('tailing')}
         onOpenLowConviction={() => {
           // Jump to Positions with the conviction filter pre-applied to exactly the
           // chip's set (tiers 1–2), so the user lands on the flagged positions.
           setFilters({ ...DEFAULT_PORTFOLIO_FILTERS, conviction: 'low' });
+          changeTab('positions');
+        }}
+        onOpenRisk={() => changeTab('risk')}
+        onOpenStops={() => {
+          // Jump to Positions filtered to names near/past a per-stock stop.
+          setFilters({ ...DEFAULT_PORTFOLIO_FILTERS, stop: 'attention' });
           changeTab('positions');
         }}
       />
