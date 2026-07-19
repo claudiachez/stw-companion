@@ -82,7 +82,7 @@ The thing that would've flagged TE −32% directly. A full ladder (host), not a 
   (numeric, default 2 — the Item-1 near band, now the user's to set). One migration, Claude-authors/
   host-applies. `RiskConfigForm` gains both editors.
 
-## Item 3 — Alerts  [BUILT: in-app + email (Resend); Discord-bot DM still an option]
+## Item 3 — Alerts  [BUILT: in-app + email (Resend) + Discord-bot DM (test bot)]
 - **In-app**: Overview chips surface the account-drawdown state + a count of names near/past a
   per-stock stop, linking to the Risk tab / stop-filtered Positions (so warnings aren't buried).
 - **Email**: `apps/web/netlify/functions/drawdown-alerts-cron.ts` (web-only, `30 8 * * 2-6`, after
@@ -91,8 +91,12 @@ The thing that would've flagged TE −32% directly. A full ladder (host), not a 
   `last_level` per (user, kind, scope) — send only when it increases, delete on recovery. Reuses the
   `@stw/shared` engine (cron ↔ screen agree). Respects `preferences.drawdownAlertsOptOut` + active status.
   **Dormant until `RESEND_API_KEY` + `ALERT_FROM_EMAIL` are set on the web site** (optional `APP_URL`).
-- **Still open**: a Discord-bot DM channel (per-user, off-app) as an alternative/addition; a Settings
-  toggle for the opt-out (the fn already honors the flag). Not built.
+- **Discord-bot DM** (test bot): the cron also DMs via a bot (`DISCORD_BOT_TOKEN`) when the user has
+  linked their Discord ID in Settings → Alert delivery (`profiles.discord_user_id`, migration 074).
+  Bot identity is the token only → swap the test bot for production by changing the env. Two Discord
+  REST calls (open DM, post). Channel-agnostic de-dup; state advances if any channel delivers.
+- **Still open**: a Discord OAuth link flow (replace the manual ID paste); a Settings opt-out toggle
+  for email (the fn already honors `preferences.drawdownAlertsOptOut`). See docs/drawdown-alerts.md.
 
 ## Standing constraints
 Advisory/display-only (never blocks). Regime gate frozen at engine 1.1.0; gate ↔ Macro

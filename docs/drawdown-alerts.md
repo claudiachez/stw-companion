@@ -9,7 +9,7 @@ Advisory/display-only — nothing here places, blocks, or adjusts a trade.
 |--|--|--|
 | **In-app** | ✅ live | My Portfolio → Overview chips (account drawdown + per-stock stops) → link to the Risk tab / stop-filtered Positions. Always on, no config. |
 | **Email (Resend)** | ✅ built, **dormant until env is set** | `apps/web/netlify/functions/drawdown-alerts-cron.ts` |
-| **Discord-bot DM** | 🔲 not built (see below) | — |
+| **Discord-bot DM** | ✅ built (test bot), **dormant until env + linking** | same cron; linked in Settings → Alert delivery |
 
 ## How the email cron works
 
@@ -34,30 +34,43 @@ Advisory/display-only — nothing here places, blocks, or adjusts a trade.
 |--|--|--|
 | `RESEND_API_KEY` | Resend sending key | resend.com → *API Keys* → create (Sending access). Free tier ≈3,000/mo, 100/day. |
 | `ALERT_FROM_EMAIL` | The "From" address | Any address on a **domain you've verified in Resend** (*Domains* → add domain → SPF/DKIM DNS records), e.g. `alerts@yourdomain`. Resend rejects an unverified-domain sender. |
-| `APP_URL` *(optional)* | Web app base URL | Your subscriber site's public URL (Netlify → that site → *Site overview*). Only builds the "Open your Risk tab →" link; omit to drop it. |
+| `DISCORD_BOT_TOKEN` *(optional)* | Bot token for DM alerts | discord.com/developers → your app → Bot → Reset/Copy Token. Enables the Discord channel; the bot's identity is entirely this token, so swapping the **test bot** for the production one is just this env var. |
+| `APP_URL` *(optional)* | Web app base URL | Your subscriber site's public URL (Netlify → that site → *Site overview*). Builds the "Open your Risk tab →" link in both email + Discord; omit to drop it. |
+
+Each channel is independent: set email vars for email, `DISCORD_BOT_TOKEN` for Discord, or both.
+The cron sends on every configured+linked channel and only advances its de-dup state if at least
+one delivered.
 
 Quick smoke test before verifying a domain: Resend allows `onboarding@resend.dev` as the sender,
 but it only delivers to the Resend account owner's email. Verify your domain before real
 subscribers are in scope.
 
-## Discord-bot DM — what it would take
+## Discord-bot DM — how it's wired (test bot)
 
 The repo's existing Discord wiring is **inbound only** (the routines read STW's channels for
-commentary — `traders.discord_user_id`, `channels.discord_channel_id`). Outbound DMs to
-subscribers are a separate build. Requirements:
+commentary — `traders.discord_user_id`, `channels.discord_channel_id`). This is the separate
+**outbound** path: the alert cron DMs a subscriber via a bot. Built as a **test bot** for now — it
+will be swapped for the production bot later, which is just changing `DISCORD_BOT_TOKEN` (the bot's
+identity is entirely the token; no code change).
 
-1. **A Discord application + bot** (discord.com/developers → New Application → Bot) → a
-   `DISCORD_BOT_TOKEN`. Send-only DMs use the **REST API** (`POST /users/@me/channels` to open a
-   DM, then `POST /channels/{id}/messages`) — no gateway websocket needed.
-2. **A shared server.** Discord only lets a bot DM a user who **shares a server** with it, so every
-   subscriber must be in your Discord server (the bot joins it too).
-3. **Per-user linking.** We need each subscriber's **Discord user ID** stored (a new
-   `profiles.discord_user_id` for subscribers — today only `traders` has one). Cleanest is a Discord
-   **OAuth2 "identify"** link flow in Settings; alternatively the user pastes their Discord ID.
-4. **User privacy setting.** The subscriber must allow DMs from server members, or the send fails.
+**To turn it on:**
+1. **Create a Discord app + bot** (discord.com/developers → New Application → Bot), copy the token
+   → `DISCORD_BOT_TOKEN` on the web site. Send-only DMs use the **REST API** (`POST
+   /users/@me/channels` then `POST /channels/{id}/messages`) — no gateway/websocket.
+2. **Share a server.** Discord only lets a bot DM a user who **shares a server** with it — invite
+   the bot to your server and have testers join it.
+3. **Link the user.** Each subscriber pastes their **Discord user ID** in **Settings → Alert
+   delivery** (Developer Mode → right-click → Copy User ID), stored on `profiles.discord_user_id`.
+   A Discord **OAuth "identify"** link flow is the eventual productionization — it populates the
+   same column, so nothing downstream changes.
+4. **Allow DMs.** The tester must allow DMs from server members, or the send fails.
 
-**Trade-off vs email:** per-user and no deliverability/spam concerns, but it requires every
-subscriber to (a) be in the server, (b) link Discord, (c) allow DMs — real friction, and not
-everyone uses Discord. So it's best as an **addition** for Discord-active users, not a replacement
-for email. The alert-evaluation + de-dup engine (`risk_alert_state`) is channel-agnostic, so adding
-Discord is just a second send path in the same cron.
+**Trade-off vs email:** per-user, no deliverability/spam concerns, but requires each subscriber to
+(a) be in the server, (b) link Discord, (c) allow DMs — real friction, and not everyone uses
+Discord. Best as an **addition** for Discord-active users, not a replacement for email. The
+evaluation + de-dup engine (`risk_alert_state`) is channel-agnostic — Discord is just a second send
+path in the same cron.
+
+## Still open
+- A Discord **OAuth link flow** (replace the manual ID paste).
+- A Settings **opt-out toggle** for email (the cron already honors `preferences.drawdownAlertsOptOut`).

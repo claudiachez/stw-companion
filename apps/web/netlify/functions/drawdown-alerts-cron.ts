@@ -73,6 +73,27 @@ async function sendEmail(resendKey: string, from: string, to: string, subject: s
   return null;
 }
 
+// Discord DM = two REST calls with the BOT token (Authorization: Bot <token>): open a DM
+// channel with the user, then post the message. Bot identity is entirely the token, so
+// swapping the test bot for the production one is just the env var — no code change.
+async function sendDiscordDm(botToken: string, discordUserId: string, content: string): Promise<string | null> {
+  const chanRes = await fetch('https://discord.com/api/v10/users/@me/channels', {
+    method: 'POST',
+    headers: { Authorization: `Bot ${botToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ recipient_id: discordUserId }),
+  });
+  if (!chanRes.ok) return `open-dm ${chanRes.status} ${(await chanRes.text()).slice(0, 160)}`;
+  const channel = (await chanRes.json()) as { id?: string };
+  if (!channel.id) return 'open-dm: no channel id';
+  const msgRes = await fetch(`https://discord.com/api/v10/channels/${channel.id}/messages`, {
+    method: 'POST',
+    headers: { Authorization: `Bot ${botToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content }),
+  });
+  if (!msgRes.ok) return `send-dm ${msgRes.status} ${(await msgRes.text()).slice(0, 160)}`;
+  return null;
+}
+
 // ── row shapes (only the columns we select) ──
 interface ConfigRow {
   user_id: string;
@@ -84,7 +105,7 @@ interface ConfigRow {
   per_stock_ladder: PerStockDrawdownStep[] | null;
   drawdown_near_band_pp: number | null;
 }
-interface ProfileRow { user_id: string; email: string | null; status: string | null; preferences: { drawdownAlertsOptOut?: boolean } | null }
+interface ProfileRow { user_id: string; email: string | null; status: string | null; discord_user_id: string | null; preferences: { drawdownAlertsOptOut?: boolean } | null }
 interface PositionRow { user_id: string; underlying: string; asset_class: string; quantity: number | null; avg_cost: number | null; mark_price: number | null; multiplier: number | null }
 interface ExecRow { user_id: string; underlying: string; asset_class: string; quantity: number | null; executed_at: string }
 interface AlertStateRow { user_id: string; alert_kind: string; scope: string; last_level: number }
@@ -103,8 +124,11 @@ const handlerImpl: Handler = async () => {
   const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim();
   const resendKey = (process.env.RESEND_API_KEY ?? '').trim();
   const fromEmail = (process.env.ALERT_FROM_EMAIL ?? '').trim();
+  const discordToken = (process.env.DISCORD_BOT_TOKEN ?? '').trim();
   const appUrl = (process.env.APP_URL ?? '').trim();
   if (!url || !serviceKey) return { statusCode: 500, body: 'Server misconfigured (Supabase env)' };
+  const emailReady = !!(resendKey && fromEmail);
+  const discordReady = !!discordToken;
 
   const ranAt = new Date().toISOString();
   const logRun = async (status: string, processed: number, summary: string) => {
@@ -115,17 +139,18 @@ const handlerImpl: Handler = async () => {
     } catch { /* run_log is best-effort */ }
   };
 
-  // Dormant until email is configured — do nothing durable so the first configured run
-  // sends the then-current escalations rather than having silently advanced the state.
-  if (!resendKey || !fromEmail) {
-    await logRun('skipped', 0, 'RESEND_API_KEY / ALERT_FROM_EMAIL not set — alerts disabled');
-    return { statusCode: 200, body: 'email not configured; no-op' };
+  // Dormant until at least one channel is configured — do nothing durable so the first
+  // configured run sends the then-current escalations rather than having silently advanced
+  // the state.
+  if (!emailReady && !discordReady) {
+    await logRun('skipped', 0, 'no channel configured (email/Discord) — alerts disabled');
+    return { statusCode: 200, body: 'no channel configured; no-op' };
   }
 
   try {
     const [configs, profiles, positions, execs, states] = await Promise.all([
       sbGet<ConfigRow>(url, serviceKey, 'risk_config?select=user_id,ibkr_nlv,equity_peak,cumulative_cashflow,equity_peak_cashflow,ladder,per_stock_ladder,drawdown_near_band_pp'),
-      sbGet<ProfileRow>(url, serviceKey, 'profiles?select=user_id,email,status,preferences'),
+      sbGet<ProfileRow>(url, serviceKey, 'profiles?select=user_id,email,status,discord_user_id,preferences'),
       sbGet<PositionRow>(url, serviceKey, 'user_positions?select=user_id,underlying,asset_class,quantity,avg_cost,mark_price,multiplier&asset_class=eq.STK'),
       sbGet<ExecRow>(url, serviceKey, 'user_executions?select=user_id,underlying,asset_class,quantity,executed_at&asset_class=eq.STK'),
       sbGet<AlertStateRow>(url, serviceKey, 'risk_alert_state?select=user_id,alert_kind,scope,last_level'),
@@ -147,7 +172,11 @@ const handlerImpl: Handler = async () => {
 
     for (const cfg of configs) {
       const profile = profileBy.get(cfg.user_id);
-      if (!profile?.email || profile.status !== 'active' || profile.preferences?.drawdownAlertsOptOut) continue;
+      if (!profile || profile.status !== 'active' || profile.preferences?.drawdownAlertsOptOut) continue;
+      // Needs at least one reachable, configured channel, else there's nothing to send to.
+      const canEmail = emailReady && !!profile.email;
+      const canDiscord = discordReady && !!profile.discord_user_id;
+      if (!canEmail && !canDiscord) continue;
 
       const nearBand = cfg.drawdown_near_band_pp ?? DRAWDOWN_NEAR_BAND_PP;
       const alerts: Alert[] = [];
@@ -201,12 +230,21 @@ const handlerImpl: Handler = async () => {
         }
       }
 
-      // Send one summary email if anything escalated.
+      // Send a summary on every configured channel if anything escalated. State advances
+      // only if at least ONE channel delivered — a total failure retries next run.
       if (alerts.length > 0) {
-        const html = renderEmail(alerts, appUrl);
-        const subject = `STW Companion — drawdown alert (${alerts.length} item${alerts.length === 1 ? '' : 's'})`;
-        const sendErr = await sendEmail(resendKey, fromEmail, profile.email, subject, html);
-        if (sendErr) { emailsFailed += 1; failures.push(`${cfg.user_id.slice(0, 8)}: ${sendErr}`); continue; } // don't advance state on a failed send
+        const uid8 = cfg.user_id.slice(0, 8);
+        let delivered = false;
+        if (canEmail) {
+          const subject = `STW Companion — drawdown alert (${alerts.length} item${alerts.length === 1 ? '' : 's'})`;
+          const e = await sendEmail(resendKey, fromEmail, profile.email!, subject, renderEmail(alerts, appUrl));
+          if (e) { emailsFailed += 1; failures.push(`email ${uid8}: ${e}`); } else delivered = true;
+        }
+        if (canDiscord) {
+          const e = await sendDiscordDm(discordToken, profile.discord_user_id!, renderDiscord(alerts, appUrl));
+          if (e) { emailsFailed += 1; failures.push(`discord ${uid8}: ${e}`); } else delivered = true;
+        }
+        if (!delivered) continue; // nothing got through — leave state so it retries
         usersAlerted += 1;
       }
 
@@ -227,7 +265,7 @@ const handlerImpl: Handler = async () => {
       }
     }
 
-    const summary = `alerted ${usersAlerted} user(s)` + (emailsFailed ? ` · ${emailsFailed} email failure(s)` : '') + (failures.length ? ` · ${failures.join('; ')}` : '');
+    const summary = `alerted ${usersAlerted} user(s)` + (emailsFailed ? ` · ${emailsFailed} send failure(s)` : '') + (failures.length ? ` · ${failures.join('; ')}` : '');
     await logRun(emailsFailed || failures.length ? 'error' : 'ok', usersAlerted, summary);
     return { statusCode: 200, body: summary };
   } catch (e) {
@@ -247,6 +285,13 @@ function renderEmail(alerts: Alert[], appUrl: string): string {
     ${link}
     <p style="font-size:11px;color:#999;margin:20px 0 0">Advisory only, based on your last IBKR sync. Manage or turn off these alerts in Settings.</p>
   </div>`;
+}
+
+function renderDiscord(alerts: Alert[], appUrl: string): string {
+  // Discord message = markdown, ≤2000 chars. Keep it short + advisory.
+  const items = alerts.map((a) => `• ${a.line}`).join('\n');
+  const link = appUrl ? `\n${appUrl}/portfolio?tab=risk` : '';
+  return `**Drawdown alert** — your account crossed or is nearing a de-risk level you set.\n${items}${link}\n_Advisory only, based on your last IBKR sync._`;
 }
 
 export const handler = schedule('30 8 * * 2-6', handlerImpl);

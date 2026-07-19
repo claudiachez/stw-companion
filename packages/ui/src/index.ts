@@ -84,7 +84,7 @@ export { ConvictionBadge } from './features/picks/components/ConvictionBadge';
 export { PortfolioPage } from './features/portfolio/PortfolioPage';
 export { useUserPositions, useIbkrSettings } from './features/portfolio/useUserPositions';
 export { useSyncPortfolio } from './features/portfolio/useSyncPortfolio';
-export { saveIbkrSettings } from './features/portfolio/api';
+export { saveIbkrSettings, fetchDiscordUserId, saveDiscordUserId } from './features/portfolio/api';
 export type { UserPosition, IbkrSettings } from './features/portfolio/api';
 
 // ── Limits engine (Item 2, plans/integrity-guardrails.md) ──────
