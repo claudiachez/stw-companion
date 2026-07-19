@@ -30,6 +30,7 @@ before opening one.
 - **[docs/ui-conventions.md](docs/ui-conventions.md)** — the standing UI rules.
 - **[docs/routines.md](docs/routines.md)** — who writes each table + the ingestion cron routines.
 - **[docs/ibkr.md](docs/ibkr.md)** — the three IBKR pipelines.
+- **[docs/drawdown-alerts.md](docs/drawdown-alerts.md)** — drawdown-alert channels (in-app + email/Resend) + setup env + the Discord-DM option.
 - **[docs/macro.md](docs/macro.md)** + **[docs/feeds.md](docs/feeds.md)** — Macro wiring + feed inventory/limits.
 - **[docs/design-system/CONTRIBUTING.md](docs/design-system/CONTRIBUTING.md)** — tokens + primitives.
 - **[docs/session-history.md](docs/session-history.md)** — dated handoff archive.
