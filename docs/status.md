@@ -4,26 +4,30 @@
 > (by `/wrap-up`). Durable rules live in CLAUDE.md; dated history in docs/session-history.md.
 
 ## State
-- **`staging` and `main` are in sync — everything is on PRODUCTION** (promoted 2026-07-16, PR #138,
-  host-approved: 124 commits). No pending promotion.
-- **Migrations applied + verified through `071`** on PROD + sandbox (058 PROD-only — known sandbox gap).
-  No migrations authored recently; the DB was already at 071 before the promotion.
-- **CI is live** (`.github/workflows/ci.yml`): typecheck + lint + test + `check:fn-parity` on every PR.
-  Run `/stw-review` before opening a PR.
-- Scheduled fns now fire on prod: `ibkr-sync-cron` (nightly), regime-daily 5-day trailing-window
-  (VIX self-heal), recap AM/PM retiming, gex/macro snapshot writers.
+- All product code through PR #143 is on `staging`. **A `staging → main` promotion is PENDING**
+  (host-approved required) — it carries: AM recap + GEX both at **8:32 ET** (#140), the GEX
+  **QUICK READ** parser fix (#141), GEX **freshness guard + stale flag** (#142), the My Portfolio
+  **Account Value (NLV) reconciliation line** (#143). None of the scheduled-fn changes take effect on
+  prod until that promotion.
+- **Migrations at `071`** on PROD + sandbox; none authored recently.
+- CI (`.github/workflows/ci.yml`) runs typecheck/lint/test/fn-parity on every PR. Run `/stw-review`
+  before opening one. Netlify functions de-duped into `@stw/functions` (parity-enforced).
 
-## Verify on prod (next session / as they occur)
-- **Regime VIX self-heal:** confirm the nightly `regime-daily` now writes rows WITH `vix_close`
-  (was null Jul 10–14 pre-fix; those were hand-patched). The Risk-pane regime should track the
-  latest trading day, not freeze.
-- **Macro econ-actuals + recap timing:** on a real release morning, Event Risk shows the just-released
-  print + green/red favorability arrow; the AM recap lands ~7:50 (or 8:33 on an 8:30-release day).
-- **`ibkr-sync-cron`:** confirm its first nightly tick populated/refreshed subscriber data (`run_log`).
+## Next work (priority order)
+1. **Drawdown-protection overhaul** — `plans/20260719_drawdown-protection-overhaul.md`. The host held
+   deep single-name losses with NO warning; the ladder is account-level (was at −8.85%, under the
+   −10% Rung 1) AND silent-until-fire AND runs off the synced NLV, not live prices. Four fixes,
+   ordered: (1) show drawdown always + "near" warning [do first, contained]; (2) drive drawdown off
+   LIVE prices; (3) rung alerts/notifications; (4) per-position stop alerts. Read the plan — it has the
+   verified numbers + the formula + the design risks (esp. peak consistency for the live-NLV change).
+2. **RegimeLight ↔ Macro trend one-source fix** — the Risk-tab regime light and the Macro
+   Trend/Structure card show SPY differently (Momentum vs Healthy Pullback) because two independent
+   fetches (`useTickerRegime` vs `useMacroTrendHistory`) get different-vintage closes. Unify the index
+   daily-closes behind one cached source; stamp the RegimeLight structure with its real as-of (not the
+   gate's date). Diagnosed this session, not yet built.
 
-## Next work
-- **Week 3 — historical reconstruction** (`plans/20260709_integrity-guardrailsv2.md`, WEEK 3): ~60 weekly
-  snapshots into staging tables; decide the regime trend-input question (200-day gate vs 9/21/200
-  bucket). Standing prohibitions carry through (gate frozen 1.1.0, advisory-only, no gate/composite blend).
-- Backlog (host-requested, unordered): multi-trader tailing (needs a link table + conflict rule — get
-  the rule decided first), transcripts/episode-recap tab, global activity feed. See docs/session-history.md.
+## Notes / smaller items
+- `ibkr_nlv` DOES refresh on every sync (nightly cron + Sync button write it by default from the Flex
+  NAV section) — `ibkr_nlv_at` tracks the sync. Only `cumulative_cashflow` is import-only (needs a
+  full-history report). Optional follow-up: keep cumulative cash-flow current between imports.
+- `risk_config.updated_at` is a stale/unrelated column — never use it as the NLV as-of (use `ibkr_nlv_at`).
