@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   positionMarketValue, rollupByUnderlying, grossExposure,
   positionConcentration, optionPositionConcentration, sectorConcentration, grossExposureViolation,
-  drawdownLadderTarget, cashflowAdjustedDrawdownPct, bindingGrossTarget, evaluateRiskConfig, classifySeverity, UNMAPPED_SECTOR,
+  drawdownLadderTarget, drawdownLadderStatus, DRAWDOWN_NEAR_BAND_PP,
+  cashflowAdjustedDrawdownPct, bindingGrossTarget, evaluateRiskConfig, classifySeverity, UNMAPPED_SECTOR,
   type PositionInput, type RiskConfig,
 } from './limits';
 
@@ -183,6 +184,64 @@ describe('drawdownLadderTarget — all four ladder cells + no-breach', () => {
   it('deeper step breached (-15 and beyond) → 50% target (the deepest applicable)', () => {
     expect(drawdownLadderTarget(OPERATOR_LADDER, -15)).toBe(50);
     expect(drawdownLadderTarget(OPERATOR_LADDER, -22)).toBe(50);
+  });
+});
+
+describe('drawdownLadderStatus — always-on drawdown read + NEAR early warning', () => {
+  it('comfortably above the first rung → ok, next rung named, no active step', () => {
+    const s = drawdownLadderStatus(OPERATOR_LADDER, -5);
+    expect(s.severity).toBe('ok');
+    expect(s.activeStep).toBeNull();
+    expect(s.nextStep).toEqual({ drawdownPct: -10, targetGrossPct: 70 });
+    expect(s.distanceToNextPp).toBeCloseTo(5, 5); // -5 is 5pp above -10
+  });
+
+  it('the verified PROD case: -8.85% → NEAR, 1.15pp from Rung 1 (-10 → 70%)', () => {
+    const s = drawdownLadderStatus(OPERATOR_LADDER, -8.85);
+    expect(s.severity).toBe('near');
+    expect(s.activeStep).toBeNull();
+    expect(s.nextStep).toEqual({ drawdownPct: -10, targetGrossPct: 70 });
+    expect(s.distanceToNextPp).toBeCloseTo(1.15, 5);
+  });
+
+  it('just outside the near band → still ok (band is exclusive-of-beyond, inclusive-at-edge)', () => {
+    expect(drawdownLadderStatus(OPERATOR_LADDER, -7.9).severity).toBe('ok'); // 2.1pp away
+    expect(drawdownLadderStatus(OPERATOR_LADDER, -8).severity).toBe('near'); // exactly 2pp away → near
+  });
+
+  it('a rung breached → breach, deepest breached is active, next-deeper rung still surfaced', () => {
+    const s = drawdownLadderStatus(OPERATOR_LADDER, -12);
+    expect(s.severity).toBe('breach');
+    expect(s.activeStep).toEqual({ drawdownPct: -10, targetGrossPct: 70 });
+    expect(s.nextStep).toEqual({ drawdownPct: -15, targetGrossPct: 50 });
+    expect(s.distanceToNextPp).toBeCloseTo(3, 5);
+  });
+
+  it('deepest rung breached → breach with no next rung ahead', () => {
+    const s = drawdownLadderStatus(OPERATOR_LADDER, -20);
+    expect(s.severity).toBe('breach');
+    expect(s.activeStep).toEqual({ drawdownPct: -15, targetGrossPct: 50 });
+    expect(s.nextStep).toBeNull();
+    expect(s.distanceToNextPp).toBeNull();
+  });
+
+  it('an empty ladder → ok, nothing to breach or approach', () => {
+    const s = drawdownLadderStatus([], -30);
+    expect(s.severity).toBe('ok');
+    expect(s.activeStep).toBeNull();
+    expect(s.nextStep).toBeNull();
+    expect(s.distanceToNextPp).toBeNull();
+  });
+
+  it('an unsorted ladder is handled (sorts shallowest → deepest internally)', () => {
+    const unsorted = [{ drawdownPct: -15, targetGrossPct: 50 }, { drawdownPct: -10, targetGrossPct: 70 }];
+    const s = drawdownLadderStatus(unsorted, -12);
+    expect(s.activeStep).toEqual({ drawdownPct: -10, targetGrossPct: 70 });
+    expect(s.nextStep).toEqual({ drawdownPct: -15, targetGrossPct: 50 });
+  });
+
+  it('the default near band is 2 percentage points', () => {
+    expect(DRAWDOWN_NEAR_BAND_PP).toBe(2);
   });
 });
 
