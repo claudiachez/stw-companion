@@ -54,18 +54,21 @@ will be swapped for the production bot later, which is just changing `DISCORD_BO
 identity is entirely the token; no code change).
 
 **To turn it on:**
-1. **Create a Discord app + bot** (discord.com/developers → New Application → Bot), copy the token,
-   and paste it in **apps/admin → Config → Discord alert bot → Save** (or set `DISCORD_BOT_TOKEN` env
-   as a fallback). The UI value overrides the env, so the bot can be **swapped from the UI** with no
-   redeploy — the bot's identity is entirely the token. Send-only DMs use the **REST API** (`POST
+1. **Create a Discord app + bot** (discord.com/developers → New Application → Bot). Copy the token —
+   the **Bot Token** from the *Bot* tab (NOT the *Public Key* on General Information; that's only for
+   verifying inbound interactions and can't send). Enable the **GUILD_MEMBERS** privileged intent on
+   the Bot tab (needed to resolve a username → id). Send-only DMs use the **REST API** (`POST
    /users/@me/channels` then `POST /channels/{id}/messages`) — no gateway/websocket.
-2. **Share a server.** Discord only lets a bot DM a user who **shares a server** with it — invite
-   the bot to your server and have testers join it.
-3. **Link the user.** Each subscriber pastes their **Discord user ID** in **Settings → Alert
-   delivery** (Developer Mode → right-click → Copy User ID), stored on `profiles.discord_user_id`.
-   A Discord **OAuth "identify"** link flow is the eventual productionization — it populates the
-   same column, so nothing downstream changes.
-4. **Allow DMs.** The tester must allow DMs from server members, or the send fails.
+2. **Add the bot to your server + set the server ID.** Discord only lets a bot DM a user who
+   **shares a server** with it. In **apps/admin → Config → Discord alert bot**, paste the **bot
+   token** and the **server (guild) ID** (right-click the server → Copy Server ID) → Save. The UI
+   token overrides `DISCORD_BOT_TOKEN` env, so the bot is **swapped from the UI** with no redeploy.
+3. **Link the user by username.** Each subscriber enters their **Discord username** in **Settings →
+   Alert delivery → Link** (as Whop shows it). The `discord-link` fn resolves it to the numeric id by
+   searching the server's members (bot token, server-side) and stores `profiles.discord_user_id` (DM
+   target) + `discord_username` (display). *Interim* — once Whop is wired it feeds both directly and
+   this manual link goes away (see decisions.md "flow through WHOP").
+4. **Allow DMs.** The user must be in the server and allow DMs from server members, or the send fails.
 
 **Trade-off vs email:** per-user, no deliverability/spam concerns, but requires each subscriber to
 (a) be in the server, (b) link Discord, (c) allow DMs — real friction, and not everyone uses

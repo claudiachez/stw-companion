@@ -141,33 +141,42 @@ export function ConfigPage() {
   const [regimeDrafts, setRegimeDrafts] = useState<RegimeDrafts>({});
   const [savingSection, setSavingSection] = useState<'sizing' | 'capital' | 'regime' | 'ibkr' | null>(null);
 
-  // Discord alert bot token (integration_secrets, migration 075) — admin-only, write-only.
-  // We fetch ONLY the updated_at (never the value) to show "set" status without pulling the
-  // secret into the browser; the cron reads the value via the service role.
+  // Discord alert bot config (integration_secrets, migration 075) — admin-only. The bot
+  // TOKEN is a secret (write-only: we fetch only updated_at, never the value); the GUILD ID
+  // (the server the resolver searches) isn't a secret, so we show + edit it normally.
   const [discordToken, setDiscordToken] = useState('');
+  const [guildIdDraft, setGuildIdDraft] = useState<string | undefined>(undefined);
   const discordSecret = useQuery({
-    queryKey: ['integration_secret', 'discord_bot_token'],
+    queryKey: ['integration_secret', 'discord'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('integration_secrets').select('key, updated_at').eq('key', 'discord_bot_token').maybeSingle();
+        .from('integration_secrets').select('key, value, updated_at').in('key', ['discord_bot_token', 'discord_guild_id']);
       if (error) throw error;
-      return data as { key: string; updated_at: string } | null;
+      const rows = (data ?? []) as { key: string; value: string | null; updated_at: string }[];
+      return {
+        tokenSet: rows.find((r) => r.key === 'discord_bot_token') ?? null,
+        guildId: rows.find((r) => r.key === 'discord_guild_id')?.value ?? '',
+      };
     },
   });
-  const saveDiscordToken = useMutation({
-    mutationFn: async (value: string) => {
-      const { error } = await supabase.from('integration_secrets')
-        .upsert({ key: 'discord_bot_token', value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+  const guildId = guildIdDraft ?? discordSecret.data?.guildId ?? '';
+  const saveDiscord = useMutation({
+    mutationFn: async (vals: { token?: string; guildId?: string }) => {
+      const rows: { key: string; value: string; updated_at: string }[] = [];
+      if (vals.token) rows.push({ key: 'discord_bot_token', value: vals.token, updated_at: new Date().toISOString() });
+      if (vals.guildId !== undefined) rows.push({ key: 'discord_guild_id', value: vals.guildId, updated_at: new Date().toISOString() });
+      if (!rows.length) return;
+      const { error } = await supabase.from('integration_secrets').upsert(rows, { onConflict: 'key' });
       if (error) throw error;
     },
-    onSuccess: () => { setDiscordToken(''); qc.invalidateQueries({ queryKey: ['integration_secret', 'discord_bot_token'] }); },
+    onSuccess: () => { setDiscordToken(''); setGuildIdDraft(undefined); qc.invalidateQueries({ queryKey: ['integration_secret', 'discord'] }); },
   });
   const clearDiscordToken = useMutation({
     mutationFn: async () => {
       const { error } = await supabase.from('integration_secrets').delete().eq('key', 'discord_bot_token');
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['integration_secret', 'discord_bot_token'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['integration_secret', 'discord'] }),
   });
 
   async function saveSizing() {
@@ -331,17 +340,17 @@ export function ConfigPage() {
           </div>
         </Section>
 
-        {(saveDiscordToken.isError || clearDiscordToken.isError) && (
-          <AlertStrip severity="negative">Discord token save failed: {errMsg(saveDiscordToken.error ?? clearDiscordToken.error)}</AlertStrip>
+        {(saveDiscord.isError || clearDiscordToken.isError) && (
+          <AlertStrip severity="negative">Discord config save failed: {errMsg(saveDiscord.error ?? clearDiscordToken.error)}</AlertStrip>
         )}
         <Section
           title={<>Discord alert bot <span className="text-t3 text-[10px] font-semibold uppercase tracking-wide align-middle ml-1">Admin only</span></>}
-          hint="The bot that DMs subscribers their drawdown alerts. Swapping the test bot for another (e.g. the STW production bot) is done right here — paste the new bot token and Save; no redeploy. Stored server-side, admin-only, and never shown back. Overrides the DISCORD_BOT_TOKEN env var if set."
-          dirty={!!discordToken.trim()}
-          saving={saveDiscordToken.isPending}
-          onSave={() => { if (discordToken.trim()) saveDiscordToken.mutate(discordToken.trim()); }}
+          hint="The bot that DMs subscribers their drawdown alerts. Swap the test bot for another (e.g. the STW production bot) right here — no redeploy. The bot must be in the server below with the GUILD_MEMBERS intent so we can resolve a subscriber's username to their ID. Token is stored server-side, admin-only, never shown back."
+          dirty={!!discordToken.trim() || (guildIdDraft !== undefined && guildIdDraft !== (discordSecret.data?.guildId ?? ''))}
+          saving={saveDiscord.isPending}
+          onSave={() => saveDiscord.mutate({ token: discordToken.trim() || undefined, guildId: guildIdDraft })}
         >
-          <div className="py-3 first:pt-0 last:pb-0 flex flex-col gap-2">
+          <div className="py-3 first:pt-0 flex flex-col gap-2">
             <div className="flex items-center gap-3">
               <span className={rowLabel}>Bot token</span>
               <span className={rowPrefix} />
@@ -349,7 +358,9 @@ export function ConfigPage() {
                 type="password"
                 value={discordToken}
                 onChange={(e) => setDiscordToken(e.target.value)}
-                placeholder={discordSecret.data ? 'Enter a new token to replace the current one' : 'Paste the Discord bot token'}
+                // A dotted placeholder signals "a token is already stored" (it's write-only —
+                // we never load the real value); typing replaces it.
+                placeholder={discordSecret.data?.tokenSet ? '•••••••••••••••• — type a new token to replace' : 'Paste the Discord bot token'}
                 autoComplete="off"
                 className={`flex-1 ${rowInput}`}
               />
@@ -359,10 +370,10 @@ export function ConfigPage() {
               <span className={rowPrefix} />
               <span className="text-t3 text-xs">
                 {discordSecret.isLoading ? 'Checking…'
-                  : discordSecret.data ? `Set · updated ${fmtDateTime(discordSecret.data.updated_at)}`
-                  : 'Not set — Discord DMs are off until a token is saved.'}
+                  : discordSecret.data?.tokenSet ? `Token set · updated ${fmtDateTime(discordSecret.data.tokenSet.updated_at)}`
+                  : 'No token — Discord DMs are off until a token is saved.'}
               </span>
-              {discordSecret.data && (
+              {discordSecret.data?.tokenSet && (
                 <button
                   onClick={() => clearDiscordToken.mutate()}
                   disabled={clearDiscordToken.isPending}
@@ -372,6 +383,19 @@ export function ConfigPage() {
                 </button>
               )}
             </div>
+          </div>
+          <div className="py-3 last:pb-0 flex items-center gap-3">
+            <span className={rowLabel}>Server (guild) ID</span>
+            <span className={rowPrefix} />
+            <input
+              type="text"
+              inputMode="numeric"
+              value={guildId}
+              onChange={(e) => setGuildIdDraft(e.target.value)}
+              placeholder="e.g. 1289… (right-click the server → Copy Server ID)"
+              autoComplete="off"
+              className={`flex-1 ${rowInput}`}
+            />
           </div>
         </Section>
       </div>

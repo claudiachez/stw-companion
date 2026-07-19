@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  useIbkrSettings, saveIbkrSettings, fetchDiscordUserId, saveDiscordUserId, useAuthStore, useSyncPortfolio, useUserPositions, LoadingSpinner,
+  useIbkrSettings, saveIbkrSettings, fetchDiscordLink, linkDiscord, useAuthStore, useSyncPortfolio, useUserPositions, LoadingSpinner,
   Button, StatusPill, AlertStrip, FormRow, TextInput,
   RiskConfigForm, useRiskConfig, useEnsureRiskConfig,
 } from '@stw/ui';
@@ -87,27 +87,33 @@ export function SettingsPage() {
   const [howToConnectExpanded, setHowToConnectExpanded] = useState(true);
   const initializedRef = useRef(false);
 
-  // Discord DM linking for drawdown alerts (Item 3). The user pastes their Discord user ID
-  // (Developer Mode → Copy User ID); the alert cron DMs it. Test bot for now — swapping to
-  // the production bot is just the DISCORD_BOT_TOKEN env, no change here.
-  const [discordId, setDiscordId] = useState('');
-  const [discordSaving, setDiscordSaving] = useState(false);
-  const [discordSaved, setDiscordSaved] = useState(false);
-  const [discordError, setDiscordError] = useState<string | null>(null);
+  // Discord DM linking for drawdown alerts (Item 3). The user enters their Discord USERNAME
+  // (as Whop shows it); the discord-link fn resolves it to the numeric id (bot searches the
+  // shared server) so the alert cron can DM them. Interim until Whop feeds the linkage.
+  const [discordUsername, setDiscordUsername] = useState('');
+  const [linkedUsername, setLinkedUsername] = useState<string | null>(null);
+  const [discordLinking, setDiscordLinking] = useState(false);
+  const [discordMsg, setDiscordMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
   useEffect(() => {
     if (!user?.id) return;
-    fetchDiscordUserId(user.id).then((id) => setDiscordId(id ?? '')).catch(() => { /* first-load best-effort */ });
+    fetchDiscordLink(user.id).then(({ username }) => {
+      setLinkedUsername(username);
+      if (username) setDiscordUsername(username);
+    }).catch(() => { /* first-load best-effort */ });
   }, [user?.id]);
-  async function handleSaveDiscord() {
-    if (!user?.id) return;
-    setDiscordSaving(true); setDiscordError(null); setDiscordSaved(false);
+  async function handleLinkDiscord() {
+    setDiscordLinking(true); setDiscordMsg(null);
     try {
-      await saveDiscordUserId(user.id, discordId.trim() || null);
-      setDiscordSaved(true);
+      const r = await linkDiscord(discordUsername.trim());
+      if (r.ok && r.linked) { setLinkedUsername(r.username ?? discordUsername.trim()); setDiscordMsg({ kind: 'ok', text: `Linked as @${r.username ?? discordUsername.trim()}` }); }
+      else if (r.ok && !r.linked) { setLinkedUsername(null); setDiscordMsg({ kind: 'ok', text: 'Discord unlinked.' }); }
+      else if (r.reason === 'not_configured') setDiscordMsg({ kind: 'err', text: 'Discord alerts aren’t set up yet — contact your STW admin.' });
+      else if (r.reason === 'not_found') setDiscordMsg({ kind: 'err', text: 'Couldn’t find that username in the STW Discord — join the server and check your exact username.' });
+      else setDiscordMsg({ kind: 'err', text: 'Couldn’t reach Discord just now — try again shortly.' });
     } catch (e) {
-      setDiscordError(e instanceof Error ? e.message : 'Failed to save');
+      setDiscordMsg({ kind: 'err', text: e instanceof Error ? e.message : 'Failed to link' });
     } finally {
-      setDiscordSaving(false);
+      setDiscordLinking(false);
     }
   }
 
@@ -414,25 +420,24 @@ export function SettingsPage() {
               <div style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)', marginBottom: SPACE[1] }}>Alert delivery</div>
               <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginBottom: SPACE[3], lineHeight: 1.5 }}>
                 Drawdown alerts are always shown in-app on the Risk tab. To also get a Discord DM when a
-                rung is crossed or approached, paste your Discord user ID and make sure you share a server
-                with our bot (and allow DMs from server members). Email alerts use your account email.
+                rung is crossed or approached, join the STW Discord server and enter your Discord username
+                below — we’ll link it. Email alerts use your account email.
               </div>
-              <FormRow label="Discord user ID">
+              <FormRow label="Discord username">
                 <TextInput
                   type="text"
-                  inputMode="numeric"
-                  value={discordId}
-                  onChange={(e) => { setDiscordId(e.target.value); setDiscordSaved(false); }}
-                  placeholder="e.g. 216154467524051123"
+                  value={discordUsername}
+                  onChange={(e) => { setDiscordUsername(e.target.value); setDiscordMsg(null); }}
+                  placeholder="e.g. cchez9849"
                   autoComplete="off"
                 />
               </FormRow>
               <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[1.5] }}>
-                In Discord: User Settings → Advanced → enable Developer Mode, then right-click your name → Copy User ID. Leave blank to turn Discord DMs off.
+                {linkedUsername ? <>Linked as <b style={bold}>@{linkedUsername}</b>. Change the name and re-link, or clear it to turn DMs off.</> : 'Your exact Discord username. Clear the field and Link to turn Discord DMs off.'}
               </div>
-              {discordError && <div style={{ marginTop: SPACE[2] }}><AlertStrip severity="negative">{discordError}</AlertStrip></div>}
-              <Button variant="primary" onClick={handleSaveDiscord} disabled={discordSaving} style={{ alignSelf: 'flex-start', minWidth: 120, marginTop: SPACE[3] }}>
-                {discordSaving ? 'Saving…' : discordSaved ? 'Saved ✓' : 'Save'}
+              {discordMsg && <div style={{ marginTop: SPACE[2] }}><AlertStrip severity={discordMsg.kind === 'ok' ? 'positive' : 'negative'}>{discordMsg.text}</AlertStrip></div>}
+              <Button variant="primary" onClick={handleLinkDiscord} disabled={discordLinking} style={{ alignSelf: 'flex-start', minWidth: 120, marginTop: SPACE[3] }}>
+                {discordLinking ? 'Linking…' : 'Link'}
               </Button>
             </div>
           </>
