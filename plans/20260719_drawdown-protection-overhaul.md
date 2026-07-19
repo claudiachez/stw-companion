@@ -1,0 +1,72 @@
+# Drawdown-protection overhaul (host-requested 2026-07-19)
+
+## Why this exists
+The host held several deep single-name losses this week (ADEA −16%, TE −32%, LEU −17%,
+AVAV −24%) and got **no warning at all** from the drawdown ladder. Investigation found **no
+math bug** — but four real design gaps that made the ladder useless in practice. This plan
+fixes all four. Advisory/display-only stays the rule; nothing here blocks a trade.
+
+## Diagnosis (verified against PROD, user 0d90bc89-…)
+- Ladder is **account-level**, not per-position: it measures NLV vs its cash-flow-adjusted
+  high-water, so individual −30% names don't trip it.
+- Real numbers: `equity_peak 45,089.91`, `ibkr_nlv 41,098.92` (synced Jul 19 18:41),
+  `flows-since-peak = 0` → **`cashflowAdjustedDrawdownPct` = −8.85%**. Ladder Rung 1 = −10%.
+  So it correctly didn't fire — the account is 1.15% *under* the first rung.
+- `cashflowAdjustedDrawdownPct(nlv, equity_peak, cum_cf, equity_peak_cf)` in
+  `packages/shared/src/utils/limits.ts` is correct: `peakAdj = equity_peak + (cum_cf −
+  equity_peak_cf)`; dd% = `(nlv − peakAdj)/peakAdj`. Historical −$60k withdrawal does NOT
+  dilute it (flows-since-peak = 0). Keep this formula.
+- The gaps: (1) drawdown % is computed but **never displayed** until a rung fires —
+  invisible early warning; (2) ladder runs off the **synced `ibkr_nlv`**, not the live
+  Finnhub-priced positions the user is staring at; (3) **no notifications** (display-only,
+  Risk tab only); (4) **no per-position stops**.
+
+Test case for all work: this account should read **−8.85% · NEAR (Rung 1 at −10% → 70% gross)**.
+
+## Item 1 — Show drawdown always + "near" warning  [do first; contained, low-risk]
+The clear immediate win — removes the silence.
+- In `ViolationsSummary.tsx` (and mirror the summary on `RegimeLight.tsx` if it belongs there):
+  always render the current `drawdownPct` + the next rung + its target, even when no rung is
+  active. e.g. `Drawdown −8.85% · next rung −10% → 70% gross`.
+- Add a **"near" tier** to the ladder, matching the 4-tier limits vocabulary (`ok|near|breach`):
+  amber `near` when within ~2 percentage points of the next rung (host to confirm the band);
+  red once a rung is crossed. Reuse `StatusPill`.
+- Source + as-of stamp per convention: the drawdown is off `ibkr_nlv` (as of `ibkr_nlv_at`).
+- Silent only while `drawdownPct` is null (no real NLV+peak yet) — keep that.
+
+## Item 2 — Drive the drawdown off LIVE prices  [engine change; design carefully]
+So the ladder tracks what the user sees, not the last sync.
+- Compute a **live NLV** = Σ(live position market value via `useLiveQuotes`/`priceCache`) +
+  **cash**, where cash = `ibkr_nlv − Σ(synced position MV)` (the residual from the last sync).
+- Feed live NLV into `cashflowAdjustedDrawdownPct` for the DISPLAY/ladder read.
+- **Consistency risk to resolve:** `equity_peak` is trigger-maintained off the SYNCED
+  `ibkr_nlv` (migration 071). Using a live NLV for "now" vs a synced peak can flip signs at
+  the margin. Decide: does the peak also move to live, or does live only drive the
+  *current-drawdown read* while the peak stays synced (probably the latter — the peak should
+  be a settled high-water, not an intraday spike). Document the decision in `docs/decisions.md`.
+- **One-source note:** the locked decision is "account equity = `risk_config.ibkr_nlv`". A
+  live-derived NLV for the drawdown read is a deliberate exception for responsiveness — get
+  host sign-off and record it; keep `ibkr_nlv` as the equity denominator for the % limits.
+- Fall back to synced `ibkr_nlv` when live quotes are unavailable (market closed / uncached).
+
+## Item 3 — Alerts when a rung is hit / approached  [largest; new capability]
+Reaches the user off the Risk tab.
+- No notification channel exists today. Decide the channel first (email is simplest — a
+  Netlify fn → Anthropic-free transactional email via a provider; or in-app + a daily digest).
+- A scheduled fn (post-sync) evaluates each user's drawdown and sends an alert on
+  cross/approach, with de-dup (don't re-alert the same rung daily). Store last-alerted state.
+- Advisory copy only; never implies an executed action.
+
+## Item 4 — Per-position stop alerts  [distinct from the account ladder]
+The thing that would've flagged TE −32% directly.
+- New per-user setting: flag a position down > X% from entry (advisory). Entry = `avg_cost`
+  from `user_positions` (subscriber) — note the subscriber feed has no return %, so compute
+  from `mark_price` vs `avg_cost`.
+- Surface on My Portfolio (the position row / detail) + optionally roll into Item 3 alerts.
+- Independent of the account ladder; purely advisory.
+
+## Standing constraints
+Advisory/display-only (never blocks). Regime gate frozen at engine 1.1.0; gate ↔ Macro
+composite never blend. Every displayed value: source + `fmtDateTime` as-of + prior-period.
+Reuse `StatusPill`/`KpiCard`/`DetailPane`. Migrations Claude-authors / host-applies. Run
+`/stw-review` before each PR; CI must pass.

@@ -2,6 +2,35 @@
 
 > Dated handoff/status narratives + old Next Steps, moved out of CLAUDE.md. Historical record only — durable rules live in CLAUDE.md / docs/decisions.md / docs/ui-conventions.md. Current status is docs/status.md.
 
+## Session — prod promotion, morning-timing/GEX fixes, portfolio reconciliation, drawdown audit (2026-07-19)
+
+Continuation of the 2026-07-16 session. Promoted staging→main once (#138, prior), then more fixes
+merged to staging (promotion pending again). Every PR green through CI.
+
+Shipped to staging (need the next promotion to reach prod):
+- **AM recap + GEX both at 8:32 ET** (#140) — recap fixed-gate (was 7:50/8:33 dynamic), GEX cron :45→:32.
+- **GEX QUICK READ parser** (#141) — the newsletter restructured (titles renamed, levels moved to a
+  prose "QUICK READ" block); the old title-match fell through to a stale post and wrote wrong-dated
+  GEX. Parser now reads both layouts; matched-item date verified against the live feed. +2 tests.
+- **GEX freshness guard + stale flag** (#142) — refuse to write a non-today report (fail loud in
+  run_log); card shows "⚠ stale" when >3 days old. Reviewed the week's 9 reports: flip/wall/label
+  already covered by the parser; the fail-safe guards are the real robustness (RSS holds only ~1wk).
+- **My Portfolio Account Value (NLV) line** (#143) — reconciles positions ($34.8K) + cash to IBKR NLV
+  ($41,099); sourced from `ibkr_nlv` + `ibkr_nlv_at`.
+
+Diagnosed (not built — see docs/status.md):
+- **RegimeLight ↔ Macro trend disagree on SPY** (Momentum vs Healthy Pullback) — two independent
+  close fetches, different vintage. One-source fix pending.
+- **Drawdown ladder felt like it failed** the host on a losing week. No math bug: account at −8.85%
+  vs a −10% Rung 1 (account-level, not per-position). Real gaps: silent-until-fire, synced-not-live
+  NLV, no notifications, no per-position stops → `plans/20260719_drawdown-protection-overhaul.md`.
+
+Corrections I owe the record (both were "checked the wrong field/thing" errors):
+- Claimed the GEX feed was "verified" without checking the matched item's DATE (it matched a stale post).
+- Claimed `ibkr_nlv` was import-only/stale-Jul-8 by reading `updated_at` instead of `ibkr_nlv_at` (it's
+  fresh, updates every sync). Both reinforce: verify the RIGHT field/identity, not just that something ran.
+
+
 ## Session — Macro/portfolio polish + dev-process guardrails + PROD promotion (2026-07-16)
 
 **Ended with a host-approved `staging → main` promotion (PR #138, 124 commits) — everything below is
