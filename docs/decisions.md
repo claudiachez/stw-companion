@@ -163,6 +163,37 @@ evaluated** — that was the exact tautology bug found and fixed (gross exposure
   `regimeExitAdvice`'s double-RED trim fallback is proportional to the gross target (`~doubleRedGrossPct%
   of size`), not the looser single-RED `trimToPct`. All advisory/display-only — nothing enforces.
 
+**Decisions locked — drawdown-protection overhaul (host 2026-07-19, `plans/20260719_drawdown-protection-overhaul.md`):**
+The ladder was correct (account at −8.85% under a −10% Rung 1) but useless in practice — silent until
+a rung fired, run off the last sync not live prices, no alerts, no per-name protection. Four fixes,
+all advisory/display-only (nothing blocks or places a trade):
+- **Item 1 — the drawdown is ALWAYS shown** on the Risk tab (the "Portfolio drawdown" card), with an
+  amber **NEAR** the moment it's within a band of the next rung — the de-risk warning now arrives before
+  the rung, not after. One source: `drawdownLadderStatus(ladder, drawdownPct)` in `@stw/shared`
+  (`ok|near|breach`, deepest breached = active, next rung surfaced). Still silent while drawdown is null.
+- **The NEAR band is a per-user setting** (`drawdown_near_band_pp`, default **2**), not a fixed constant —
+  the user decides how early amber fires. `DRAWDOWN_NEAR_BAND_PP` in `@stw/shared` is only the seed default.
+- **Item 2 — the drawdown READ is driven off LIVE prices** (host: "Option A"). `liveNlv = ibkr_nlv +
+  Σ(livePrice − syncedMark)·qty·mult` over stock legs with a Finnhub quote (option legs + unquoted names
+  keep their synced mark; falls back to `ibkr_nlv` when no quotes). Live NLV drives the current-drawdown
+  read for BOTH the card and the ladder→gross binding target (computed once in `PortfolioPage`, threaded
+  to `ViolationsSummary` + `useBindingGrossTarget` — never two live-NLV computations). **The `equity_peak`
+  stays a settled high-water off the SYNCED `ibkr_nlv`** (the migration-071 trigger is unchanged) — live
+  drives "now," not the peak, so an intraday spike can't ratchet the bar (the phantom-drawdown risk 071
+  was built to avoid). **One-source exception (host-signed-off):** a live-derived NLV for the *drawdown
+  read* is a deliberate exception to "account equity = `risk_config.ibkr_nlv`" for responsiveness; the
+  concentration-limit denominator stays `ibkr_nlv` (never re-derived from live). Source stamped
+  `Finnhub · <quote time>` when live, `IBKR · <sync>` on fallback (the `HoldingDetail` price idiom).
+- **Item 4 — a FULL per-stock drawdown ladder** (host, 2026-07-19 — a ladder, not a single stop), keyed
+  to each position's drawdown from entry (`mark_price` vs `avg_cost` on `user_positions`). Distinct axis
+  from the account ladder — it flags/targets a single NAME, it does NOT set a gross target, so it
+  **structurally cannot contradict** the market-regime rule or the portfolio ladder (those two reconcile
+  via `bindingGrossTarget`; the per-stock ladder is independent). *Open:* what each per-stock rung drives
+  (an advisory trim-to-weight target is the working assumption — to confirm before building Item 4).
+- **UI must clearly distinguish the three de-risking concepts:** market-regime de-risking (RegimeLight) /
+  portfolio drawdown ladder (the "Portfolio drawdown" + Gross exposure cards) / individual-stock drawdown
+  (My Portfolio position row/detail). Same reconciliation rule as before — the first two bind by "tightest."
+
 **Decisions locked — REGIME_EXIT is a per-user rule, not a signed document (host 2026-07-08):**
 - The advisory de-risking policy (integrity-guardrails Item 4) is a **per-user setting**, not the
   single operator-owned `docs/regime_exit_v0.md` the original spec described. Values live on

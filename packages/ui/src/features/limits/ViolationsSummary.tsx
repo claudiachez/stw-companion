@@ -143,10 +143,12 @@ const fmtEquity = (n: number) =>
  * sits on the ladder + an amber NEAR the moment it's within the band of the next
  * rung — so the de-risk warning arrives BEFORE the rung, not after. Advisory only.
  */
-function DrawdownCard({ status, nlv, asOf }: {
+function DrawdownCard({ status, nlv, asOf, isLive }: {
   status: DrawdownLadderStatus;
   nlv: number | null;
   asOf: string | null;
+  /** Drawdown read off live Finnhub-priced positions (Item 2) vs the last IBKR sync. */
+  isLive: boolean;
 }) {
   const pill = SEVERITY_PILL[status.severity];
   // An `ok` drawdown reads neutral (a small red-number-in-green would jar); only a
@@ -200,10 +202,10 @@ function DrawdownCard({ status, nlv, asOf }: {
         )}
       </div>
 
-      {/* Source + as-of, per convention. Item 1 reads off the last synced IBKR Net Liq;
-          Item 2 will drive this off live prices. */}
+      {/* Source + as-of, per convention (the HoldingDetail price idiom): live drawdown off
+          Finnhub-priced positions when quotes are cached, the last IBKR sync on fallback. */}
       <div className="text-t3 text-[10px] mt-2 tabular-nums">
-        vs your cash-flow-adjusted peak{nlv != null ? ` · account Net Liq ${fmtEquity(nlv)}` : ''} · Source: IBKR{asOf ? ` · as of ${fmtDateTime(asOf)}` : ''}
+        vs your cash-flow-adjusted peak{nlv != null ? ` · ${isLive ? 'live ' : ''}account Net Liq ${fmtEquity(nlv)}` : ''} · Source: {isLive ? 'Finnhub' : 'IBKR'}{asOf ? ` · as of ${fmtDateTime(asOf)}` : ''}
       </div>
     </div>
   );
@@ -343,13 +345,17 @@ function BreachOnlyList({
   );
 }
 
-export function ViolationsSummary({ showSyncButton = false, settingsTo, bindingGross }: {
+export function ViolationsSummary({ showSyncButton = false, settingsTo, bindingGross, drawdown }: {
   showSyncButton?: boolean;
   settingsTo?: string;
   /** The reconciled ladder-vs-regime gross target from the parent's useBindingGrossTarget
    * (so this card and the sibling RegimeLight show the identical binding number). When
    * omitted, falls back to a ladder-only reconciliation from this card's own data. */
   bindingGross?: BindingGrossTarget | null;
+  /** Live NLV for the drawdown READ (Item 2), from the parent's useLiveNlv — so the card %
+   * and the ladder→gross binding target read the same live value. Omitted (admin, no live
+   * quotes) → the drawdown reads off the synced `ibkr_nlv` (the settled fallback). */
+  drawdown?: { nlv: number | null; asOf: string | null; isLive: boolean };
 }) {
   const userId = useAuthStore((s) => s.user?.id);
 
@@ -389,8 +395,13 @@ export function ViolationsSummary({ showSyncButton = false, settingsTo, bindingG
   // manual placeholder, which lit up a phantom −60% (peak stuck at $100k, NLV ~$40k).
   // Null (→ ladder silent) until a real NLV + peak exist; a ~$60k historical
   // withdrawal no longer reads as a loss.
+  // Drawdown reads off the LIVE NLV when the parent supplies one (Item 2, web), else the
+  // synced ibkr_nlv (admin / no live quotes). The peak + the % denominator stay synced.
+  const ddNlv = drawdown ? drawdown.nlv : config.ibkr_nlv;
+  const ddAsOf = drawdown ? drawdown.asOf : config.ibkr_nlv_at;
+  const ddIsLive = drawdown?.isLive ?? false;
   const drawdownPct = cashflowAdjustedDrawdownPct(
-    config.ibkr_nlv, config.equity_peak, config.cumulative_cashflow, config.equity_peak_cashflow,
+    ddNlv, config.equity_peak, config.cumulative_cashflow, config.equity_peak_cashflow,
   );
   // Always-on drawdown read for the card below (Item 1): null → silent (no NLV+peak yet).
   const ladderStatus = drawdownPct === null ? null : drawdownLadderStatus(config.ladder, drawdownPct);
@@ -459,7 +470,7 @@ export function ViolationsSummary({ showSyncButton = false, settingsTo, bindingG
       <div className="rounded-2xl border border-border p-3 flex flex-col gap-4" style={{ background: 'var(--s2)' }}>
       {/* Drawdown first — it drives the gross-exposure target the next card renders. */}
       {ladderStatus && (
-        <DrawdownCard status={ladderStatus} nlv={config.ibkr_nlv} asOf={config.ibkr_nlv_at} />
+        <DrawdownCard status={ladderStatus} nlv={ddNlv} asOf={ddAsOf} isLive={ddIsLive} />
       )}
       <div className="bg-surface border border-border rounded-xl p-5">
         <div className="text-text font-semibold text-sm flex items-center gap-1.5">
