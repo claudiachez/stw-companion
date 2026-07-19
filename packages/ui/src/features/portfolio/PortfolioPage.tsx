@@ -797,11 +797,24 @@ export function PortfolioPage() {
     // genuinely isn't a match yet) — the count reflects only confirmed matches.
     if (filters.structure && regime?.bucket !== filters.structure) return false;
     if (filters.standing && regime?.standing !== filters.standing) return false;
+    // Per-stock stop-ladder status. A name with no stock position (option-only) has no
+    // stop status, so it's excluded when a stop filter is active — same as structure above.
+    if (filters.stop) {
+      const sev = perStockLadders.get(underlying)?.status.severity;
+      if (filters.stop === 'attention' && sev !== 'near' && sev !== 'breach') return false;
+      if (filters.stop === 'breach' && sev !== 'breach') return false;
+    }
     if (q && !underlying.toUpperCase().includes(q)) return false;
     return true;
   };
   const dir = filters.sort.endsWith('_asc') ? 1 : -1;
   const nl = (v: number | null) => (v == null ? Number.NEGATIVE_INFINITY : v);
+  // Per-stock drawdown-from-entry for the "Stop drawdown" sort. Null (no stock position)
+  // sorts to the END regardless of direction, so option-only rows never top the list.
+  const ddSort = (underlying: string, asc: boolean) => {
+    const v = perStockLadders.get(underlying)?.status.drawdownPct;
+    return v == null ? (asc ? Infinity : -Infinity) : v;
+  };
 
   // grouped view rows
   const visibleGroups = useMemo<PortfolioGroup[]>(() => {
@@ -811,13 +824,15 @@ export function PortfolioPage() {
         case 'pnl_desc': case 'pnl_asc': return (a.netPnl - b.netPnl) * dir;
         case 'ret_desc': case 'ret_asc': return (nl(a.returnPct) - nl(b.returnPct)) * dir;
         case 'value_desc': case 'value_asc': return (a.marketValue - b.marketValue) * dir;
+        case 'dd_asc': return ddSort(a.underlying, true) - ddSort(b.underlying, true);
+        case 'dd_desc': return ddSort(b.underlying, false) - ddSort(a.underlying, false);
         case 'az': return a.underlying.localeCompare(b.underlying);
         case 'za': return b.underlying.localeCompare(a.underlying);
         default: return 0;
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allGroups, filters, regimes, sectorMap]);
+  }, [allGroups, filters, regimes, sectorMap, perStockLadders]);
 
   // flat per-leg rows (default view)
   const visibleLegs = useMemo<LegRowData[]>(() => {
@@ -831,13 +846,15 @@ export function PortfolioPage() {
         case 'pnl_desc': case 'pnl_asc': return (nl(a.p.unrealized_pnl) - nl(b.p.unrealized_pnl)) * dir;
         case 'ret_desc': case 'ret_asc': return (nl(a.p.unrealized_pnl_pct) - nl(b.p.unrealized_pnl_pct)) * dir;
         case 'value_desc': case 'value_asc': return (posMV(a.p) - posMV(b.p)) * dir;
+        case 'dd_asc': return ddSort(a.underlying, true) - ddSort(b.underlying, true);
+        case 'dd_desc': return ddSort(b.underlying, false) - ddSort(a.underlying, false);
         case 'az': return a.underlying.localeCompare(b.underlying) || instrumentLabel(a.p).localeCompare(instrumentLabel(b.p));
         case 'za': return b.underlying.localeCompare(a.underlying) || instrumentLabel(a.p).localeCompare(instrumentLabel(b.p));
         default: return 0;
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [positions, pickMap, filters, regimes, sectorMap]);
+  }, [positions, pickMap, filters, regimes, sectorMap, perStockLadders]);
 
   const lastSynced = useMemo(() => {
     if (lastResult) return lastResult.lastSyncedAt;
