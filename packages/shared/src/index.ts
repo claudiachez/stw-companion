@@ -11,6 +11,7 @@ export * from './utils/conviction';
 export * from './utils/earnings';
 export * from './utils/macro';
 export * from './utils/limits';
+export * from './utils/nlv';
 export * from './utils/regime';
 export * from './utils/treemap';
 export * from './utils/sizing';

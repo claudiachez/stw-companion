@@ -19,17 +19,26 @@ import type { RiskConfigRow } from './api';
  * When both fire the tighter (lower) target binds. Both surfaces call THIS hook with
  * the same config + instrument, so they compute the identical result — the
  * reconciliation lives in one place, not two renderers.
+ *
+ * `liveNlv` (plans/20260719 Item 2) overrides the NLV used for the DRAWDOWN read so the
+ * ladder target tracks live prices, matching the "Portfolio drawdown" card. Pass it from
+ * the composition root's `useLiveNlv` (web). Omit it (admin, no live quotes) to read off
+ * the synced `ibkr_nlv` — the settled fallback. The equity denominator + peak are
+ * unchanged either way.
  */
 export function useBindingGrossTarget(
   config: RiskConfigRow | null | undefined,
   instrument: string,
+  liveNlv?: number | null,
 ): BindingGrossTarget | null {
   // Must run unconditionally (hook rule) — the config guard comes after.
   const { data: row } = useLatestRegime(instrument);
   if (!config) return null;
 
+  // `undefined` = no live feed (admin) → synced NLV; a passed value (incl. null) wins.
+  const nlvForDrawdown = liveNlv !== undefined ? liveNlv : config.ibkr_nlv;
   const drawdownPct = cashflowAdjustedDrawdownPct(
-    config.ibkr_nlv, config.equity_peak, config.cumulative_cashflow, config.equity_peak_cashflow,
+    nlvForDrawdown, config.equity_peak, config.cumulative_cashflow, config.equity_peak_cashflow,
   );
   const ladderPct = drawdownPct === null ? null : drawdownLadderTarget(config.ladder, drawdownPct);
 

@@ -22,6 +22,7 @@ import { useCapabilities } from '../../context/AppCapabilities';
 import { useLiveQuotes } from '../../hooks/useLiveQuotes';
 import { ViolationsSummary } from '../limits/ViolationsSummary';
 import { useBindingGrossTarget } from '../limits/useBindingGrossTarget';
+import { useLiveNlv } from './useLiveNlv';
 import { useSectorMap, useRiskConfig } from '../limits/useRiskConfig';
 import { DEFAULT_RISK_CONFIG } from '../limits/api';
 import { RegimeLight } from '../regime/RegimeLight';
@@ -670,10 +671,16 @@ export function PortfolioPage() {
     stopPct: regimeRiskConfig?.regime_stop_pct ?? DEFAULT_RISK_CONFIG.regime_stop_pct,
     doubleRedGrossPct: regimeRiskConfig?.regime_doublered_gross_pct ?? DEFAULT_RISK_CONFIG.regime_doublered_gross_pct,
   };
+  // Live NLV for the drawdown read (Item 2, Option A) — computed ONCE here from the held
+  // positions + the shared Finnhub cache, then threaded into BOTH useBindingGrossTarget
+  // (the ladder→gross target) and ViolationsSummary (the card), so the two never read a
+  // different NLV. Falls back to the synced ibkr_nlv when quotes aren't cached.
+  const liveNlv = useLiveNlv(regimeRiskConfig, positions);
   // One reconciliation of the drawdown ladder vs the double-RED regime target, computed
   // once here and passed to BOTH the RegimeLight and ViolationsSummary so they show the
-  // identical binding gross number (never two conflicting targets).
-  const bindingGross = useBindingGrossTarget(regimeRiskConfig, regimeInstrument);
+  // identical binding gross number (never two conflicting targets). The ladder side reads
+  // the live NLV so its target tracks the same drawdown the card shows.
+  const bindingGross = useBindingGrossTarget(regimeRiskConfig, regimeInstrument, liveNlv.nlv);
 
   const allGroups = useMemo<PortfolioGroup[]>(() => {
     const map = new Map<string, UserPosition[]>();
@@ -1018,7 +1025,7 @@ export function PortfolioPage() {
         <RegimeLight instrument={regimeInstrument} exitRule={regimeExitRule} structure={regimes[regimeInstrument]} bindingGross={bindingGross} />
       </div>
       {capabilities.canUseLimits ? (
-        <ViolationsSummary settingsTo="/settings" bindingGross={bindingGross} />
+        <ViolationsSummary settingsTo="/settings" bindingGross={bindingGross} drawdown={{ nlv: liveNlv.nlv, asOf: liveNlv.asOf, isLive: liveNlv.isLive }} />
       ) : (
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '12px 16px', fontSize: FONT_SIZE.sm, color: 'var(--t3)' }}>
           <strong style={{ color: 'var(--text)' }}>Risk limits 🔒</strong> — flag concentration and
