@@ -297,8 +297,12 @@ function SummaryChip({ severity, onClick, children }: { severity: 'info' | 'warn
   );
 }
 
-function PortfolioSummary({ groups, showPnl, onOpenTailing, onOpenLowConviction }: {
+function PortfolioSummary({ groups, showPnl, nlv, nlvAt, onOpenTailing, onOpenLowConviction }: {
   groups: PortfolioGroup[]; showPnl: boolean;
+  /** Account Net Liquidation Value from IBKR (risk_config.ibkr_nlv) + its as-of stamp —
+   *  positions market value + cash/margin, so the header reconciles to what IBKR shows. */
+  nlv: number | null;
+  nlvAt: string | null;
   onOpenTailing: () => void;
   onOpenLowConviction: () => void;
 }) {
@@ -378,6 +382,21 @@ function PortfolioSummary({ groups, showPnl, onOpenTailing, onOpenLowConviction 
           </div>
         )}
       </div>
+
+      {/* Reconcile to IBKR: the KPI "Market Value" is positions only; the account's
+          Net Liq (from the IBKR sync) also includes cash/margin — so this line ties the
+          positions total out to the ~NLV the user sees in IBKR. Carries its own source +
+          as-of stamp (the NLV updates on IMPORT, a separate, often-older sync than positions). */}
+      {showPnl && nlv != null && (
+        <div style={{ marginTop: 12, fontSize: FONT_SIZE.xs, color: 'var(--t2)', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'baseline' }}>
+          <span style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: LETTER_SPACING.label, textTransform: 'uppercase', color: 'var(--t3)' }}>Account value</span>
+          <span style={{ color: 'var(--text)', fontWeight: FONT_WEIGHT.semibold, fontVariantNumeric: 'tabular-nums' }}>{fmtMoneyCompact(nlv)}</span>
+          <span style={{ color: 'var(--t3)' }}>
+            = {fmtMoneyCompact(t.mv)} positions {nlv - t.mv >= 0 ? '+' : '−'} {fmtMoneyCompact(Math.abs(nlv - t.mv))} {nlv - t.mv >= 0 ? 'cash' : 'margin'}
+          </span>
+          <span style={{ color: 'var(--t3)' }}>· Source: IBKR Net Liq{nlvAt ? ` · as of ${fmtDateTime(nlvAt)}` : ''}</span>
+        </div>
+      )}
 
       {positionCount > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
@@ -948,6 +967,8 @@ export function PortfolioPage() {
       <PortfolioSummary
         groups={allGroups}
         showPnl={showPnl}
+        nlv={regimeRiskConfig?.ibkr_nlv ?? null}
+        nlvAt={regimeRiskConfig?.ibkr_nlv_at ?? null}
         onOpenTailing={() => changeTab('tailing')}
         onOpenLowConviction={() => {
           // Jump to Positions with the conviction filter pre-applied to exactly the
