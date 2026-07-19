@@ -1,7 +1,9 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { TIERS, fmtDateTime, sizingTone, matchConvictionBand, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, SPACE } from '@stw/shared';
-import { useUserPositions, useIbkrSettings } from './useUserPositions';
+import { TIERS, fmtDateTime, sizingTone, matchConvictionBand, DEFAULT_PER_STOCK_LADDER, cashflowAdjustedDrawdownPct, drawdownLadderStatus, DRAWDOWN_NEAR_BAND_PP, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, SPACE } from '@stw/shared';
+import { useUserPositions, useIbkrSettings, useUserExecutions } from './useUserPositions';
+import { usePerStockLadders, type PerStockLadderInfo } from './usePerStockLadders';
+import { PerStockLadderChip } from './PerStockLadder';
 import { useSyncPortfolio } from './useSyncPortfolio';
 import { useHoldings } from '../picks/useHoldings';
 import { useConvictionChanges, type HoldingRef } from '../picks/useConvictionChanges';
@@ -143,7 +145,7 @@ interface LegRowData {
   conviction: number | null;
 }
 
-function FlatLegRow({ row, onSelectTicker, showPnl, isMobile, portfolioValue, regime }: { row: LegRowData; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean; portfolioValue: number; regime?: TickerRegime }) {
+function FlatLegRow({ row, onSelectTicker, showPnl, isMobile, portfolioValue, regime, ladderInfo }: { row: LegRowData; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean; portfolioValue: number; regime?: TickerRegime; ladderInfo?: PerStockLadderInfo }) {
   const { p, underlying, isTailed, traders } = row;
   const weightPct = portfolioValue > 0 ? (posMV(p) / portfolioValue) * 100 : null;
   return (
@@ -155,6 +157,8 @@ function FlatLegRow({ row, onSelectTicker, showPnl, isMobile, portfolioValue, re
           {isTailed && traders.map((t) => <Badge key={t} kind="source" trader={t} />)}
           {/* Compact = trend-structure chip only (matches the Stock Picks list rows). */}
           <RegimeBadge regime={regime} compact />
+          {/* Per-stock drawdown stop — only on the stock leg, only when it needs attention. */}
+          {p.asset_class === 'STK' && <PerStockLadderChip info={ladderInfo} />}
         </div>
         <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 1 }}>{instrumentLabel(p)}</div>
       </td>
@@ -168,7 +172,7 @@ function FlatLegRow({ row, onSelectTicker, showPnl, isMobile, portfolioValue, re
   );
 }
 
-function FlatTable({ rows, onSelectTicker, showPnl, isMobile, portfolioValue, regimes }: { rows: LegRowData[]; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean; portfolioValue: number; regimes: Record<string, TickerRegime> }) {
+function FlatTable({ rows, onSelectTicker, showPnl, isMobile, portfolioValue, regimes, perStockLadders }: { rows: LegRowData[]; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean; portfolioValue: number; regimes: Record<string, TickerRegime>; perStockLadders: Map<string, PerStockLadderInfo> }) {
   return (
     <div style={{ overflowX: 'auto', paddingBottom: 9 }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: FONT_SIZE.xs }}>
@@ -184,7 +188,7 @@ function FlatTable({ rows, onSelectTicker, showPnl, isMobile, portfolioValue, re
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => <FlatLegRow key={r.p.id} row={r} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} portfolioValue={portfolioValue} regime={regimes[r.underlying]} />)}
+          {rows.map((r) => <FlatLegRow key={r.p.id} row={r} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} portfolioValue={portfolioValue} regime={regimes[r.underlying]} ladderInfo={perStockLadders.get(r.underlying)} />)}
         </tbody>
       </table>
     </div>
@@ -243,8 +247,8 @@ function PositionMetrics({ group, portfolioValue, showPnl }: { group: PortfolioG
 
 // header content for a group's accordion row (ticker/badges/composition + P&L columns) —
 // the AccordionList call site below supplies this as `renderHeader`.
-function GroupHeader({ group, onSelectTicker, showPnl, isMobile, portfolioValue, regime }: {
-  group: PortfolioGroup; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean; portfolioValue: number; regime?: TickerRegime;
+function GroupHeader({ group, onSelectTicker, showPnl, isMobile, portfolioValue, regime, ladderInfo }: {
+  group: PortfolioGroup; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean; portfolioValue: number; regime?: TickerRegime; ladderInfo?: PerStockLadderInfo;
 }) {
   const { underlying, netPnl, marketValue, isTailed, traders, conviction } = group;
   const weightPct = portfolioValue > 0 ? (marketValue / portfolioValue) * 100 : null;
@@ -260,6 +264,8 @@ function GroupHeader({ group, onSelectTicker, showPnl, isMobile, portfolioValue,
           {conviction !== null && <ConvictionBadge level={conviction} />}
           {/* Compact = trend-structure chip only (matches the Stock Picks list rows). */}
           <RegimeBadge regime={regime} compact />
+          {/* Per-stock drawdown stop for the group's underlying (shown only when actionable). */}
+          <PerStockLadderChip info={ladderInfo} />
         </div>
         <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{composition(group)}</div>
       </div>
@@ -281,10 +287,23 @@ function GroupHeader({ group, onSelectTicker, showPnl, isMobile, portfolioValue,
 
 // ── summary stat cards ────────────────────────────────────────
 
-// §2.3 — a clickable pill for the two Overview alerts, each jumping to the
-// relevant filtered view. Two severities: neutral info vs amber warning.
-function SummaryChip({ severity, onClick, children }: { severity: 'info' | 'warning'; onClick: () => void; children: React.ReactNode }) {
-  const c = severity === 'warning'
+// Risk warnings surfaced on Overview (Item 3 in-app) — the account drawdown state + a
+// count of names near/past a per-stock stop, so the warnings aren't buried on the Risk tab.
+interface OverviewWarnings {
+  drawdownSeverity: 'near' | 'breach' | null;
+  drawdownPct: number | null;
+  /** Names near OR past a per-stock stop (needs attention). */
+  stopAttention: number;
+  /** Subset past a stop and not yet trimmed (breach). */
+  stopBreach: number;
+}
+
+// §2.3 — a clickable pill for the Overview alerts, each jumping to the relevant view.
+// Severities: neutral info · amber warning · red negative (a live breach).
+function SummaryChip({ severity, onClick, children }: { severity: 'info' | 'warning' | 'negative'; onClick: () => void; children: React.ReactNode }) {
+  const c = severity === 'negative'
+    ? { fg: 'var(--status-negative-text)', bg: 'var(--status-negative-bg)', bd: 'var(--status-negative-border)' }
+    : severity === 'warning'
     ? { fg: 'var(--status-warning-text)', bg: 'var(--status-warning-bg)', bd: 'var(--status-warning-border)' }
     : { fg: 'var(--t2)', bg: 'var(--s2)', bd: 'var(--border)' };
   return (
@@ -298,14 +317,18 @@ function SummaryChip({ severity, onClick, children }: { severity: 'info' | 'warn
   );
 }
 
-function PortfolioSummary({ groups, showPnl, nlv, nlvAt, onOpenTailing, onOpenLowConviction }: {
+function PortfolioSummary({ groups, showPnl, nlv, warnings, onOpenTailing, onOpenLowConviction, onOpenRisk, onOpenStops }: {
   groups: PortfolioGroup[]; showPnl: boolean;
-  /** Account Net Liquidation Value from IBKR (risk_config.ibkr_nlv) + its as-of stamp —
-   *  positions market value + cash/margin, so the header reconciles to what IBKR shows. */
+  /** Account Net Liquidation Value from IBKR (risk_config.ibkr_nlv) — positions market
+   *  value + cash/margin, shown as the hero Account Value card with the split as its qualifier. */
   nlv: number | null;
-  nlvAt: string | null;
+  /** Risk warnings to surface on Overview (Item 3 in-app): the account-drawdown state +
+   *  count of stock names near/past a per-stock stop. Chips link to the relevant surface. */
+  warnings: OverviewWarnings;
   onOpenTailing: () => void;
   onOpenLowConviction: () => void;
+  onOpenRisk: () => void;
+  onOpenStops: () => void;
 }) {
   const t = useMemo(() => {
     let mv = 0, pnl = 0, cost = 0, legs = 0, sharesVal = 0, optVal = 0, optRisk = 0, tailed = 0, low = 0;
@@ -343,9 +366,22 @@ function PortfolioSummary({ groups, showPnl, nlv, nlvAt, onOpenTailing, onOpenLo
           <KpiCard label="Positions" primaryValue={positionCount} delta={{ value: `${t.legs} leg${t.legs === 1 ? '' : 's'}`, direction: 'flat' }} />
         </div>
         {showPnl && (
-          <div style={{ flex: 1, minWidth: 104 }} title="Total market value of your open positions">
-            <KpiCard label="Market Value" primaryValue={fmtMoneyCompact(t.mv)} />
-          </div>
+          nlv != null ? (
+            // Account Value (NLV) is the hero — positions + cash/margin — with the split as
+            // its qualifier. Replaces the standalone reconciliation line that used to sit
+            // below the KPI row (host, 2026-07-19); the market value now lives in the split.
+            <div style={{ flex: 1, minWidth: 104 }} title="Your IBKR account Net Liquidation Value — open positions plus cash (or minus margin).">
+              <KpiCard
+                label="Account Value"
+                primaryValue={fmtMoneyCompact(nlv)}
+                delta={{ value: `${fmtMoneyCompact(t.mv)} positions ${nlv - t.mv >= 0 ? '+' : '−'} ${fmtMoneyCompact(Math.abs(nlv - t.mv))} ${nlv - t.mv >= 0 ? 'cash' : 'margin'}`, direction: 'flat' }}
+              />
+            </div>
+          ) : (
+            <div style={{ flex: 1, minWidth: 104 }} title="Total market value of your open positions">
+              <KpiCard label="Market Value" primaryValue={fmtMoneyCompact(t.mv)} />
+            </div>
+          )
         )}
         {showPnl && (
           <div
@@ -384,23 +420,27 @@ function PortfolioSummary({ groups, showPnl, nlv, nlvAt, onOpenTailing, onOpenLo
         )}
       </div>
 
-      {/* Reconcile to IBKR: the KPI "Market Value" is positions only; the account's
-          Net Liq (from the IBKR sync) also includes cash/margin — so this line ties the
-          positions total out to the ~NLV the user sees in IBKR. Carries its own source +
-          as-of stamp (the NLV updates on IMPORT, a separate, often-older sync than positions). */}
-      {showPnl && nlv != null && (
-        <div style={{ marginTop: 12, fontSize: FONT_SIZE.xs, color: 'var(--t2)', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'baseline' }}>
-          <span style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: LETTER_SPACING.label, textTransform: 'uppercase', color: 'var(--t3)' }}>Account value</span>
-          <span style={{ color: 'var(--text)', fontWeight: FONT_WEIGHT.semibold, fontVariantNumeric: 'tabular-nums' }}>{fmtMoneyCompact(nlv)}</span>
-          <span style={{ color: 'var(--t3)' }}>
-            = {fmtMoneyCompact(t.mv)} positions {nlv - t.mv >= 0 ? '+' : '−'} {fmtMoneyCompact(Math.abs(nlv - t.mv))} {nlv - t.mv >= 0 ? 'cash' : 'margin'}
-          </span>
-          <span style={{ color: 'var(--t3)' }}>· Source: IBKR Net Liq{nlvAt ? ` · as of ${fmtDateTime(nlvAt)}` : ''}</span>
-        </div>
-      )}
-
       {positionCount > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+          {/* Risk warnings first — the account drawdown state + per-stock stops needing
+              action, so they're seen on Overview, not only the Risk tab (host, 2026-07-19). */}
+          {warnings.drawdownSeverity && (
+            <SummaryChip severity={warnings.drawdownSeverity === 'breach' ? 'negative' : 'warning'} onClick={onOpenRisk}>
+              <span>
+                {warnings.drawdownSeverity === 'breach' ? '● ' : '⚠ '}
+                Portfolio drawdown {warnings.drawdownPct != null ? `${warnings.drawdownPct >= 0 ? '+' : '−'}${Math.abs(warnings.drawdownPct).toFixed(1)}%` : ''}
+                {warnings.drawdownSeverity === 'breach' ? ' · rung crossed' : ' · near a rung'}
+              </span>
+            </SummaryChip>
+          )}
+          {warnings.stopAttention > 0 && (
+            <SummaryChip severity={warnings.stopBreach > 0 ? 'negative' : 'warning'} onClick={onOpenStops}>
+              <span>
+                {warnings.stopBreach > 0 ? '● ' : '⚠ '}
+                {warnings.stopAttention} position{warnings.stopAttention === 1 ? '' : 's'} near / past a stop
+              </span>
+            </SummaryChip>
+          )}
           <SummaryChip severity="info" onClick={onOpenTailing}>
             <span><strong style={{ color: 'var(--text)' }}>{t.tailed}</strong> of {positionCount} tailed{traderSummary ? ` · ${traderSummary}` : ''}</span>
           </SummaryChip>
@@ -676,6 +716,30 @@ export function PortfolioPage() {
   // (the ladder→gross target) and ViolationsSummary (the card), so the two never read a
   // different NLV. Falls back to the synced ibkr_nlv when quotes aren't cached.
   const liveNlv = useLiveNlv(regimeRiskConfig, positions);
+  // Per-stock drawdown ladders (Item 4) — one status per held stock name, off its live
+  // drawdown-from-entry, with trim-compliance reconstructed from the fill log. Computed
+  // once here; the map feeds both the row chips and the detail-pane section (one source).
+  const { data: executions = [] } = useUserExecutions();
+  const perStockLadders = usePerStockLadders(positions, executions, regimeRiskConfig);
+
+  // Risk warnings for the Overview chips (Item 3 in-app): the account-drawdown state off
+  // the SAME live NLV the Risk tab uses (one source of inputs → same verdict), plus how many
+  // stock names are near/past a per-stock stop. Advisory — the chips just link to the detail.
+  const overviewWarnings = useMemo<OverviewWarnings>(() => {
+    const ddPct = regimeRiskConfig
+      ? cashflowAdjustedDrawdownPct(liveNlv.nlv, regimeRiskConfig.equity_peak, regimeRiskConfig.cumulative_cashflow, regimeRiskConfig.equity_peak_cashflow)
+      : null;
+    const ddStatus = ddPct === null || !regimeRiskConfig
+      ? null
+      : drawdownLadderStatus(regimeRiskConfig.ladder, ddPct, regimeRiskConfig.drawdown_near_band_pp ?? DRAWDOWN_NEAR_BAND_PP);
+    const stops = [...perStockLadders.values()];
+    return {
+      drawdownSeverity: ddStatus && (ddStatus.severity === 'near' || ddStatus.severity === 'breach') ? ddStatus.severity : null,
+      drawdownPct: ddStatus ? ddStatus.drawdownPct : null,
+      stopAttention: stops.filter((i) => i.status.severity === 'near' || i.status.severity === 'breach').length,
+      stopBreach: stops.filter((i) => i.status.severity === 'breach').length,
+    };
+  }, [regimeRiskConfig, liveNlv.nlv, perStockLadders]);
   // One reconciliation of the drawdown ladder vs the double-RED regime target, computed
   // once here and passed to BOTH the RegimeLight and ViolationsSummary so they show the
   // identical binding gross number (never two conflicting targets). The ladder side reads
@@ -786,11 +850,24 @@ export function PortfolioPage() {
     // genuinely isn't a match yet) — the count reflects only confirmed matches.
     if (filters.structure && regime?.bucket !== filters.structure) return false;
     if (filters.standing && regime?.standing !== filters.standing) return false;
+    // Per-stock stop-ladder status. A name with no stock position (option-only) has no
+    // stop status, so it's excluded when a stop filter is active — same as structure above.
+    if (filters.stop) {
+      const sev = perStockLadders.get(underlying)?.status.severity;
+      if (filters.stop === 'attention' && sev !== 'near' && sev !== 'breach') return false;
+      if (filters.stop === 'breach' && sev !== 'breach') return false;
+    }
     if (q && !underlying.toUpperCase().includes(q)) return false;
     return true;
   };
   const dir = filters.sort.endsWith('_asc') ? 1 : -1;
   const nl = (v: number | null) => (v == null ? Number.NEGATIVE_INFINITY : v);
+  // Per-stock drawdown-from-entry for the "Stop drawdown" sort. Null (no stock position)
+  // sorts to the END regardless of direction, so option-only rows never top the list.
+  const ddSort = (underlying: string, asc: boolean) => {
+    const v = perStockLadders.get(underlying)?.status.drawdownPct;
+    return v == null ? (asc ? Infinity : -Infinity) : v;
+  };
 
   // grouped view rows
   const visibleGroups = useMemo<PortfolioGroup[]>(() => {
@@ -800,13 +877,15 @@ export function PortfolioPage() {
         case 'pnl_desc': case 'pnl_asc': return (a.netPnl - b.netPnl) * dir;
         case 'ret_desc': case 'ret_asc': return (nl(a.returnPct) - nl(b.returnPct)) * dir;
         case 'value_desc': case 'value_asc': return (a.marketValue - b.marketValue) * dir;
+        case 'dd_asc': return ddSort(a.underlying, true) - ddSort(b.underlying, true);
+        case 'dd_desc': return ddSort(b.underlying, false) - ddSort(a.underlying, false);
         case 'az': return a.underlying.localeCompare(b.underlying);
         case 'za': return b.underlying.localeCompare(a.underlying);
         default: return 0;
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allGroups, filters, regimes, sectorMap]);
+  }, [allGroups, filters, regimes, sectorMap, perStockLadders]);
 
   // flat per-leg rows (default view)
   const visibleLegs = useMemo<LegRowData[]>(() => {
@@ -820,13 +899,15 @@ export function PortfolioPage() {
         case 'pnl_desc': case 'pnl_asc': return (nl(a.p.unrealized_pnl) - nl(b.p.unrealized_pnl)) * dir;
         case 'ret_desc': case 'ret_asc': return (nl(a.p.unrealized_pnl_pct) - nl(b.p.unrealized_pnl_pct)) * dir;
         case 'value_desc': case 'value_asc': return (posMV(a.p) - posMV(b.p)) * dir;
+        case 'dd_asc': return ddSort(a.underlying, true) - ddSort(b.underlying, true);
+        case 'dd_desc': return ddSort(b.underlying, false) - ddSort(a.underlying, false);
         case 'az': return a.underlying.localeCompare(b.underlying) || instrumentLabel(a.p).localeCompare(instrumentLabel(b.p));
         case 'za': return b.underlying.localeCompare(a.underlying) || instrumentLabel(a.p).localeCompare(instrumentLabel(b.p));
         default: return 0;
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [positions, pickMap, filters, regimes, sectorMap]);
+  }, [positions, pickMap, filters, regimes, sectorMap, perStockLadders]);
 
   const lastSynced = useMemo(() => {
     if (lastResult) return lastResult.lastSyncedAt;
@@ -891,6 +972,8 @@ export function PortfolioPage() {
         stwWeight={pickMap.get(selectedGroup.underlying)?.stwWeight ?? null}
         showPnl={showPnl}
         tickerRegime={regimes[selectedGroup.underlying]}
+        perStockLadder={perStockLadders.get(selectedGroup.underlying)}
+        perStockLadderConfig={regimeRiskConfig?.per_stock_ladder ?? DEFAULT_PER_STOCK_LADDER}
         onClose={() => setSelected(null)}
         onViewStwPosition={onViewStwPosition}
       />
@@ -975,12 +1058,18 @@ export function PortfolioPage() {
         groups={allGroups}
         showPnl={showPnl}
         nlv={regimeRiskConfig?.ibkr_nlv ?? null}
-        nlvAt={regimeRiskConfig?.ibkr_nlv_at ?? null}
+        warnings={overviewWarnings}
         onOpenTailing={() => changeTab('tailing')}
         onOpenLowConviction={() => {
           // Jump to Positions with the conviction filter pre-applied to exactly the
           // chip's set (tiers 1–2), so the user lands on the flagged positions.
           setFilters({ ...DEFAULT_PORTFOLIO_FILTERS, conviction: 'low' });
+          changeTab('positions');
+        }}
+        onOpenRisk={() => changeTab('risk')}
+        onOpenStops={() => {
+          // Jump to Positions filtered to names near/past a per-stock stop.
+          setFilters({ ...DEFAULT_PORTFOLIO_FILTERS, stop: 'attention' });
           changeTab('positions');
         }}
       />
@@ -1076,7 +1165,7 @@ export function PortfolioPage() {
                 onToggle={toggleGroup}
                 accentColor={(g) => (g.conviction !== null ? (TIERS[g.conviction]?.color ?? 'var(--border)') : 'var(--border)')}
                 renderHeader={(g) => (
-                  <GroupHeader group={g} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} portfolioValue={portfolioValue} regime={regimes[g.underlying]} />
+                  <GroupHeader group={g} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} portfolioValue={portfolioValue} regime={regimes[g.underlying]} ladderInfo={perStockLadders.get(g.underlying)} />
                 )}
                 renderExpanded={(g) => (
                   <>
@@ -1087,7 +1176,7 @@ export function PortfolioPage() {
               />
             </>
           ) : (
-            <FlatTable rows={visibleLegs} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} portfolioValue={portfolioValue} regimes={regimes} />
+            <FlatTable rows={visibleLegs} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} portfolioValue={portfolioValue} regimes={regimes} perStockLadders={perStockLadders} />
           )}
         </div>
       </div>

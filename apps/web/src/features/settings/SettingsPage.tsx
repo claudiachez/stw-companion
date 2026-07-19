@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  useIbkrSettings, saveIbkrSettings, useAuthStore, useSyncPortfolio, useUserPositions, LoadingSpinner,
+  useIbkrSettings, saveIbkrSettings, fetchDiscordUserId, saveDiscordUserId, useAuthStore, useSyncPortfolio, useUserPositions, LoadingSpinner,
   Button, StatusPill, AlertStrip, FormRow, TextInput,
   RiskConfigForm, useRiskConfig, useEnsureRiskConfig,
 } from '@stw/ui';
@@ -86,6 +86,30 @@ export function SettingsPage() {
   const [editingConnection, setEditingConnection] = useState(false);
   const [howToConnectExpanded, setHowToConnectExpanded] = useState(true);
   const initializedRef = useRef(false);
+
+  // Discord DM linking for drawdown alerts (Item 3). The user pastes their Discord user ID
+  // (Developer Mode → Copy User ID); the alert cron DMs it. Test bot for now — swapping to
+  // the production bot is just the DISCORD_BOT_TOKEN env, no change here.
+  const [discordId, setDiscordId] = useState('');
+  const [discordSaving, setDiscordSaving] = useState(false);
+  const [discordSaved, setDiscordSaved] = useState(false);
+  const [discordError, setDiscordError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!user?.id) return;
+    fetchDiscordUserId(user.id).then((id) => setDiscordId(id ?? '')).catch(() => { /* first-load best-effort */ });
+  }, [user?.id]);
+  async function handleSaveDiscord() {
+    if (!user?.id) return;
+    setDiscordSaving(true); setDiscordError(null); setDiscordSaved(false);
+    try {
+      await saveDiscordUserId(user.id, discordId.trim() || null);
+      setDiscordSaved(true);
+    } catch (e) {
+      setDiscordError(e instanceof Error ? e.message : 'Failed to save');
+    } finally {
+      setDiscordSaving(false);
+    }
+  }
 
   useEffect(() => {
     if (settings) {
@@ -383,7 +407,35 @@ export function SettingsPage() {
           riskConfigLoading || !riskConfig ? (
             <LoadingSpinner />
           ) : (
+            <>
             <RiskConfigForm userId={user!.id} config={riskConfig} />
+            {/* Alert delivery — where drawdown alerts reach you off the Risk tab (Item 3). */}
+            <div style={{ marginTop: SPACE[4], background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: RADIUS.xl, padding: SPACE[4] }}>
+              <div style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)', marginBottom: SPACE[1] }}>Alert delivery</div>
+              <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginBottom: SPACE[3], lineHeight: 1.5 }}>
+                Drawdown alerts are always shown in-app on the Risk tab. To also get a Discord DM when a
+                rung is crossed or approached, paste your Discord user ID and make sure you share a server
+                with our bot (and allow DMs from server members). Email alerts use your account email.
+              </div>
+              <FormRow label="Discord user ID">
+                <TextInput
+                  type="text"
+                  inputMode="numeric"
+                  value={discordId}
+                  onChange={(e) => { setDiscordId(e.target.value); setDiscordSaved(false); }}
+                  placeholder="e.g. 216154467524051123"
+                  autoComplete="off"
+                />
+              </FormRow>
+              <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[1.5] }}>
+                In Discord: User Settings → Advanced → enable Developer Mode, then right-click your name → Copy User ID. Leave blank to turn Discord DMs off.
+              </div>
+              {discordError && <div style={{ marginTop: SPACE[2] }}><AlertStrip severity="negative">{discordError}</AlertStrip></div>}
+              <Button variant="primary" onClick={handleSaveDiscord} disabled={discordSaving} style={{ alignSelf: 'flex-start', minWidth: 120, marginTop: SPACE[3] }}>
+                {discordSaving ? 'Saving…' : discordSaved ? 'Saved ✓' : 'Save'}
+              </Button>
+            </div>
+          </>
           )
         ) : (
           <div style={{

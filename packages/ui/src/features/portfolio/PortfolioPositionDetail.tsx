@@ -14,6 +14,8 @@ import { useEarningsCalendar } from '../earnings/useEarningsCalendar';
 import { EarningsBadge } from '../earnings/EarningsBadge';
 import type { TickerRegime } from '../picks/useTickerRegime';
 import { useUserExecutions } from './useUserPositions';
+import { PerStockLadderDetail } from './PerStockLadder';
+import type { PerStockLadderInfo } from './usePerStockLadders';
 import type { UserPosition, UserExecution } from './api';
 
 const STATE_COLOR: Record<'GREEN' | 'RED' | 'UNKNOWN', string> = {
@@ -116,7 +118,7 @@ function Section({ title, children }: { title: React.ReactNode; children: React.
  * STW's view is an explicit link inside the Tailing section.
  */
 export function PortfolioPositionDetail({
-  group, ownPortfolioPct, stwWeight, showPnl, tickerRegime, onClose, onViewStwPosition,
+  group, ownPortfolioPct, stwWeight, showPnl, tickerRegime, perStockLadder, perStockLadderConfig, onClose, onViewStwPosition,
 }: {
   group: DetailGroup;
   /** This position's share of the subscriber's own book, by market value. */
@@ -126,6 +128,10 @@ export function PortfolioPositionDetail({
   showPnl: boolean;
   /** The ticker's own trend structure + sector-rotation standing (computed once at the page level). */
   tickerRegime?: TickerRegime;
+  /** Per-stock drawdown-ladder status for this name (Item 4), computed once at the page level. */
+  perStockLadder?: PerStockLadderInfo;
+  /** The user's configured per-stock rungs, to render the full ladder. */
+  perStockLadderConfig: { drawdownPct: number; holdFractionPct: number }[];
   onClose: () => void;
   onViewStwPosition: () => void;
 }) {
@@ -342,6 +348,14 @@ export function PortfolioPositionDetail({
           <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[2], fontStyle: 'italic' }}>
             Advisory — under forward validation. Not a trade signal.
           </div>
+        </Section>
+      )}
+
+      {/* Per-stock stop ladder (Item 4) — this name's own drawdown ladder, kept a SEPARATE
+          section from the account-wide Portfolio drawdown + the market-regime read above. */}
+      {group.hasStock && (
+        <Section title="Per-stock stop ladder">
+          <PerStockLadderDetail info={perStockLadder} ladder={perStockLadderConfig} />
         </Section>
       )}
 

@@ -194,6 +194,24 @@ all advisory/display-only (nothing blocks or places a trade):
   portfolio drawdown ladder (the "Portfolio drawdown" + Gross exposure cards) / individual-stock drawdown
   (My Portfolio position row/detail). Same reconciliation rule as before — the first two bind by "tightest."
 
+**Direction — access + Discord linking flow through WHOP, not our own auth (host 2026-07-19):**
+STW already sells subscriptions on **Whop**, which also manages Discord access (Whop's bot adds a
+paid member to the STW server + assigns roles; removes them on lapse — the "Claim Discord Access"
+flow). Target model: **a user's app access mirrors their Whop membership.** Buy on Whop → membership
+active → grant our app access; lapse → revoke. Verify via `/me/has_access/:id` + `membership.activated`
+/`membership.deactivated` webhooks (signature-verified), and/or Login-with-Whop OAuth. Not built yet —
+this is the DIRECTION so nothing we build now contradicts it.
+- **Do NOT build a separate Discord OAuth "connect" / linking flow** — Whop already links each member's
+  Discord account and puts them in the server. `profiles.discord_user_id` should be **populated from
+  Whop** (webhook/API), not our own OAuth. (This is why the standalone Discord identify flow was dropped.)
+- **What we've built is Whop-compatible, no rework:** the `status = 'active'` gate + `subscription_tier`
+  become **Whop-driven** (webhook-synced) instead of manually set; `profiles.discord_user_id` gets its
+  value from Whop; the drawdown-alert cron already gates on `status = 'active'`, which aligns.
+- **The alert bot + token is a SEPARATE layer from access.** Whop manages *membership + server access*;
+  our own bot (token in `integration_secrets`) *sends the custom drawdown DMs* to members already in the
+  Whop-managed server. Different concerns — the token store stays. The manual Discord-ID paste (admin +
+  Settings) is an INTERIM for the test bot until Whop feeds the ID.
+
 **Decisions locked — REGIME_EXIT is a per-user rule, not a signed document (host 2026-07-08):**
 - The advisory de-risking policy (integrity-guardrails Item 4) is a **per-user setting**, not the
   single operator-owned `docs/regime_exit_v0.md` the original spec described. Values live on

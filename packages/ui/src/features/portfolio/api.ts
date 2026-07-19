@@ -93,3 +93,22 @@ export async function saveIbkrSettings(
     .eq('user_id', userId);
   if (error) throw error;
 }
+
+/** Subscriber's linked Discord user ID for alert DMs (migration 074) — null when not linked. */
+export async function fetchDiscordUserId(userId: string): Promise<string | null> {
+  const { data, error } = await getSupabase()
+    .from('profiles')
+    .select('discord_user_id')
+    .eq('user_id', userId)
+    .single();
+  if (error) throw error;
+  return (data as { discord_user_id: string | null }).discord_user_id ?? null;
+}
+
+export async function saveDiscordUserId(userId: string, discordUserId: string | null): Promise<void> {
+  const { error } = await getSupabase()
+    .from('profiles')
+    .update({ discord_user_id: discordUserId })
+    .eq('user_id', userId);
+  if (error) throw error;
+}

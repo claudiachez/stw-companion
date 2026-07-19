@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FONT_SIZE, FONT_WEIGHT, RADIUS, SPACE, type DrawdownStep } from '@stw/shared';
+import { FONT_SIZE, FONT_WEIGHT, RADIUS, SPACE, type DrawdownStep, type PerStockDrawdownStep } from '@stw/shared';
 import { Button } from '../../primitives/Button';
 import { FormRow, type FormRowProps } from '../../primitives/FormRow';
 import { TextInput } from '../../primitives/TextInput';
@@ -80,6 +80,23 @@ function crossPolicyWarnings(regimeDoubleRedGrossPct: number, ladder: DrawdownSt
   return [];
 }
 
+/** Per-stock rungs should get strictly deeper (more negative drawdown) and hold a
+ * strictly lower-or-equal fraction of peak as you go down — a stop that trims more,
+ * never less, the further a name falls. */
+function perStockLadderWarnings(ladder: PerStockDrawdownStep[]): string[] {
+  const warnings: string[] = [];
+  for (let i = 1; i < ladder.length; i++) {
+    const prev = ladder[i - 1];
+    const cur = ladder[i];
+    if (Math.abs(cur.drawdownPct) <= Math.abs(prev.drawdownPct)) {
+      warnings.push(`Per-stock ${rungLabel(i)}'s drawdown (${Math.abs(cur.drawdownPct)}%) should be deeper than ${rungLabel(i - 1)}'s (${Math.abs(prev.drawdownPct)}%).`);
+    } else if (cur.holdFractionPct > prev.holdFractionPct) {
+      warnings.push(`Per-stock ${rungLabel(i)} keeps more of the position (${cur.holdFractionPct}%) than the shallower ${rungLabel(i - 1)} (${prev.holdFractionPct}%) — deeper losses should hold less.`);
+    }
+  }
+  return warnings;
+}
+
 /** A single position can't out-concentrate its own sector, and a single sector
  * can't out-concentrate the whole book. */
 function thresholdWarnings(maxPositionPct: number, maxOptionPositionPct: number, maxSectorPct: number, maxGrossPct: number): string[] {
@@ -101,6 +118,7 @@ export function RiskConfigForm({ userId, config }: { userId: string; config: Ris
   const [draft, setDraft] = useState<{
     maxPositionPct?: number; maxOptionPositionPct?: number; maxSectorPct?: number; maxGrossPct?: number;
     accountEquity?: number; ladder?: DrawdownStep[];
+    perStockLadder?: PerStockDrawdownStep[]; drawdownNearBandPp?: number;
     regimeTrimToPct?: number; regimeStopPct?: number; regimeDoubleRedGrossPct?: number;
   }>({});
 
@@ -110,6 +128,8 @@ export function RiskConfigForm({ userId, config }: { userId: string; config: Ris
   const maxGrossPct = draft.maxGrossPct ?? config.max_gross_pct;
   const accountEquity = draft.accountEquity ?? config.account_equity;
   const ladder = draft.ladder ?? config.ladder;
+  const perStockLadder = draft.perStockLadder ?? config.per_stock_ladder ?? [];
+  const drawdownNearBandPp = draft.drawdownNearBandPp ?? config.drawdown_near_band_pp ?? 2;
   const regimeTrimToPct = draft.regimeTrimToPct ?? config.regime_trim_to_pct;
   const regimeStopPct = draft.regimeStopPct ?? config.regime_stop_pct;
   const regimeDoubleRedGrossPct = draft.regimeDoubleRedGrossPct ?? config.regime_doublered_gross_pct;
@@ -117,6 +137,7 @@ export function RiskConfigForm({ userId, config }: { userId: string; config: Ris
   const warnings = [
     ...thresholdWarnings(maxPositionPct, maxOptionPositionPct, maxSectorPct, maxGrossPct),
     ...ladderWarnings(ladder),
+    ...perStockLadderWarnings(perStockLadder),
     ...crossPolicyWarnings(regimeDoubleRedGrossPct, ladder),
   ];
 
@@ -134,6 +155,20 @@ export function RiskConfigForm({ userId, config }: { userId: string; config: Ris
     setDraft((d) => ({ ...d, ladder: ladder.filter((_, idx) => idx !== i) }));
   }
 
+  function updateStockRung(i: number, patch: Partial<PerStockDrawdownStep>) {
+    setDraft((d) => ({ ...d, perStockLadder: perStockLadder.map((r, idx) => (idx === i ? { ...r, ...patch } : r)) }));
+  }
+  function addStockRung() {
+    const last = perStockLadder[perStockLadder.length - 1];
+    const next: PerStockDrawdownStep = last
+      ? { drawdownPct: last.drawdownPct - 5, holdFractionPct: Math.max(0, last.holdFractionPct - 25) }
+      : { drawdownPct: -5, holdFractionPct: 75 };
+    setDraft((d) => ({ ...d, perStockLadder: [...perStockLadder, next] }));
+  }
+  function removeStockRung(i: number) {
+    setDraft((d) => ({ ...d, perStockLadder: perStockLadder.filter((_, idx) => idx !== i) }));
+  }
+
   async function handleSave() {
     await save.mutateAsync({
       max_position_pct: maxPositionPct,
@@ -142,6 +177,8 @@ export function RiskConfigForm({ userId, config }: { userId: string; config: Ris
       max_gross_pct: maxGrossPct,
       account_equity: accountEquity,
       ladder,
+      per_stock_ladder: perStockLadder,
+      drawdown_near_band_pp: drawdownNearBandPp,
       regime_trim_to_pct: regimeTrimToPct,
       regime_stop_pct: regimeStopPct,
       regime_doublered_gross_pct: regimeDoubleRedGrossPct,
@@ -234,6 +271,53 @@ export function RiskConfigForm({ userId, config }: { userId: string; config: Ris
           <button
             type="button"
             onClick={addRung}
+            style={{
+              marginTop: SPACE[2], background: 'none', border: '1px dashed var(--border)', borderRadius: RADIUS.md,
+              padding: `${SPACE[1]}px ${SPACE[2.5]}px`, fontSize: FONT_SIZE.sm, color: 'var(--t2)', cursor: 'pointer',
+            }}
+          >
+            + Add rung
+          </button>
+        </div>
+
+        <NumRow layout={rowLayout} label="Near warning band" suffix="pp" note="amber early warning when this many points from the next rung — both ladders" min={0}
+          value={drawdownNearBandPp} onChange={(v) => setDraft((d) => ({ ...d, drawdownNearBandPp: v }))} />
+
+        <div>
+          <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: FONT_WEIGHT.semibold, marginBottom: SPACE[2] }}>
+            Per-stock stop ladder
+          </div>
+          <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginBottom: SPACE[2.5] }}>
+            Applies to each single stock position by its drawdown from your entry — at each rung, hold at most this % of the position's peak size (0 = exit). Separate from the account-wide ladder above; advisory only.
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE[2.5] }}>
+            {perStockLadder.map((rung, i) => (
+              <FormRow key={i} layout={rowLayout} label={rungLabel(i)}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[1.5], flexWrap: 'wrap' }}>
+                  <span style={prefixSlot}>At</span>
+                  <TextInput type="number" min={0} max={100} style={smallInput}
+                    value={Math.abs(rung.drawdownPct)}
+                    onChange={(e) => updateStockRung(i, { drawdownPct: -Math.abs(Number(e.target.value)) })} />
+                  <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>% down → hold ≤</span>
+                  <TextInput type="number" min={0} max={100} style={smallInput}
+                    value={rung.holdFractionPct}
+                    onChange={(e) => updateStockRung(i, { holdFractionPct: Number(e.target.value) })} />
+                  <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>% of peak</span>
+                  <button
+                    type="button"
+                    onClick={() => removeStockRung(i)}
+                    aria-label={`Remove per-stock ${rungLabel(i)}`}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t3)', fontSize: FONT_SIZE.sm, padding: `0 ${SPACE[1]}px`, marginLeft: 'auto' }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </FormRow>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={addStockRung}
             style={{
               marginTop: SPACE[2], background: 'none', border: '1px dashed var(--border)', borderRadius: RADIUS.md,
               padding: `${SPACE[1]}px ${SPACE[2.5]}px`, fontSize: FONT_SIZE.sm, color: 'var(--t2)', cursor: 'pointer',

@@ -57,13 +57,48 @@ Reaches the user off the Risk tab.
   cross/approach, with de-dup (don't re-alert the same rung daily). Store last-alerted state.
 - Advisory copy only; never implies an executed action.
 
-## Item 4 — Per-position stop alerts  [distinct from the account ladder]
-The thing that would've flagged TE −32% directly.
-- New per-user setting: flag a position down > X% from entry (advisory). Entry = `avg_cost`
-  from `user_positions` (subscriber) — note the subscriber feed has no return %, so compute
-  from `mark_price` vs `avg_cost`.
-- Surface on My Portfolio (the position row / detail) + optionally roll into Item 3 alerts.
-- Independent of the account ladder; purely advisory.
+## Item 4 — Per-stock drawdown LADDER  [distinct from the account ladder]  — DESIGN LOCKED (host 2026-07-19)
+The thing that would've flagged TE −32% directly. A full ladder (host), not a single stop.
+- **Trigger** = drawdown-from-entry per STOCK position: `(mark_price − avg_cost)/avg_cost`,
+  from `user_positions` (stable — a trim doesn't change the remaining shares' avg_cost).
+  Scoped to STK legs for v1 (options have their own leverage/decay risk lens — out of scope).
+- **Rung action = reduce-to a fraction of PEAK size** (host: "trim ¼ each"). Default ladder:
+  `[{-5→75}, {-10→50}, {-15→25}, {-20→0}]` = hold ≤ 75/50/25/0 % of peak. Per-user, retunable.
+- **Trim-aware via `user_executions`, NOT a new baseline table** (host asked; confirmed the data
+  exists). Reconstruct the current open episode's PEAK quantity by cumulative-summing signed fills
+  per underlying (append-only log survives a full close). `alreadyComplies = |curQty|/|peakQty| ≤
+  target` → idempotent (a rung goes quiet once you've trimmed to it; no nagging, and Item 3 alerts
+  only fire when NOT complied). **Completeness guard:** reconcile Σ(signed fills) against
+  `user_positions.quantity`; on mismatch (pre-window/pre-sync fills missing) fall back to
+  peak = current qty ("history incomplete"), never a wrong number.
+- **Shared logic** (`@stw/shared`): `reconstructPositionEpisode(fills)` → `{peakQty, entryQty,
+  reconciles}`; `perStockLadderStatus(drawdownPct, curQty, peakQty, ladder, nearBandPp)` →
+  `{severity, activeRung, nextRung, targetHoldPct, alreadyComplies, distanceToNextPp}`. Same
+  `ok|near|breach` + NEAR band vocabulary as the account ladder.
+- **UI:** My Portfolio position row (chip) + detail pane section, CLEARLY distinguished from the
+  account "Portfolio drawdown" card (host: three concepts must be visually distinct). Independent
+  axis — flags a NAME, sets no gross target, so it cannot contradict the regime/portfolio ladder.
+- **Settings + migration:** `risk_config` gains `per_stock_ladder` (jsonb) + `drawdown_near_band_pp`
+  (numeric, default 2 — the Item-1 near band, now the user's to set). One migration, Claude-authors/
+  host-applies. `RiskConfigForm` gains both editors.
+
+## Item 3 — Alerts  [BUILT: in-app + email (Resend) + Discord-bot DM (test bot)]
+- **In-app**: Overview chips surface the account-drawdown state + a count of names near/past a
+  per-stock stop, linking to the Risk tab / stop-filtered Positions (so warnings aren't buried).
+- **Email**: `apps/web/netlify/functions/drawdown-alerts-cron.ts` (web-only, `30 8 * * 2-6`, after
+  ibkr-sync-cron) evaluates each user's account + per-stock ladders on synced data and emails a
+  summary via Resend on ESCALATION only. De-dup via `risk_alert_state` (migration 073): a monotonic
+  `last_level` per (user, kind, scope) — send only when it increases, delete on recovery. Reuses the
+  `@stw/shared` engine (cron ↔ screen agree). Respects `preferences.drawdownAlertsOptOut` + active status.
+  **Dormant until `RESEND_API_KEY` + `ALERT_FROM_EMAIL` are set on the web site** (optional `APP_URL`).
+- **Discord-bot DM** (test bot): the cron also DMs via a bot (`DISCORD_BOT_TOKEN`) when the user has
+  linked their Discord ID in Settings → Alert delivery (`profiles.discord_user_id`, migration 074).
+  Bot identity is the token only → swap the test bot for production from the **admin UI** (Config →
+  Discord alert bot; `integration_secrets`, migration 075 — admin-only RLS, write-only), with the
+  `DISCORD_BOT_TOKEN` env as fallback. Two Discord REST calls (open DM, post). Channel-agnostic
+  de-dup; state advances if any channel delivers.
+- **Still open**: a Discord OAuth link flow (replace the manual ID paste); a Settings opt-out toggle
+  for email (the fn already honors `preferences.drawdownAlertsOptOut`). See docs/drawdown-alerts.md.
 
 ## Standing constraints
 Advisory/display-only (never blocks). Regime gate frozen at engine 1.1.0; gate ↔ Macro

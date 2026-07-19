@@ -10,9 +10,13 @@ export type PortfolioSort =
   | 'pnl_desc' | 'pnl_asc'
   | 'ret_desc' | 'ret_asc'
   | 'value_desc' | 'value_asc'
+  | 'dd_desc' | 'dd_asc'
   | 'az' | 'za';
 
 export type PortfolioType = '' | 'stocks' | 'options';
+
+/** Per-stock stop-ladder filter: '' = all · 'attention' = near or past a rung · 'breach' = past a rung, not trimmed. */
+export type PortfolioStopFilter = '' | 'attention' | 'breach';
 
 export interface PortfolioFilters {
   search: string;
@@ -21,6 +25,7 @@ export interface PortfolioFilters {
   structure: TrendBucket | '';   // the ticker's own 9/21/200 trend structure
   standing: SectorStanding | ''; // its sector's rotation standing (sector regime)
   sector: string;                // GICS market sector (from useSectorMap); '' = all
+  stop: PortfolioStopFilter;     // per-stock drawdown stop-ladder status
   type: PortfolioType;
   sort: PortfolioSort;
   tailedOnly: boolean;
@@ -34,6 +39,7 @@ export const DEFAULT_PORTFOLIO_FILTERS: PortfolioFilters = {
   structure: '',
   standing: '',
   sector: '',
+  stop: '',
   type: '',
   sort: 'pnl_desc',
   tailedOnly: false,
@@ -54,6 +60,8 @@ const SORT_OPTIONS: { value: PortfolioSort; label: string }[] = [
   { value: 'ret_asc',    label: 'Sort: Return ↑' },
   { value: 'value_desc', label: 'Sort: Value ↓' },
   { value: 'value_asc',  label: 'Sort: Value ↑' },
+  { value: 'dd_asc',     label: 'Sort: Stop drawdown ↓' }, // most negative (worst) first
+  { value: 'dd_desc',    label: 'Sort: Stop drawdown ↑' },
   { value: 'az',         label: 'Sort: A → Z' },
   { value: 'za',         label: 'Sort: Z → A' },
 ];
@@ -89,8 +97,8 @@ interface Props {
 }
 
 export function PortfolioFilterBar({ filters, onChange, baskets, sectors, filtered, total }: Props) {
-  const { search, basket, conviction, structure, standing, sector, type, sort, tailedOnly, groupByTicker } = filters;
-  const hasFilter = !!search || !!basket || !!conviction || !!structure || !!standing || !!sector || type !== '' || tailedOnly;
+  const { search, basket, conviction, structure, standing, sector, stop, type, sort, tailedOnly, groupByTicker } = filters;
+  const hasFilter = !!search || !!basket || !!conviction || !!structure || !!standing || !!sector || !!stop || type !== '' || tailedOnly;
 
   return (
     <>
@@ -132,6 +140,12 @@ export function PortfolioFilterBar({ filters, onChange, baskets, sectors, filter
         </select>
       )}
 
+      <select value={stop} onChange={(e) => onChange({ ...filters, stop: e.target.value as PortfolioStopFilter })} className={ctrlBorderClass} style={ctrlStyle} title="Filter by each stock's per-stock drawdown stop-ladder status">
+        <option value="">All Stops</option>
+        <option value="attention">Near / past a stop</option>
+        <option value="breach">Past a stop (not trimmed)</option>
+      </select>
+
       <select value={type} onChange={(e) => onChange({ ...filters, type: e.target.value as PortfolioType })} className={ctrlBorderClass} style={ctrlStyle}>
         <option value="">All Types</option>
         <option value="stocks">Stocks</option>
@@ -154,7 +168,7 @@ export function PortfolioFilterBar({ filters, onChange, baskets, sectors, filter
 
       {hasFilter && (
         <button
-          onClick={() => onChange({ ...filters, search: '', basket: '', conviction: '', structure: '', standing: '', sector: '', type: '', tailedOnly: false })}
+          onClick={() => onChange({ ...filters, search: '', basket: '', conviction: '', structure: '', standing: '', sector: '', stop: '', type: '', tailedOnly: false })}
           style={{ ...ctrlStyle, background: 'none', color: 'var(--t3)', padding: '0 4px' }}
           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--t2)'; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--t3)'; }}
