@@ -34,7 +34,7 @@ Advisory/display-only — nothing here places, blocks, or adjusts a trade.
 |--|--|--|
 | `RESEND_API_KEY` | Resend sending key | resend.com → *API Keys* → create (Sending access). Free tier ≈3,000/mo, 100/day. |
 | `ALERT_FROM_EMAIL` | The "From" address | Any address on a **domain you've verified in Resend** (*Domains* → add domain → SPF/DKIM DNS records), e.g. `alerts@yourdomain`. Resend rejects an unverified-domain sender. |
-| `DISCORD_BOT_TOKEN` *(optional)* | Bot token for DM alerts | discord.com/developers → your app → Bot → Reset/Copy Token. Enables the Discord channel; the bot's identity is entirely this token, so swapping the **test bot** for the production one is just this env var. |
+| Discord bot token | Bot token for DM alerts | **Preferred: the admin UI** — apps/admin → Config → *Discord alert bot* (stored in `integration_secrets`, admin-only, write-only). Swapping the **test bot** for another is done there, no redeploy. `DISCORD_BOT_TOKEN` env is a fallback if the UI value is unset. Get the token at discord.com/developers → your app → Bot → Reset/Copy Token. |
 | `APP_URL` *(optional)* | Web app base URL | Your subscriber site's public URL (Netlify → that site → *Site overview*). Builds the "Open your Risk tab →" link in both email + Discord; omit to drop it. |
 
 Each channel is independent: set email vars for email, `DISCORD_BOT_TOKEN` for Discord, or both.
@@ -54,8 +54,10 @@ will be swapped for the production bot later, which is just changing `DISCORD_BO
 identity is entirely the token; no code change).
 
 **To turn it on:**
-1. **Create a Discord app + bot** (discord.com/developers → New Application → Bot), copy the token
-   → `DISCORD_BOT_TOKEN` on the web site. Send-only DMs use the **REST API** (`POST
+1. **Create a Discord app + bot** (discord.com/developers → New Application → Bot), copy the token,
+   and paste it in **apps/admin → Config → Discord alert bot → Save** (or set `DISCORD_BOT_TOKEN` env
+   as a fallback). The UI value overrides the env, so the bot can be **swapped from the UI** with no
+   redeploy — the bot's identity is entirely the token. Send-only DMs use the **REST API** (`POST
    /users/@me/channels` then `POST /channels/{id}/messages`) — no gateway/websocket.
 2. **Share a server.** Discord only lets a bot DM a user who **shares a server** with it — invite
    the bot to your server and have testers join it.

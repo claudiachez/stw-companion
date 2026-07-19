@@ -93,8 +93,10 @@ The thing that would've flagged TE −32% directly. A full ladder (host), not a 
   **Dormant until `RESEND_API_KEY` + `ALERT_FROM_EMAIL` are set on the web site** (optional `APP_URL`).
 - **Discord-bot DM** (test bot): the cron also DMs via a bot (`DISCORD_BOT_TOKEN`) when the user has
   linked their Discord ID in Settings → Alert delivery (`profiles.discord_user_id`, migration 074).
-  Bot identity is the token only → swap the test bot for production by changing the env. Two Discord
-  REST calls (open DM, post). Channel-agnostic de-dup; state advances if any channel delivers.
+  Bot identity is the token only → swap the test bot for production from the **admin UI** (Config →
+  Discord alert bot; `integration_secrets`, migration 075 — admin-only RLS, write-only), with the
+  `DISCORD_BOT_TOKEN` env as fallback. Two Discord REST calls (open DM, post). Channel-agnostic
+  de-dup; state advances if any channel delivers.
 - **Still open**: a Discord OAuth link flow (replace the manual ID paste); a Settings opt-out toggle
   for email (the fn already honors `preferences.drawdownAlertsOptOut`). See docs/drawdown-alerts.md.
 

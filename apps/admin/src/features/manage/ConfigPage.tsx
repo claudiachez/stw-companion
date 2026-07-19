@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAppConfig, AlertStrip } from '@stw/ui';
+import { fmtDateTime } from '@stw/shared';
 import { supabase } from '../../lib/supabase';
 
 function errMsg(e: unknown): string {
@@ -139,6 +140,35 @@ export function ConfigPage() {
   const [capitalDrafts, setCapitalDrafts] = useState<CapitalDrafts>({});
   const [regimeDrafts, setRegimeDrafts] = useState<RegimeDrafts>({});
   const [savingSection, setSavingSection] = useState<'sizing' | 'capital' | 'regime' | 'ibkr' | null>(null);
+
+  // Discord alert bot token (integration_secrets, migration 075) — admin-only, write-only.
+  // We fetch ONLY the updated_at (never the value) to show "set" status without pulling the
+  // secret into the browser; the cron reads the value via the service role.
+  const [discordToken, setDiscordToken] = useState('');
+  const discordSecret = useQuery({
+    queryKey: ['integration_secret', 'discord_bot_token'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('integration_secrets').select('key, updated_at').eq('key', 'discord_bot_token').maybeSingle();
+      if (error) throw error;
+      return data as { key: string; updated_at: string } | null;
+    },
+  });
+  const saveDiscordToken = useMutation({
+    mutationFn: async (value: string) => {
+      const { error } = await supabase.from('integration_secrets')
+        .upsert({ key: 'discord_bot_token', value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+      if (error) throw error;
+    },
+    onSuccess: () => { setDiscordToken(''); qc.invalidateQueries({ queryKey: ['integration_secret', 'discord_bot_token'] }); },
+  });
+  const clearDiscordToken = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from('integration_secrets').delete().eq('key', 'discord_bot_token');
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['integration_secret', 'discord_bot_token'] }),
+  });
 
   async function saveSizing() {
     const entries: [string, number][] = [];
@@ -298,6 +328,50 @@ export function ConfigPage() {
             <span className={rowPrefix} />
             <span className="text-sm font-semibold text-t2">{regimeTotal}%</span>
             <span className="text-t3 text-xs">normalized — ratios are what matter, needn't equal 100%</span>
+          </div>
+        </Section>
+
+        {(saveDiscordToken.isError || clearDiscordToken.isError) && (
+          <AlertStrip severity="negative">Discord token save failed: {errMsg(saveDiscordToken.error ?? clearDiscordToken.error)}</AlertStrip>
+        )}
+        <Section
+          title={<>Discord alert bot <span className="text-t3 text-[10px] font-semibold uppercase tracking-wide align-middle ml-1">Admin only</span></>}
+          hint="The bot that DMs subscribers their drawdown alerts. Swapping the test bot for another (e.g. the STW production bot) is done right here — paste the new bot token and Save; no redeploy. Stored server-side, admin-only, and never shown back. Overrides the DISCORD_BOT_TOKEN env var if set."
+          dirty={!!discordToken.trim()}
+          saving={saveDiscordToken.isPending}
+          onSave={() => { if (discordToken.trim()) saveDiscordToken.mutate(discordToken.trim()); }}
+        >
+          <div className="py-3 first:pt-0 last:pb-0 flex flex-col gap-2">
+            <div className="flex items-center gap-3">
+              <span className={rowLabel}>Bot token</span>
+              <span className={rowPrefix} />
+              <input
+                type="password"
+                value={discordToken}
+                onChange={(e) => setDiscordToken(e.target.value)}
+                placeholder={discordSecret.data ? 'Enter a new token to replace the current one' : 'Paste the Discord bot token'}
+                autoComplete="off"
+                className={`flex-1 ${rowInput}`}
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <span className={rowLabel} />
+              <span className={rowPrefix} />
+              <span className="text-t3 text-xs">
+                {discordSecret.isLoading ? 'Checking…'
+                  : discordSecret.data ? `Set · updated ${fmtDateTime(discordSecret.data.updated_at)}`
+                  : 'Not set — Discord DMs are off until a token is saved.'}
+              </span>
+              {discordSecret.data && (
+                <button
+                  onClick={() => clearDiscordToken.mutate()}
+                  disabled={clearDiscordToken.isPending}
+                  className="text-xs text-t3 hover:text-t2 underline disabled:opacity-40"
+                >
+                  {clearDiscordToken.isPending ? 'Clearing…' : 'Clear'}
+                </button>
+              )}
+            </div>
           </div>
         </Section>
       </div>

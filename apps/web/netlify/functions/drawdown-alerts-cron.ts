@@ -124,9 +124,18 @@ const handlerImpl: Handler = async () => {
   const serviceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY ?? '').trim();
   const resendKey = (process.env.RESEND_API_KEY ?? '').trim();
   const fromEmail = (process.env.ALERT_FROM_EMAIL ?? '').trim();
-  const discordToken = (process.env.DISCORD_BOT_TOKEN ?? '').trim();
   const appUrl = (process.env.APP_URL ?? '').trim();
   if (!url || !serviceKey) return { statusCode: 500, body: 'Server misconfigured (Supabase env)' };
+
+  // Discord bot token: the admin-managed value (integration_secrets, migration 075) wins so
+  // the bot can be swapped from the UI; the DISCORD_BOT_TOKEN env is the fallback.
+  let discordToken = (process.env.DISCORD_BOT_TOKEN ?? '').trim();
+  try {
+    const rows = await sbGet<{ value: string | null }>(url, serviceKey, 'integration_secrets?key=eq.discord_bot_token&select=value');
+    const dbToken = (rows[0]?.value ?? '').trim();
+    if (dbToken) discordToken = dbToken;
+  } catch { /* table absent / no rows — fall back to env */ }
+
   const emailReady = !!(resendKey && fromEmail);
   const discordReady = !!discordToken;
 
