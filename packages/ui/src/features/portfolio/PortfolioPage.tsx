@@ -1,7 +1,9 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { TIERS, fmtDateTime, sizingTone, matchConvictionBand, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, SPACE } from '@stw/shared';
-import { useUserPositions, useIbkrSettings } from './useUserPositions';
+import { TIERS, fmtDateTime, sizingTone, matchConvictionBand, DEFAULT_PER_STOCK_LADDER, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, SPACE } from '@stw/shared';
+import { useUserPositions, useIbkrSettings, useUserExecutions } from './useUserPositions';
+import { usePerStockLadders, type PerStockLadderInfo } from './usePerStockLadders';
+import { PerStockLadderChip } from './PerStockLadder';
 import { useSyncPortfolio } from './useSyncPortfolio';
 import { useHoldings } from '../picks/useHoldings';
 import { useConvictionChanges, type HoldingRef } from '../picks/useConvictionChanges';
@@ -143,7 +145,7 @@ interface LegRowData {
   conviction: number | null;
 }
 
-function FlatLegRow({ row, onSelectTicker, showPnl, isMobile, portfolioValue, regime }: { row: LegRowData; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean; portfolioValue: number; regime?: TickerRegime }) {
+function FlatLegRow({ row, onSelectTicker, showPnl, isMobile, portfolioValue, regime, ladderInfo }: { row: LegRowData; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean; portfolioValue: number; regime?: TickerRegime; ladderInfo?: PerStockLadderInfo }) {
   const { p, underlying, isTailed, traders } = row;
   const weightPct = portfolioValue > 0 ? (posMV(p) / portfolioValue) * 100 : null;
   return (
@@ -155,6 +157,8 @@ function FlatLegRow({ row, onSelectTicker, showPnl, isMobile, portfolioValue, re
           {isTailed && traders.map((t) => <Badge key={t} kind="source" trader={t} />)}
           {/* Compact = trend-structure chip only (matches the Stock Picks list rows). */}
           <RegimeBadge regime={regime} compact />
+          {/* Per-stock drawdown stop — only on the stock leg, only when it needs attention. */}
+          {p.asset_class === 'STK' && <PerStockLadderChip info={ladderInfo} />}
         </div>
         <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 1 }}>{instrumentLabel(p)}</div>
       </td>
@@ -168,7 +172,7 @@ function FlatLegRow({ row, onSelectTicker, showPnl, isMobile, portfolioValue, re
   );
 }
 
-function FlatTable({ rows, onSelectTicker, showPnl, isMobile, portfolioValue, regimes }: { rows: LegRowData[]; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean; portfolioValue: number; regimes: Record<string, TickerRegime> }) {
+function FlatTable({ rows, onSelectTicker, showPnl, isMobile, portfolioValue, regimes, perStockLadders }: { rows: LegRowData[]; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean; portfolioValue: number; regimes: Record<string, TickerRegime>; perStockLadders: Map<string, PerStockLadderInfo> }) {
   return (
     <div style={{ overflowX: 'auto', paddingBottom: 9 }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: FONT_SIZE.xs }}>
@@ -184,7 +188,7 @@ function FlatTable({ rows, onSelectTicker, showPnl, isMobile, portfolioValue, re
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => <FlatLegRow key={r.p.id} row={r} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} portfolioValue={portfolioValue} regime={regimes[r.underlying]} />)}
+          {rows.map((r) => <FlatLegRow key={r.p.id} row={r} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} portfolioValue={portfolioValue} regime={regimes[r.underlying]} ladderInfo={perStockLadders.get(r.underlying)} />)}
         </tbody>
       </table>
     </div>
@@ -243,8 +247,8 @@ function PositionMetrics({ group, portfolioValue, showPnl }: { group: PortfolioG
 
 // header content for a group's accordion row (ticker/badges/composition + P&L columns) —
 // the AccordionList call site below supplies this as `renderHeader`.
-function GroupHeader({ group, onSelectTicker, showPnl, isMobile, portfolioValue, regime }: {
-  group: PortfolioGroup; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean; portfolioValue: number; regime?: TickerRegime;
+function GroupHeader({ group, onSelectTicker, showPnl, isMobile, portfolioValue, regime, ladderInfo }: {
+  group: PortfolioGroup; onSelectTicker: (t: string) => void; showPnl: boolean; isMobile: boolean; portfolioValue: number; regime?: TickerRegime; ladderInfo?: PerStockLadderInfo;
 }) {
   const { underlying, netPnl, marketValue, isTailed, traders, conviction } = group;
   const weightPct = portfolioValue > 0 ? (marketValue / portfolioValue) * 100 : null;
@@ -260,6 +264,8 @@ function GroupHeader({ group, onSelectTicker, showPnl, isMobile, portfolioValue,
           {conviction !== null && <ConvictionBadge level={conviction} />}
           {/* Compact = trend-structure chip only (matches the Stock Picks list rows). */}
           <RegimeBadge regime={regime} compact />
+          {/* Per-stock drawdown stop for the group's underlying (shown only when actionable). */}
+          <PerStockLadderChip info={ladderInfo} />
         </div>
         <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{composition(group)}</div>
       </div>
@@ -676,6 +682,11 @@ export function PortfolioPage() {
   // (the ladder→gross target) and ViolationsSummary (the card), so the two never read a
   // different NLV. Falls back to the synced ibkr_nlv when quotes aren't cached.
   const liveNlv = useLiveNlv(regimeRiskConfig, positions);
+  // Per-stock drawdown ladders (Item 4) — one status per held stock name, off its live
+  // drawdown-from-entry, with trim-compliance reconstructed from the fill log. Computed
+  // once here; the map feeds both the row chips and the detail-pane section (one source).
+  const { data: executions = [] } = useUserExecutions();
+  const perStockLadders = usePerStockLadders(positions, executions, regimeRiskConfig);
   // One reconciliation of the drawdown ladder vs the double-RED regime target, computed
   // once here and passed to BOTH the RegimeLight and ViolationsSummary so they show the
   // identical binding gross number (never two conflicting targets). The ladder side reads
@@ -891,6 +902,8 @@ export function PortfolioPage() {
         stwWeight={pickMap.get(selectedGroup.underlying)?.stwWeight ?? null}
         showPnl={showPnl}
         tickerRegime={regimes[selectedGroup.underlying]}
+        perStockLadder={perStockLadders.get(selectedGroup.underlying)}
+        perStockLadderConfig={regimeRiskConfig?.per_stock_ladder ?? DEFAULT_PER_STOCK_LADDER}
         onClose={() => setSelected(null)}
         onViewStwPosition={onViewStwPosition}
       />
@@ -1076,7 +1089,7 @@ export function PortfolioPage() {
                 onToggle={toggleGroup}
                 accentColor={(g) => (g.conviction !== null ? (TIERS[g.conviction]?.color ?? 'var(--border)') : 'var(--border)')}
                 renderHeader={(g) => (
-                  <GroupHeader group={g} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} portfolioValue={portfolioValue} regime={regimes[g.underlying]} />
+                  <GroupHeader group={g} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} portfolioValue={portfolioValue} regime={regimes[g.underlying]} ladderInfo={perStockLadders.get(g.underlying)} />
                 )}
                 renderExpanded={(g) => (
                   <>
@@ -1087,7 +1100,7 @@ export function PortfolioPage() {
               />
             </>
           ) : (
-            <FlatTable rows={visibleLegs} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} portfolioValue={portfolioValue} regimes={regimes} />
+            <FlatTable rows={visibleLegs} onSelectTicker={onSelectTicker} showPnl={showPnl} isMobile={isMobile} portfolioValue={portfolioValue} regimes={regimes} perStockLadders={perStockLadders} />
           )}
         </div>
       </div>
