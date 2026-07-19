@@ -94,21 +94,42 @@ export async function saveIbkrSettings(
   if (error) throw error;
 }
 
-/** Subscriber's linked Discord user ID for alert DMs (migration 074) — null when not linked. */
-export async function fetchDiscordUserId(userId: string): Promise<string | null> {
+/** The subscriber's linked Discord (migration 074/076): the resolved id (DM target) + the
+ *  display handle. Both null when not linked. */
+export async function fetchDiscordLink(userId: string): Promise<{ username: string | null; userId: string | null }> {
   const { data, error } = await getSupabase()
     .from('profiles')
-    .select('discord_user_id')
+    .select('discord_username, discord_user_id')
     .eq('user_id', userId)
     .single();
   if (error) throw error;
-  return (data as { discord_user_id: string | null }).discord_user_id ?? null;
+  const row = data as { discord_username: string | null; discord_user_id: string | null };
+  return { username: row.discord_username, userId: row.discord_user_id };
 }
 
-export async function saveDiscordUserId(userId: string, discordUserId: string | null): Promise<void> {
-  const { error } = await getSupabase()
-    .from('profiles')
-    .update({ discord_user_id: discordUserId })
-    .eq('user_id', userId);
-  if (error) throw error;
+export interface DiscordLinkResult {
+  ok: boolean;
+  linked?: boolean;
+  username?: string;
+  /** 'not_configured' | 'not_found' | 'search_failed' when ok is false. */
+  reason?: string;
+  detail?: string;
+  error?: string;
+}
+
+/**
+ * Link (or, with an empty username, unlink) the caller's Discord by USERNAME. A username can't
+ * be DM'd directly, so this posts to the `discord-link` fn, which resolves it to the numeric id
+ * server-side (using the admin bot token — never exposed to the browser) and stores both.
+ */
+export async function linkDiscord(username: string): Promise<DiscordLinkResult> {
+  const { data: { session } } = await getSupabase().auth.getSession();
+  const token = session?.access_token;
+  if (!token) throw new Error('Not signed in');
+  const res = await fetch('/.netlify/functions/discord-link', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username }),
+  });
+  return (await res.json()) as DiscordLinkResult;
 }
