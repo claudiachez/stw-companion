@@ -1,4 +1,4 @@
-import { DEFAULT_PER_STOCK_LADDER, DRAWDOWN_NEAR_BAND_PP } from '@stw/shared';
+import { DEFAULT_PER_STOCK_LADDER, DEFAULT_PER_STOCK_OPTION_LADDER, DRAWDOWN_NEAR_BAND_PP } from '@stw/shared';
 import { getSupabase } from '../../lib/supabase';
 
 export interface RiskConfigRow {
@@ -11,6 +11,14 @@ export interface RiskConfigRow {
   ladder: { drawdownPct: number; targetGrossPct: number }[];
   /** Per-stock drawdown ladder (migration 072): reduce-to % of PEAK size at each drawdown-from-entry rung. */
   per_stock_ladder: { drawdownPct: number; holdFractionPct: number }[];
+  /** Per-OPTION drawdown ladder (migration 078): sibling to per_stock_ladder for option positions. */
+  per_stock_option_ladder: { drawdownPct: number; holdFractionPct: number }[];
+  /** Per-guardrail on/off toggles (migration 078). Default true; honored by the Risk-tab
+   *  evaluators + alert cron as those surfaces are migrated (stored/edited in Settings first). */
+  caps_enabled: boolean;
+  ladder_enabled: boolean;
+  per_stock_enabled: boolean;
+  regime_enabled: boolean;
   /** Percentage-point band for the amber "near" warning on BOTH ladders (migration 072, default 2). */
   drawdown_near_band_pp: number;
   is_placeholder: boolean;
@@ -72,6 +80,11 @@ export const DEFAULT_RISK_CONFIG = {
   max_gross_pct: 100,
   ladder: [{ drawdownPct: -10, targetGrossPct: 70 }, { drawdownPct: -15, targetGrossPct: 50 }],
   per_stock_ladder: DEFAULT_PER_STOCK_LADDER,
+  per_stock_option_ladder: DEFAULT_PER_STOCK_OPTION_LADDER,
+  caps_enabled: true,
+  ladder_enabled: true,
+  per_stock_enabled: true,
+  regime_enabled: true,
   drawdown_near_band_pp: DRAWDOWN_NEAR_BAND_PP,
   account_equity: 100000,
   regime_trim_to_pct: 70,
@@ -98,7 +111,7 @@ export async function ensureRiskConfig(userId: string): Promise<RiskConfigRow> {
 
 export async function saveRiskConfig(
   userId: string,
-  patch: Partial<Pick<RiskConfigRow, 'max_position_pct' | 'max_option_position_pct' | 'max_sector_pct' | 'max_gross_pct' | 'ladder' | 'per_stock_ladder' | 'drawdown_near_band_pp' | 'account_equity' | 'regime_trim_to_pct' | 'regime_stop_pct' | 'regime_doublered_gross_pct'>>,
+  patch: Partial<Pick<RiskConfigRow, 'max_position_pct' | 'max_option_position_pct' | 'max_sector_pct' | 'max_gross_pct' | 'ladder' | 'per_stock_ladder' | 'per_stock_option_ladder' | 'caps_enabled' | 'ladder_enabled' | 'per_stock_enabled' | 'regime_enabled' | 'drawdown_near_band_pp' | 'account_equity' | 'regime_trim_to_pct' | 'regime_stop_pct' | 'regime_doublered_gross_pct'>>,
 ): Promise<void> {
   const { error } = await getSupabase()
     .from('risk_config')

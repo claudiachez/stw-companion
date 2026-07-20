@@ -39,3 +39,26 @@
 
 **Verification:** compiles/boots clean, no console/build errors. Live authed page not
 screenshotted (auth-gated; can't sign in) — needs a logged-in eyeball on the dev server/staging.
+
+## Settings page (committed)
+Guardrails form (`RiskConfigForm`) rebuilt to the 4-tab redesign (Position size caps / Account
+safety net / Per-position stops / Red-market playbook), each with an on/off toggle, draggable
+monotonic ladder columns, and a stocks/options scope switch. Dollar equivalents honor `showMoney`.
+
+**New data (migration `078_guardrail_toggles_and_option_ladder.sql` — APPLIED to PROD via MCP):**
+- `caps_enabled` / `ladder_enabled` / `per_stock_enabled` / `regime_enabled` (bool, default true).
+- `per_stock_option_ladder` (jsonb) — the per-OPTION stop ladder, sibling to `per_stock_ladder`.
+
+**Deferred (host-approved boundary):** the toggles + options ladder are STORED + EDITABLE now, but
+the **Risk-tab evaluators + drawdown-alert cron do NOT yet honor them** — a disabled guardrail still
+evaluates, and the per-option ladder isn't yet used for option positions. Wire this when the **Risk
+tab** is redesigned (skip disabled guardrails; use the option ladder for option positions).
+
+**Deviations from the mock:**
+- **IBKR connection editor kept as-is** (the existing, working `SettingsPage` panel) rather than
+  re-skinned to the mock's exact layout — functionally complete (collapsible, token reveal, guide,
+  import). Re-skin later if desired.
+- **Omitted the mock's "STW playbook / Reset to preset" banner** — there's no client-side PRESET in
+  our data model; defaults live server-side (`DEFAULT_RISK_CONFIG`). Add a reset-to-defaults if wanted.
+- Mock's `--pos-*/--warn/--neg` map to our real `--status-positive/warning/negative-*` tokens; the
+  knob shadow uses `SHADOW.card` (the mock's literal rgba is lint-banned).
