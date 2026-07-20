@@ -9,6 +9,13 @@ export function formatDate(iso: string | null): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
 }
 
+/** Month + full year, e.g. "Mar 2026" — for "member since"-style date-only labels. */
+export function formatMonthYear(iso: string | null): string {
+  if (!iso) return '–';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
+
 export function formatWeight(w: number | null): string {
   if (w == null) return '–';
   return `${w.toFixed(1)}%`;

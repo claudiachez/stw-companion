@@ -10,6 +10,8 @@ export interface UserPreferences {
   picksDefaultTab?: PicksTab;
   /** Which index drives the My Portfolio regime light (IWM/SPY/QQQ). */
   regimeInstrument?: string;
+  /** "Show dollar amounts" — off = percentages only everywhere (screen-sharing). */
+  showMoney?: boolean;
 }
 
 export async function loadPreferences(userId: string): Promise<UserPreferences | null> {
