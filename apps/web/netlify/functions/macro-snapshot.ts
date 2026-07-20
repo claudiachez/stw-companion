@@ -46,7 +46,7 @@
 import type { Handler } from '@netlify/functions';
 import { schedule } from '@netlify/functions';
 import {
-  trendBucket, trendSleeveScore, environmentScore,
+  trendBucket, trendStructure, trendSleeveScore, environmentScore,
   vixScore, ivPremiumScore, vixDirectionScore, volatilityStressScore, hv30,
   creditOasScore, us10yScore, uupScore, ratesDollarScore, breadthScore,
   classifyEventRisk, riskAppetiteScore, SLEEVE_WEIGHTS,
@@ -243,12 +243,10 @@ const handlerImpl: Handler = async () => {
   const indicatorScores: Record<string, number | null> = {};
   const buckets: Record<string, ReturnType<typeof trendBucket>> = {};
   for (const symbol of TREND_SYMBOLS) {
-    const closes = closesBySymbol[symbol] ?? [];
-    const close = closes[closes.length - 1] ?? null;
-    const ma9 = sma(closes, 9);
-    const ma21 = sma(closes, 21);
-    const ma200 = sma(closes, 200);
-    const bucket = trendBucket(close, ma9, ma21, ma200);
+    // Same one-source structure read the client surfaces use (trendStructure).
+    // Runs post-close, so its daily close IS the settled close — consistent with
+    // the live client, which also classifies off the daily close (fixed 2026-07-20).
+    const { bucket } = trendStructure(closesBySymbol[symbol] ?? []);
     buckets[symbol] = bucket;
     indicatorScores[symbol] = bucket ? { momentum: 90, healthy_pullback: 70, mid_caution: 50, bear_rally: 35, risk_off: 10 }[bucket] : null;
   }

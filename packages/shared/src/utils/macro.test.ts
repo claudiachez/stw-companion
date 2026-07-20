@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  trendBucket, trendSubScore, trendSleeveScore, trendSleeveLabel,
+  trendBucket, trendStructure, trendSubScore, trendSleeveScore, trendSleeveLabel,
   environmentScore, regimeBand, hv30, SLEEVE_WEIGHTS,
   vixScore, ivPremiumScore, vixDirectionScore,
   volatilityStressScore, stressLabel, percentileRank,
@@ -39,6 +39,41 @@ describe('trendBucket', () => {
   });
   it('missing 200D MA → null', () => {
     expect(trendBucket(100, 95, 90, null)).toBeNull();
+  });
+});
+
+describe('trendStructure', () => {
+  const rising = Array.from({ length: 200 }, (_, i) => 100 + i);
+
+  it('classifies off the latest daily close and matches the primitives', () => {
+    const s = trendStructure(rising);
+    expect(s.close).toBe(rising[rising.length - 1]); // 299, the last daily close
+    expect(s.ma9).toBeCloseTo((291 + 292 + 293 + 294 + 295 + 296 + 297 + 298 + 299) / 9);
+    expect(s.ma200).toBeCloseTo(rising.reduce((a, b) => a + b, 0) / 200);
+    expect(s.bucket).toBe('momentum');
+    expect(s.bucket).toBe(trendBucket(s.close, s.ma9, s.ma21, s.ma200));
+  });
+
+  it('derives the bucket only from daily closes — never a substituted live tick', () => {
+    // A recent pop lifts the 9-day MA; the last daily close dips just under it.
+    const closes = [
+      ...Array.from({ length: 191 }, (_, i) => 100 + i * 0.5),
+      205, 206, 207, 208, 209, 210, 211, 212,
+      206, // the classified close
+    ];
+    const s = trendStructure(closes);
+    expect(s.close).toBe(206);
+    expect(s.bucket).toBe(trendBucket(206, s.ma9, s.ma21, s.ma200));
+  });
+
+  it('is all-null until there is enough history for the 200-day MA', () => {
+    const s = trendStructure([100, 101, 102]);
+    expect(s.ma200).toBeNull();
+    expect(s.bucket).toBeNull();
+  });
+
+  it('handles an empty series without throwing', () => {
+    expect(trendStructure([])).toEqual({ close: null, ma9: null, ma21: null, ma200: null, bucket: null });
   });
 });
 
