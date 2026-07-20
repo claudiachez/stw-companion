@@ -105,9 +105,14 @@ order placement out of web. `plans/` files are date-prefixed `YYYYMMDD_<name>`.
   denominator, never re-derived from the same positions.
 - **Drawdown:** cash-flow-adjusted off live NLV (`cashflowAdjustedDrawdownPct`); `cumulative_cashflow`
   written by IMPORT only; silent until real NLV+peak exist. Ladder vs double-RED regime = independent
-  triggers reconciled by "tightest binds" (`bindingGrossTarget`).
+  triggers reconciled by "tightest binds" (`bindingGrossTarget`). Overhaul (2026-07-19): drawdown
+  shown always + `near` band (user-set `drawdown_near_band_pp`); DISPLAY read off LIVE prices while the
+  peak stays synced (Option A); a **per-stock** ladder (reduce-to-% of peak, trim-aware via
+  `user_executions`); alerts in-app + email/Discord. Three de-risking surfaces stay visually distinct.
 - **REGIME_EXIT:** per-user `risk_config` setting, advisory/display-only, one source `regimeExitAdvice`.
 - **Frozen:** regime gate at engine 1.1.0; the gate and the Macro composite never blend; no new gate indicators.
+- **Access + Discord via Whop (direction, not built):** app access will mirror Whop membership; Whop
+  links Discord + feeds `profiles.discord_user_id`. Don't build separate auth / Discord-OAuth.
 
 ## Tech stack
 React 18 + Vite 5 + TS · pnpm workspace · react-router 6 · TanStack Query 5 (60s stale) · Zustand 5 ·
