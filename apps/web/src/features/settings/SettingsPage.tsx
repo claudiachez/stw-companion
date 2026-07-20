@@ -428,7 +428,7 @@ export function SettingsPage() {
                   type="text"
                   value={discordUsername}
                   onChange={(e) => { setDiscordUsername(e.target.value); setDiscordMsg(null); }}
-                  placeholder="e.g. cchez9849"
+                  placeholder="your Discord username"
                   autoComplete="off"
                 />
               </FormRow>
