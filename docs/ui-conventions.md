@@ -130,6 +130,12 @@
   the 2-step limit was a UI artifact, not a real constraint. It's now a dynamic array (Add/Remove
   rung). Before hardcoding a "fixed" count for any array-backed config, check whether the schema and
   pure logic already support N — if so, don't under-build the UI to match an arbitrary seed value.
+- **The three de-risking concepts stay visually DISTINCT surfaces** (host, 2026-07-19): (1)
+  market-regime de-risking = the RegimeLight card; (2) portfolio (account) drawdown ladder = the
+  "Portfolio drawdown" + Gross-exposure cards; (3) individual-stock drawdown = the per-stock chip on a
+  position row + its own detail-pane section. Never merge them into one card/number. (1) and (2) both
+  cap gross and reconcile via `bindingGrossTarget` ("tightest binds"); (3) is a separate axis (flags a
+  NAME, sets no gross target) and must never be blended with the account read.
 - **A subscriber page with several distinct jobs gets a `SubNav` sub-tab bar, not one long scroll**
   (host, 2026-07-08, My Portfolio → Overview / Positions / Risk / Tailing). Same secondary-nav
   pattern as the admin (`SubNav` primitive). Corollary: **the filter toolbar is tab-scoped, not

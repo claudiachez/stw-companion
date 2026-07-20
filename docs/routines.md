@@ -15,7 +15,9 @@ repo**. Know who writes what before you reason about freshness or "why is this r
 | `holding_transactions` | **DB trigger** (no client) | auto-logged from any `holdings` write; never written directly by app or routine |
 | `run_log` | **the routines** | ingestion audit + high-water mark; newest `digest` → "Latest Portfolio Changes" |
 | `user_positions` | **web `ibkr-flex.ts`** | each subscriber's own IBKR account; user-owned RLS |
-| `profiles` / `tiers` | auth + Settings | per-user creds/preferences, tier paywall |
+| `risk_alert_state` | **`drawdown-alerts-cron`** Netlify scheduled fn (web, `*/15` market hours) | de-dup memory for the drawdown alert cron — `last_level` (is-it-new) + `last_alerted_at` (ET, one-alert-per-user-per-day cap). Migration 073; user-owned RLS, service-role write. Full flow: docs/drawdown-alerts.md |
+| `integration_secrets` | **admin → Config** UI | admin-only secrets (e.g. `discord_bot_token`, `discord_guild_id`); migration 075, editor-email RLS (NOT world-readable like `app_config`). Read by crons via service role |
+| `profiles` / `tiers` | auth + Settings | per-user creds/preferences, tier paywall. `discord_user_id`/`discord_username` (migrations 074/076) written by the **`discord-link`** fn (resolves a username→id via the bot). *Future:* Whop feeds these + `status`/`subscription_tier` (docs/decisions.md "flow through WHOP") |
 | `ticker_sector_map` | **`sector-map-sync`** Netlify fn (auto) + one-off migration 062 | ticker → **canonical GICS-11 (+ ETF/Cash)** sector, read by `useSectorMap` (Risk-tab concentration, detail-pane Sector, heatmap Sector grouping). Migration 062 re-seeded the existing rows to GICS; `sector-map-sync` (web, weekdays 22:00 UTC) auto-maps newly-opened `holdings` tickers via `resolveSector` (`@stw/shared`). No longer a manual stopgap |
 
 "The routines" = three cowork cron tasks that ingest Discord into Supabase — **the primary writers of

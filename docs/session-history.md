@@ -2,6 +2,41 @@
 
 > Dated handoff/status narratives + old Next Steps, moved out of CLAUDE.md. Historical record only — durable rules live in CLAUDE.md / docs/decisions.md / docs/ui-conventions.md. Current status is docs/status.md.
 
+## Session — drawdown-protection overhaul built + alerts + Whop direction (2026-07-19, cont.)
+
+Built the overhaul the prior session diagnosed (`plans/20260719_drawdown-protection-overhaul.md`).
+All merged to `staging`; the `staging→main` promotion is still pending (now 33 commits — carries the
+prior batch + all of this). Migrations authored 072–076; applied 072/073/075 to PROD+sandbox,
+074/076 to PROD only (sandbox has no `profiles`).
+
+Shipped (each its own PR, CI green):
+- **#145 Item 1** — drawdown shown always on the Risk tab + amber `near` band. `drawdownLadderStatus`
+  in `@stw/shared`.
+- **#146 Item 2** — drawdown READ off LIVE prices (host chose **Option A**: live "now", peak stays
+  synced off `ibkr_nlv`). `liveNlvFromMarks` + `useLiveNlv`; one-source exception recorded in decisions.md.
+- **#147** — **Item 4** per-stock drawdown ladder (reduce-to-% of peak, trim-aware by reconstructing
+  peak from `user_executions` — host asked "aren't we naive to trims?", so we don't paste an ID we
+  derive the peak), + **Item 3** in-app warnings (Overview chips) + email cron + Account-Value card
+  fix + a Stops filter/sort. Migrations 072 (`per_stock_ladder` + `drawdown_near_band_pp`) + 073
+  (`risk_alert_state`). Filter+sort shipped with the field, per convention.
+- **#148** — Discord DM channel: admin-managed bot token (`integration_secrets`, migration 075 —
+  NOT `app_config`, which is world-readable), link by **username** (migration 074/076 +
+  `discord-link` fn resolving username→id via the bot's guild search; bot token never in the browser).
+- **#149** — alerts fire **intraday** (`*/15` market hours, live-priced) with a **one-per-user-per-day**
+  cap (host: "when it happens, act ASAP, no spam"); generic username placeholder.
+
+Direction recorded (not built): **access + Discord linking flow through Whop** (docs/decisions.md +
+CLAUDE.md index). Whop already sells subs + manages Discord access → app access should mirror Whop
+membership; Whop feeds `profiles.discord_user_id`. Explicitly do NOT build separate auth/Discord-OAuth;
+the manual username link is interim. This dropped a standalone Discord-OAuth flow mid-design.
+
+Design calls made with the host (all in decisions.md): Option A peak; per-stock rung = reduce-to
+fraction of PEAK (trim-aware via executions, not a naive "cut current"); per-stock default
+75/50/25/0 at −5/−10/−15/−20; near-band a user setting; one-alert-per-day-when-it-happens.
+
+Pending: the promotion (crons don't run until on `main`); alert env/bot setup; the Whop build; the
+still-open RegimeLight↔Macro one-source fix + a Settings email opt-out toggle.
+
 ## Session — prod promotion, morning-timing/GEX fixes, portfolio reconciliation, drawdown audit (2026-07-19)
 
 Continuation of the 2026-07-16 session. Promoted staging→main once (#138, prior), then more fixes
