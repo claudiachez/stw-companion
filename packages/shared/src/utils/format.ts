@@ -16,6 +16,14 @@ export function formatMonthYear(iso: string | null): string {
   return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 }
 
+/** Mask an IBKR account id for display: first 4 + "•••" + last 2, e.g. "U842•••93". */
+export function maskAccount(account: string | null | undefined): string | null {
+  if (!account) return null;
+  const a = account.trim();
+  if (a.length <= 6) return a;
+  return `${a.slice(0, 4)}•••${a.slice(-2)}`;
+}
+
 export function formatWeight(w: number | null): string {
   if (w == null) return '–';
   return `${w.toFixed(1)}%`;

@@ -96,6 +96,20 @@ export async function saveIbkrSettings(
 
 /** The subscriber's linked Discord (migration 074/076): the resolved id (DM target) + the
  *  display handle. Both null when not linked. */
+/** The user's IBKR account id (single-account), read from any synced execution row.
+ *  Null until the first sync/import lands a fill. Mask with `maskAccount` for display. */
+export async function fetchIbkrAccount(userId: string): Promise<string | null> {
+  const { data, error } = await getSupabase()
+    .from('user_executions')
+    .select('account')
+    .eq('user_id', userId)
+    .not('account', 'is', null)
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return (data?.account as string | null) ?? null;
+}
+
 export async function fetchDiscordLink(userId: string): Promise<{ username: string | null; userId: string | null }> {
   const { data, error } = await getSupabase()
     .from('profiles')

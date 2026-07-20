@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  FONT_SIZE, FONT_WEIGHT, SPACE, RADIUS, SHADOW, formatMonthYear, fmtDateTime,
+  FONT_SIZE, FONT_WEIGHT, SPACE, RADIUS, SHADOW, formatMonthYear, fmtDateTime, maskAccount,
 } from '@stw/shared';
 import { getSupabase } from '../lib/supabase';
 import { useAuthStore } from '../store/auth';
@@ -14,7 +14,7 @@ import { StatusPill, type StatusPillVariant } from '../primitives/StatusPill';
 import { AlertStrip } from '../primitives/AlertStrip';
 import { Button } from '../primitives/Button';
 import { TextInput } from '../primitives/TextInput';
-import { useIbkrSettings } from '../features/portfolio/useUserPositions';
+import { useIbkrSettings, useIbkrAccount } from '../features/portfolio/useUserPositions';
 import { useRiskConfig } from '../features/limits/useRiskConfig';
 import { usePicksTabStore, coercePicksTab, PICKS_TABS, PICKS_TAB_LABELS, type PicksTab } from '../features/picks/usePicksTab';
 
@@ -70,9 +70,13 @@ export function ProfilePage() {
   });
 
   const { data: ibkr } = useIbkrSettings();
+  const { data: ibkrAccount } = useIbkrAccount();
   const { data: riskConfig } = useRiskConfig(user?.id);
 
   const [pwMsg, setPwMsg] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarErr, setAvatarErr] = useState<string | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   const [editingName, setEditingName] = useState(false);
   const [first, setFirst] = useState('');
   const [last, setLast] = useState('');
@@ -87,6 +91,7 @@ export function ProfilePage() {
   const tier = profile ? (TIER_LABELS[profile.subscription_tier] ?? profile.subscription_tier) : '—';
   const ibkrConnected = !!(ibkr?.ibkr_flex_token && ibkr?.ibkr_query_id);
   const ibkrSyncedAt = riskConfig?.ibkr_nlv_at ?? null;
+  const maskedAccount = maskAccount(ibkrAccount);
 
   async function changePassword() {
     if (!user?.email) return;
@@ -127,6 +132,34 @@ export function ProfilePage() {
     setEditingName(false);
   }
 
+  async function uploadAvatar(file: File) {
+    if (!user?.id) return;
+    if (!file.type.startsWith('image/')) { setAvatarErr('Choose an image file.'); return; }
+    if (file.size > 3 * 1024 * 1024) { setAvatarErr('Image must be under 3 MB.'); return; }
+    setUploadingAvatar(true);
+    setAvatarErr(null);
+    const ext = (file.name.split('.').pop() || 'png').toLowerCase();
+    const path = `${user.id}/${Date.now()}.${ext}`;
+    const sb = getSupabase();
+    const { error: upErr } = await sb.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type });
+    if (upErr) { setUploadingAvatar(false); setAvatarErr(upErr.message); return; }
+    const url = sb.storage.from('avatars').getPublicUrl(path).data.publicUrl;
+    const { error: setErr } = await sb.rpc('set_my_avatar_url', { url });
+    setUploadingAvatar(false);
+    if (setErr) { setAvatarErr(setErr.message); return; }
+    await queryClient.invalidateQueries({ queryKey: ['profile', user.id] });
+  }
+
+  async function removeAvatar() {
+    if (!user?.id) return;
+    setUploadingAvatar(true);
+    setAvatarErr(null);
+    const { error } = await getSupabase().rpc('set_my_avatar_url', { url: '' });
+    setUploadingAvatar(false);
+    if (error) { setAvatarErr(error.message); return; }
+    await queryClient.invalidateQueries({ queryKey: ['profile', user.id] });
+  }
+
   const prefRow: React.CSSProperties = {
     display: 'flex', alignItems: 'center', gap: SPACE[3], padding: `${SPACE[2.5]}px 0`, flexWrap: 'wrap',
   };
@@ -144,11 +177,19 @@ export function ProfilePage() {
         {/* Identity */}
         <div style={card}>
           <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[3.5] }}>
-            <div style={{
-              width: 52, height: 52, borderRadius: RADIUS.full, background: 'var(--s2)', border: '1px solid var(--border)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: FONT_SIZE.display, fontWeight: FONT_WEIGHT.bold, color: 'var(--acc)', flexShrink: 0,
-            }}>{initial}</div>
+            {profile?.avatar_url ? (
+              <img
+                src={profile.avatar_url}
+                alt=""
+                style={{ width: 52, height: 52, borderRadius: RADIUS.full, objectFit: 'cover', border: '1px solid var(--border)', flexShrink: 0 }}
+              />
+            ) : (
+              <div style={{
+                width: 52, height: 52, borderRadius: RADIUS.full, background: 'var(--s2)', border: '1px solid var(--border)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: FONT_SIZE.display, fontWeight: FONT_WEIGHT.bold, color: 'var(--acc)', flexShrink: 0,
+              }}>{initial}</div>
+            )}
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap' }}>
                 <span style={{ fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)' }}>{name}</span>
@@ -169,6 +210,25 @@ export function ProfilePage() {
 
           {editingName && (
             <div style={{ marginTop: SPACE[3], display: 'flex', flexDirection: 'column', gap: SPACE[2] }}>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadAvatar(f); if (avatarInputRef.current) avatarInputRef.current.value = ''; }}
+              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2.5], flexWrap: 'wrap' }}>
+                {profile?.avatar_url ? (
+                  <img src={profile.avatar_url} alt="" style={{ width: 40, height: 40, borderRadius: RADIUS.full, objectFit: 'cover', border: '1px solid var(--border)' }} />
+                ) : (
+                  <div style={{ width: 40, height: 40, borderRadius: RADIUS.full, background: 'var(--s2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, color: 'var(--acc)' }}>{initial}</div>
+                )}
+                <Button variant="secondary" onClick={() => avatarInputRef.current?.click()} disabled={uploadingAvatar}>
+                  {uploadingAvatar ? 'Uploading…' : profile?.avatar_url ? 'Change photo' : 'Upload photo'}
+                </Button>
+                {profile?.avatar_url && <Button variant="ghost" onClick={removeAvatar} disabled={uploadingAvatar}>Remove</Button>}
+              </div>
+              {avatarErr && <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--status-negative-text)' }}>{avatarErr}</div>}
               <div style={{ display: 'flex', gap: SPACE[2], flexWrap: 'wrap' }}>
                 <TextInput value={first} onChange={(e) => setFirst(e.target.value)} placeholder="First name" aria-label="First name" style={{ flex: 1, minWidth: 140 }} />
                 <TextInput value={last} onChange={(e) => setLast(e.target.value)} placeholder="Last name" aria-label="Last name" style={{ flex: 1, minWidth: 140 }} />
@@ -206,7 +266,7 @@ export function ProfilePage() {
                 <span style={{ display: 'block', fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>Interactive Brokers</span>
                 <span style={{ display: 'block', fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>
                   {ibkrConnected
-                    ? (ibkrSyncedAt ? `Connected · synced ${fmtDateTime(ibkrSyncedAt)}` : 'Connected')
+                    ? [maskedAccount ? `account ${maskedAccount}` : 'Connected', ibkrSyncedAt ? `synced ${fmtDateTime(ibkrSyncedAt)}` : null].filter(Boolean).join(' · ')
                     : 'Not connected'}
                 </span>
               </span>

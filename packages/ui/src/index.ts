@@ -83,7 +83,7 @@ export { ConvictionBadge } from './features/picks/components/ConvictionBadge';
 
 // ── Portfolio ─────────────────────────────────────────────────
 export { PortfolioPage } from './features/portfolio/PortfolioPage';
-export { useUserPositions, useIbkrSettings } from './features/portfolio/useUserPositions';
+export { useUserPositions, useIbkrSettings, useIbkrAccount } from './features/portfolio/useUserPositions';
 export { useSyncPortfolio } from './features/portfolio/useSyncPortfolio';
 export { saveIbkrSettings, fetchDiscordLink, linkDiscord } from './features/portfolio/api';
 export type { UserPosition, IbkrSettings } from './features/portfolio/api';

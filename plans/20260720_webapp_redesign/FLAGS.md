@@ -1,10 +1,14 @@
 # Redesign — flags for the host (accumulated per page; surface in the final PR)
 
 ## Profile page (committed)
-**Dropped / no-source fields (redesign showed them; our data can't back them):**
-- **IBKR masked account number** ("U842•••93"): no such column exists — the connection is a
-  Flex token + query id, not a stored account number. Omitted; the row shows connection state +
-  last-synced (`ibkr_nlv_at`) instead. → Add an account-number field only if we start storing it.
+**Resolved:**
+- **IBKR masked account number** ("U842•••93") — RESOLVED. It IS available: `user_executions.account`
+  (per-fill). Now shown (masked via `maskAccount`) on both the Profile connected-accounts card and the
+  Settings connection header. Null until the first fill syncs.
+- **Avatar upload/edit** (host request) — real image upload. Migration `079_profile_avatar.sql`
+  (APPLIED to PROD via MCP): `profiles.avatar_url` + a public `avatars` storage bucket with own-folder
+  RLS + a `set_my_avatar_url` RPC. Profile shows the image (initials fallback); Edit adds upload / change /
+  remove (≤3 MB, image/* only). Path `<uid>/<ts>.<ext>` in the avatars bucket.
 
 **Host-requested additions (2nd round):**
 - **Pending pill is amber** (host request) — added a generic `warning` variant to StatusPill (distinct
