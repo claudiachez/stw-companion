@@ -85,12 +85,15 @@ The thing that would've flagged TE −32% directly. A full ladder (host), not a 
 ## Item 3 — Alerts  [BUILT: in-app + email (Resend) + Discord-bot DM (test bot)]
 - **In-app**: Overview chips surface the account-drawdown state + a count of names near/past a
   per-stock stop, linking to the Risk tab / stop-filtered Positions (so warnings aren't buried).
-- **Email**: `apps/web/netlify/functions/drawdown-alerts-cron.ts` (web-only, `30 8 * * 2-6`, after
-  ibkr-sync-cron) evaluates each user's account + per-stock ladders on synced data and emails a
-  summary via Resend on ESCALATION only. De-dup via `risk_alert_state` (migration 073): a monotonic
-  `last_level` per (user, kind, scope) — send only when it increases, delete on recovery. Reuses the
-  `@stw/shared` engine (cron ↔ screen agree). Respects `preferences.drawdownAlertsOptOut` + active status.
-  **Dormant until `RESEND_API_KEY` + `ALERT_FROM_EMAIL` are set on the web site** (optional `APP_URL`).
+- **Email + Discord**: `apps/web/netlify/functions/drawdown-alerts-cron.ts` (web-only, `*/15 13-21 *
+  * 1-5` = every 15 min during US market hours, holidays skipped) LIVE-PRICES each user's holdings
+  server-side (Finnhub) and evaluates the account + per-stock ladders intraday — so it fires WHEN a
+  rung is crossed, not at a fixed time. Sends via Resend + Discord DM on ESCALATION, **capped to one
+  alert per user per trading day** (host rule: act ASAP, no spam): `risk_alert_state` (migration 073)
+  holds `last_level` (is-it-new) + `last_alerted_at` (ET, the per-day cap); a held escalation fires as
+  the next day's first alert; recovery deletes the row. Reuses the `@stw/shared` engine (cron ↔ screen
+  agree). Respects `preferences.drawdownAlertsOptOut` + active status. **Dormant until a channel is
+  configured** (email vars and/or Discord token) + `VITE_FINNHUB_KEY` for the live read.
 - **Discord-bot DM** (test bot): the cron also DMs via a bot (`DISCORD_BOT_TOKEN`) when the user has
   linked their Discord ID in Settings → Alert delivery (`profiles.discord_user_id`, migration 074).
   Bot identity is the token only → swap the test bot for production from the **admin UI** (Config →

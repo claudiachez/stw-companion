@@ -11,22 +11,25 @@ Advisory/display-only — nothing here places, blocks, or adjusts a trade.
 | **Email (Resend)** | ✅ built, **dormant until env is set** | `apps/web/netlify/functions/drawdown-alerts-cron.ts` |
 | **Discord-bot DM** | ✅ built (test bot), **dormant until env + linking** | same cron; linked in Settings → Alert delivery |
 
-## How the email cron works
+## How the alert cron works
 
-- **Schedule:** `30 8 * * 2-6` (30 min after `ibkr-sync-cron`), so it evaluates fresh synced
-  data. `schedule()` runs cron on the **prod (`main`) deploy only** — never staging.
-- **What it checks:** each user's **account** drawdown ladder + each **per-stock** stop ladder,
-  using the same `@stw/shared` engine the Risk tab uses (cron ↔ screen always agree). Runs off the
-  last IBKR sync (`ibkr_nlv` + stored marks) — correct for a post-sync daily job.
-- **When it emails:** on **escalation only** — a deeper rung, or ok→near→breach. De-dup lives in
-  `risk_alert_state` (migration 073): a monotonic `last_level` per (user, kind, scope); an email
-  goes out only when the current level exceeds the stored one, and the row is deleted on full
-  recovery so a later re-entry alerts afresh. A standing breach is **not** re-sent daily.
-- **Who gets it:** profiles with `status = 'active'`, a real email, and computable drawdown.
-  Honors an opt-out flag at `profiles.preferences.drawdownAlertsOptOut = true` (no Settings toggle
-  wired yet — the fn already respects the flag if set directly).
-- **Safety:** until `RESEND_API_KEY` + `ALERT_FROM_EMAIL` are set the fn no-ops and advances **no**
-  state, so it ships dormant; the first configured run then sends the then-current escalations.
+- **Schedule:** `*/15 13-21 * * 1-5` — every 15 min during US market hours (the window covers RTH
+  in both EST and EDT; the handler skips holidays via `isTradingDay`). `schedule()` runs cron on the
+  **prod (`main`) deploy only** — never staging. Fires *when it happens*, not at a fixed time.
+- **Live-priced:** it fetches live Finnhub quotes for the held tickers **server-side** and evaluates
+  the **account** drawdown ladder + each **per-stock** stop ladder on the intraday price (falling
+  back to the synced mark for any unquoted leg) — the same `@stw/shared` engine the Risk tab uses,
+  so cron ↔ screen agree. Catches an intraday move within ~15 min instead of waiting for the sync.
+- **One alert per user per day, on the first escalation.** An alert is a **new escalation** — a
+  deeper rung, or ok→near→breach — vs the stored level. `risk_alert_state` (migration 073) holds a
+  monotonic `last_level` per (user, kind, scope) for "is this new", and `last_alerted_at` (compared
+  in ET) enforces the **once-a-day cap**: the first escalation of the trading day sends immediately;
+  further escalations that day are held (they fire as the next day's first alert if still unresolved).
+  A full recovery to ok deletes the row so a re-entry alerts afresh.
+- **Who gets it:** profiles with `status = 'active'` and a configured+linked channel (email and/or a
+  linked Discord). Honors `profiles.preferences.drawdownAlertsOptOut = true` (no Settings toggle yet).
+- **Safety:** until a channel is configured the fn no-ops and advances **no** state, so it ships
+  dormant; the first configured run then sends the then-current escalations.
 
 ## Required env (web Netlify site → Site configuration → Environment variables)
 
@@ -35,6 +38,7 @@ Advisory/display-only — nothing here places, blocks, or adjusts a trade.
 | `RESEND_API_KEY` | Resend sending key | resend.com → *API Keys* → create (Sending access). Free tier ≈3,000/mo, 100/day. |
 | `ALERT_FROM_EMAIL` | The "From" address | Any address on a **domain you've verified in Resend** (*Domains* → add domain → SPF/DKIM DNS records), e.g. `alerts@yourdomain`. Resend rejects an unverified-domain sender. |
 | Discord bot token | Bot token for DM alerts | **Preferred: the admin UI** — apps/admin → Config → *Discord alert bot* (stored in `integration_secrets`, admin-only, write-only). Swapping the **test bot** for another is done there, no redeploy. `DISCORD_BOT_TOKEN` env is a fallback if the UI value is unset. Get the token at discord.com/developers → your app → Bot → Reset/Copy Token. |
+| `VITE_FINNHUB_KEY` (or `FINNHUB_KEY`) | Live quotes for the intraday read | Already set for `sector-map-sync`. Without it the cron falls back to synced marks (loses intraday responsiveness). |
 | `APP_URL` *(optional)* | Web app base URL | Your subscriber site's public URL (Netlify → that site → *Site overview*). Builds the "Open your Risk tab →" link in both email + Discord; omit to drop it. |
 
 Each channel is independent: set email vars for email, `DISCORD_BOT_TOKEN` for Discord, or both.
