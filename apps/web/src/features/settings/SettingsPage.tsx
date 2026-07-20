@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
-  useIbkrSettings, saveIbkrSettings, fetchDiscordLink, linkDiscord, useAuthStore, useSyncPortfolio, useUserPositions, LoadingSpinner,
+  useIbkrSettings, saveIbkrSettings, fetchDiscordLink, linkDiscord, useAuthStore, useSyncPortfolio, useUserPositions, useIbkrAccount, LoadingSpinner,
   Button, StatusPill, AlertStrip, FormRow, TextInput,
   RiskConfigForm, useRiskConfig, useEnsureRiskConfig,
 } from '@stw/ui';
-import { FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, RADIUS, SPACE, fmtDateTime } from '@stw/shared';
+import { FONT_SIZE, FONT_WEIGHT, RADIUS, SPACE, fmtDateTime, maskAccount } from '@stw/shared';
 import { useTierAccess } from '../../shared/hooks/useTierAccess';
 
 const bold = { color: 'var(--t2)' } as const;
@@ -60,6 +60,7 @@ export function SettingsPage() {
   const session = useAuthStore((s) => s.session);
   const queryClient = useQueryClient();
   const { data: settings, isLoading } = useIbkrSettings();
+  const { data: ibkrAccount } = useIbkrAccount();
   const { data: positions } = useUserPositions();
   const { sync, isSyncing, syncError, lastResult } = useSyncPortfolio();
   const canUseLimits = useTierAccess('limits');
@@ -69,6 +70,8 @@ export function SettingsPage() {
   const [token, setToken] = useState('');
   const [queryId, setQueryId] = useState('');
   const [showToken, setShowToken] = useState(false);
+  // Inline "what is this?" explainers on the token / query-ID rows — one open at a time.
+  const [tip, setTip] = useState<null | 'tok' | 'qid'>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -161,6 +164,15 @@ export function SettingsPage() {
     }
   }
 
+  async function handleDisconnect() {
+    if (!user) return;
+    if (!window.confirm('Disconnect Interactive Brokers? Your synced history stays, but daily syncs stop until you reconnect.')) return;
+    await saveIbkrSettings(user.id, { ibkr_flex_token: null, ibkr_query_id: null });
+    await queryClient.invalidateQueries({ queryKey: ['ibkr-settings', user.id] });
+    setToken('');
+    setQueryId('');
+  }
+
   async function handleImportFile(file: File) {
     if (!session?.access_token) { setImportError('Not signed in'); return; }
     setImporting(true);
@@ -187,6 +199,7 @@ export function SettingsPage() {
   if (isLoading) return <LoadingSpinner className="mt-16" />;
 
   const isConnected = !!(settings?.ibkr_flex_token && settings?.ibkr_query_id);
+  const maskedAccount = maskAccount(ibkrAccount);
   const lastSyncedAt = positions?.length
     ? positions.reduce((latest, p) => (p.last_synced_at > latest ? p.last_synced_at : latest), positions[0].last_synced_at)
     : null;
@@ -250,34 +263,154 @@ export function SettingsPage() {
 
       {/* Setup / edit panel — collapsed once connected; always open on first-ever setup. */}
       {(!isConnected || editingConnection) && (
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: RADIUS.xl, overflow: 'hidden' }}>
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: RADIUS.xl, padding: SPACE[4] }}>
 
-          <div style={{ padding: `${SPACE[3.5]}px ${SPACE[4]}px`, borderBottom: '1px solid var(--bsub)', display: 'flex', alignItems: 'center', gap: SPACE[2.5] }}>
-            <span style={{ fontWeight: FONT_WEIGHT.semibold, fontSize: FONT_SIZE.base, color: 'var(--text)' }}>
-              IBKR Connection
+          {/* Header — title + connection state pill + (once connected) the masked account. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap', marginBottom: SPACE[0.5] }}>
+            <span style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>
+              Interactive Brokers connection
             </span>
-            {!isConnected && <StatusPill variant="neutral">Not connected</StatusPill>}
+            <StatusPill variant={isConnected ? 'ok' : 'neutral'}>{isConnected ? 'Connected' : 'Not connected'}</StatusPill>
+            {maskedAccount && (
+              <span style={{ marginLeft: 'auto', fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>account {maskedAccount}</span>
+            )}
+          </div>
+          <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', lineHeight: 1.5, marginBottom: SPACE[3] }}>
+            Read-only: we pull positions and fills through IBKR&rsquo;s Flex reports. Nothing here can place trades.
           </div>
 
-          {/* How to connect — its own nested collapse, independent of the panel toggle above:
-              expanded by default only for a first-time setup, collapsed the moment you're
-              back here just to rotate a token. */}
-          <div style={{ borderBottom: '1px solid var(--bsub)' }}>
+          {/* Token + query-ID rows — inline label · info · input · action. */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE[2.5] }}>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap' }}>
+              <span style={{ width: 110, flexShrink: 0, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)', display: 'inline-flex', alignItems: 'center', gap: SPACE[1.5] }}>
+                Flex token
+                <button
+                  type="button"
+                  aria-label="What is the Flex token?"
+                  onClick={() => setTip((t) => (t === 'tok' ? null : 'tok'))}
+                  style={{ width: 18, height: 18, flexShrink: 0, borderRadius: RADIUS.full, border: '1px solid var(--border)', background: 'var(--s2)', color: 'var(--t3)', fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, cursor: 'pointer', padding: 0, lineHeight: 1 }}
+                >i</button>
+              </span>
+              <TextInput
+                type={showToken ? 'text' : 'password'}
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                placeholder="Paste your Flex Token"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="none"
+                style={{ flex: 1, minWidth: 160, fontFamily: 'monospace' }}
+              />
+              <Button variant="secondary" onClick={() => setShowToken((v) => !v)} style={{ padding: `${SPACE[1.5]}px ${SPACE[2.5]}px`, fontSize: FONT_SIZE.xs }}>
+                {showToken ? 'Hide' : 'Reveal'}
+              </Button>
+            </div>
+            {tip === 'tok' && (
+              <div style={{ background: 'var(--s2)', border: '1px solid var(--border)', borderRadius: RADIUS.lg, padding: `${SPACE[2]}px ${SPACE[3]}px`, fontSize: FONT_SIZE.xs, color: 'var(--t2)', lineHeight: 1.6 }}>
+                A read-only password IBKR generates just for reports — it can never place trades. Find or renew it in IBKR under <b style={bold}>Performance &amp; Reports → Settings → Flex Web Service</b>. Tokens expire (up to 1 year); if syncs stop, renew it there and paste the new one here.
+              </div>
+            )}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap' }}>
+              <span style={{ width: 110, flexShrink: 0, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)', display: 'inline-flex', alignItems: 'center', gap: SPACE[1.5] }}>
+                Flex query ID
+                <button
+                  type="button"
+                  aria-label="What is the Flex query ID?"
+                  onClick={() => setTip((t) => (t === 'qid' ? null : 'qid'))}
+                  style={{ width: 18, height: 18, flexShrink: 0, borderRadius: RADIUS.full, border: '1px solid var(--border)', background: 'var(--s2)', color: 'var(--t3)', fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, cursor: 'pointer', padding: 0, lineHeight: 1 }}
+                >i</button>
+              </span>
+              <TextInput
+                type="text"
+                inputMode="numeric"
+                value={queryId}
+                onChange={(e) => setQueryId(e.target.value)}
+                placeholder="e.g. 123456"
+                autoComplete="off"
+                style={{ width: 130, flex: '0 0 auto', fontFamily: 'monospace' }}
+              />
+              <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>from IBKR → Performance &amp; Reports → Flex Queries</span>
+            </div>
+            {tip === 'qid' && (
+              <div style={{ background: 'var(--s2)', border: '1px solid var(--border)', borderRadius: RADIUS.lg, padding: `${SPACE[2]}px ${SPACE[3]}px`, fontSize: FONT_SIZE.xs, color: 'var(--t2)', lineHeight: 1.6 }}>
+                The ID of the saved Flex Query report we read (your positions and trades). It&rsquo;s the number shown next to your query&rsquo;s name in <b style={bold}>Performance &amp; Reports → Flex Queries</b>.
+              </div>
+            )}
+          </div>
+
+          {saveError && <div style={{ marginTop: SPACE[2.5] }}><AlertStrip severity="negative">{saveError}</AlertStrip></div>}
+
+          {/* Actions — verify (via sync), persist, and disconnect. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap', marginTop: SPACE[3] }}>
+            <Button variant="secondary" onClick={sync} disabled={isSyncing}>
+              {isSyncing ? 'Testing…' : 'Test connection'}
+            </Button>
+            <Button variant="primary" onClick={handleSave} disabled={saving} style={{ minWidth: 120 }}>
+              {saving ? (token.trim() && queryId.trim() ? 'Saving & verifying…' : 'Saving…') : saved ? 'Saved ✓' : 'Save'}
+            </Button>
+            {isConnected && lastResult && !syncError && (
+              <span style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--status-positive-text)' }}>
+                ✓ Reached IBKR{lastResult.accountId ? ` — ${maskAccount(lastResult.accountId)}` : ''}, {lastResult.count} position{lastResult.count !== 1 ? 's' : ''}
+              </span>
+            )}
+            {isConnected && (
+              <Button variant="destructive" onClick={handleDisconnect} style={{ marginLeft: 'auto', padding: `${SPACE[1.5]}px ${SPACE[3.5]}px`, fontSize: FONT_SIZE.sm }}>
+                Disconnect…
+              </Button>
+            )}
+          </div>
+          <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[2] }}>
+            Changing the token or query ID re-verifies against the same IBKR account before saving — a mismatch is blocked so your history stays consistent.
+          </div>
+
+          {/* Trade history — daily sync covers a short window; this file upload backfills up to a year. */}
+          <div style={{ marginTop: SPACE[3], borderTop: '1px solid var(--bsub)', paddingTop: SPACE[2.5], display: 'flex', flexDirection: 'column', gap: SPACE[2] }}>
+            <span style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>Trade history</span>
+            <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', lineHeight: 1.5 }}>
+              Daily syncs cover the last ~30 days of fills. To load your <b style={bold}>full past history</b> in one go — or to <b style={bold}>repair</b> a broken one — run your Flex query in the IBKR portal with a long <b style={bold}>Period</b> (e.g. Year to Date), download the <b style={bold}>XML</b>, and upload it here. Re-importing <b style={bold}>refreshes</b> existing fills (e.g. to backfill prices); your live positions are left untouched.
+            </span>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".xml,text/xml,application/xml"
+              style={{ display: 'none' }}
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImportFile(f); }}
+            />
+            <Button
+              variant="secondary"
+              onClick={() => importInputRef.current?.click()}
+              disabled={importing}
+              style={{ alignSelf: 'flex-start' }}
+            >
+              {importing ? 'Importing…' : 'Import past year of trades'}
+            </Button>
+            {importResult && (
+              <AlertStrip severity="positive">
+                Imported {importResult.executions} fill{importResult.executions !== 1 ? 's' : ''}
+                {importResult.accountId ? ` from account ${maskAccount(importResult.accountId)}` : ''} — prices refreshed, duplicates merged.
+              </AlertStrip>
+            )}
+            {importError && <AlertStrip severity="negative">{importError}</AlertStrip>}
+          </div>
+
+          {/* First-time setup guide — collapsed link, expands the full step-by-step below. */}
+          <div style={{ marginTop: SPACE[3], borderTop: '1px solid var(--bsub)', paddingTop: SPACE[1.5] }}>
             <button
               type="button"
               onClick={() => setHowToConnectExpanded((v) => !v)}
               style={{
-                width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer',
-                padding: `${SPACE[3]}px ${SPACE[4]}px`, display: 'flex', alignItems: 'center', gap: SPACE[1.5],
-                fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', textTransform: 'uppercase',
-                letterSpacing: LETTER_SPACING.label, fontWeight: FONT_WEIGHT.semibold,
+                background: 'none', border: 'none', cursor: 'pointer', color: 'var(--acc)',
+                fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, padding: `${SPACE[1.5]}px 0`,
+                display: 'flex', alignItems: 'center', gap: SPACE[1.5],
               }}
             >
               <span style={{ display: 'inline-block', transform: howToConnectExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>▶</span>
-              How to connect
+              First time? How to set up your Flex token &amp; query
             </button>
             {howToConnectExpanded && (
-              <div style={{ padding: `0 ${SPACE[4]}px ${SPACE[3.5]}px` }}>
+              <div style={{ paddingTop: SPACE[2] }}>
                 {/* Explicit number badges — the design-system CSS reset strips native
                     <ol> markers, so step numbers (and lettered sub-items) are rendered,
                     not relied on. Step 3 nests the four Flex sections as a, b, c, d. */}
@@ -316,93 +449,6 @@ export function SettingsPage() {
                 </p>
               </div>
             )}
-          </div>
-
-          {/* Form fields */}
-          <div style={{ padding: `${SPACE[3.5]}px ${SPACE[4]}px`, display: 'flex', flexDirection: 'column', gap: SPACE[3.5] }}>
-
-            <FormRow label="Flex Token">
-              <div style={{ position: 'relative' }}>
-                <TextInput
-                  type={showToken ? 'text' : 'password'}
-                  value={token}
-                  onChange={(e) => setToken(e.target.value)}
-                  placeholder="Paste your Flex Token"
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="none"
-                  style={{ paddingRight: SPACE[12] + SPACE[2] }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowToken((v) => !v)}
-                  style={{
-                    position: 'absolute', right: SPACE[2.5], top: '50%', transform: 'translateY(-50%)',
-                    background: 'none', border: 'none', cursor: 'pointer',
-                    fontSize: FONT_SIZE.sm, color: 'var(--t3)', padding: SPACE[1],
-                  }}
-                >
-                  {showToken ? 'Hide' : 'Show'}
-                </button>
-              </div>
-            </FormRow>
-
-            <FormRow label="Query ID">
-              <TextInput
-                type="text"
-                inputMode="numeric"
-                value={queryId}
-                onChange={(e) => setQueryId(e.target.value)}
-                placeholder="e.g. 123456"
-                autoComplete="off"
-              />
-            </FormRow>
-
-            {saveError && <AlertStrip severity="negative">{saveError}</AlertStrip>}
-
-            <Button
-              variant="primary"
-              onClick={handleSave}
-              disabled={saving}
-              style={{ alignSelf: 'flex-start', minWidth: 120 }}
-            >
-              {saving ? (token.trim() && queryId.trim() ? 'Saving & verifying…' : 'Saving…') : saved ? 'Saved ✓' : 'Save'}
-            </Button>
-          </div>
-
-          {/* Import trade history — part of the connection section. Backfills the full
-              history the short live window can't reach, and (via refresh-on-conflict)
-              repairs a broken/price-less history on re-import. */}
-          <div style={{ borderTop: '1px solid var(--bsub)', padding: `${SPACE[3.5]}px ${SPACE[4]}px`, display: 'flex', flexDirection: 'column', gap: SPACE[2] }}>
-            <span style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>Import trade history</span>
-            <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)', lineHeight: 1.55 }}>
-              The daily sync only carries the last few days. To load your <b style={bold}>full past history</b> in one go — or to
-              <b style={bold}> repair</b> a broken one — run your Flex query in the IBKR portal with a long <b style={bold}>Period</b>
-              {' '}(e.g. Year to Date), download the <b style={bold}>XML</b>, and upload it here. Re-importing
-              {' '}<b style={bold}>refreshes</b> existing fills (e.g. to backfill prices); your live positions are left untouched.
-            </span>
-            <input
-              ref={importInputRef}
-              type="file"
-              accept=".xml,text/xml,application/xml"
-              style={{ display: 'none' }}
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImportFile(f); }}
-            />
-            <Button
-              variant="secondary"
-              onClick={() => importInputRef.current?.click()}
-              disabled={importing}
-              style={{ alignSelf: 'flex-start' }}
-            >
-              {importing ? 'Importing…' : 'Choose Flex XML…'}
-            </Button>
-            {importResult && (
-              <AlertStrip severity="positive">
-                Imported {importResult.executions} fill{importResult.executions !== 1 ? 's' : ''}
-                {importResult.accountId ? ` from account ${importResult.accountId}` : ''} — prices refreshed, duplicates merged.
-              </AlertStrip>
-            )}
-            {importError && <AlertStrip severity="negative">{importError}</AlertStrip>}
           </div>
         </div>
       )}

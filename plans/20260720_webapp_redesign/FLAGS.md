@@ -58,10 +58,15 @@ the **Risk-tab evaluators + drawdown-alert cron do NOT yet honor them** — a di
 evaluates, and the per-option ladder isn't yet used for option positions. Wire this when the **Risk
 tab** is redesigned (skip disabled guardrails; use the option ladder for option positions).
 
+**Connection editor (re-skinned, host request):** `SettingsPage` IBKR panel now matches the mock —
+CONNECTED/Not-connected pill + masked account in the header, Flex-token/query rows with ⓘ tips +
+Reveal/Hide, Test connection (→ our verify/sync), Save, Disconnect… (new: clears the token/query),
+styled Trade-history + collapsible "First time?" guide.
+- **Import stays a Flex-XML file upload**, not the mock's implied one-click server fetch — the Flex API
+  can't override the saved query period, so a one-click 365-day pull isn't possible. The "Import past
+  year of trades" button opens the file picker (download YTD XML in IBKR → upload). Behavior unchanged.
+
 **Deviations from the mock:**
-- **IBKR connection editor kept as-is** (the existing, working `SettingsPage` panel) rather than
-  re-skinned to the mock's exact layout — functionally complete (collapsible, token reveal, guide,
-  import). Re-skin later if desired.
 - **Omitted the mock's "STW playbook / Reset to preset" banner** — there's no client-side PRESET in
   our data model; defaults live server-side (`DEFAULT_RISK_CONFIG`). Add a reset-to-defaults if wanted.
 - Mock's `--pos-*/--warn/--neg` map to our real `--status-positive/warning/negative-*` tokens; the
