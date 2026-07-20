@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   FONT_SIZE, FONT_WEIGHT, SPACE, RADIUS, SHADOW, formatMonthYear, fmtDateTime,
 } from '@stw/shared';
@@ -13,19 +13,18 @@ import { LoadingSpinner } from '../primitives/LoadingSpinner';
 import { StatusPill, type StatusPillVariant } from '../primitives/StatusPill';
 import { AlertStrip } from '../primitives/AlertStrip';
 import { Button } from '../primitives/Button';
+import { TextInput } from '../primitives/TextInput';
 import { useIbkrSettings } from '../features/portfolio/useUserPositions';
 import { useRiskConfig } from '../features/limits/useRiskConfig';
 import { usePicksTabStore, coercePicksTab, PICKS_TABS, PICKS_TAB_LABELS, type PicksTab } from '../features/picks/usePicksTab';
 
 const TIER_LABELS: Record<string, string> = { free: 'Free', basic: 'Basic', premium: 'Premium' };
 
-// 'pending' reads as `unevaluated`, not a caution/warning variant — an approval decision
-// hasn't happened yet, which is closer to "no verdict yet" than "approaching a breach."
-// Same mapping as apps/admin/src/features/users/UsersPage.tsx's STATUS_VARIANT. (The redesign
-// mock coloured pending amber; kept as unevaluated here to honour the StatusPill contract —
-// flagged in the redesign PR.)
+// Approval status → pill variant. Pending is amber (`warning`) per the redesign — a caution
+// state ("waiting on review"), rendered via the generic `warning` variant rather than `near`
+// (which means "≥80% of a limit").
 const STATUS_VARIANT: Record<string, StatusPillVariant> = {
-  pending: 'unevaluated',
+  pending: 'warning',
   approved: 'ok',
   rejected: 'breach',
 };
@@ -50,6 +49,7 @@ const sectionLabel: React.CSSProperties = {
 
 export function ProfilePage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { isAdmin } = useCapabilities();
   const user = useAuthStore((s) => s.user);
   const theme = useThemeStore((s) => s.theme);
@@ -73,6 +73,11 @@ export function ProfilePage() {
   const { data: riskConfig } = useRiskConfig(user?.id);
 
   const [pwMsg, setPwMsg] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState(false);
+  const [first, setFirst] = useState('');
+  const [last, setLast] = useState('');
+  const [savingName, setSavingName] = useState(false);
+  const [nameErr, setNameErr] = useState<string | null>(null);
 
   if (isLoading) return <LoadingSpinner className="mt-16" />;
 
@@ -102,6 +107,26 @@ export function ProfilePage() {
     window.location.href = `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`;
   }
 
+  function openNameEdit() {
+    const parts = (profile?.display_name ?? '').trim().split(/\s+/).filter(Boolean);
+    setFirst(parts[0] ?? '');
+    setLast(parts.slice(1).join(' '));
+    setNameErr(null);
+    setEditingName(true);
+  }
+
+  async function saveName() {
+    const full = `${first.trim()} ${last.trim()}`.trim();
+    if (!full) { setNameErr('Enter a name.'); return; }
+    setSavingName(true);
+    setNameErr(null);
+    const { error } = await getSupabase().rpc('set_my_display_name', { new_name: full });
+    setSavingName(false);
+    if (error) { setNameErr(error.message); return; }
+    await queryClient.invalidateQueries({ queryKey: ['profile', user?.id] });
+    setEditingName(false);
+  }
+
   const prefRow: React.CSSProperties = {
     display: 'flex', alignItems: 'center', gap: SPACE[3], padding: `${SPACE[2.5]}px 0`, flexWrap: 'wrap',
   };
@@ -129,12 +154,32 @@ export function ProfilePage() {
                 <span style={{ fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)' }}>{name}</span>
                 <StatusPill variant={STATUS_VARIANT[status] ?? 'unevaluated'}>{STATUS_LABEL[status] ?? status}</StatusPill>
                 <StatusPill variant="neutral">{tier}</StatusPill>
+                {!editingName && (
+                  <button
+                    onClick={openNameEdit}
+                    style={{ marginLeft: 'auto', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold, color: 'var(--acc)' }}
+                  >Edit</button>
+                )}
               </div>
               <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)' }}>
                 {user?.email}{profile?.created_at ? ` · member since ${formatMonthYear(profile.created_at)}` : ''}
               </div>
             </div>
           </div>
+
+          {editingName && (
+            <div style={{ marginTop: SPACE[3], display: 'flex', flexDirection: 'column', gap: SPACE[2] }}>
+              <div style={{ display: 'flex', gap: SPACE[2], flexWrap: 'wrap' }}>
+                <TextInput value={first} onChange={(e) => setFirst(e.target.value)} placeholder="First name" aria-label="First name" style={{ flex: 1, minWidth: 140 }} />
+                <TextInput value={last} onChange={(e) => setLast(e.target.value)} placeholder="Last name" aria-label="Last name" style={{ flex: 1, minWidth: 140 }} />
+              </div>
+              {nameErr && <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--status-negative-text)' }}>{nameErr}</div>}
+              <div style={{ display: 'flex', gap: SPACE[2] }}>
+                <Button variant="primary" onClick={saveName} disabled={savingName}>{savingName ? 'Saving…' : 'Save'}</Button>
+                <Button variant="ghost" onClick={() => setEditingName(false)} disabled={savingName}>Cancel</Button>
+              </div>
+            </div>
+          )}
           {status === 'pending' && (
             <div style={{ marginTop: SPACE[3] }}>
               <AlertStrip severity="warning">

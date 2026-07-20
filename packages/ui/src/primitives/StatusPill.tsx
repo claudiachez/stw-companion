@@ -14,11 +14,17 @@ import { FONT_SIZE, LETTER_SPACING, RADIUS, SPACE } from '@stw/shared';
 // state that is neither a real breach nor missing data — e.g. SettingsPage.tsx's "Not
 // connected" pill or a "flat" bias reading (docs/design-system/audit/02-component-
 // duplication-report.md item 2, audit/03's BiasChip).
-export type StatusPillVariant = 'ok' | 'near' | 'breach' | 'unevaluated' | 'info' | 'neutral';
+// `warning` and `near` share the amber `status.warning` role but carry distinct intent:
+// `near` is specifically "≥80% of a limit, about to breach" (the risk engine); `warning` is a
+// generic caution state that isn't a limit reading — e.g. an account "Pending approval" pill,
+// which is a caution, not a near-breach. Keep them separate so a reader isn't forced to read
+// `near` as "near what?" on a non-limit surface.
+export type StatusPillVariant = 'ok' | 'near' | 'warning' | 'breach' | 'unevaluated' | 'info' | 'neutral';
 
 const VARIANT_ROLE: Record<StatusPillVariant, 'positive' | 'warning' | 'negative' | 'unevaluated' | 'info' | 'neutral'> = {
   ok: 'positive',
   near: 'warning',
+  warning: 'warning',
   breach: 'negative',
   unevaluated: 'unevaluated',
   info: 'info',

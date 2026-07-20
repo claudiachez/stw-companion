@@ -1,0 +1,41 @@
+# Redesign — flags for the host (accumulated per page; surface in the final PR)
+
+## Profile page (committed)
+**Dropped / no-source fields (redesign showed them; our data can't back them):**
+- **IBKR masked account number** ("U842•••93"): no such column exists — the connection is a
+  Flex token + query id, not a stored account number. Omitted; the row shows connection state +
+  last-synced (`ibkr_nlv_at`) instead. → Add an account-number field only if we start storing it.
+
+**Host-requested additions (2nd round):**
+- **Pending pill is amber** (host request) — added a generic `warning` variant to StatusPill (distinct
+  from `near` = "≥80% of a limit"); `pending → warning`.
+- **Name edit** — "Edit" on the identity card opens First + Last name inputs, stored as
+  `display_name = "First Last"` (no first/last columns; split on first space to prefill). **Needs
+  migration `077_set_my_display_name.sql`** (SECURITY DEFINER RPC — users have no direct UPDATE on
+  profiles; same pattern as `set_my_preferences`). **HOST MUST APPLY 077.** Want true separate
+  first/last columns instead? That's a further schema change.
+
+**Deviations from the mock (deliberate, per our conventions):**
+- **Theme control is 2-way (Light/Dark), not 3-way** — you chose to skip "System" (our theme store
+  is binary; System would be a new device-follow behavior). The mock's System segment is dropped.
+- **Exact px snap to the type scale**: the mock's 13/16/22px map to our `FONT_SIZE` tokens
+  (14/18/26) — lint forbids literal font-sizes, so the app's type scale is canonical. Sub-pixel
+  differences from the mock on the name (16→18) and avatar initial (22→26).
+- **Pending/rejected notices use the `AlertStrip` primitive** (left-accent bar) rather than the
+  mock's full bordered box — primitive reuse over a bespoke box.
+- **Buttons use the `Button` secondary/destructive primitives** (secondary has a faint `--s2` fill
+  vs the mock's transparent bg) — primitive reuse; tiny fill delta.
+
+**New wiring added:**
+- `Show dollar amounts` → new `showMoney` global preference (`usePrivacyStore` +
+  `profiles.preferences.showMoney`, synced). No consuming surface yet — honored as Overview/other
+  privacy surfaces are redesigned.
+- `Change password` → Supabase password-reset email. `Sign out` → real signOut → /login.
+  `Delete account…` → mailto to **`cc@claudiachez.com`** (interim — no dedicated support inbox /
+  self-delete endpoint exists). **Confirm the support address.**
+- `Manage` (IBKR) → routes to `/settings` (web only; the card is hidden in admin, which has no
+  Settings route).
+- Theme toggle **removed from the hamburger menu** (Profile owns it now), per your instruction.
+
+**Verification:** compiles/boots clean, no console/build errors. Live authed page not
+screenshotted (auth-gated; can't sign in) — needs a logged-in eyeball on the dev server/staging.
