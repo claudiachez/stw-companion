@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { trendBucket, relativeStrength, RS_LOOKBACKS, SECTOR_ETFS, SECTOR_CONSTITUENTS, rankSectorConstituents } from '@stw/shared';
+import { trendStructure, relativeStrength, RS_LOOKBACKS, SECTOR_ETFS, SECTOR_CONSTITUENTS, rankSectorConstituents } from '@stw/shared';
 import type { SectorRotationRow } from '@stw/shared';
-import { loadCloses, loadLastDate, sma, tdBatchCloses, fetchClosesChunked } from './maCache';
+import { loadCloses, loadLastDate, tdBatchCloses, fetchClosesChunked } from './maCache';
 
 export interface SectorConstituents {
   leaders: SectorRotationRow[];
@@ -9,15 +9,12 @@ export interface SectorConstituents {
 }
 
 function buildRow(meta: { symbol: string; name: string }, closes: number[], spyCloses: number[]): SectorRotationRow {
-  const close = closes.length > 0 ? closes[closes.length - 1] : null;
-  const ma9 = sma(closes, 9);
-  const ma21 = sma(closes, 21);
-  const ma200 = sma(closes, 200);
+  const { close, ma9, ma21, ma200, bucket } = trendStructure(closes);
   return {
     symbol: meta.symbol,
     name: meta.name,
     close, ma9, ma21, ma200,
-    bucket: trendBucket(close, ma9, ma21, ma200),
+    bucket,
     rsWeek: relativeStrength(closes, spyCloses, RS_LOOKBACKS.week),
     rs1M: relativeStrength(closes, spyCloses, RS_LOOKBACKS.oneMonth),
     rs3M: relativeStrength(closes, spyCloses, RS_LOOKBACKS.threeMonth),

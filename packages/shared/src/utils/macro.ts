@@ -60,6 +60,47 @@ export function trendBucket(
   return (a9 || a21) ? 'bear_rally' : 'risk_off';
 }
 
+/**
+ * Simple moving average of the last `n` closes (oldest → newest series). Local to
+ * this module — the frozen regime engine (`regime.ts`) has its own `sma` with a
+ * different lookback semantics, so this stays unexported to avoid a name clash;
+ * `trendStructure` below is the exported one-source read the macro surfaces share.
+ */
+function sma(closes: number[], n: number): number | null {
+  if (closes.length < n) return null;
+  return closes.slice(-n).reduce((a, b) => a + b, 0) / n;
+}
+
+/** A ticker/index's full 9/21/200 structure read, derived once from a closes array. */
+export interface TrendStructure {
+  /** The classified close — the latest DAILY close, the same series the MAs use. */
+  close: number | null;
+  ma9: number | null;
+  ma21: number | null;
+  ma200: number | null;
+  bucket: TrendBucket | null;
+}
+
+/**
+ * The ONE source of truth for an index/ticker's trend-structure read, derived
+ * from a daily-close series (oldest → newest). The `close` classified against the
+ * 9/21/200 MAs is the latest DAILY close — the same series the MAs are built from
+ * — so every surface that shows a trend bucket (Macro Trend table, the Risk-tab
+ * RegimeLight, per-ticker regime badges, sector rows) agrees on the same state.
+ *
+ * A live intraday quote may be displayed alongside for price/change, but it must
+ * NOT be substituted for `close` here: doing so was the "SPY reads Momentum on
+ * Risk vs Healthy Pullback on Macro" discrepancy (an intraday tick straddling the
+ * 9-day MA flipped the bucket only on the surface that used the live quote).
+ */
+export function trendStructure(closes: number[]): TrendStructure {
+  const close = closes.length > 0 ? closes[closes.length - 1] : null;
+  const ma9 = sma(closes, 9);
+  const ma21 = sma(closes, 21);
+  const ma200 = sma(closes, 200);
+  return { close, ma9, ma21, ma200, bucket: trendBucket(close, ma9, ma21, ma200) };
+}
+
 /** Short status word for a 0–100 trend sleeve score (for the score strip / chips). */
 export function trendSleeveLabel(score: number | null): string {
   if (score === null) return '—';

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { trendBucket, mapIndustryToSector, sectorStanding } from '@stw/shared';
+import { trendStructure, mapIndustryToSector, sectorStanding } from '@stw/shared';
 import type { TrendBucket, SectorStanding } from '@stw/shared';
-import { loadCloses, tdBatchCloses, sma } from '../macro/maCache';
+import { loadCloses, tdBatchCloses } from '../macro/maCache';
 import { useSectorRotation } from '../macro/useSectorRotation';
 
 export interface TickerRegime {
@@ -96,11 +96,7 @@ export function useTickerRegime(tickers: string[], finnhubKey?: string, twelveDa
       const result: Record<string, TickerRegime> = {};
       for (const t of tickers) {
         const closes = closesMap[t] ?? [];
-        const close = closes.length > 0 ? closes[closes.length - 1] : null;
-        const ma9 = sma(closes, 9);
-        const ma21 = sma(closes, 21);
-        const ma200 = sma(closes, 200);
-        const bucket = trendBucket(close, ma9, ma21, ma200);
+        const { close, ma9, ma21, ma200, bucket } = trendStructure(closes);
         const sectorSymbol = loadCachedSector(t) ?? null;
         const sectorRow = sectorSymbol ? sectorRowBySymbol[sectorSymbol] : undefined;
         result[t] = {

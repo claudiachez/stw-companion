@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { trendBucket } from '@stw/shared';
+import { trendStructure } from '@stw/shared';
 import type { MacroIndicator } from '@stw/shared';
-import { tdDailyCloses, loadCloses, loadLastDate, sma } from './maCache';
+import { tdDailyCloses, loadCloses, loadLastDate } from './maCache';
 
 // ── Module 4: Trend / Market Structure ──────────────────────────────
 // Only price-trend assets live here. VIX moved to Volatility/Stress and US10Y
@@ -81,18 +81,20 @@ export function useMacroIndicators(symbols: string[], finnhubKey?: string, twelv
         const meta = ALL_INDICATORS.find((x) => x.symbol === sym) ?? { symbol: sym, name: sym };
         const closes = maMap[sym] ?? [];
         const quote = quoteMap[sym];
-        const close = quote?.c ?? (closes.length > 0 ? closes[closes.length - 1] : null);
-        const ma9 = sma(closes, 9);
-        const ma21 = sma(closes, 21);
-        const ma200 = sma(closes, 200);
+        // Structure (bucket + MAs) is classified off the settled DAILY close, the
+        // same source of truth every other surface uses (trendStructure). The live
+        // Finnhub quote drives only the displayed price/change — never the bucket,
+        // so this table can't disagree with the Risk-tab RegimeLight for the same
+        // index (the intraday-quote-vs-daily-close discrepancy, fixed 2026-07-20).
+        const { close: dailyClose, ma9, ma21, ma200, bucket } = trendStructure(closes);
         return {
           symbol: sym,
           name: meta.name,
-          close,
+          close: quote?.c ?? dailyClose,
           chg: quote?.d ?? null,
           chgPct: quote?.dp ?? null,
           ma9, ma21, ma200,
-          bucket: trendBucket(close, ma9, ma21, ma200),
+          bucket,
         };
       });
 
