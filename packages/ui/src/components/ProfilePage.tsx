@@ -177,19 +177,28 @@ export function ProfilePage() {
         {/* Identity */}
         <div style={card}>
           <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[3.5] }}>
-            {profile?.avatar_url ? (
-              <img
-                src={profile.avatar_url}
-                alt=""
-                style={{ width: 52, height: 52, borderRadius: RADIUS.full, objectFit: 'cover', border: '1px solid var(--border)', flexShrink: 0 }}
-              />
-            ) : (
-              <div style={{
-                width: 52, height: 52, borderRadius: RADIUS.full, background: 'var(--s2)', border: '1px solid var(--border)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: FONT_SIZE.display, fontWeight: FONT_WEIGHT.bold, color: 'var(--acc)', flexShrink: 0,
-              }}>{initial}</div>
-            )}
+            <div style={{ position: 'relative', flexShrink: 0, width: 52, height: 52 }}>
+              {profile?.avatar_url ? (
+                <img src={profile.avatar_url} alt="" style={{ width: 52, height: 52, borderRadius: RADIUS.full, objectFit: 'cover', border: '1px solid var(--border)', opacity: uploadingAvatar ? 0.5 : 1 }} />
+              ) : (
+                <div style={{ width: 52, height: 52, borderRadius: RADIUS.full, background: 'var(--s2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: FONT_SIZE.display, fontWeight: FONT_WEIGHT.bold, color: 'var(--acc)', opacity: uploadingAvatar ? 0.5 : 1 }}>{initial}</div>
+              )}
+              {editingName && (
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  disabled={uploadingAvatar}
+                  aria-label={profile?.avatar_url ? 'Change photo' : 'Upload photo'}
+                  title={profile?.avatar_url ? 'Change photo' : 'Upload photo'}
+                  style={{ position: 'absolute', right: -2, bottom: -2, width: 22, height: 22, borderRadius: RADIUS.full, border: '2px solid var(--surface)', background: 'var(--acc)', color: 'var(--text-inverse)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: uploadingAvatar ? 'default' : 'pointer', padding: 0 }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                    <circle cx="12" cy="13" r="4" />
+                  </svg>
+                </button>
+              )}
+            </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap' }}>
                 <span style={{ fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)' }}>{name}</span>
@@ -217,16 +226,13 @@ export function ProfilePage() {
                 style={{ display: 'none' }}
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadAvatar(f); if (avatarInputRef.current) avatarInputRef.current.value = ''; }}
               />
-              <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2.5], flexWrap: 'wrap' }}>
-                {profile?.avatar_url ? (
-                  <img src={profile.avatar_url} alt="" style={{ width: 40, height: 40, borderRadius: RADIUS.full, objectFit: 'cover', border: '1px solid var(--border)' }} />
-                ) : (
-                  <div style={{ width: 40, height: 40, borderRadius: RADIUS.full, background: 'var(--s2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, color: 'var(--acc)' }}>{initial}</div>
+              {/* Photo is edited via the camera badge on the avatar above — here we only
+                  surface upload status and a remove affordance, so there's no second avatar. */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap', fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>
+                <span>{uploadingAvatar ? 'Uploading photo…' : profile?.avatar_url ? 'Tap the camera to change your photo.' : 'Tap the camera to add a photo.'}</span>
+                {profile?.avatar_url && !uploadingAvatar && (
+                  <button type="button" onClick={removeAvatar} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--acc)', fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold }}>Remove photo</button>
                 )}
-                <Button variant="secondary" onClick={() => avatarInputRef.current?.click()} disabled={uploadingAvatar}>
-                  {uploadingAvatar ? 'Uploading…' : profile?.avatar_url ? 'Change photo' : 'Upload photo'}
-                </Button>
-                {profile?.avatar_url && <Button variant="ghost" onClick={removeAvatar} disabled={uploadingAvatar}>Remove</Button>}
               </div>
               {avatarErr && <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--status-negative-text)' }}>{avatarErr}</div>}
               <div style={{ display: 'flex', gap: SPACE[2], flexWrap: 'wrap' }}>
