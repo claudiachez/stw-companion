@@ -49,7 +49,7 @@ const STANDING_SEGMENTS: SegmentOption<SectorStanding | ''>[] = [
 // comment for the full story).
 const ctrlStyle: React.CSSProperties = {
   height: 30,
-  padding: '0 8px',
+  padding: '0 6px',
   fontSize: FONT_SIZE.sm,
   borderRadius: 5,
   background: 'var(--bg)',
@@ -92,7 +92,7 @@ export function FilterBar({ holdings, sectors, filtered }: Props) {
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search ticker…"
           className={ctrlBorderClass}
-          style={{ ...ctrlStyle, width: 120, cursor: 'text' }}
+          style={{ ...ctrlStyle, width: 112, padding: '0 8px', cursor: 'text' }}
         />
 
         <select value={tier} onChange={(e) => setTier(e.target.value)} className={ctrlBorderClass} style={ctrlStyle}>
@@ -146,7 +146,7 @@ export function FilterBar({ holdings, sectors, filtered }: Props) {
       </div>
 
       {/* Row 2 — segmented filter groups + Show closed */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '6px 12px', background: 'var(--bg)', borderBottom: '1px solid var(--bsub)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' as never }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 12px', background: 'var(--bg)', borderBottom: '1px solid var(--bsub)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' as never }}>
         <SegmentedControl
           label="Type"
           options={TYPE_SEGMENTS}

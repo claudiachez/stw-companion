@@ -77,7 +77,8 @@ export function HoldingRow({ holding: h, isSelected, maxWeight, onClick, isUserH
               exactly what CONTRIBUTING.md warns against). */}
           {isUserHeld && (
             <span style={{
-              fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.semibold, padding: '1px 5px', borderRadius: 4,
+              fontSize: FONT_SIZE['3xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: '0.05em', textTransform: 'uppercase',
+              padding: '1px 6px', borderRadius: 4,
               color: 'var(--acc)', background: 'var(--c5bg)', border: '1px solid var(--c5b)',
             }}>
               Held
@@ -91,7 +92,7 @@ export function HoldingRow({ holding: h, isSelected, maxWeight, onClick, isUserH
       </div>
 
       {/* Right side: weight bar + P&L + weight */}
-      <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, minWidth: 60 }}>
+      <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, minWidth: 66 }}>
         {/* Weight bar */}
         <div style={{ width: 48, height: 3, borderRadius: 2, background: 'var(--bsub)' }}>
           <div style={{ width: `${Math.max(0, wPct)}%`, height: '100%', borderRadius: 2, background: tier.color }} />
