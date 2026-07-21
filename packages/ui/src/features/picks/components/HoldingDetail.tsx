@@ -151,7 +151,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
         {price ? (
           <>
             <div style={statBig('var(--text)')}>${price.toFixed(2)}</div>
-            {isLive && dpStr  && <div style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.semibold, color: dpColor, marginTop: 2 }}>{dpStr}</div>}
+            {isLive && dpStr  && <div style={{ fontSize: FONT_SIZE['2xs'], fontWeight: 400, color: dpColor, marginTop: 2 }}>{dpStr}</div>}
             {isLive && hiloStr && <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 1 }}>{hiloStr}</div>}
             <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 4, opacity: 0.8 }}>
               {srcTime ? `Finnhub · ${srcTime}` : 'Finnhub'}
@@ -224,7 +224,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
     return (
       <>
         <DetailPaneMetricLabel>STW's weight</DetailPaneMetricLabel>
-        <div style={{ fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)', fontVariantNumeric: 'tabular-nums', lineHeight: 1.15 }}>
+        <div style={{ fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)', fontVariantNumeric: 'tabular-nums', lineHeight: 1.15 }}>
           {initWeight != null ? `${initWeight}%` : '—'}
           <span style={{ color: 'var(--t3)', fontWeight: FONT_WEIGHT.medium, margin: '0 4px' }}>→</span>
           {curWeight != null ? `${curWeight}%` : '—'}
@@ -253,7 +253,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
     return (
       <>
         <DetailPaneMetricLabel>Your side</DetailPaneMetricLabel>
-        <div style={{ fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold, color: holdsOwn ? 'var(--acc)' : 'var(--t3)', lineHeight: 1.15 }}>
+        <div style={{ fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, color: holdsOwn ? 'var(--acc)' : 'var(--t3)', lineHeight: 1.15 }}>
           {holdsOwn ? 'Tailing' : 'Not held'}
         </div>
         <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 4 }}>
@@ -434,7 +434,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
         badges={
           <>
             <Badge kind="category" category={h.basket} />
-            <span style={{ fontSize: FONT_SIZE['2xs'], padding: '2px 6px', borderRadius: RADIUS.DEFAULT, color: 'var(--t2)', background: 'var(--s2)', border: '1px solid var(--bsub)' }}>
+            <span style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: '0.06em', padding: '2px 8px', borderRadius: RADIUS.DEFAULT, color: 'var(--t2)', background: 'var(--s2)', border: '1px solid var(--border)' }}>
               Rank #{String(h.rank).padStart(2, '0')} / {totalCount}
             </span>
             <Badge kind="tier" tier={h.conviction} />
@@ -502,7 +502,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
           <DetailPaneSection title="STW's conviction" action={ddDate ? <span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>updated {ddDate}</span> : undefined}>
             <div style={{ display: 'flex', gap: 3 }}>{convSegs}</div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 3 }}>
-              <span>Concern</span><span>Highest {h.conviction}/5</span>
+              <span>Concern</span><span style={{ color: 'var(--status-positive-text)', fontWeight: FONT_WEIGHT.bold }}>Highest {h.conviction}/5</span>
             </div>
           </DetailPaneSection>
         )}
@@ -510,8 +510,8 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
         {/* Why STW holds it — the durable "why he's in it" (green positive card). The ↗ opens
             the original DD message (everyone sees it; Discord gates access). */}
         {h.summary && (
-          <div style={{ position: 'relative', padding: '12px 14px', paddingRight: h.dd_source_url ? 30 : 14, borderRadius: RADIUS.lg, background: 'var(--c5bg)', border: '1px solid var(--c5b)', marginBottom: SPACE[2.5] }}>
-            <div style={{ fontSize: FONT_SIZE['3xs'], fontWeight: FONT_WEIGHT.bold, color: 'var(--acc)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: SPACE[1] }}>Why STW holds it</div>
+          <div style={{ position: 'relative', padding: '12px 14px', paddingRight: h.dd_source_url ? 30 : 14, borderRadius: 10, background: 'var(--c5bg)', border: '1px solid var(--c5b)', marginBottom: SPACE[2.5] }}>
+            <div style={{ fontSize: FONT_SIZE['3xs'], fontWeight: FONT_WEIGHT.bold, color: 'var(--acc)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: SPACE[1.5] }}>Why STW holds it</div>
             <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.6 }}>{h.summary}</div>
             <SourceLink url={h.dd_source_url} title="Open DD source message" style={{ position: 'absolute', top: 6, right: 6 }} />
           </div>

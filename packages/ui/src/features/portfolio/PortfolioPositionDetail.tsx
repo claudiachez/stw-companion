@@ -223,7 +223,7 @@ export function PortfolioPositionDetail({
         <span style={{
           fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: LETTER_SPACING.label,
           textTransform: 'uppercase', color: 'var(--t2)', background: 'var(--s2)',
-          border: '1px solid var(--border)', borderRadius: RADIUS.DEFAULT, padding: '2px 6px', whiteSpace: 'nowrap',
+          border: '1px solid var(--border)', borderRadius: RADIUS.DEFAULT, padding: '2px 8px', whiteSpace: 'nowrap',
         }}>{sector}</span>
       )}
       <RegimeBadge regime={tickerRegime} />
@@ -323,7 +323,7 @@ export function PortfolioPositionDetail({
               {group.basket && <Badge kind="category" category={group.basket} />}
               {group.conviction !== null && (
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: SPACE[1] }}>
-                  <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>Conviction {group.conviction}/5</span>
+                  <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)' }}>Conviction {group.conviction}/5</span>
                   <Badge kind="tier" tier={group.conviction} />
                 </span>
               )}
@@ -340,7 +340,7 @@ export function PortfolioPositionDetail({
                 ↗
               </button>
             </div>
-            <div style={{ fontSize: FONT_SIZE.sms, color: 'var(--t2)', lineHeight: 1.5, fontVariantNumeric: 'tabular-nums' }}>
+            <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.5, fontVariantNumeric: 'tabular-nums' }}>
               You hold {ownPortfolioPct !== null ? `${ownPortfolioPct.toFixed(1)}%` : '—'} of your account — STW holds {stwWeight !== null ? `${stwWeight.toFixed(1)}%` : '—'} of theirs.
               {tone.state !== 'inline' && (
                 <span style={{ color: tone.textVar, fontWeight: FONT_WEIGHT.semibold }}>
@@ -362,7 +362,7 @@ export function PortfolioPositionDetail({
           {/* Size vs cap */}
           <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap' }}>
             <span style={{ width: 8, height: 8, borderRadius: RADIUS.full, background: posSeverity ? SEVERITY_COLOR[posSeverity] : 'var(--t3)', flexShrink: 0 }} />
-            <span style={{ fontSize: FONT_SIZE.sms, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums', flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums', flex: 1, minWidth: 0 }}>
               Size: {posPct.toFixed(1)}% of your {config.max_position_pct}% one-stock cap
               {config.max_position_pct - posPct >= 0
                 ? ` — ${(config.max_position_pct - posPct).toFixed(1)} points of room left`
@@ -386,7 +386,7 @@ export function PortfolioPositionDetail({
           {/* Market lights — trend + volatility from the frozen regime gate. */}
           <div style={{ marginTop: SPACE[2.5], paddingTop: SPACE[2.5], borderTop: '1px solid var(--bsub)' }}>
             {regimeLoading ? null : gate ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap', fontSize: FONT_SIZE.sms, color: 'var(--t2)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap', fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>
                 <span style={{ width: 8, height: 8, borderRadius: RADIUS.full, background: 'var(--t3)', flexShrink: 0 }} />
                 <span>
                   Market lights: Trend <b style={{ color: STATE_COLOR[gate.trend_state], fontWeight: FONT_WEIGHT.semibold }}>{gate.trend_state}</b> · Volatility <b style={{ color: STATE_COLOR[gate.vol_state], fontWeight: FONT_WEIGHT.semibold }}>{gate.vol_state}</b>
@@ -403,7 +403,7 @@ export function PortfolioPositionDetail({
             )}
           </div>
 
-          <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[2.5], fontStyle: 'italic' }}>
+          <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 7, fontStyle: 'italic' }}>
             Advisory — flags only, nothing is traded for you.
           </div>
         </DetailPaneSection>
@@ -413,9 +413,9 @@ export function PortfolioPositionDetail({
           cost basis (avg entry → current mark) alongside the unrealized return. */}
       <DetailPaneSection title="Open P&L by holding">
         {showPnl ? group.positions.map((p) => (
-          <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', gap: SPACE[2], fontSize: FONT_SIZE.sms, padding: '4px 0', color: 'var(--t2)' }}>
+          <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', gap: SPACE[2.5], fontSize: FONT_SIZE.sms, padding: '4px 0', color: 'var(--t2)' }}>
             <span style={{ display: 'flex', flexDirection: 'column' }}>
-              <span>{instrumentLabel(p)}</span>
+              <span style={{ color: 'var(--text)', fontWeight: FONT_WEIGHT.semibold }}>{instrumentLabel(p)}</span>
               <span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>
                 {p.quantity !== null ? `${Math.abs(p.quantity)} @ ` : ''}avg {p.avg_cost !== null ? `$${p.avg_cost.toFixed(2)}` : '—'}
                 {p.mark_price !== null ? ` · mark $${p.mark_price.toFixed(2)}` : ''}
