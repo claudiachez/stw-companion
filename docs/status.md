@@ -4,6 +4,13 @@
 > (by `/wrap-up`). Durable rules live in CLAUDE.md; dated history in docs/session-history.md.
 
 ## State
+- **RIGOROUS element-level re-QA IN PROGRESS** on `claude/webapp-redesign` (the first QA pass was
+  structure-only; the host proved it insufficient on the detail panes). Full handover — operating
+  principles, host rulings, per-view status, global G1/G2/G3, open questions —
+  → **[plans/20260720_webapp_redesign/REQA.md](../plans/20260720_webapp_redesign/REQA.md)** (READ FIRST for redesign work).
+  Done so far (7 commits): both detail panes; G1 (canonical "points heavier/lighter"); G2 ("+" on
+  gains, shared `formatMoney`). Remaining: the other 11 views need the same live-DOM-vs-byte-exact-ref
+  diff + match-mock copy. Branch typecheck-green; nothing pushed.
 - **The full webapp redesign is DONE but LIVES ONLY ON THE LOCAL BRANCH `claude/webapp-redesign`
   — NOT pushed, NO PR, NOT on `staging`/`main`.** 21 commits (see session-history). Host is holding
   the push for a **QA session next** (log in + eyeball every screen, light + dark), then `/stw-review`
