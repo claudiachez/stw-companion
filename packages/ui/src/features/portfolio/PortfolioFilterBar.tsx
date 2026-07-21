@@ -97,7 +97,7 @@ const STANDING_SEGMENTS: SegmentOption<SectorStanding | ''>[] = [
 // would make `ctrlBorderClass`'s `focus:border-acc` silently never take effect (found +
 // fixed in TextInput.tsx the same session — see its header comment for the full story).
 const ctrlStyle: React.CSSProperties = {
-  height: 34, padding: '0 8px', fontSize: FONT_SIZE.sm, borderRadius: 5,
+  height: 30, padding: '0 6px', fontSize: FONT_SIZE.sm, borderRadius: 5,
   background: 'var(--bg)', color: 'var(--text)',
   cursor: 'pointer', flexShrink: 0,
 };
@@ -105,12 +105,9 @@ const ctrlStyle: React.CSSProperties = {
 // For real keyboard-focus targets (text input, selects) — pairs the removed native
 // outline with a visible border-color change on focus instead of just deleting it.
 const ctrlBorderClass = 'border border-[var(--border)] focus:outline-none focus:border-acc';
-// For the toggle `<label>` chips — same visible border, but the label itself never
-// receives focus (the checkbox inside it does, and keeps its own native focus ring).
-const ctrlBorderClassStatic = 'border border-[var(--border)]';
-
+// Toggle `<label>`s are plain checkbox + text (no border/pill), per the design ref.
 const toggleStyle = (on: boolean): React.CSSProperties => ({
-  ...ctrlStyle, display: 'flex', alignItems: 'center', gap: 6, color: on ? 'var(--text)' : 'var(--t2)',
+  display: 'flex', alignItems: 'center', gap: 5, fontSize: FONT_SIZE.xs, color: on ? 'var(--text)' : 'var(--t2)', cursor: 'pointer',
 });
 
 interface Props {
@@ -136,7 +133,7 @@ export function PortfolioFilterBar({ filters, onChange, baskets, sectors, filter
           onChange={(e) => onChange({ ...filters, search: e.target.value })}
           placeholder="Search ticker…"
           className={ctrlBorderClass}
-          style={{ ...ctrlStyle, width: 120, cursor: 'text' }}
+          style={{ ...ctrlStyle, width: 112, padding: '0 8px', cursor: 'text' }}
         />
 
         {baskets.length > 0 && (
@@ -179,7 +176,7 @@ export function PortfolioFilterBar({ filters, onChange, baskets, sectors, filter
       </div>
 
       {/* Row 2 — segmented filter groups + toggles */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '6px 12px', background: 'var(--bg)', borderBottom: '1px solid var(--bsub)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' as never }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 12px', background: 'var(--bg)', borderBottom: '1px solid var(--bsub)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' as never }}>
         <SegmentedControl
           label="Type"
           options={TYPE_SEGMENTS}
@@ -208,12 +205,12 @@ export function PortfolioFilterBar({ filters, onChange, baskets, sectors, filter
           onChange={(v) => onChange({ ...filters, standing: v })}
         />
 
-        <label className={ctrlBorderClassStatic} style={toggleStyle(tailedOnly)} title="Show only positions that match a followed trader's pick">
+        <label style={toggleStyle(tailedOnly)} title="Show only positions that match a followed trader's pick">
           <input type="checkbox" checked={tailedOnly} onChange={(e) => onChange({ ...filters, tailedOnly: e.target.checked })} style={{ accentColor: 'var(--acc)', cursor: 'pointer' }} />
           Tailed only
         </label>
 
-        <label className={ctrlBorderClassStatic} style={toggleStyle(groupByTicker)} title="Group legs by underlying ticker (off = flat per-leg table)">
+        <label style={toggleStyle(groupByTicker)} title="Group legs by underlying ticker (off = flat per-leg table)">
           <input type="checkbox" checked={groupByTicker} onChange={(e) => onChange({ ...filters, groupByTicker: e.target.checked })} style={{ accentColor: 'var(--acc)', cursor: 'pointer' }} />
           Group by ticker
         </label>
