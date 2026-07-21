@@ -15,7 +15,6 @@ import { useEarningsCalendar } from '../earnings/useEarningsCalendar';
 import { EarningsBadge } from '../earnings/EarningsBadge';
 import type { TickerRegime } from '../picks/useTickerRegime';
 import { useUserExecutions } from './useUserPositions';
-import { PerStockLadderDetail } from './PerStockLadder';
 import type { PerStockLadderInfo } from './usePerStockLadders';
 import type { UserPosition, UserExecution } from './api';
 
@@ -35,6 +34,23 @@ const SEVERITY_COLOR: Record<ViolationSeverity, string> = {
 // The stat block's "big" value. Design calls for 19px; there is no 19 token, so this uses
 // FONT_SIZE.xl (20) — the token documented for "at-a-glance stat numbers", 1px over spec.
 const statBig = (color: string): React.CSSProperties => ({ fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, color, lineHeight: 1.15 });
+
+// Compact "Against your risk plan" rows (ref: Size / Stop ladder / Market lights as a tight
+// dot-row list, no dividers/sub-headers).
+const riskRow: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap' };
+const riskText: React.CSSProperties = { fontSize: FONT_SIZE.sm, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums', flex: 1, minWidth: 0 };
+const riskDot = (c: string): React.CSSProperties => ({ width: 8, height: 8, borderRadius: RADIUS.full, background: c, flexShrink: 0 });
+const fmtDd2 = (pct: number) => `${pct >= 0 ? '+' : '−'}${Math.abs(pct).toFixed(1)}%`;
+function stopLadderSummary(info: PerStockLadderInfo): string {
+  const s = info.status;
+  if (s.activeRung && s.alreadyComplies !== true) {
+    return `${fmtDd2(s.drawdownPct)} vs entry — past the ${s.activeRung.drawdownPct}% rung, keep ≤${s.targetHoldPct}% of peak`;
+  }
+  if (s.nextRung) {
+    return `${fmtDd2(s.drawdownPct)} vs entry — first stop ${s.distanceToNextPp != null ? `${s.distanceToNextPp.toFixed(1)}pp away ` : ''}(${s.nextRung.drawdownPct}% → keep ≤${s.nextRung.holdFractionPct}%)`;
+  }
+  return `${fmtDd2(s.drawdownPct)} vs entry`;
+}
 
 function fmtMoney(n: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
@@ -354,57 +370,68 @@ export function PortfolioPositionDetail({
         )}
       </DetailPaneSection>
 
-      {/* Against your risk plan — size vs cap + this name's stop ladder + the market lights,
-          each a distinct sub-block (the three de-risking surfaces stay visually separate),
-          advisory-only. */}
+      {/* Against your risk plan — Size / Stop ladder / Market lights as a compact 3-row dot
+          list (ref anatomy), rung chips below, advisory + entry/now footnote. */}
       {config && (
         <DetailPaneSection title="Against your risk plan">
-          {/* Size vs cap */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap' }}>
-            <span style={{ width: 8, height: 8, borderRadius: RADIUS.full, background: posSeverity ? SEVERITY_COLOR[posSeverity] : 'var(--t3)', flexShrink: 0 }} />
-            <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums', flex: 1, minWidth: 0 }}>
-              Size: {posPct.toFixed(1)}% of your {config.max_position_pct}% one-stock cap
-              {config.max_position_pct - posPct >= 0
-                ? ` — ${(config.max_position_pct - posPct).toFixed(1)} points of room left`
-                : ` — ${(posPct - config.max_position_pct).toFixed(1)} points over`}
-            </span>
-            {posSeverity && <StatusPill variant={posSeverity}>{SEVERITY_LABEL[posSeverity]}</StatusPill>}
-          </div>
-
-          {/* Per-stock stop ladder — its own labelled sub-block (kept distinct from the
-              account-wide Portfolio drawdown + the market-regime read). */}
-          {group.hasStock && (
-            <div style={{ marginTop: SPACE[2.5], paddingTop: SPACE[2.5], borderTop: '1px solid var(--bsub)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], marginBottom: SPACE[1.5] }}>
-                <span style={{ width: 8, height: 8, borderRadius: RADIUS.full, background: 'var(--t3)', flexShrink: 0 }} />
-                <span style={{ fontSize: FONT_SIZE.sms, color: 'var(--t2)' }}>Stop ladder</span>
-              </div>
-              <PerStockLadderDetail info={perStockLadder} ladder={perStockLadderConfig} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            <div style={riskRow}>
+              <span style={riskDot(posSeverity ? SEVERITY_COLOR[posSeverity] : 'var(--t3)')} />
+              <span style={riskText}>
+                Size: {posPct.toFixed(1)}% of your {config.max_position_pct}% one-stock cap
+                {config.max_position_pct - posPct >= 0
+                  ? ` — ${(config.max_position_pct - posPct).toFixed(1)} points of room left`
+                  : ` — ${(posPct - config.max_position_pct).toFixed(1)} points over`}
+              </span>
+              {posSeverity && <StatusPill variant={posSeverity}>{SEVERITY_LABEL[posSeverity]}</StatusPill>}
             </div>
-          )}
 
-          {/* Market lights — trend + volatility from the frozen regime gate. */}
-          <div style={{ marginTop: SPACE[2.5], paddingTop: SPACE[2.5], borderTop: '1px solid var(--bsub)' }}>
-            {regimeLoading ? null : gate ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap', fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>
-                <span style={{ width: 8, height: 8, borderRadius: RADIUS.full, background: 'var(--t3)', flexShrink: 0 }} />
-                <span>
+            {group.hasStock && perStockLadder && (
+              <div style={riskRow}>
+                <span style={riskDot(SEVERITY_COLOR[perStockLadder.status.severity] ?? 'var(--t3)')} />
+                <span style={riskText}>Stop ladder: {stopLadderSummary(perStockLadder)}</span>
+                <StatusPill variant={perStockLadder.status.severity === 'ok' ? 'ok' : perStockLadder.status.severity}>{SEVERITY_LABEL[perStockLadder.status.severity]}</StatusPill>
+              </div>
+            )}
+
+            {!regimeLoading && (gate ? (
+              <div style={riskRow}>
+                <span style={riskDot('var(--t3)')} />
+                <span style={riskText}>
                   Market lights: Trend <b style={{ color: STATE_COLOR[gate.trend_state], fontWeight: FONT_WEIGHT.semibold }}>{gate.trend_state}</b> · Volatility <b style={{ color: STATE_COLOR[gate.vol_state], fontWeight: FONT_WEIGHT.semibold }}>{gate.vol_state}</b>
                   {regime && <span style={{ color: 'var(--t3)' }}> · as of {formatDate(regime.trading_date)}</span>}
                 </span>
               </div>
             ) : (
               <div style={{ fontSize: FONT_SIZE.sms, color: 'var(--t3)' }}>No market regime data yet.</div>
-            )}
-            {regimeAdvice && (
-              <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', marginTop: SPACE[1.5], borderLeft: '2px solid var(--status-warning-text)', paddingLeft: SPACE[2] }}>
-                Your rule: {regimeAdvice}
-              </div>
-            )}
+            ))}
           </div>
 
+          {group.hasStock && perStockLadderConfig.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACE[1.5], marginTop: SPACE[2] }}>
+              {perStockLadderConfig.map((r) => {
+                const active = perStockLadder?.status.activeRung?.drawdownPct === r.drawdownPct;
+                const c = perStockLadder ? (SEVERITY_COLOR[perStockLadder.status.severity] ?? 'var(--t3)') : 'var(--t3)';
+                return (
+                  <span key={r.drawdownPct} style={{
+                    fontSize: FONT_SIZE['2xs'], fontVariantNumeric: 'tabular-nums', padding: '2px 7px', borderRadius: 5,
+                    border: `1px solid ${active ? c : 'var(--border)'}`, color: active ? c : 'var(--t3)',
+                    background: active ? 'var(--s2)' : 'transparent', fontWeight: active ? FONT_WEIGHT.semibold : undefined,
+                  }}>
+                    {r.drawdownPct}% → {r.holdFractionPct === 0 ? 'exit' : `keep ≤${r.holdFractionPct}%`}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+          {regimeAdvice && (
+            <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', marginTop: SPACE[2], borderLeft: '2px solid var(--status-warning-text)', paddingLeft: SPACE[2] }}>
+              Your rule: {regimeAdvice}
+            </div>
+          )}
           <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 7, fontStyle: 'italic' }}>
             Advisory — flags only, nothing is traded for you.
+            {perStockLadder ? ` Entry avg $${perStockLadder.avgCost.toFixed(2)} · now $${perStockLadder.currentPrice.toFixed(2)}.` : ''}
           </div>
         </DetailPaneSection>
       )}
