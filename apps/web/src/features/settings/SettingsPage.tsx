@@ -206,7 +206,7 @@ export function SettingsPage() {
 
   return (
     <div style={{ height: '100%', overflowY: 'auto' }}>
-    <div style={{ maxWidth: 780, margin: '0 auto', padding: `${SPACE[4]}px ${SPACE[4]}px ${SPACE[8]}px`, display: 'flex', flexDirection: 'column', gap: SPACE[3] }}>
+    <div style={{ maxWidth: 860, margin: '0 auto', padding: `${SPACE[4]}px ${SPACE[4]}px ${SPACE[8]}px`, display: 'flex', flexDirection: 'column', gap: SPACE[3] }}>
 
       {/* Compact connection status strip — the "done" state once connected. Setup/edit
           only reappears behind the toggle below, never as permanent prime real estate. */}
@@ -302,7 +302,7 @@ export function SettingsPage() {
                 autoCapitalize="none"
                 style={{ flex: 1, minWidth: 160, fontFamily: 'monospace' }}
               />
-              <Button variant="secondary" onClick={() => setShowToken((v) => !v)} style={{ padding: `${SPACE[1.5]}px ${SPACE[2.5]}px`, fontSize: FONT_SIZE.xs }}>
+              <Button variant="ghost" onClick={() => setShowToken((v) => !v)} style={{ padding: `${SPACE[1.5]}px ${SPACE[2.5]}px`, fontSize: FONT_SIZE.xs }}>
                 {showToken ? 'Hide' : 'Reveal'}
               </Button>
             </div>
@@ -344,7 +344,7 @@ export function SettingsPage() {
 
           {/* Actions — verify (via sync), persist, and disconnect. */}
           <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap', marginTop: SPACE[3] }}>
-            <Button variant="secondary" onClick={sync} disabled={isSyncing}>
+            <Button variant="secondary" onClick={sync} disabled={isSyncing} style={{ padding: `${SPACE[1.5]}px ${SPACE[3.5]}px`, fontSize: FONT_SIZE.sm }}>
               {isSyncing ? 'Testing…' : 'Test connection'}
             </Button>
             <Button variant="primary" onClick={handleSave} disabled={saving} style={{ minWidth: 120 }}>
@@ -382,7 +382,7 @@ export function SettingsPage() {
               variant="secondary"
               onClick={() => importInputRef.current?.click()}
               disabled={importing}
-              style={{ alignSelf: 'flex-start' }}
+              style={{ alignSelf: 'flex-start', padding: `${SPACE[1.5]}px ${SPACE[3.5]}px`, fontSize: FONT_SIZE.sm }}
             >
               {importing ? 'Importing…' : 'Import past year of trades'}
             </Button>

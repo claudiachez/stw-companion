@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, RADIUS, SHADOW, SPACE,
+  FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, RADIUS, SPACE,
   type DrawdownStep, type PerStockDrawdownStep,
 } from '@stw/shared';
 import { Button } from '../../primitives/Button';
@@ -100,7 +100,7 @@ function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
         border: `1px solid ${on ? 'var(--acc)' : 'var(--border)'}`, background: on ? 'var(--acc)' : 'var(--border)',
       }}
     >
-      <span style={{ position: 'absolute', top: 2, left: on ? 20 : 2, width: 16, height: 16, borderRadius: RADIUS.full, background: 'var(--text-inverse)', boxShadow: SHADOW.card, transition: 'left 150ms ease' }} />
+      <span style={{ position: 'absolute', top: 2, left: on ? 20 : 2, width: 16, height: 16, borderRadius: RADIUS.full, background: 'var(--text-inverse)', boxShadow: '0 1px 2px rgba(0,0,0,0.3)', transition: 'left 150ms ease' }} />
     </button>
   );
 }
@@ -499,7 +499,7 @@ export function RiskConfigForm({ userId, config }: { userId: string; config: Ris
               const on = scope === sc;
               return (
                 <button key={sc} type="button" onClick={() => setScope(sc)}
-                  style={{ padding: `${SPACE[1]}px ${SPACE[3]}px`, borderRadius: RADIUS.full, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, cursor: 'pointer', border: `1px solid ${on ? 'var(--acc)' : 'var(--border)'}`, background: on ? 'var(--s2)' : 'var(--surface)', color: on ? 'var(--text)' : 'var(--t2)' }}>
+                  style={{ minHeight: 32, padding: '5px 12px', borderRadius: RADIUS.full, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, cursor: 'pointer', border: `1px solid ${on ? 'var(--acc)' : 'var(--border)'}`, background: on ? 'var(--s2)' : 'var(--surface)', color: on ? 'var(--text)' : 'var(--t2)' }}>
                   {sc === 'stocks' ? 'Stocks' : 'Options'}
                 </button>
               );
@@ -588,9 +588,9 @@ export function RiskConfigForm({ userId, config }: { userId: string; config: Ris
       {warnings.length > 0 && (
         <div style={{ marginTop: SPACE[3.5] }}>
           <AlertStrip severity="warning">
-            <ul style={{ margin: 0, paddingLeft: SPACE[4], display: 'flex', flexDirection: 'column', gap: SPACE[0.5] }}>
-              {warnings.map((w, i) => <li key={i}>{w}</li>)}
-            </ul>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE[1] }}>
+              {warnings.map((w, i) => <span key={i}>{w}</span>)}
+            </div>
           </AlertStrip>
         </div>
       )}
