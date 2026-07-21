@@ -146,6 +146,23 @@ locked event-sourcing rule is byte-identical** (weightLocked for Closed/Exercise
   be new order-write orchestration, which the frozen-flow constraint forbids). Modal-title ticker kept as
   plain text (a form title, not a navigation affordance), matching the current mount.
 
+## Macro page (committed)
+Rebuilt to the 7-section design (verdict / sleeves / AI recap / merged "Coming up" 7-day feed /
+trend structure / internals-GEX-fear&greed 3-card row / sector rotation), one-open ⓘ explainers,
+reusing all macro hooks + scorers; regime gate frozen + never blended. Macro index/ETF symbols =
+plain text (TickerLink exception). Removed ModuleScoreStrip/MacroEventRiskCard/EarningsAheadCard
+(merged into "Coming up" + AI recap); per-event setup prose now lives in the recap.
+
+## GEX Signals page (committed)
+Rebuilt: stale banner, session verdict (bias pill + counts), price-map zoned level ladders,
+Today's-setups rows, day log, glossary — reusing useGraddox + gex scorers; GexChart untouched
+(canvas literal-color exception). SPY/QQQ plain text (index exception).
+- **Deviation:** the design's per-setup 120×40 **sparkline + "X pts to trigger" caption was omitted** —
+  the real GEX read carries no recent-price series and triggers are free-form host text with no
+  reliable numeric level to parse; plotting would require fabricating data / could show a wrong number.
+  The per-level "±X pts" in the price maps IS real (from the live price). Build the sparkline only if we
+  start capturing an intraday series + machine-readable trigger levels.
+
 **Deviations from the mock:**
 - **Omitted the mock's "STW playbook / Reset to preset" banner** — there's no client-side PRESET in
   our data model; defaults live server-side (`DEFAULT_RISK_CONFIG`). Add a reset-to-defaults if wanted.
