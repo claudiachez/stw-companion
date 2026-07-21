@@ -1,411 +1,658 @@
-import { useState, type ReactNode } from 'react';
+import { useState, type ReactNode, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  evaluateRiskConfig, cashflowAdjustedDrawdownPct, bindingGrossTarget,
-  drawdownLadderStatus, DRAWDOWN_NEAR_BAND_PP, fmtDateTime,
+  evaluateRiskConfig, cashflowAdjustedDrawdownPct, bindingGrossTarget, drawdownLadderStatus,
+  regimeGate, regimeExitAdvice, TREND_BUCKET_META, DRAWDOWN_NEAR_BAND_PP, fmtDateTime, formatDate,
+  FONT_SIZE, FONT_WEIGHT, SPACE, RADIUS, LETTER_SPACING,
   type PositionInput, type ConcentrationViolation, type ViolationSeverity, type BindingGrossTarget,
-  type DrawdownLadderStatus,
+  type DrawdownLadderStatus, type RegimeState,
 } from '@stw/shared';
 import { useAuthStore } from '../../store/auth';
+import { usePrivacyStore } from '../../store/privacy';
 import { LoadingSpinner } from '../../primitives/LoadingSpinner';
 import { HelpToggle } from '../../primitives/HelpToggle';
-import { StatusPill, type StatusPillVariant } from '../../primitives/StatusPill';
-import { useUserPositions } from '../portfolio/useUserPositions';
+import { StatusPill } from '../../primitives/StatusPill';
+import { TickerLink } from '../../primitives/TickerLink';
+import { useUserPositions, useUserExecutions } from '../portfolio/useUserPositions';
 import { useSyncPortfolio } from '../portfolio/useSyncPortfolio';
+import { usePerStockLadders, type PerStockLadderInfo } from '../portfolio/usePerStockLadders';
+import { useRegimeInstrumentStore, REGIME_INSTRUMENTS } from '../regime/useRegimeInstrument';
+import { useLatestRegime } from '../regime/useLatestRegime';
+import type { TickerRegime } from '../picks/useTickerRegime';
 import { useRiskConfig, useSectorMap, useViolationAcks, useAcknowledgeViolation, useEnsureRiskConfig } from './useRiskConfig';
 import type { ViolationType, AckStatus } from './api';
 
-// Book-level violations display — split out of the original LimitsPanel (host
-// decision, 2026-07-06) so it can live on My Portfolio instead of Settings.
-// Settings keeps only RiskConfigForm (account setup); this reads the same
-// user_positions/risk_config data and renders read-only + acknowledge UI.
-// Collapsed by default (one-line status strip) so a clean book doesn't crowd
-// the page. `showSyncButton` is admin-only (apps/admin's LimitsPanel composite)
-// — on My Portfolio, the page's own Sync button already invalidates the same
-// `useUserPositions` query key, so no second sync control is needed there.
+// ── Risk tab, redesigned (plans/20260720_webapp_redesign) ─────────────────────
+// A pure RE-LAYOUT of the live risk engine: every number comes from the existing
+// hooks/shared scorers (evaluateRiskConfig, cashflowAdjustedDrawdownPct,
+// drawdownLadderStatus, useBindingGrossTarget, usePerStockLadders, the frozen
+// regimeGate) — nothing is re-derived here. The new layer is (a) the aggregated
+// "verdict banner" over what the engine already computes, and (b) honoring the
+// per-guardrail on/off flags (caps/ladder/per_stock/regime) so a disabled
+// guardrail neither flags nor shows a breach — it shows a muted "off" state.
+// Advisory/display-only; the regime gate is frozen (engine 1.1.0) — read only.
 
-// Four severity tiers (see @stw/shared limits.ts): a NEAR (≥80% of limit) amber
-// tier is the actionable early warning — a breach is already too late; and an
-// UNEVALUATED gray tier is missing data (unmapped sector), never a breach, so it
-// can't become a permanent red flag the operator learns to ignore.
-const SEVERITY_PILL: Record<ViolationSeverity, { variant: StatusPillVariant; label: string }> = {
-  ok: { variant: 'ok', label: 'OK' },
-  near: { variant: 'near', label: 'Near' },
-  breach: { variant: 'breach', label: 'Breach' },
-  unevaluated: { variant: 'unevaluated', label: 'Unevaluated' },
-};
+type Sev3 = 'ok' | 'near' | 'breach';
 
-const SEVERITY_TEXT_COLOR: Record<ViolationSeverity, string> = {
-  ok: 'var(--acc)',
+const SEV_TEXT: Record<ViolationSeverity, string> = {
+  ok: 'var(--status-positive-text)',
   near: 'var(--status-warning-text)',
   breach: 'var(--status-negative-text)',
   unevaluated: 'var(--t3)',
 };
+const SEV_BG: Record<ViolationSeverity, string> = {
+  ok: 'var(--status-positive-bg)',
+  near: 'var(--status-warning-bg)',
+  breach: 'var(--status-negative-bg)',
+  unevaluated: 'var(--status-neutral-bg)',
+};
+const SEV_BORDER: Record<ViolationSeverity, string> = {
+  ok: 'var(--status-positive-border)',
+  near: 'var(--status-warning-border)',
+  breach: 'var(--status-negative-border)',
+  unevaluated: 'var(--status-neutral-border)',
+};
+const SEV_PILL_LABEL: Record<Sev3, string> = { ok: 'On track', near: 'Heads-up', breach: 'Action' };
 
-function ViolationRow({
-  v, ack, onAcknowledge, note: noteBadge, ackable = true,
-}: {
-  v: ConcentrationViolation;
-  ack: { status: AckStatus; glide_path_note: string | null } | undefined;
-  onAcknowledge: (status: AckStatus, note?: string) => void;
-  note?: string;
-  /** When false, breaches show the pill but not the acknowledge/glide-path workflow. */
-  ackable?: boolean;
-}) {
-  const status = ack?.status ?? 'new';
-  const committedGlide = status === 'glide_path' ? (ack?.glide_path_note ?? '') : '';
-  const [editingGlide, setEditingGlide] = useState(false);
-  const [note, setNote] = useState(ack?.glide_path_note ?? '');
-  const pill = SEVERITY_PILL[v.severity];
-  const unevaluated = v.severity === 'unevaluated';
+const STATE_COLOR: Record<RegimeState, string> = {
+  GREEN: 'var(--acc)', RED: 'var(--status-negative-text)', UNKNOWN: 'var(--t3)',
+};
+
+const card: CSSProperties = {
+  background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: RADIUS.xl, padding: SPACE[4],
+};
+const sectionLabel: CSSProperties = {
+  fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: '0.1em',
+  textTransform: 'uppercase', color: 'var(--t3)', marginTop: SPACE[1],
+};
+const cardTitle: CSSProperties = { fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' };
+const cardDesc: CSSProperties = { fontSize: FONT_SIZE.xs, color: 'var(--t3)', lineHeight: 1.5 };
+const bigNum: CSSProperties = { fontSize: FONT_SIZE.display, fontWeight: FONT_WEIGHT.bold, fontVariantNumeric: 'tabular-nums' };
+const num: CSSProperties = { fontVariantNumeric: 'tabular-nums' };
+
+function fmtDrawdown(pct: number): string {
+  return `${pct >= 0 ? '+' : '−'}${Math.abs(pct).toFixed(2)}%`;
+}
+
+/** A muted "this guardrail is off" card body (honors the *_enabled flags). */
+function OffState({ title, help, settingsRef }: { title: string; help: string; settingsRef: ReactNode }) {
+  return (
+    <div style={card}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap', marginBottom: SPACE[1] }}>
+        <span style={cardTitle}>{title}</span>
+        <StatusPill variant="neutral">Off</StatusPill>
+      </div>
+      <div style={{ ...cardDesc, color: 'var(--t2)' }}>
+        {help} Turn it back on in {settingsRef}.
+      </div>
+    </div>
+  );
+}
+
+// ── verdict banner ────────────────────────────────────────────────────────────
+
+interface BannerItem { severity: 'near' | 'breach'; main: string; sub: string; }
+
+function VerdictBanner({ items }: { items: BannerItem[] }) {
+  const breaches = items.filter((i) => i.severity === 'breach').length;
+  const worst: Sev3 = breaches > 0 ? 'breach' : items.length > 0 ? 'near' : 'ok';
+  const pill = worst === 'breach'
+    ? `${breaches} action${breaches === 1 ? '' : 's'}`
+    : worst === 'near' ? 'Heads-up' : 'All clear';
+  const headline = worst === 'breach'
+    ? 'Action suggested on your book'
+    : worst === 'near' ? 'A few things to keep an eye on' : "You're within all your guardrails";
 
   return (
-    <div className="flex flex-col gap-2 py-3 border-b border-bsub last:border-0">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-text text-sm font-medium">
-          {v.scope}
-          {noteBadge && <span className="text-t3 text-xs font-normal ml-1.5">{noteBadge}</span>}
+    <div style={{ background: SEV_BG[worst], border: `1px solid ${SEV_BORDER[worst]}`, borderRadius: RADIUS.xl, padding: `${SPACE[3.5]}px ${SPACE[4]}px` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2.5], flexWrap: 'wrap' }}>
+        <span style={{
+          display: 'inline-flex', alignItems: 'center', padding: `${SPACE[0.5]}px ${SPACE[2]}px`, borderRadius: RADIUS.full,
+          border: `1px solid ${SEV_BORDER[worst]}`, background: 'var(--surface)', color: SEV_TEXT[worst],
+          fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: LETTER_SPACING.label,
+          textTransform: 'uppercase', whiteSpace: 'nowrap',
+        }}>{pill}</span>
+        <span style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)' }}>{headline}</span>
+        <span style={{ marginLeft: 'auto', fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>
+          Advisory only — we flag, you decide. Nothing is traded for you.
         </span>
-        <div className="flex items-center gap-2">
-          {!unevaluated && (
-            <span className="text-xs tabular-nums" style={{ color: SEVERITY_TEXT_COLOR[v.severity] }}>
-              {v.exposurePct.toFixed(1)}% / {v.limitPct}%
-            </span>
-          )}
-          <StatusPill variant={pill.variant}>{pill.label}</StatusPill>
-        </div>
       </div>
 
-      {/* Missing-data row: explain, don't offer a false acknowledge/glide action. */}
-      {unevaluated && (
-        <div className="text-t3 text-xs">
-          No sector mapping yet — this position can’t be evaluated. Map its sector to include it.
-        </div>
-      )}
-
-      {/* Breaches get the acknowledge + glide-path workflow. Acknowledgment (I've
-          seen it) is kept distinct from the glide path (my committed reduction
-          plan); once a glide path is set it renders as plain text, not an input. */}
-      {v.severity === 'breach' && ackable && (
-        <div className="flex flex-col gap-2">
-          {committedGlide && !editingGlide ? (
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="text-[10px] text-t3 uppercase tracking-wide">Glide path</span>
-              <span className="text-t2 flex-1 min-w-[180px]">{committedGlide}</span>
-              <button onClick={() => setEditingGlide(true)} className="text-t3 hover:text-t2">Edit</button>
-            </div>
-          ) : editingGlide || status !== 'glide_path' ? (
-            <div className="flex flex-col gap-1">
-              <div className="flex flex-wrap items-center gap-2">
-                {status === 'new' && (
-                  <button
-                    onClick={() => onAcknowledge('acknowledged')}
-                    className="text-xs px-2 py-1 rounded bg-s2 border border-border text-text"
-                  >
-                    Acknowledge
-                  </button>
-                )}
-                {status === 'acknowledged' && (
-                  <span className="text-[10px] text-t3 uppercase tracking-wide">Acknowledged</span>
-                )}
-                <input
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  placeholder="Glide path"
-                  className="flex-1 min-w-[220px] bg-s2 border border-border rounded px-2 py-1 text-xs text-text"
-                />
-                <button
-                  onClick={() => { onAcknowledge('glide_path', note); setEditingGlide(false); }}
-                  disabled={!note.trim()}
-                  className="text-xs px-2 py-1 rounded bg-acc text-white disabled:opacity-40"
-                >
-                  Set glide path
-                </button>
+      {items.length > 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE[2], marginTop: SPACE[3] }}>
+          {items.map((it, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: SPACE[2.5], background: 'var(--surface)', border: '1px solid var(--bsub)', borderRadius: RADIUS.lg, padding: `${SPACE[2]}px ${SPACE[3]}px` }}>
+              <span style={{ flexShrink: 0, width: 8, height: 8, borderRadius: RADIUS.full, background: SEV_TEXT[it.severity], marginTop: 6 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--text)', lineHeight: 1.5 }}>{it.main}</div>
+                <div style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: SEV_TEXT[it.severity], lineHeight: 1.5 }}>{it.sub}</div>
               </div>
-              {/* Format example as persistent helper text, not a placeholder that
-                  vanishes the moment you start typing (when it's most useful). */}
-              <span className="text-[10px] text-t3">e.g. “no adds; reduce to 10% by 2026-08-01”</span>
             </div>
-          ) : null}
+          ))}
+        </div>
+      ) : (
+        <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', marginTop: SPACE[2] }}>
+          Nothing is over a cap, near a safety-net step, or past a per-stock stop. Check back after your next sync.
         </div>
       )}
     </div>
   );
 }
 
-const fmtEquity = (n: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
+// ── market health check ───────────────────────────────────────────────────────
 
-/**
- * Always-on drawdown read (plans/20260719 Item 1) — the fix for "the ladder was
- * silent until it fired". Renders whenever a real drawdown exists (a null drawdown
- * = no NLV+peak yet stays hidden, per the plan), showing the current % + where it
- * sits on the ladder + an amber NEAR the moment it's within the band of the next
- * rung — so the de-risk warning arrives BEFORE the rung, not after. Advisory only.
- */
-function DrawdownCard({ status, nlv, asOf, isLive }: {
+function MarketLight({ label, state, note }: { label: string; state: RegimeState; note: string }) {
+  const color = STATE_COLOR[state];
+  const text = state === 'GREEN' ? (label === 'Trend' ? 'Uptrend' : 'Calm')
+    : state === 'RED' ? (label === 'Trend' ? 'Downtrend' : 'Stressed') : 'Unknown';
+  return (
+    <div style={{ background: 'var(--bg)', border: '1px solid var(--bsub)', borderRadius: RADIUS.lg, padding: `${SPACE[2.5]}px ${SPACE[3]}px` }}>
+      <div style={{ ...sectionLabel, marginTop: 0, marginBottom: SPACE[1] }}>{label}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[1.5] }}>
+        <span style={{ width: 10, height: 10, borderRadius: RADIUS.full, background: color, flexShrink: 0 }} />
+        <span style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold, color }}>{text}</span>
+      </div>
+      <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: 2, lineHeight: 1.4 }}>{note}</div>
+    </div>
+  );
+}
+
+function MarketCard({ instrument, setInstrument, regimeEnabled, structure, settingsRef }: {
+  instrument: string;
+  setInstrument: (i: string) => void;
+  regimeEnabled: boolean;
+  structure: TickerRegime | null | undefined;
+  settingsRef: ReactNode;
+}) {
+  const [showNums, setShowNums] = useState(false);
+  const { data: row, isLoading } = useLatestRegime(instrument);
+  const { data: config } = useRiskConfig(useAuthStore((s) => s.user?.id));
+
+  const gate = row
+    ? regimeGate({ close: row.close, sma200: row.sma200 }, { vixClose: row.vix_close, vix3mClose: row.vix3m_close })
+    : null;
+  const exitRule = config && {
+    trimToPct: config.regime_trim_to_pct, stopPct: config.regime_stop_pct, doubleRedGrossPct: config.regime_doublered_gross_pct,
+  };
+  const advice = gate && exitRule && regimeEnabled ? regimeExitAdvice(gate, exitRule) : null;
+
+  const reds = gate ? (Number(gate.trend_state === 'RED') + Number(gate.vol_state === 'RED')) : 0;
+  const sizingKnown = !!gate && gate.trend_state !== 'UNKNOWN' && gate.vol_state !== 'UNKNOWN';
+  const sizing = !regimeEnabled ? '—' : !sizingKnown ? '—' : reds === 0 ? '×1.0' : reds === 1 ? '×0.5' : '×0.25';
+
+  const trendNote = structure?.bucket ? TREND_BUCKET_META[structure.bucket].label : 'Price vs its 200-day average';
+  const close = structure?.close ?? row?.close ?? null;
+  const ma9 = structure?.ma9 ?? null;
+  const ma21 = structure?.ma21 ?? null;
+  const ma200 = structure?.ma200 ?? row?.sma200 ?? null;
+
+  const chip = (o: { value: string }) => {
+    const active = instrument === o.value;
+    return (
+      <button key={o.value} onClick={() => setInstrument(o.value)} style={{
+        fontSize: FONT_SIZE.xs, padding: `2px ${SPACE[2.5]}px`, borderRadius: RADIUS.DEFAULT, border: '1px solid var(--border)',
+        background: active ? 'var(--acc)' : 'transparent', color: active ? 'var(--text-inverse)' : 'var(--t2)',
+        cursor: 'pointer', fontWeight: FONT_WEIGHT.semibold,
+      }}>{o.value}</button>
+    );
+  };
+
+  return (
+    <div style={card}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap', marginBottom: SPACE[3] }}>
+        <span style={cardTitle}>Market health check</span>
+        <HelpToggle ariaLabel="About the market health check">
+          <span className="block">A read of the broad backdrop from your chosen index: the frozen GREEN/RED gate (trend = price vs its 200-day average; volatility = VIX vs 3-month VIX) plus its finer 9/21/200 structure.</span>
+          <span className="block text-t3 mt-1">Suggested sizing scales any NEW position: ×1.0 all-clear, ×0.5 one light red, ×0.25 both red.</span>
+          <span className="block text-t3 mt-1">Advisory only — nothing here places or blocks a trade.</span>
+        </HelpToggle>
+        <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>measured on</span>
+        {REGIME_INSTRUMENTS.map(chip)}
+        {row && <span style={{ marginLeft: 'auto', fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>{formatDate(row.trading_date)}</span>}
+      </div>
+
+      {isLoading ? (
+        <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>Loading market regime…</div>
+      ) : !row || !gate ? (
+        <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>No market regime data yet.</div>
+      ) : (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: SPACE[2] }}>
+            <MarketLight label="Trend" state={gate.trend_state} note={trendNote} />
+            <MarketLight label="Volatility" state={gate.vol_state} note="VIX vs 3-month VIX" />
+            <div style={{ background: 'var(--bg)', border: '1px solid var(--bsub)', borderRadius: RADIUS.lg, padding: `${SPACE[2.5]}px ${SPACE[3]}px` }}>
+              <div style={{ ...sectionLabel, marginTop: 0, marginBottom: SPACE[1] }}>Suggested sizing</div>
+              <div style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)' }}>{sizing}</div>
+              <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: 2, lineHeight: 1.4 }}>
+                {regimeEnabled ? 'for any new position you open' : 'Regime guardrail is off'}
+              </div>
+            </div>
+          </div>
+
+          {advice && (
+            <div style={{ marginTop: SPACE[3], padding: `${SPACE[2]}px ${SPACE[3]}px`, borderRadius: RADIUS.md, borderLeft: '3px solid var(--status-warning-border)', background: 'var(--status-warning-bg)', fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.55 }}>
+              <b style={{ color: 'var(--status-warning-text)' }}>Your red-market playbook kicks in:</b> {advice}{' '}
+              <span style={{ color: 'var(--t3)' }}>(You wrote this rule in {settingsRef}.)</span>
+            </div>
+          )}
+
+          <button onClick={() => setShowNums((v) => !v)} style={{ marginTop: SPACE[3], background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t3)', fontSize: FONT_SIZE.xs, padding: 0, textDecoration: 'underline' }}>
+            {showNums ? 'Hide the numbers behind this' : 'Show the numbers behind this'}
+          </button>
+          {showNums && (
+            <div style={{ marginTop: SPACE[2], background: 'var(--s2)', border: '1px solid var(--border)', borderRadius: RADIUS.lg, padding: `${SPACE[2.5]}px ${SPACE[3]}px`, fontSize: FONT_SIZE.xs, color: 'var(--t2)', lineHeight: 1.6, ...num }}>
+              Close {close?.toFixed(2) ?? '—'} · 9MA {ma9?.toFixed(2) ?? '—'} · 21MA {ma21?.toFixed(2) ?? '—'} · 200MA {ma200?.toFixed(2) ?? '—'} · VIX {row.vix_close?.toFixed(2) ?? '—'} vs VIX3M {row.vix3m_close?.toFixed(2) ?? '—'}
+              <span style={{ display: 'block', color: 'var(--t3)', marginTop: 2 }}>
+                Source: live 9/21 structure from TwelveData · gate from regime_daily · {formatDate(row.trading_date)}
+              </span>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── account safety net (drawdown ladder) ──────────────────────────────────────
+
+function LadderViz({ ladder, maxGross, status }: {
+  ladder: { drawdownPct: number; targetGrossPct: number }[];
+  maxGross: number;
   status: DrawdownLadderStatus;
+}) {
+  const rungs = [...ladder].sort((a, b) => b.drawdownPct - a.drawdownPct); // -10 → -15
+  const scaleMax = Math.max(maxGross, ...rungs.map((r) => r.targetGrossPct), 1);
+  const activeDd = status.activeStep?.drawdownPct ?? null;
+
+  interface Seg { key: string; top: string; range: string; target: number; sev: ViolationSeverity | 'muted'; here: boolean; }
+  const segs: Seg[] = [
+    { key: 'healthy', top: `${maxGross}%`, range: 'At peak', target: maxGross, sev: 'ok', here: activeDd === null },
+    ...rungs.map((r) => {
+      const breached = status.drawdownPct <= r.drawdownPct;
+      const isNext = status.nextStep?.drawdownPct === r.drawdownPct;
+      const sev: ViolationSeverity | 'muted' = breached ? 'breach' : (isNext && status.severity === 'near') ? 'near' : 'muted';
+      return { key: String(r.drawdownPct), top: `${r.targetGrossPct}%`, range: `Down ${Math.abs(r.drawdownPct)}%+`, target: r.targetGrossPct, sev, here: activeDd === r.drawdownPct };
+    }),
+  ];
+  const fillFor = (s: Seg) => (s.sev === 'muted' ? 'var(--s2)' : SEV_BG[s.sev]);
+  const txtFor = (s: Seg) => (s.sev === 'muted' ? 'var(--t3)' : SEV_TEXT[s.sev]);
+
+  return (
+    <div style={{ display: 'flex', gap: SPACE[1.5], alignItems: 'flex-end' }}>
+      {segs.map((s) => {
+        const txt = txtFor(s);
+        return (
+          <div key={s.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <span style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, color: 'var(--text)', height: 13, textAlign: 'center' }}>{s.here ? '▼ you are here' : ''}</span>
+            <span style={{ fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold, color: txt, ...num }}>{s.top}</span>
+            <div style={{ height: 64, background: 'var(--s2)', borderRadius: RADIUS.md, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', overflow: 'hidden', outline: s.here ? `2px solid ${txt}` : 'none' }}>
+              <div style={{ height: Math.round(64 * Math.max(0, Math.min(1, s.target / scaleMax))), background: fillFor(s), borderTop: `2px solid ${txt}` }} />
+            </div>
+            <span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', lineHeight: 1.4 }}>{s.range}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function SafetyNetCard({ status, ladder, maxGross, nlv, asOf, isLive, money, settingsRef }: {
+  status: DrawdownLadderStatus;
+  ladder: { drawdownPct: number; targetGrossPct: number }[];
+  maxGross: number;
   nlv: number | null;
   asOf: string | null;
-  /** Drawdown read off live Finnhub-priced positions (Item 2) vs the last IBKR sync. */
   isLive: boolean;
+  money: (n: number | null) => string;
+  settingsRef: ReactNode;
 }) {
-  const pill = SEVERITY_PILL[status.severity];
-  // An `ok` drawdown reads neutral (a small red-number-in-green would jar); only a
-  // NEAR/breach takes the amber/red status color so attention tracks real proximity.
-  const numColor = status.severity === 'ok' ? 'var(--text)' : SEVERITY_TEXT_COLOR[status.severity];
-  const { activeStep, nextStep, distanceToNextPp } = status;
+  const sev = status.severity;
+  const numColor = sev === 'ok' ? 'var(--text)' : SEV_TEXT[sev];
+  const belowPeak = nlv != null && status.drawdownPct < 0 ? nlv / (1 + status.drawdownPct / 100) - nlv : 0;
+
+  const sentence = status.activeStep
+    ? `You've crossed a safety-net step — your plan is to trim gross exposure to ${status.activeStep.targetGrossPct}%.`
+    : status.nextStep
+      ? `${status.distanceToNextPp !== null ? `${status.distanceToNextPp.toFixed(1)}pp` : 'A little'} from your next step at ${status.nextStep.drawdownPct}% (which trims gross to ${status.nextStep.targetGrossPct}%).`
+      : 'Comfortably above your safety-net steps.';
+
   return (
-    <div className="bg-surface border border-border rounded-xl p-5">
-      <div className="text-text font-semibold text-sm flex items-center gap-1.5">
-        Portfolio drawdown
-        <StatusPill variant={pill.variant}>{pill.label}</StatusPill>
-        <HelpToggle ariaLabel="About portfolio drawdown">
-          <span className="block">How far your <strong>whole account</strong> is below its high-water mark — not any single position — adjusted for your deposits and withdrawals so a transfer isn't mistaken for a gain or loss.</span>
-          <span className="block text-t3 mt-1">As you draw down, the ladder tightens your gross-exposure target — the rungs below show at what depth. This is reconciled with the market-regime rule above: whichever is tighter binds.</span>
-          <span className="block text-t3 mt-1">Amber "near" means you're within {DRAWDOWN_NEAR_BAND_PP} points of the next rung; red means a rung is crossed. Advisory only — nothing here places or blocks a trade.</span>
-        </HelpToggle>
-      </div>
-
-      <div className="flex items-baseline gap-2 mt-2">
-        <span className="text-2xl font-semibold tabular-nums" style={{ color: numColor }}>
-          {status.drawdownPct >= 0 ? '+' : '−'}{Math.abs(status.drawdownPct).toFixed(2)}%
+    <div style={card}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap', marginBottom: 2 }}>
+        <span style={cardTitle}>Account safety net</span>
+        <StatusPill variant={sev}>{SEV_PILL_LABEL[sev as Sev3] ?? 'OK'}</StatusPill>
+        <span style={{ marginLeft: 'auto', fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', ...num }}>
+          {isLive ? 'Finnhub' : 'IBKR'}{asOf ? ` · ${fmtDateTime(asOf)}` : ''}
         </span>
-        <span className="text-t3 text-xs">from peak</span>
       </div>
-
-      {/* Where you sit on the ladder — always shown, breach or not. */}
-      <div className="text-t2 text-xs mt-2" style={{ lineHeight: 1.5 }}>
-        {activeStep ? (
-          <>
-            <span style={{ color: SEVERITY_TEXT_COLOR.breach }}>
-              Rung crossed at {activeStep.drawdownPct}% — de-risk gross to {activeStep.targetGrossPct}%.
-            </span>
-            {nextStep && (
-              <span className="text-t3">
-                {' '}Next rung {nextStep.drawdownPct}% → {nextStep.targetGrossPct}% gross
-                {distanceToNextPp !== null && `, ${distanceToNextPp.toFixed(1)}pp away`}.
-              </span>
-            )}
-          </>
-        ) : nextStep ? (
-          <span>
-            Next rung <span className="font-medium text-text">{nextStep.drawdownPct}% → {nextStep.targetGrossPct}% gross</span>
-            {distanceToNextPp !== null && (
-              <span style={{ color: status.severity === 'near' ? SEVERITY_TEXT_COLOR.near : 'var(--t3)' }}>
-                {' '}· {distanceToNextPp.toFixed(1)}pp away
-              </span>
-            )}
-          </span>
-        ) : (
-          <span className="text-t3">No de-risk rungs configured.</span>
-        )}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: SPACE[2], margin: `${SPACE[1.5]}px 0 2px` }}>
+        <span style={{ ...bigNum, color: numColor }}>{fmtDrawdown(status.drawdownPct)}</span>
+        <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)' }}>{belowPeak > 0 ? `−${money(belowPeak)} below peak` : 'at your peak'}</span>
       </div>
-
-      {/* Source + as-of, per convention (the HoldingDetail price idiom): live drawdown off
-          Finnhub-priced positions when quotes are cached, the last IBKR sync on fallback. */}
-      <div className="text-t3 text-[10px] mt-2 tabular-nums">
-        vs your cash-flow-adjusted peak{nlv != null ? ` · ${isLive ? 'live ' : ''}account Net Liq ${fmtEquity(nlv)}` : ''} · Source: {isLive ? 'Finnhub' : 'IBKR'}{asOf ? ` · as of ${fmtDateTime(asOf)}` : ''}
+      <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.55, marginBottom: SPACE[3.5] }}>{sentence}</div>
+      <LadderViz ladder={ladder} maxGross={maxGross} status={status} />
+      <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[1.5] }}>
+        Your plan: how much stays invested as your account drawdown deepens. Edit in {settingsRef}.
       </div>
     </div>
   );
 }
 
-function GrossExposureBar({ v, binding }: { v: ConcentrationViolation; binding: BindingGrossTarget | null }) {
-  const { exposurePct: pct, limitPct } = v;
-  const targetPct = binding?.targetPct ?? null;
-  const scaleMax = Math.max(limitPct, pct, 100) * 1.05;
-  const fillPct = Math.min(100, (pct / scaleMax) * 100);
-  const limitMarkerPct = Math.min(100, (limitPct / scaleMax) * 100);
-  // The bar marker is the BINDING target (the number that actually governs), not the
-  // ladder alone — so a tighter double-RED regime target moves the mark too.
-  const ladderMarkerPct = targetPct !== null ? Math.min(100, (targetPct / scaleMax) * 100) : null;
-  // At-limit (100%/100%) is `near` → amber, never green: a full bar you're trained
-  // to see as "fine" defeats the point.
-  const fill = SEVERITY_TEXT_COLOR[v.severity];
+// ── how much you're invested (gross exposure) ─────────────────────────────────
+
+function InvestedCard({ gross, cap, target, accountEquity, money }: {
+  gross: ConcentrationViolation;
+  cap: number;
+  target: number | null;
+  accountEquity: number;
+  money: (n: number | null) => string;
+}) {
+  const pct = gross.exposurePct;
+  const sev = gross.severity;
+  const numColor = sev === 'ok' ? 'var(--text)' : SEV_TEXT[sev];
+  const scaleMax = Math.max(cap, pct, 100) * 1.05;
+  const grW = Math.min(100, (pct / scaleMax) * 100);
+  const capLeft = Math.min(100, (cap / scaleMax) * 100);
+  const targetLeft = target !== null ? Math.min(100, (target / scaleMax) * 100) : null;
+
+  const sentence = pct > cap
+    ? `You're invested ${pct.toFixed(1)}% of your account — over your ${cap}% ceiling.`
+    : target !== null && pct > target
+      ? `You're invested ${pct.toFixed(1)}% — above today's de-risk target of ${target}%.`
+      : `You're invested ${pct.toFixed(1)}% of your account. ${cap}% is your ceiling.`;
+
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center justify-end text-xs">
-        <span className="tabular-nums" style={{ color: fill }}>
-          {pct.toFixed(1)}% / {limitPct}%
-        </span>
+    <div style={card}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap', marginBottom: 2 }}>
+        <span style={cardTitle}>How much you're invested</span>
+        <StatusPill variant={sev}>{SEV_PILL_LABEL[sev as Sev3] ?? 'OK'}</StatusPill>
+        <HelpToggle ariaLabel="About gross exposure">
+          <span className="block">Your total market value ÷ your account equity (Net Liquidation Value).</span>
+          <span className="block text-t3 mt-1">Above 100% means you're using leverage/margin, so a market drop hits your equity harder.</span>
+        </HelpToggle>
       </div>
-      {/* Ticks on the track make "how far over" legible: a solid mark at the cap
-          (so an overshoot reads as distance past it, not a full bar) + a lighter
-          mark at the binding de-risk target. */}
-      <div className="relative h-2.5 rounded-full bg-s2 border border-border overflow-hidden">
-        <div className="h-full rounded-full" style={{ width: `${fillPct}%`, background: fill }} />
-        {ladderMarkerPct !== null && (
-          <div className="absolute top-0 bottom-0" style={{ left: `${ladderMarkerPct}%`, width: 1, background: 'var(--status-warning-text)', opacity: 0.7 }} title={`De-risk target: ${targetPct}%`} />
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: SPACE[2], margin: `${SPACE[1.5]}px 0 2px` }}>
+        <span style={{ ...bigNum, color: numColor }}>{pct.toFixed(1)}%</span>
+        <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)' }}>≈ {money((pct / 100) * accountEquity)} of {money(accountEquity)}</span>
+      </div>
+      <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.55, marginBottom: SPACE[3] }}>{sentence}</div>
+      <div style={{ position: 'relative', height: 14, background: 'var(--s2)', border: '1px solid var(--border)', borderRadius: RADIUS.full }}>
+        <div style={{ position: 'absolute', left: 0, top: 1, bottom: 1, width: `${grW}%`, background: numColor, borderRadius: RADIUS.full, opacity: 0.85 }} />
+        {targetLeft !== null && <div style={{ position: 'absolute', top: -3, bottom: -3, left: `${targetLeft}%`, width: 2, background: 'var(--status-warning-text)' }} title={`De-risk target ${target}%`} />}
+        <div style={{ position: 'absolute', top: -3, bottom: -3, left: `${capLeft}%`, width: 2, background: 'var(--text)' }} title={`Cap ${cap}%`} />
+      </div>
+      <div style={{ display: 'flex', gap: SPACE[4], flexWrap: 'wrap', fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[2], ...num }}>
+        <span><span style={{ color: 'var(--text)', fontWeight: FONT_WEIGHT.bold }}>▏</span> cap {cap}%</span>
+        {target !== null && <span><span style={{ color: 'var(--status-warning-text)', fontWeight: FONT_WEIGHT.bold }}>▏</span> today's de-risk target {target}%</span>}
+      </div>
+    </div>
+  );
+}
+
+// ── size caps ─────────────────────────────────────────────────────────────────
+
+interface CapEntry { v: ConcentrationViolation; kind: string; ackType: ViolationType | null; }
+
+function CapRow({ entry, ack, onAcknowledge }: {
+  entry: CapEntry;
+  ack: { status: AckStatus; glide_path_note: string | null } | undefined;
+  onAcknowledge: (status: AckStatus, note?: string) => void;
+}) {
+  const { v, kind, ackType } = entry;
+  const status = ack?.status ?? 'new';
+  const [note, setNote] = useState(ack?.glide_path_note ?? '');
+  const sev = v.severity;
+  const scaleMax = Math.max(v.limitPct, v.exposurePct, 1) * 1.05;
+  const barW = Math.min(100, (v.exposurePct / scaleMax) * 100);
+  const capLeft = Math.min(100, (v.limitPct / scaleMax) * 100);
+  const unevaluated = sev === 'unevaluated';
+  const over = v.exposurePct - v.limitPct;
+  const sub = unevaluated
+    ? 'No sector mapping yet — map its sector to include it.'
+    : over > 0 ? `Over by ${over.toFixed(1)}pp.` : `${Math.abs(over).toFixed(1)}pp of room left.`;
+  const canAck = ackType !== null && sev === 'breach';
+
+  return (
+    <div style={{ background: 'var(--bg)', border: '1px solid var(--bsub)', borderRadius: RADIUS.lg, padding: `${SPACE[2.5]}px ${SPACE[3]}px` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap' }}>
+        <span style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)' }}>{v.scope}</span>
+        <span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>{kind}</span>
+        {!unevaluated && (
+          <span style={{ marginLeft: 'auto', fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: SEV_TEXT[sev], ...num }}>
+            {v.exposurePct.toFixed(1)}% / {v.limitPct}%
+          </span>
         )}
-        <div className="absolute top-0 bottom-0" style={{ left: `${limitMarkerPct}%`, width: 2, background: 'var(--text)' }} title={`Cap: ${limitPct}%`} />
+        <StatusPill variant={sev}>{sev === 'breach' ? 'Breach' : sev === 'near' ? 'Near' : sev === 'unevaluated' ? 'Unevaluated' : 'OK'}</StatusPill>
       </div>
-      <div className="flex items-center gap-3 text-[10px] text-t3">
-        <span><span style={{ color: 'var(--text)' }}>▏</span> cap {limitPct}%</span>
-        {targetPct !== null && <span><span style={{ color: 'var(--status-warning-text)' }}>▏</span> target {targetPct}%</span>}
+      {!unevaluated && (
+        <div style={{ position: 'relative', height: 8, background: 'var(--s2)', borderRadius: RADIUS.full, margin: `${SPACE[2]}px 0 ${SPACE[1]}px` }}>
+          <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${barW}%`, background: SEV_TEXT[sev], borderRadius: RADIUS.full }} />
+          <div style={{ position: 'absolute', top: -2, bottom: -2, left: `${capLeft}%`, width: 2, background: 'var(--text)' }} />
+        </div>
+      )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2.5], flexWrap: 'wrap', marginTop: SPACE[1] }}>
+        <span style={{ fontSize: FONT_SIZE.xs, color: unevaluated ? 'var(--t3)' : SEV_TEXT[sev], lineHeight: 1.5 }}>{sub}</span>
+        {canAck && status === 'new' && (
+          <button onClick={() => onAcknowledge('acknowledged')} style={{ marginLeft: 'auto', padding: `3px ${SPACE[2.5]}px`, fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold, borderRadius: RADIUS.md, background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            Got it — I'll handle this
+          </button>
+        )}
+        {canAck && status !== 'new' && (
+          <span style={{ marginLeft: 'auto', fontSize: FONT_SIZE.xs, color: 'var(--status-positive-text)', whiteSpace: 'nowrap' }}>Acknowledged ✓</span>
+        )}
       </div>
-      {binding && (
-        <div className="text-xs text-[var(--status-warning-text)] bg-[var(--status-warning-bg)] border border-[var(--status-warning-border)] rounded px-3 py-2 mt-1">
-          {binding.source === 'both' ? (
-            <>
-              {/* Both de-risk triggers live at once — show the ONE binding number plus
-                  what it reconciles, so it's not read as two separate instructions. */}
-              <span className="block font-semibold">Binding target: reduce gross to {binding.targetPct}%</span>
-              <span className="block text-t3 mt-1" style={{ color: 'var(--t2)' }}>
-                The tighter of your drawdown ladder ({binding.ladderPct}%) and the double-RED regime rule ({binding.regimePct}%).
-              </span>
-            </>
-          ) : binding.source === 'ladder' ? (
-            <span className="block">Drawdown ladder target: reduce gross to {binding.targetPct}%</span>
-          ) : (
-            <span className="block">Regime rule (double-RED): reduce gross to {binding.targetPct}%</span>
+      {canAck && status !== 'new' && (
+        <input
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          onBlur={() => { if (note.trim() && note !== (ack?.glide_path_note ?? '')) onAcknowledge('glide_path', note); }}
+          placeholder="Write your plan — e.g. no adds; trim back under the cap by Aug 1"
+          style={{ width: '100%', marginTop: SPACE[2], background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: RADIUS.md, padding: `6px ${SPACE[2]}px`, fontSize: FONT_SIZE.sm, color: 'var(--text)' }}
+        />
+      )}
+    </div>
+  );
+}
+
+function SizeCapsCard({ entries, ackFor, onAcknowledge }: {
+  entries: CapEntry[];
+  ackFor: (scope: string, type: ViolationType) => { status: AckStatus; glide_path_note: string | null } | undefined;
+  onAcknowledge: (scope: string, type: ViolationType, status: AckStatus, note?: string) => void;
+}) {
+  const [showOk, setShowOk] = useState(false);
+  const RANK: Record<ViolationSeverity, number> = { breach: 0, near: 1, unevaluated: 2, ok: 3 };
+  const exceptions = entries.filter((e) => e.v.severity !== 'ok').sort((a, b) => RANK[a.v.severity] - RANK[b.v.severity]);
+  const okOnes = entries.filter((e) => e.v.severity === 'ok');
+  const total = entries.length;
+
+  return (
+    <div style={card}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap', marginBottom: 2 }}>
+        <span style={cardTitle}>Size caps</span>
+        <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>{exceptions.length ? `${exceptions.length} to review` : `all ${total} within caps`}</span>
+      </div>
+      <div style={{ ...cardDesc, marginBottom: SPACE[2.5] }}>How big any one stock, sector, or options bet is vs the caps you set. Only exceptions are shown.</div>
+      {exceptions.length === 0 ? (
+        <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', background: 'var(--status-positive-bg)', border: '1px solid var(--status-positive-border)', borderRadius: RADIUS.lg, padding: `${SPACE[2]}px ${SPACE[3]}px` }}>
+          All {total} within their caps — nothing to show.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE[2.5] }}>
+          {exceptions.map((e) => (
+            <CapRow
+              key={`${e.ackType}-${e.v.scope}`}
+              entry={e}
+              ack={e.ackType ? ackFor(e.v.scope, e.ackType) : undefined}
+              onAcknowledge={(status, note) => e.ackType && onAcknowledge(e.v.scope, e.ackType, status, note)}
+            />
+          ))}
+        </div>
+      )}
+      {okOnes.length > 0 && (
+        <>
+          <button onClick={() => setShowOk((v) => !v)} style={{ marginTop: SPACE[2.5], background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t3)', fontSize: FONT_SIZE.xs, padding: 0, textDecoration: 'underline' }}>
+            {showOk ? 'Hide the ones within their caps' : `Show the ${okOnes.length} within their caps`}
+          </button>
+          {showOk && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACE[1.5], marginTop: SPACE[2] }}>
+              {okOnes.map((e) => (
+                <span key={`${e.ackType}-${e.v.scope}`} style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', background: 'var(--s2)', border: '1px solid var(--border)', borderRadius: RADIUS.md, padding: `2px ${SPACE[2]}px`, ...num }}>
+                  {e.v.scope} {e.v.exposurePct.toFixed(1)}%
+                </span>
+              ))}
+            </div>
           )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── per-stock stops ───────────────────────────────────────────────────────────
+
+interface StopRow { ticker: string; kind: 'shares' | 'options'; info: PerStockLadderInfo; }
+
+function PerStockStopsCard({ rows, ladderRungs, optionRungs }: {
+  rows: StopRow[];
+  ladderRungs: { drawdownPct: number }[];
+  optionRungs: { drawdownPct: number }[];
+}) {
+  const exceptions = rows
+    .filter((r) => r.info.status.severity === 'near' || r.info.status.severity === 'breach')
+    .sort((a, b) => a.info.status.drawdownPct - b.info.status.drawdownPct);
+
+  return (
+    <div style={card}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap', marginBottom: 2 }}>
+        <span style={cardTitle}>Per-stock stops</span>
+        <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>{exceptions.length ? `${exceptions.length} near / past a stop` : 'none near a stop'}</span>
+      </div>
+      <div style={{ ...cardDesc, marginBottom: SPACE[2.5] }}>Each position measured against your buy price. One appears here only when it's near or past one of your stop steps.</div>
+      {exceptions.length === 0 ? (
+        <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', background: 'var(--status-positive-bg)', border: '1px solid var(--status-positive-border)', borderRadius: RADIUS.lg, padding: `${SPACE[2]}px ${SPACE[3]}px` }}>
+          No position is near a stop right now.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE[2.5] }}>
+          {exceptions.map((r) => {
+            const s = r.info.status;
+            const sev = s.severity as Sev3;
+            const rungs = r.kind === 'options' ? optionRungs : ladderRungs;
+            const plan = sev === 'breach'
+              ? (s.targetHoldPct !== null
+                ? `Down past a stop — your plan is to reduce to ${s.targetHoldPct}% of peak size.`
+                : 'Down past a stop.')
+              : s.nextRung
+                ? `Approaching your next stop at ${s.nextRung.drawdownPct}% from entry.`
+                : 'Near a stop.';
+            const hold = r.info.historyIncomplete || s.currentHoldPct === null
+              ? 'holding vs peak unknown (incomplete fill history)'
+              : `now holding ${s.currentHoldPct.toFixed(0)}% of peak`;
+            const detail = `Stops: ${rungs.map((x) => `${x.drawdownPct}%`).join(' / ')} · ${hold}`;
+            return (
+              <div key={`${r.kind}-${r.ticker}`} style={{ background: 'var(--bg)', border: '1px solid var(--bsub)', borderRadius: RADIUS.lg, padding: `${SPACE[2.5]}px ${SPACE[3]}px` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap' }}>
+                  <TickerLink ticker={r.ticker} style={{ color: 'var(--acc)' }} />
+                  <span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>{r.kind}</span>
+                  <span style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: SEV_TEXT[sev], ...num }}>{fmtDrawdown(s.drawdownPct)}</span>
+                  <span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>from entry</span>
+                  <span style={{ marginLeft: 'auto' }}><StatusPill variant={sev}>{sev === 'breach' ? 'Past stop' : 'Near'}</StatusPill></span>
+                </div>
+                <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.55, marginTop: SPACE[1] }}>{plan}</div>
+                <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[1], ...num }}>{detail}</div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
 
-const SEVERITY_RANK: Record<ViolationSeverity, number> = { breach: 0, near: 1, unevaluated: 2, ok: 3 };
+// ── glossary ──────────────────────────────────────────────────────────────────
 
-/** One-line roll-up: "18/20 within limit · 1 breach · 1 near · max HOOD 8.5%/10%". */
-function sectionSummary(violations: ConcentrationViolation[]): string {
-  const evaluated = violations.filter((v) => v.severity !== 'unevaluated');
-  const breaches = evaluated.filter((v) => v.severity === 'breach').length;
-  const near = evaluated.filter((v) => v.severity === 'near').length;
-  const withinLimit = evaluated.length - breaches;
-  const unevaluated = violations.length - evaluated.length;
-
-  const parts = [`${withinLimit}/${evaluated.length} within limit`];
-  if (breaches) parts.push(`${breaches} breach${breaches === 1 ? '' : 'es'}`);
-  if (near) parts.push(`${near} near`);
-  if (unevaluated) parts.push(`${unevaluated} unevaluated`);
-
-  const top = [...evaluated].sort((a, b) => (b.exposurePct / (b.limitPct || 1)) - (a.exposurePct / (a.limitPct || 1)))[0];
-  if (top) parts.push(`max ${top.scope} ${top.exposurePct.toFixed(1)}%/${top.limitPct}%`);
-  return parts.join(' · ');
-}
-
-function BreachOnlyList({
-  title, description, help, violations, ackFor, onAcknowledge, unmappedNote, ackable = true, ackType = 'position',
-}: {
-  title: string;
-  description: ReactNode;
-  /** Optional deeper "what / why / how" shown behind an ⓘ next to the title. */
-  help?: ReactNode;
-  violations: ConcentrationViolation[];
-  ackFor?: (scope: string, type: ViolationType) => { status: AckStatus; glide_path_note: string | null } | undefined;
-  onAcknowledge?: (scope: string, status: AckStatus, note?: string) => void;
-  unmappedNote?: string;
-  /** Option concentration is display-only (no ack type in the DB) — pass false. */
-  ackable?: boolean;
-  ackType?: ViolationType;
-}) {
-  const [showAll, setShowAll] = useState(false);
-  const type = ackType;
-  // Exceptions are the resting view: anything not comfortably OK — breaches,
-  // near-limit (the actionable early warning), and unevaluated (missing data).
-  const exceptions = violations.filter((v) => v.severity !== 'ok').sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
-  const shown = showAll ? [...violations].sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]) : exceptions;
-  const hiddenCount = violations.length - shown.length;
-
+function Glossary() {
+  const [open, setOpen] = useState(false);
+  const term: CSSProperties = { color: 'var(--text)', fontWeight: FONT_WEIGHT.semibold };
   return (
-    <div className="bg-surface border border-border rounded-xl p-5">
-      <div className="text-text font-semibold text-sm flex items-center gap-1.5">
-        {title}
-        {help && <HelpToggle ariaLabel={`About ${title}`}>{help}</HelpToggle>}
-      </div>
-      <div className="text-t3 text-xs mt-0.5" style={{ lineHeight: 1.5 }}>{description}</div>
-      {violations.length > 0 && <div className="text-t3 text-xs mt-2 mb-2" style={{ color: 'var(--t2)' }}>{sectionSummary(violations)}</div>}
-      {violations.length === 0 && <div className="text-t3 text-xs">No positions.</div>}
-      {violations.length > 0 && shown.length === 0 && (
-        <div className="text-t3 text-xs">All {violations.length} comfortably within limit.</div>
-      )}
-      {shown.map((v) => (
-        <ViolationRow
-          key={v.scope}
-          v={v}
-          ackable={ackable}
-          ack={ackFor?.(v.scope, type)}
-          onAcknowledge={(status, note) => onAcknowledge?.(v.scope, status, note)}
-          note={v.severity === 'unevaluated' ? unmappedNote : undefined}
-        />
-      ))}
-      {hiddenCount > 0 && (
-        <button onClick={() => setShowAll(true)} className="text-xs text-t3 hover:text-t2 mt-2">
-          Show all {violations.length}
-        </button>
-      )}
-      {showAll && exceptions.length < violations.length && (
-        <button onClick={() => setShowAll(false)} className="text-xs text-t3 hover:text-t2 mt-2">
-          Show exceptions only
-        </button>
+    <div style={{ ...card, padding: `${SPACE[3]}px ${SPACE[4]}px` }}>
+      <button onClick={() => setOpen((v) => !v)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t3)', fontSize: FONT_SIZE.xs, padding: 0, textDecoration: 'underline' }}>
+        {open ? 'Hide the plain-English glossary' : 'What do these terms mean?'}
+      </button>
+      {open && (
+        <div style={{ marginTop: SPACE[2], fontSize: FONT_SIZE.xs, color: 'var(--t2)', lineHeight: 1.7 }}>
+          <b style={term}>Invested</b> — the combined size of all your positions ("gross exposure"). Over 100% means you're borrowing on margin.<br />
+          <b style={term}>Down / drawdown</b> — how far your account sits below its highest value, adjusted for deposits and withdrawals so adding cash never looks like a loss.<br />
+          <b style={term}>Safety-net step</b> — a line in your plan: "if I'm down X%, cut invested to Y%". Set in Settings.<br />
+          <b style={term}>Cap</b> — the most of your account you allow in one stock, one sector, or in options on one name.<br />
+          <b style={term}>Trend / volatility lights</b> — the daily market health check: is the market still in an uptrend, and how violently are prices swinging.<br />
+          <b style={term}>Advisory</b> — everything on this page is a heads-up. Nothing here ever places or blocks a trade.
+        </div>
       )}
     </div>
   );
 }
 
-export function ViolationsSummary({ showSyncButton = false, settingsTo, bindingGross, drawdown }: {
+// ── page ──────────────────────────────────────────────────────────────────────
+
+export function ViolationsSummary({ showSyncButton = false, settingsTo, bindingGross, drawdown, regimeStructure }: {
   showSyncButton?: boolean;
   settingsTo?: string;
-  /** The reconciled ladder-vs-regime gross target from the parent's useBindingGrossTarget
-   * (so this card and the sibling RegimeLight show the identical binding number). When
-   * omitted, falls back to a ladder-only reconciliation from this card's own data. */
+  /** Reconciled ladder-vs-regime gross target from the parent's useBindingGrossTarget. */
   bindingGross?: BindingGrossTarget | null;
-  /** Live NLV for the drawdown READ (Item 2), from the parent's useLiveNlv — so the card %
-   * and the ladder→gross binding target read the same live value. Omitted (admin, no live
-   * quotes) → the drawdown reads off the synced `ibkr_nlv` (the settled fallback). */
+  /** Live NLV for the drawdown READ (Item 2), from the parent's useLiveNlv. */
   drawdown?: { nlv: number | null; asOf: string | null; isLive: boolean };
+  /** The chosen index's live 9/21/200 structure (from useTickerRegime in the parent). */
+  regimeStructure?: TickerRegime | null;
 }) {
   const userId = useAuthStore((s) => s.user?.id);
+  const showMoney = usePrivacyStore((s) => s.showMoney);
 
-  // "Settings" renders as a link when the host app provides a route (web → /settings);
-  // admin has no /settings route, so it falls back to plain text there.
   const settingsRef: ReactNode = settingsTo
-    ? <Link to={settingsTo} style={{ color: 'var(--acc)', fontWeight: 600 }}>Settings</Link>
+    ? <Link to={settingsTo} style={{ color: 'var(--acc)', fontWeight: FONT_WEIGHT.semibold }}>Settings</Link>
     : 'Settings';
 
   const { data: positions, isLoading: positionsLoading } = useUserPositions();
+  const { data: executions = [] } = useUserExecutions();
   const { data: config, isLoading: configLoading } = useRiskConfig(userId);
   const { data: sectorMap } = useSectorMap();
   const { data: acks } = useViolationAcks(userId);
   const acknowledge = useAcknowledgeViolation(userId);
-  const { sync, isSyncing, syncError, lastResult } = useSyncPortfolio();
+  const { sync, isSyncing, syncError } = useSyncPortfolio();
+  const instrument = useRegimeInstrumentStore((s) => s.instrument);
+  const setInstrument = useRegimeInstrumentStore((s) => s.setInstrument);
 
   useEnsureRiskConfig(userId, config, configLoading);
 
+  // Per-stock ladders — shares vs options use their OWN ladder (migration 078 honoring).
+  const stockLadders = usePerStockLadders(positions ?? [], executions, config, 'STK');
+  const optionLadders = usePerStockLadders(positions ?? [], executions, config, 'OPT');
+
   if (positionsLoading || configLoading || !config) return <LoadingSpinner className="mt-8" />;
 
+  const money = (n: number | null): string => {
+    if (n === null) return '—';
+    if (!showMoney) return '•••';
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
+  };
+
+  const capsEnabled = config.caps_enabled;
+  const ladderEnabled = config.ladder_enabled;
+  const perStockEnabled = config.per_stock_enabled;
+  const regimeEnabled = config.regime_enabled;
+
   const positionInputs: PositionInput[] = (positions ?? []).map((p) => ({
-    underlying: p.underlying,
-    quantity: p.quantity,
-    markPrice: p.mark_price,
-    multiplier: p.multiplier,
-    isOption: p.asset_class === 'OPT',
+    underlying: p.underlying, quantity: p.quantity, markPrice: p.mark_price, multiplier: p.multiplier, isOption: p.asset_class === 'OPT',
   }));
 
-  // Prefer the LIVE Net Liquidation Value from the IBKR NAV sync (migration 070) —
-  // the manual account_equity is only the fallback until the first NAV sync lands.
-  // A stale deposit figure is what made gross exposure read ~114% when the real
-  // number was far lower.
+  // One source: ibkr_nlv is the concentration denominator (never re-derived).
   const accountEquity = config.ibkr_nlv ?? config.account_equity;
-  const usingLiveEquity = config.ibkr_nlv != null;
-  // Drawdown is measured NET OF CASH FLOWS off the live NLV against its cash-flow-
-  // adjusted peak (migration 071) — NOT (equity − equity_peak)/equity_peak off the
-  // manual placeholder, which lit up a phantom −60% (peak stuck at $100k, NLV ~$40k).
-  // Null (→ ladder silent) until a real NLV + peak exist; a ~$60k historical
-  // withdrawal no longer reads as a loss.
-  // Drawdown reads off the LIVE NLV when the parent supplies one (Item 2, web), else the
-  // synced ibkr_nlv (admin / no live quotes). The peak + the % denominator stay synced.
+
+  // Drawdown reads off the LIVE NLV supplied by the parent (Option A); peak + denominator stay synced.
   const ddNlv = drawdown ? drawdown.nlv : config.ibkr_nlv;
   const ddAsOf = drawdown ? drawdown.asOf : config.ibkr_nlv_at;
   const ddIsLive = drawdown?.isLive ?? false;
-  const drawdownPct = cashflowAdjustedDrawdownPct(
-    ddNlv, config.equity_peak, config.cumulative_cashflow, config.equity_peak_cashflow,
-  );
-  // Always-on drawdown read for the card below (Item 1): null → silent (no NLV+peak yet).
-  // The NEAR band is the user's setting (migration 072), defaulting to the shared constant
-  // when the column isn't present yet (migration applied separately from the deploy).
+  const drawdownPct = cashflowAdjustedDrawdownPct(ddNlv, config.equity_peak, config.cumulative_cashflow, config.equity_peak_cashflow);
   const nearBand = config.drawdown_near_band_pp ?? DRAWDOWN_NEAR_BAND_PP;
   const ladderStatus = drawdownPct === null ? null : drawdownLadderStatus(config.ladder, drawdownPct, nearBand);
 
@@ -417,135 +664,117 @@ export function ViolationsSummary({ showSyncButton = false, settingsTo, bindingG
     ladder: config.ladder,
   }, drawdownPct);
 
+  // Gate the binding gross target's two legs by their enabled flags, then re-reconcile
+  // through the same shared "tightest binds" reducer (no NLV/target re-derivation).
+  const gatedLadderPct = ladderEnabled ? (bindingGross?.ladderPct ?? null) : null;
+  const gatedRegimePct = regimeEnabled ? (bindingGross?.regimePct ?? null) : null;
+  const gatedBinding = bindingGrossTarget(gatedLadderPct, gatedRegimePct);
+
+  // Size-cap entries (position / option / sector), only when caps are enabled.
+  const capEntries: CapEntry[] = capsEnabled ? [
+    ...result.positionViolations.map((v): CapEntry => ({ v, kind: 'single-stock cap', ackType: 'position' })),
+    ...result.optionViolations.map((v): CapEntry => ({ v, kind: 'options cap', ackType: null })),
+    ...result.sectorViolations.map((v): CapEntry => ({ v, kind: 'sector cap', ackType: 'sector' })),
+  ] : [];
+
+  const stopRows: StopRow[] = perStockEnabled ? [
+    ...[...stockLadders.entries()].map(([ticker, info]): StopRow => ({ ticker, kind: 'shares', info })),
+    ...[...optionLadders.entries()].map(([ticker, info]): StopRow => ({ ticker, kind: 'options', info })),
+  ] : [];
+
+  // ── verdict banner aggregation (the new layer over engine output) ──
+  const items: BannerItem[] = [];
+  if (ladderEnabled && ladderStatus && ladderStatus.severity !== 'ok') {
+    if (ladderStatus.activeStep) {
+      items.push({ severity: 'breach', main: `Your account is down ${Math.abs(ladderStatus.drawdownPct).toFixed(1)}% — past a safety-net step.`, sub: `Plan: trim gross exposure to ${ladderStatus.activeStep.targetGrossPct}%.` });
+    } else if (ladderStatus.nextStep) {
+      items.push({ severity: 'near', main: `Your account is down ${Math.abs(ladderStatus.drawdownPct).toFixed(1)}% — nearing a safety-net step.`, sub: `Next step at ${ladderStatus.nextStep.drawdownPct}% → hold gross to ${ladderStatus.nextStep.targetGrossPct}%.` });
+    }
+  }
+  if (result.grossViolation.severity === 'breach') {
+    items.push({ severity: 'breach', main: `You're invested ${result.grossViolation.exposurePct.toFixed(1)}% of your account — over your ${config.max_gross_pct}% cap.`, sub: 'Consider trimming back toward your cap.' });
+  } else if (gatedBinding && result.grossViolation.exposurePct > gatedBinding.targetPct) {
+    items.push({ severity: 'near', main: `You're invested ${result.grossViolation.exposurePct.toFixed(1)}% — above today's de-risk target.`, sub: `Target is ${gatedBinding.targetPct}% (from your ${gatedBinding.source === 'regime' ? 'red-market rule' : gatedBinding.source === 'both' ? 'drawdown + red-market rules' : 'drawdown ladder'}).` });
+  }
+  for (const e of capEntries) {
+    if (e.v.severity !== 'breach' && e.v.severity !== 'near') continue;
+    const over = e.v.exposurePct - e.v.limitPct;
+    items.push({
+      severity: e.v.severity,
+      main: `${e.v.scope} is ${e.v.exposurePct.toFixed(1)}% of your book — ${e.v.severity === 'breach' ? 'over' : 'near'} your ${e.v.limitPct}% ${e.kind}.`,
+      sub: e.v.severity === 'breach' ? `Over by ${over.toFixed(1)}pp.` : 'Approaching the cap.',
+    });
+  }
+  for (const r of stopRows) {
+    const s = r.info.status;
+    if (s.severity !== 'breach' && s.severity !== 'near') continue;
+    items.push({
+      severity: s.severity,
+      main: `${r.ticker} ${r.kind} down ${Math.abs(s.drawdownPct).toFixed(1)}% from entry — ${s.severity === 'breach' ? 'past' : 'near'} a stop.`,
+      sub: s.severity === 'breach'
+        ? (s.targetHoldPct !== null ? `Plan: reduce to ${s.targetHoldPct}% of peak size.` : 'Reduce per your stop plan.')
+        : (s.nextRung ? `Next stop at ${s.nextRung.drawdownPct}%.` : 'Approaching a stop.'),
+    });
+  }
+  // Order breach-first so the banner reads worst-first.
+  items.sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'breach' ? -1 : 1));
+
   function ackFor(scope: string, type: ViolationType) {
     return acks?.find((a) => a.scope === scope && a.violation_type === type);
   }
 
-  const allViolations = [...result.positionViolations, ...result.optionViolations, ...result.sectorViolations, result.grossViolation];
-  const totalBreaches = allViolations.filter((v) => v.severity === 'breach').length;
-  const totalNear = allViolations.filter((v) => v.severity === 'near').length;
-  // Counts-only roll-up — the gross % lives in the Gross exposure card below, so the
-  // header no longer repeats it (was "Gross 116%…" here AND "115.9%…" in the card).
-  const summaryLine = totalBreaches === 0 && totalNear === 0
-    ? 'All within limit'
-    : [
-      totalBreaches ? `${totalBreaches} breach${totalBreaches === 1 ? '' : 'es'}` : '',
-      totalNear ? `${totalNear} near` : '',
-    ].filter(Boolean).join(' · ');
-
-  const sectorDataMissing = !sectorMap || Object.keys(sectorMap).length === 0;
-
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 min-w-0 flex-wrap">
-          {/* Section header — larger/bolder than the card titles below so the
-              page reads as "one section governing four cards", not a flat stack. */}
-          <span className="text-text font-bold text-base shrink-0">Risk limits</span>
-          <span className="text-t3 text-xs" style={{ color: totalBreaches > 0 ? 'var(--status-negative-text)' : totalNear > 0 ? 'var(--status-warning-text)' : 'var(--t3)' }}>{summaryLine}</span>
-        </div>
-        {showSyncButton && (
-          <button
-            onClick={() => sync()}
-            disabled={isSyncing}
-            className="shrink-0 px-3 py-1.5 rounded text-xs font-semibold bg-acc text-white cursor-pointer"
-            style={{ opacity: isSyncing ? 0.6 : 1 }}
-          >
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE[3] }}>
+      {showSyncButton && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button onClick={() => sync()} disabled={isSyncing} style={{ padding: `${SPACE[1.5]}px ${SPACE[3]}px`, borderRadius: RADIUS.md, fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold, background: 'var(--acc)', color: 'var(--text-inverse)', border: 'none', cursor: 'pointer', opacity: isSyncing ? 0.6 : 1 }}>
             {isSyncing ? 'Syncing…' : 'Sync & Evaluate'}
           </button>
-        )}
-      </div>
-
-      <div className="text-t3 text-xs" style={{ marginTop: -8, lineHeight: 1.5 }}>
-        We compare your own IBKR positions (synced from your account) against the limits you
-        set in {settingsRef}. It's a heads-up only — nothing here places or blocks a trade; it
-        just flags where you're over the line so you can decide what to do.
-        {lastResult && ` Synced ${lastResult.count} position${lastResult.count !== 1 ? 's' : ''}.`}
-      </div>
+        </div>
+      )}
       {syncError && (
-        <div className="text-xs font-medium text-[var(--status-negative-text)] bg-[var(--status-negative-bg)] border border-[var(--status-negative-border)] rounded px-3 py-2">
+        <div style={{ fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.medium, color: 'var(--status-negative-text)', background: 'var(--status-negative-bg)', border: '1px solid var(--status-negative-border)', borderRadius: RADIUS.md, padding: `${SPACE[2]}px ${SPACE[3]}px` }}>
           Sync failed: {syncError} — evaluating against last-synced data below.
         </div>
       )}
 
-      {/* The four limit cards are one group — a subtle tinted container sets them
-          apart from the standalone Regime light card (same card style) above. */}
-      <div className="rounded-2xl border border-border p-3 flex flex-col gap-4" style={{ background: 'var(--s2)' }}>
-      {/* Drawdown first — it drives the gross-exposure target the next card renders. */}
-      {ladderStatus && (
-        <DrawdownCard status={ladderStatus} nlv={ddNlv} asOf={ddAsOf} isLive={ddIsLive} />
+      <VerdictBanner items={items} />
+
+      <div style={sectionLabel}>The market right now</div>
+      <MarketCard instrument={instrument} setInstrument={setInstrument} regimeEnabled={regimeEnabled} structure={regimeStructure} settingsRef={settingsRef} />
+
+      <div style={sectionLabel}>Your account vs your plan</div>
+
+      {!ladderEnabled ? (
+        <OffState title="Account safety net" help="Your drawdown safety net is off — no de-risk steps are being tracked." settingsRef={settingsRef} />
+      ) : ladderStatus ? (
+        <SafetyNetCard status={ladderStatus} ladder={config.ladder} maxGross={config.max_gross_pct} nlv={ddNlv} asOf={ddAsOf} isLive={ddIsLive} money={money} settingsRef={settingsRef} />
+      ) : (
+        <div style={card}>
+          <div style={{ ...cardTitle, marginBottom: SPACE[1] }}>Account safety net</div>
+          <div style={{ ...cardDesc, color: 'var(--t2)' }}>Silent until a live account value and a peak exist (connect IBKR with the NAV section in {settingsRef}).</div>
+        </div>
       )}
-      <div className="bg-surface border border-border rounded-xl p-5">
-        <div className="text-text font-semibold text-sm flex items-center gap-1.5">
-          Gross exposure
-          <StatusPill variant={SEVERITY_PILL[result.grossViolation.severity].variant}>{SEVERITY_PILL[result.grossViolation.severity].label}</StatusPill>
-          <HelpToggle ariaLabel="About gross exposure">
-            <span className="block">Your total market value ÷ your account equity.</span>
-            <span className="block text-t3 mt-1">Above 100% means you're using leverage/margin, so a market drop hits your equity harder.</span>
-            <span className="block text-t3 mt-1">Keep it near or under your gross cap; as you draw down, the ladder auto-tightens the target.</span>
-          </HelpToggle>
-        </div>
-        <div className="text-t3 text-xs mt-0.5 mb-3" style={{ lineHeight: 1.5 }}>
-          Total market value of every position vs your account equity. Above 100% means you're
-          using leverage/margin; the drawdown ladder can trim this target as you draw down.
-        </div>
-        {usingLiveEquity ? (
-          <div className="text-t3 text-xs mb-2 tabular-nums">
-            vs live account equity {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(accountEquity)} — Net Liquidation Value from your last IBKR sync (incl. margin).
-          </div>
-        ) : config.is_placeholder && (
-          <div className="text-t3 text-xs mb-2">
-            Using a default $100,000 account equity — connect IBKR (with the NAV section) so this reads
-            your live balance, or set a figure in Settings.
-          </div>
-        )}
-        <GrossExposureBar
-          v={result.grossViolation}
-          binding={bindingGross !== undefined ? bindingGross : bindingGrossTarget(result.ladderTargetGrossPct, null)}
+
+      <InvestedCard gross={result.grossViolation} cap={config.max_gross_pct} target={gatedBinding?.targetPct ?? null} accountEquity={accountEquity} money={money} />
+
+      {capsEnabled ? (
+        <SizeCapsCard
+          entries={capEntries}
+          ackFor={ackFor}
+          onAcknowledge={(scope, type, status, note) => acknowledge.mutate({ scope, violationType: type, status, glidePathNote: note })}
         />
-      </div>
+      ) : (
+        <OffState title="Size caps" help="Your single-stock, sector, and options caps are off — concentration isn't being flagged." settingsRef={settingsRef} />
+      )}
 
-      <BreachOnlyList
-        title="Position concentration"
-        description="Each ticker's share of your book vs your single-name cap — limits how much any one position can hurt you."
-        help={<>
-          <span className="block">Each ticker's market value as a % of your whole book, vs your single-name cap.</span>
-          <span className="block text-t3 mt-1">Caps how much any one position can hurt you if it gaps against you.</span>
-          <span className="block text-t3 mt-1">Over the line? Trim it, or set a glide path (a dated plan to reduce).</span>
-        </>}
-        violations={result.positionViolations}
-        ackType="position"
-        ackFor={ackFor}
-        onAcknowledge={(scope, status, note) => acknowledge.mutate({ scope, violationType: 'position', status, glidePathNote: note })}
-      />
+      {perStockEnabled ? (
+        <PerStockStopsCard rows={stopRows} ladderRungs={config.per_stock_ladder} optionRungs={config.per_stock_option_ladder} />
+      ) : (
+        <OffState title="Per-stock stops" help="Your per-position stops are off — individual names aren't being measured against your entry." settingsRef={settingsRef} />
+      )}
 
-      <BreachOnlyList
-        title="Option concentration"
-        description={<>Each ticker's OPTIONS exposure vs your option cap — options carry more risk per dollar (leverage, time decay), so this cap is usually tighter than the overall position cap. Set it under {settingsRef} → thresholds.</>}
-        help={<>
-          <span className="block">Each underlying's OPTIONS exposure as a % of your book, vs your option cap.</span>
-          <span className="block text-t3 mt-1">Options carry more risk per dollar (leverage + time decay), so this cap is usually tighter than the overall position cap.</span>
-          <span className="block text-t3 mt-1">Set the cap under Settings → thresholds.</span>
-        </>}
-        violations={result.optionViolations}
-        ackable={false}
-      />
-
-      <BreachOnlyList
-        title="Sector concentration"
-        description="Each sector's share of your book vs your sector cap — limits thematic (correlated) risk when several names move together."
-        help={<>
-          <span className="block">Each sector's combined market value as a % of your book, vs your sector cap.</span>
-          <span className="block text-t3 mt-1">Limits correlated risk — when a whole theme sells off, names in it tend to move together.</span>
-          <span className="block text-t3 mt-1">Diversify or trim the heaviest sector to bring it back in line.</span>
-        </>}
-        violations={result.sectorViolations}
-        ackType="sector"
-        ackFor={ackFor}
-        onAcknowledge={(scope, status, note) => acknowledge.mutate({ scope, violationType: 'sector', status, glidePathNote: note })}
-        unmappedNote={sectorDataMissing ? '(no sector data yet)' : undefined}
-      />
-      </div>
+      <Glossary />
     </div>
   );
 }

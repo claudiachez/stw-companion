@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { TIERS, fmtDateTime, sizingTone, matchConvictionBand, DEFAULT_PER_STOCK_LADDER, cashflowAdjustedDrawdownPct, drawdownLadderStatus, DRAWDOWN_NEAR_BAND_PP, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, SPACE } from '@stw/shared';
+import { TIERS, fmtDateTime, sizingTone, matchConvictionBand, DEFAULT_PER_STOCK_LADDER, cashflowAdjustedDrawdownPct, drawdownLadderStatus, DRAWDOWN_NEAR_BAND_PP, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING } from '@stw/shared';
 import { useUserPositions, useIbkrSettings, useUserExecutions } from './useUserPositions';
 import { usePerStockLadders, type PerStockLadderInfo } from './usePerStockLadders';
 import { PerStockLadderChip } from './PerStockLadder';
@@ -26,9 +26,7 @@ import { ViolationsSummary } from '../limits/ViolationsSummary';
 import { useBindingGrossTarget } from '../limits/useBindingGrossTarget';
 import { useLiveNlv } from './useLiveNlv';
 import { useSectorMap, useRiskConfig } from '../limits/useRiskConfig';
-import { DEFAULT_RISK_CONFIG } from '../limits/api';
-import { RegimeLight } from '../regime/RegimeLight';
-import { useRegimeInstrumentStore, REGIME_INSTRUMENTS } from '../regime/useRegimeInstrument';
+import { useRegimeInstrumentStore } from '../regime/useRegimeInstrument';
 import { useAuthStore } from '../../store/auth';
 import { PortfolioPositionDetail, type DetailGroup } from './PortfolioPositionDetail';
 import {
@@ -699,18 +697,12 @@ export function PortfolioPage() {
     [convictionBatch, pickMap, heldUnderlyings],
   );
 
-  // The viewer's regime-light index (default IWM = STW's proxy; user can prefer
-  // SPY/QQQ) + their own REGIME_EXIT rule (migration 063) — both used by the
-  // Risk-tab RegimeLight below. Advisory / display-only.
+  // The chosen regime index (default IWM = STW's proxy; user can prefer SPY/QQQ) — drives
+  // the Risk-tab market card (rendered inside ViolationsSummary, which sets the store) and
+  // the batched 9/21/200 structure + bindingGross computed here. Advisory / display-only.
   const regimeInstrument = useRegimeInstrumentStore((s) => s.instrument);
-  const setRegimeInstrument = useRegimeInstrumentStore((s) => s.setInstrument);
   const regimeUserId = useAuthStore((s) => s.user?.id);
   const { data: regimeRiskConfig } = useRiskConfig(regimeUserId);
-  const regimeExitRule = {
-    trimToPct: regimeRiskConfig?.regime_trim_to_pct ?? DEFAULT_RISK_CONFIG.regime_trim_to_pct,
-    stopPct: regimeRiskConfig?.regime_stop_pct ?? DEFAULT_RISK_CONFIG.regime_stop_pct,
-    doubleRedGrossPct: regimeRiskConfig?.regime_doublered_gross_pct ?? DEFAULT_RISK_CONFIG.regime_doublered_gross_pct,
-  };
   // Live NLV for the drawdown read (Item 2, Option A) — computed ONCE here from the held
   // positions + the shared Finnhub cache, then threaded into BOTH useBindingGrossTarget
   // (the ladder→gross target) and ViolationsSummary (the card), so the two never read a
@@ -741,9 +733,9 @@ export function PortfolioPage() {
     };
   }, [regimeRiskConfig, liveNlv.nlv, perStockLadders]);
   // One reconciliation of the drawdown ladder vs the double-RED regime target, computed
-  // once here and passed to BOTH the RegimeLight and ViolationsSummary so they show the
-  // identical binding gross number (never two conflicting targets). The ladder side reads
-  // the live NLV so its target tracks the same drawdown the card shows.
+  // once here and passed to ViolationsSummary (the invested-bar target marker + the verdict
+  // banner) so every risk surface shows the identical binding gross number. The ladder side
+  // reads the live NLV so its target tracks the same drawdown the card shows.
   const bindingGross = useBindingGrossTarget(regimeRiskConfig, regimeInstrument, liveNlv.nlv);
 
   const allGroups = useMemo<PortfolioGroup[]>(() => {
@@ -1084,43 +1076,25 @@ export function PortfolioPage() {
   );
 
   const riskBody = (
-    <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)', padding: pad }}>
-      {/* Advisory regime light — shown to every portfolio user, driven by their
-          chosen index (default IWM = STW's proxy; picker below persists per-user). */}
-      <div style={{ marginBottom: SPACE[4], display: 'flex', flexDirection: 'column', gap: SPACE[2] }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>Regime index</span>
-          {/* Chips (same style as the Trend / Market Structure indicator toggles), not a dropdown. */}
-          {REGIME_INSTRUMENTS.map((o) => {
-            const active = regimeInstrument === o.value;
-            return (
-              <button
-                key={o.value}
-                onClick={() => setRegimeInstrument(o.value)}
-                title={o.label}
-                style={{
-                  fontSize: FONT_SIZE.xs, padding: '2px 10px', borderRadius: 4, border: '1px solid var(--border)',
-                  background: active ? 'var(--acc)' : 'transparent',
-                  color: active ? 'var(--text-inverse)' : 'var(--t2)', cursor: 'pointer', fontWeight: FONT_WEIGHT.semibold,
-                }}
-              >
-                {o.value}
-              </button>
-            );
-          })}
-        </div>
-        {/* One consolidated card: the frozen gate + the index's live 9/21/200
-            structure, so there's no second block with a conflicting close. */}
-        <RegimeLight instrument={regimeInstrument} exitRule={regimeExitRule} structure={regimes[regimeInstrument]} bindingGross={bindingGross} />
+    <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)' }}>
+      {/* Redesigned Risk tab (plans/20260720_webapp_redesign): the verdict banner +
+          market health check + the four account-vs-plan cards, all rendered by
+          ViolationsSummary from the existing engine/hooks. Max-width 860, centered. */}
+      <div style={{ maxWidth: 860, margin: '0 auto', padding: pad, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {capabilities.canUseLimits ? (
+          <ViolationsSummary
+            settingsTo="/settings"
+            bindingGross={bindingGross}
+            drawdown={{ nlv: liveNlv.nlv, asOf: liveNlv.asOf, isLive: liveNlv.isLive }}
+            regimeStructure={regimes[regimeInstrument]}
+          />
+        ) : (
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '12px 16px', fontSize: FONT_SIZE.sm, color: 'var(--t3)' }}>
+            <strong style={{ color: 'var(--text)' }}>Risk limits 🔒</strong> — flag concentration and
+            gross-exposure breaches in your own book, requires <strong style={{ color: 'var(--t2)' }}>Premium</strong>.
+          </div>
+        )}
       </div>
-      {capabilities.canUseLimits ? (
-        <ViolationsSummary settingsTo="/settings" bindingGross={bindingGross} drawdown={{ nlv: liveNlv.nlv, asOf: liveNlv.asOf, isLive: liveNlv.isLive }} />
-      ) : (
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '12px 16px', fontSize: FONT_SIZE.sm, color: 'var(--t3)' }}>
-          <strong style={{ color: 'var(--text)' }}>Risk limits 🔒</strong> — flag concentration and
-          gross-exposure breaches in your own book, requires <strong style={{ color: 'var(--t2)' }}>Premium</strong>.
-        </div>
-      )}
     </div>
   );
 

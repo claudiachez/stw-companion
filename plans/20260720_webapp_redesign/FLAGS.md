@@ -66,6 +66,28 @@ styled Trade-history + collapsible "First time?" guide.
   can't override the saved query period, so a one-click 365-day pull isn't possible. The "Import past
   year of trades" button opens the file picker (download YTD XML in IBKR → upload). Behavior unchanged.
 
+## Risk tab (committed)
+`ViolationsSummary` rebuilt to the redesign (verdict banner + market health check + the four
+account-vs-plan cards + glossary), a pure re-layout over the existing engine (`evaluateRiskConfig`,
+`cashflowAdjustedDrawdownPct`/`drawdownLadderStatus`, `useBindingGrossTarget`, `regimeExitAdvice`, the
+`risk_violation_acks` ack/glide-path workflow) — no re-derived NLV/drawdown/target.
+
+**Guardrail-honoring wired here** (the deferred Settings work): a `*_enabled=false` guardrail shows a
+muted "off" card and contributes no banner items; per-stock stops route OPTION positions to
+`per_stock_option_ladder` and shares to `per_stock_ladder` (via a new `assetClass` arg on
+`usePerStockLadders`; the shared status util was already ladder-agnostic — no util/test change).
+
+**Notes / follow-ups:**
+- **Drawdown-alert cron does NOT yet honor the `*_enabled` flags** — still out of scope; wire it when
+  the alert layer is next touched (it currently evaluates all guardrails regardless of the toggles).
+- RegimeLight's presentation is **replaced by the new market card on the subscriber Risk tab**;
+  RegimeLight.tsx is untouched and still used on the admin Limits tab.
+- Per-stock rows render `TickerLink`-styled but **non-navigating on the Risk tab** (no detail pane there).
+- Multiple option legs on one underlying **roll up together** in the per-option ladder (mirrors the
+  stock-lot rollup) — a minor advisory simplification.
+- Not visually verified (auth + IBKR data required) — needs a logged-in pass (toggle a guardrail off in
+  Settings → confirm it drops from the Risk banner + shows the muted card).
+
 **Deviations from the mock:**
 - **Omitted the mock's "STW playbook / Reset to preset" banner** — there's no client-side PRESET in
   our data model; defaults live server-side (`DEFAULT_RISK_CONFIG`). Add a reset-to-defaults if wanted.
