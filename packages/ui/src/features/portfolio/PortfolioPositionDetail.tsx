@@ -233,7 +233,7 @@ export function PortfolioPositionDetail({
           <DetailPaneMetricLabel>Your position</DetailPaneMetricLabel>
           <div style={statBig('var(--text)')}>{fmtMoney(group.marketValue)}</div>
           <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[0.5] }}>
-            market value{ownPortfolioPct !== null ? ` · ${ownPortfolioPct.toFixed(1)}% of book` : ''}
+            {ownPortfolioPct !== null ? `${ownPortfolioPct.toFixed(1)}% of your account` : 'market value'}
           </div>
           <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[0.5] }}>{legCount} leg{legCount !== 1 ? 's' : ''} · {composition}</div>
         </>
@@ -262,9 +262,10 @@ export function PortfolioPositionDetail({
           {showPnl ? (
             <>
               <div style={statBig(pnlColor(group.netPnl))}>{fmtMoney(group.netPnl)}</div>
-              <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[0.5] }}>
-                unrealized{group.returnPct !== null ? ` · ${fmtPct(group.returnPct)}` : ''}
+              <div style={{ fontSize: FONT_SIZE['2xs'], color: pnlColor(group.netPnl), marginTop: SPACE[0.5], lineHeight: 1.4 }}>
+                {group.returnPct !== null ? `${fmtPct(group.returnPct)} vs what you paid` : 'vs what you paid'}
               </div>
+              <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', lineHeight: 1.4 }}>on open holdings only</div>
             </>
           ) : (
             <div style={{ fontSize: FONT_SIZE.base, color: 'var(--t3)' }}>Hidden</div>
@@ -280,7 +281,12 @@ export function PortfolioPositionDetail({
           {config ? (
             <>
               <div style={statBig(posSeverity ? SEVERITY_COLOR[posSeverity] : 'var(--text)')}>{posPct.toFixed(1)}%</div>
-              <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[0.5] }}>of your {config.max_position_pct}% cap</div>
+              <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[0.5] }}>of your {config.max_position_pct}% one-stock cap</div>
+              <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', lineHeight: 1.4 }}>
+                {config.max_position_pct - posPct >= 0
+                  ? `${(config.max_position_pct - posPct).toFixed(1)} points of room left`
+                  : `${(posPct - config.max_position_pct).toFixed(1)} points over`}
+              </div>
               {posSeverity && <div style={{ marginTop: SPACE[0.5] }}><StatusPill variant={posSeverity}>{SEVERITY_LABEL[posSeverity]}</StatusPill></div>}
             </>
           ) : (
