@@ -627,14 +627,14 @@ function SizingBar({ delta }: { delta: number | null }) {
   );
 }
 
-// A short conviction label for a tailed name (STW tiers 1–5 map onto TIERS keys), with a ▼
-// when the latest webinar batch marked it down (declining set). Colored by the tier.
+// Numeric conviction line under a tailed name ("conviction 5/5"), muted; turns red with a
+// ▼ when the latest webinar batch marked it down (declining set) — matches the redesign,
+// which shows STW's 1–5 rating, not a word band.
 function ConvictionNote({ conviction, declining }: { conviction: number | null; declining: boolean }) {
   if (conviction == null) return null;
-  const meta = TIERS[conviction];
   return (
-    <span style={{ display: 'block', fontSize: FONT_SIZE['2xs'], color: declining ? 'var(--status-negative-text)' : (meta?.color ?? 'var(--t3)'), lineHeight: 1.3 }}>
-      {declining ? '▼ ' : ''}{meta?.short ?? `Tier ${conviction}`}
+    <span style={{ display: 'block', fontSize: FONT_SIZE['2xs'], color: declining ? 'var(--status-negative-text)' : 'var(--t3)', lineHeight: 1.3 }}>
+      conviction {conviction}/5{declining ? ' ▼' : ''}
     </span>
   );
 }
@@ -759,10 +759,14 @@ function TailingTab({ groups, portfolioValue, pickMap, decliningTailed, showMone
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               {rows.map(({ g, yourPct, stwWeight, delta, conviction, declining }) => {
                 const tone = sizingTone(delta, 1);
+                const overD = tone.state === 'oversized';
+                const matchClause = showMoney && delta != null && portfolioValue > 0
+                  ? ` — matching them = ${overD ? 'trim' : 'add'} ≈ ${fmtMoney((Math.abs(delta) / 100) * portfolioValue)}`
+                  : '';
                 const note = delta == null ? '—'
-                  : tone.state === 'oversized' ? `${delta.toFixed(1)}pt heavier`
-                  : tone.state === 'undersized' ? `${Math.abs(delta).toFixed(1)}pt lighter`
-                  : 'In line with STW';
+                  : tone.state === 'oversized' ? `${delta.toFixed(1)} points more than ${trader}${matchClause}`
+                  : tone.state === 'undersized' ? `${Math.abs(delta).toFixed(1)} points less than ${trader}${matchClause}`
+                  : 'sized like STW (within 1 point)';
                 const noteColor = tone.state === 'inline' ? 'var(--status-positive-text)' : tone.textVar;
                 return (
                   <div key={g.underlying} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderBottom: '1px solid var(--bsub)', flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
