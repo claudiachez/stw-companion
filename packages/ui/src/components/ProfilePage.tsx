@@ -269,7 +269,7 @@ export function ProfilePage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2.5], flexWrap: 'wrap' }}>
               <span style={{ width: 8, height: 8, borderRadius: RADIUS.full, background: ibkrConnected ? 'var(--acc)' : 'var(--t3)', flexShrink: 0 }} />
               <span style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ display: 'block', fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>Interactive Brokers</span>
+                <span style={{ display: 'block', fontSize: FONT_SIZE.sms, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>Interactive Brokers</span>
                 <span style={{ display: 'block', fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>
                   {ibkrConnected
                     ? [maskedAccount || 'Connected', ibkrSyncedAt ? `synced ${fmtDateTime(ibkrSyncedAt)}` : null].filter(Boolean).join(' · ')
