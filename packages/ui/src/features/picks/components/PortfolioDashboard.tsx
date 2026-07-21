@@ -238,7 +238,11 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
   const pad = isMobile ? '16px 14px' : '14px 16px';
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto' }}>
+    <div style={{ height: '100%', overflowY: 'auto', background: 'var(--bg)' }}>
+      {/* Contained column + single pane card (matches the ref pane + the sibling Overview tab,
+          instead of sprawling full-bleed). */}
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: isMobile ? 12 : '16px 20px' }}>
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
       {/* Eyebrow strip — names the surface (shared anatomy with DetailPane). */}
       <div style={{
         background: 'var(--s2)', borderBottom: '1px solid var(--bsub)',
@@ -401,6 +405,8 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
               </div>
             )}
           </div>
+        </div>
+      </div>
         </div>
       </div>
     </div>

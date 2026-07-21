@@ -246,8 +246,13 @@ export function TradesTable({ holdings, onSelectTicker }: Props) {
   return (
     // Full-bleed eyebrow + filter bar above a padded, scrollable area holding the lot list —
     // so the Transactions tab reads as the same app as Ticker Details.
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div style={{ height: '100%', overflowY: 'auto', background: 'var(--bg)' }}>
       {editing && <TradeEditForm holding={editing} onDone={() => setEditing(null)} />}
+
+      {/* Contained column + pane card — consistent with the Portfolio-Overview sub-tab + the ref pane
+          (rows stay full-bleed inside the card). */}
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: isMobile ? 12 : '16px 20px' }}>
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
 
       {/* Eyebrow strip — names the surface (shared anatomy with DetailPane). */}
       <div style={{
@@ -261,7 +266,7 @@ export function TradesTable({ holdings, onSelectTicker }: Props) {
 
       <TradesFilterBar holdings={holdings} sectors={sectorOptions} count={trades.length} total={allTrades.length} />
 
-      <div style={{ flex: 1, overflowY: 'auto' }}>
+      <div>
         <div>
           {trades.length === 0 ? (
             <p style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', padding: `${SPACE[3]}px ${SPACE[3]}px` }}>
@@ -285,6 +290,8 @@ export function TradesTable({ holdings, onSelectTicker }: Props) {
         <p style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', padding: '8px 14px', lineHeight: 1.5 }}>
           One row per lot. Open rows show live P&amp;L; closed rows show what was booked and its contribution to the whole book.
         </p>
+      </div>
+        </div>
       </div>
     </div>
   );
