@@ -44,7 +44,7 @@ export function StatusPill({ variant, children }: StatusPillProps) {
         display: 'inline-flex',
         alignItems: 'center',
         gap: SPACE[1],
-        padding: `${SPACE[0.5]}px ${SPACE[1.5]}px`,
+        padding: `${SPACE[0.5]}px ${SPACE[2]}px`,
         borderRadius: RADIUS.full,
         border: `1px solid var(--status-${role}-border)`,
         background: `var(--status-${role}-bg)`,

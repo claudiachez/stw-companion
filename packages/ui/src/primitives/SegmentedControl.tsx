@@ -36,7 +36,7 @@ export function SegmentedControl<T extends string>({ label, options, value, onCh
       >
         {label}
       </span>
-      <div style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 5, overflow: 'hidden', flexShrink: 0 }}>
+      <div style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden', flexShrink: 0 }}>
         {options.map((o, i) => {
           const active = o.value === value;
           return (

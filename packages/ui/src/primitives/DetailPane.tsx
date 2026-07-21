@@ -52,10 +52,10 @@ export function DetailPane({ eyebrow, title, subtitle, badges, metrics, isMobile
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap' }}>
             <span style={{ fontSize: FONT_SIZE['2xl'], fontWeight: FONT_WEIGHT.bold, color: 'var(--text)', lineHeight: 1.1 }}>{title}</span>
-            {badges && <div style={{ display: 'flex', gap: SPACE[1], flexWrap: 'wrap', alignItems: 'center' }}>{badges}</div>}
+            {badges && <div style={{ display: 'flex', gap: SPACE[2], flexWrap: 'wrap', alignItems: 'center' }}>{badges}</div>}
           </div>
           {subtitle && (
-            <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)', marginTop: SPACE[1] }}>{subtitle}</div>
+            <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)', marginTop: 1 }}>{subtitle}</div>
           )}
         </div>
         {onClose && (
@@ -79,11 +79,11 @@ export function DetailPane({ eyebrow, title, subtitle, badges, metrics, isMobile
         <div style={{
           display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`,
           borderTop: '1px solid var(--bsub)', borderBottom: '1px solid var(--bsub)',
-          margin: `${SPACE[3.5]}px 0`, ...NUMERIC_STYLE,
+          margin: `${SPACE[3]}px ${SPACE[4]}px`, ...NUMERIC_STYLE,
         }}>
           {metrics.map((m, i) => (
             <div key={m.key} style={{
-              minWidth: 0, padding: `${SPACE[2.5]}px ${SPACE[3.5]}px`,
+              minWidth: 0, padding: `${SPACE[2.5]}px ${SPACE[3]}px ${SPACE[3]}px`,
               borderLeft: i % cols !== 0 ? '1px solid var(--bsub)' : undefined,
               borderTop: i >= cols ? '1px solid var(--bsub)' : undefined,
             }}>{m.content}</div>
@@ -112,7 +112,7 @@ export function DetailPaneMetricLabel({ children }: { children: React.ReactNode 
  * shared section skeleton both detail panes stack, so they can't drift. */
 export function DetailPaneSection({ title, action, children }: { title?: React.ReactNode; action?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div style={{ border: '1px solid var(--bsub)', borderRadius: RADIUS.lg, padding: `${SPACE[3]}px ${SPACE[3.5]}px`, marginBottom: SPACE[2.5] }}>
+    <div style={{ border: '1px solid var(--bsub)', borderRadius: 10, padding: `${SPACE[3]}px ${SPACE[3.5]}px`, marginBottom: SPACE[2.5] }}>
       {(title || action) && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: SPACE[2], marginBottom: SPACE[2] }}>
           {title ? <DetailPaneMetricLabel>{title}</DetailPaneMetricLabel> : <span />}

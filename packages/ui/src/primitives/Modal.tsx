@@ -1,4 +1,4 @@
-import { FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, MODAL_WIDTH, OVERLAY, SHADOW, SPACE, Z_INDEX } from '@stw/shared';
+import { FONT_SIZE, FONT_WEIGHT, MODAL_WIDTH, OVERLAY, SHADOW, SPACE, Z_INDEX } from '@stw/shared';
 
 // Phase 3 addition to the spec's component list (not in the original 11 — added based on
 // a Phase 1 finding: docs/design-system/audit/03-responsive-mobile-conventions.md found
@@ -17,7 +17,7 @@ export interface ModalProps {
   children: React.ReactNode;
 }
 
-export function Modal({ onClose, width = 'md', accentColor = 'var(--acc)', title, children }: ModalProps) {
+export function Modal({ onClose, width = 'md', accentColor = 'var(--border)', title, children }: ModalProps) {
   return (
     <div
       onClick={onClose}
@@ -32,12 +32,12 @@ export function Modal({ onClose, width = 'md', accentColor = 'var(--acc)', title
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%', maxWidth: MODAL_WIDTH[width],
-          background: 'var(--surface)', border: `1px solid ${accentColor}`, borderRadius: 10,
+          background: 'var(--surface)', border: `1px solid ${accentColor}`, borderRadius: 12,
           padding: `${SPACE[4]}px ${SPACE[5]}px`, boxShadow: SHADOW.modal,
         }}
       >
         {title && (
-          <div style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: accentColor, marginBottom: SPACE[3], textTransform: 'uppercase', letterSpacing: LETTER_SPACING.label }}>
+          <div style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)', marginBottom: SPACE[3] }}>
             {title}
           </div>
         )}

@@ -41,21 +41,21 @@ export function AccordionList<T>({
               style={{
                 display: 'flex', alignItems: 'center', gap: SPACE[2], padding: '10px 14px',
                 borderBottom: '1px solid var(--bsub)', cursor: 'pointer',
-                background: isExpanded ? 'var(--c5bg)' : 'transparent',
+                background: 'transparent',
               }}
               onMouseEnter={(e) => { if (!isExpanded) (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
               onMouseLeave={(e) => { if (!isExpanded) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
             >
               <span
                 style={{
-                  fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', flexShrink: 0, width: 8, textAlign: 'center',
+                  fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', flexShrink: 0, width: 16, textAlign: 'center',
                   transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s', display: 'inline-block',
                 }}
               >
                 ▶
               </span>
               {accent !== undefined && (
-                <div style={{ width: 3, height: 30, borderRadius: 2, flexShrink: 0, background: accent }} />
+                <div style={{ width: 3, height: 32, borderRadius: 2, flexShrink: 0, background: accent }} />
               )}
               {renderHeader(item, isExpanded)}
             </div>
