@@ -148,7 +148,7 @@ function FlatLegRow({ row, onSelectTicker, showMoney, isMobile, portfolioValue, 
       <td style={td}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           {/* Every position opens its own detail pane, tailed or not (host, 2026-07-08). */}
-          <TickerLink ticker={underlying} onSelect={onSelectTicker} />
+          <TickerLink ticker={underlying} onSelect={onSelectTicker} style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.bold }} />
           {isTailed && traders.map((t) => <Badge key={t} kind="source" trader={t} />)}
           {/* Compact = trend-structure chip only (matches the Stock Picks list rows). */}
           <RegimeBadge regime={regime} compact />
@@ -202,9 +202,11 @@ function LegRow({ pos, showMoney }: { pos: UserPosition; showMoney: boolean }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px 7px 40px', borderBottom: '1px solid var(--bsub)', background: 'var(--bg)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
         <span style={{
+          // Option-leg kind chip uses the semantic info token (not a raw sky-blue rgba) per the
+          // Listing Pages redesign; STOCK stays neutral.
           fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.semibold, padding: '1px 5px', borderRadius: 4, flexShrink: 0,
-          color: isOpt ? 'var(--c4)' : 'var(--t2)', background: isOpt ? 'var(--c4bg)' : 'var(--s2)',
-          border: isOpt ? '1px solid var(--c4b)' : '1px solid var(--border)',
+          color: isOpt ? 'var(--status-info-text)' : 'var(--t2)', background: isOpt ? 'var(--status-info-bg)' : 'var(--s2)',
+          border: isOpt ? '1px solid var(--status-info-border)' : '1px solid var(--border)',
         }}>
           {isOpt ? `${qty < 0 ? 'SHORT ' : ''}${pos.put_call === 'C' ? 'CALL' : 'PUT'}` : 'STOCK'}
         </span>
@@ -1314,12 +1316,8 @@ export function PortfolioPage() {
 
   const positionsBody = (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, overflow: 'hidden' }}>
-      {/* Filter toolbar — scoped to Positions only */}
-      <div style={{ display: 'flex', alignItems: 'center', background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', flexShrink: 0, overflowX: 'auto', WebkitOverflowScrolling: 'touch' as never }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', minWidth: 'max-content' }}>
-          <PortfolioFilterBar filters={filters} onChange={setFilters} baskets={baskets} sectors={sectors} filtered={visibleCount} total={totalCount} />
-        </div>
-      </div>
+      {/* Filter toolbar — scoped to Positions only. The two-row bar owns its own surface. */}
+      <PortfolioFilterBar filters={filters} onChange={setFilters} baskets={baskets} sectors={sectors} filtered={visibleCount} total={totalCount} />
       <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)', padding: pad }}>
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', boxShadow: 'var(--shadow)' }}>
           <div style={{ padding: '8px 13px', background: 'var(--s2)', borderBottom: '1px solid var(--bsub)', display: 'flex', alignItems: 'center', gap: 8 }}>

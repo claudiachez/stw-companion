@@ -96,7 +96,7 @@ export function HoldingRow({ holding: h, isSelected, maxWeight, onClick, isUserH
         </div>
 
         {pnlPct != null && (
-          <span style={{ fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold, color: pnlColor, fontVariantNumeric: 'tabular-nums' }}>
+          <span style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: pnlColor, fontVariantNumeric: 'tabular-nums' }}>
             {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%
           </span>
         )}
