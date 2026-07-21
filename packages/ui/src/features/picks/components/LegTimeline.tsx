@@ -488,9 +488,10 @@ function confirmDelete(del: (id: string) => Promise<void>, id: string, onlyEvent
 
 // ── Add / edit form ───────────────────────────────────────────────────────────────────────────
 const fld: React.CSSProperties = { width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 5, padding: '6px 8px', fontSize: FONT_SIZE.sm, color: 'var(--text)', boxSizing: 'border-box', height: 30 };
-const lbl: React.CSSProperties = { fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: LETTER_SPACING.label, marginBottom: 2, display: 'block' };
+const fldSelect: React.CSSProperties = { ...fld, padding: '0 6px' };
+const lbl: React.CSSProperties = { fontSize: FONT_SIZE['3xs'], fontWeight: FONT_WEIGHT.bold, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: LETTER_SPACING.label, marginBottom: 2, display: 'block' };
 // 9px/700/0.1em uppercase section header — the redesign's numbered form-section label.
-const sectionLbl: React.CSSProperties = { fontSize: FONT_SIZE['3xs'], fontWeight: FONT_WEIGHT.bold, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8, display: 'block' };
+const sectionLbl: React.CSSProperties = { fontSize: FONT_SIZE['3xs'], fontWeight: FONT_WEIGHT.bold, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6, display: 'block' };
 const hint: React.CSSProperties = { fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: 6 };
 // Selectable pill — replaces the leg/action <select>s with chips (same state, new skin).
 function chip(active: boolean): React.CSSProperties {
@@ -499,7 +500,7 @@ function chip(active: boolean): React.CSSProperties {
     border: `1px solid ${active ? 'var(--acc)' : 'var(--border)'}`,
     background: active ? 'var(--acc)' : 'var(--bg)',
     color: active ? 'var(--text-inverse)' : 'var(--t2)',
-    fontWeight: active ? FONT_WEIGHT.semibold : FONT_WEIGHT.medium,
+    fontWeight: FONT_WEIGHT.semibold,
   };
 }
 
@@ -623,16 +624,16 @@ function EventForm({ ticker, legs, event, onDone }: { ticker: string; legs: Leg[
                 {l.instrument_type === 'SHARES' ? 'Shares' : `$${l.option_strike}${l.option_right === 'PUT' ? 'P' : 'C'} ${fmtOptionExpiry(l.option_expiry)}`}
               </button>
             ))}
-            <button type="button" onClick={() => setLegId(NEW_LEG)} style={chip(legId === NEW_LEG)}>＋ New leg</button>
+            <button type="button" onClick={() => setLegId(NEW_LEG)} style={{ ...chip(legId === NEW_LEG), background: legId === NEW_LEG ? 'var(--acc)' : 'transparent' }}>＋ New leg</button>
           </div>
           {legId === NEW_LEG && (
-            <div style={{ display: 'grid', gridTemplateColumns: gridCols(4), gap: 8, marginTop: 10, padding: 10, border: '1px dashed var(--border)', borderRadius: 6 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: gridCols(4), gap: 8, marginTop: 8, padding: 10, border: '1px dashed var(--border)', borderRadius: 8 }}>
               <div><label style={lbl}>Instrument</label>
-                <select style={fld} value={instrument} onChange={(e) => setInstrument(e.target.value as 'SHARES' | 'CALL' | 'PUT')}>
+                <select style={fldSelect} value={instrument} onChange={(e) => setInstrument(e.target.value as 'SHARES' | 'CALL' | 'PUT')}>
                   <option value="SHARES">Shares</option><option value="CALL">Call</option><option value="PUT">Put</option>
                 </select></div>
               <div><label style={lbl}>Direction</label>
-                <select style={fld} value={direction} onChange={(e) => setDirection(e.target.value as Direction)}>
+                <select style={fldSelect} value={direction} onChange={(e) => setDirection(e.target.value as Direction)}>
                   <option value="long">Long</option><option value="short">Short</option>
                 </select></div>
               {instrument !== 'SHARES' && <>
@@ -649,7 +650,7 @@ function EventForm({ ticker, legs, event, onDone }: { ticker: string; legs: Leg[
           <label style={sectionLbl}>Contract</label>
           <div style={{ display: 'grid', gridTemplateColumns: gridCols(3), gap: 8 }}>
             <div><label style={lbl}>Right</label>
-              <select style={fld} value={instrument} onChange={(e) => setInstrument(e.target.value as 'CALL' | 'PUT')}>
+              <select style={fldSelect} value={instrument} onChange={(e) => setInstrument(e.target.value as 'CALL' | 'PUT')}>
                 <option value="CALL">Call</option><option value="PUT">Put</option>
               </select></div>
             <div><label style={lbl}>Strike</label>
@@ -683,17 +684,17 @@ function EventForm({ ticker, legs, event, onDone }: { ticker: string; legs: Leg[
         </div>
         <div style={hint}>{weightHint}</div>
         <div style={{ marginTop: 10 }}><label style={lbl}>Notes (optional)</label>
-          <textarea style={{ ...fld, height: 'auto', minHeight: 48, resize: 'vertical' }} value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
+          <textarea style={{ ...fld, height: 'auto', minHeight: 44, resize: 'vertical' }} value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
       </section>
 
-      <div style={{ background: 'var(--s2)', border: '1px solid var(--bsub)', borderRadius: 6, padding: '8px 10px', marginTop: 14, fontSize: FONT_SIZE.sms, color: 'var(--t2)' }}>
-        <span style={{ color: 'var(--t3)' }}>This will read: </span>{preview}
+      <div style={{ background: 'var(--s2)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 12px', marginTop: 14, fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>
+        <span style={{ color: 'var(--text)', fontWeight: FONT_WEIGHT.bold }}>This will read: </span>{preview}
       </div>
 
       {error && <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--status-negative-text)', marginTop: 8 }}>{error}</div>}
       <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-        <button onClick={save} disabled={saving} style={{ padding: '6px 14px', borderRadius: 5, border: 'none', cursor: 'pointer', background: 'var(--acc)', color: 'var(--text-inverse)', fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, opacity: saving ? 0.6 : 1 }}>{saving ? 'Saving…' : 'Save event'}</button>
-        <button onClick={onDone} disabled={saving} style={{ padding: '6px 14px', borderRadius: 5, cursor: 'pointer', background: 'none', border: '1px solid var(--border)', color: 'var(--t2)', fontSize: FONT_SIZE.sm }}>Cancel</button>
+        <button onClick={save} disabled={saving} style={{ padding: '7px 16px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'var(--acc)', color: 'var(--text-inverse)', fontSize: FONT_SIZE.sms, fontWeight: FONT_WEIGHT.bold, opacity: saving ? 0.6 : 1 }}>{saving ? 'Saving…' : 'Save event'}</button>
+        <button onClick={onDone} disabled={saving} style={{ padding: '7px 16px', borderRadius: 6, cursor: 'pointer', background: 'none', border: '1px solid var(--border)', color: 'var(--t2)', fontSize: FONT_SIZE.sms }}>Cancel</button>
       </div>
     </Modal>
   );
