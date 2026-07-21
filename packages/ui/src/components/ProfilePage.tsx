@@ -272,7 +272,7 @@ export function ProfilePage() {
                 <span style={{ display: 'block', fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>Interactive Brokers</span>
                 <span style={{ display: 'block', fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>
                   {ibkrConnected
-                    ? [maskedAccount ? `account ${maskedAccount}` : 'Connected', ibkrSyncedAt ? `synced ${fmtDateTime(ibkrSyncedAt)}` : null].filter(Boolean).join(' · ')
+                    ? [maskedAccount || 'Connected', ibkrSyncedAt ? `synced ${fmtDateTime(ibkrSyncedAt)}` : null].filter(Boolean).join(' · ')
                     : 'Not connected'}
                 </span>
               </span>
