@@ -396,7 +396,7 @@ function AttentionStrip({ warnings, sectorCap, onOpenRisk, onOpenStops }: {
             <button key={r.key} onClick={r.onClick}
               style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--surface)', border: '1px solid var(--bsub)', borderRadius: 8, padding: '9px 12px', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
               <span style={{ flexShrink: 0, width: 8, height: 8, borderRadius: 999, background: `var(--status-${r.sev === 'breach' ? 'negative' : 'warning'}-text)` }} />
-              <span style={{ flex: 1, minWidth: 0, fontSize: FONT_SIZE.sm, color: 'var(--text)', lineHeight: 1.5 }}>{r.text}</span>
+              <span style={{ flex: 1, minWidth: 0, fontSize: FONT_SIZE.sms, color: 'var(--text)', lineHeight: 1.5 }}>{r.text}</span>
               <span style={{ flexShrink: 0, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--acc)', whiteSpace: 'nowrap' }}>{r.go} →</span>
             </button>
           ))}
@@ -440,7 +440,7 @@ function PortfolioSummary({ groups, showMoney, nlv, warnings, sectorCap, onOpenR
   const stat = (label: string, big: React.ReactNode, color: string, sub: string) => (
     <div key={label} style={{ ...overviewCard, padding: '12px 14px' }}>
       <div style={{ ...eyebrow, marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, color, fontVariantNumeric: 'tabular-nums' }}>{big}</div>
+      <div style={{ fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, color, fontVariantNumeric: 'tabular-nums' }}>{big}</div>
       <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', lineHeight: 1.45, marginTop: 2 }}>{sub}</div>
     </div>
   );
@@ -452,7 +452,7 @@ function PortfolioSummary({ groups, showMoney, nlv, warnings, sectorCap, onOpenR
         <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
           <div style={{ flex: 1, minWidth: 220 }}>
             <div style={{ ...eyebrow, marginBottom: 2 }}>Your account is worth</div>
-            <div style={{ fontSize: FONT_SIZE.display, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)', fontVariantNumeric: 'tabular-nums', lineHeight: 1.2 }}>
+            <div style={{ fontSize: FONT_SIZE.hero, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)', fontVariantNumeric: 'tabular-nums', lineHeight: 1.2 }}>
               {showMoney ? (nlv != null ? fmtMoney(nlv) : '—') : MONEY_MASK}
             </div>
             <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.55, marginTop: 4 }}>
@@ -465,7 +465,7 @@ function PortfolioSummary({ groups, showMoney, nlv, warnings, sectorCap, onOpenR
           </div>
           <div style={{ minWidth: 180 }}>
             <div style={{ ...eyebrow, marginBottom: 2 }}>Open positions are</div>
-            <div style={{ fontSize: FONT_SIZE.display, fontWeight: FONT_WEIGHT.bold, color: pnlColor(t.pnl), fontVariantNumeric: 'tabular-nums', lineHeight: 1.2 }}>
+            <div style={{ fontSize: FONT_SIZE.hero, fontWeight: FONT_WEIGHT.bold, color: pnlColor(t.pnl), fontVariantNumeric: 'tabular-nums', lineHeight: 1.2 }}>
               {showMoney ? `${t.pnl >= 0 ? '+' : '−'}${fmtMoney(Math.abs(t.pnl))}` : MONEY_MASK}
             </div>
             <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.55, marginTop: 4 }}>
@@ -511,12 +511,12 @@ function MoversCard({ groups, portfolioValue, onOpenPosition }: { groups: Portfo
           return (
             <button key={g.underlying} onClick={() => onOpenPosition(g.underlying)}
               style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', padding: '5px 0', cursor: 'pointer', width: '100%', textAlign: 'left' }}>
-              <span style={{ width: 52, flexShrink: 0, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold, color: 'var(--acc)' }}>{g.underlying}</span>
+              <span style={{ width: 52, flexShrink: 0, fontSize: FONT_SIZE.sms, fontWeight: FONT_WEIGHT.bold, color: 'var(--acc)' }}>{g.underlying}</span>
               <span style={{ width: 44, flexShrink: 0, fontSize: FONT_SIZE.xs, color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>{wt != null ? `${wt.toFixed(1)}%` : '—'}</span>
               <span style={{ flex: 1, height: 8, background: 'var(--s2)', borderRadius: 4, overflow: 'hidden' }}>
                 <span style={{ display: 'block', height: '100%', width: barW, background: color, borderRadius: 4 }} />
               </span>
-              <span style={{ width: 64, flexShrink: 0, textAlign: 'right', fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color, fontVariantNumeric: 'tabular-nums' }}>{fmtMoneyCompact(g.netPnl)}</span>
+              <span style={{ width: 64, flexShrink: 0, textAlign: 'right', fontSize: FONT_SIZE.sms, fontWeight: FONT_WEIGHT.semibold, color, fontVariantNumeric: 'tabular-nums' }}>{fmtMoneyCompact(g.netPnl)}</span>
             </button>
           );
         })}
@@ -633,7 +633,7 @@ function SizingBar({ delta }: { delta: number | null }) {
 function ConvictionNote({ conviction, declining }: { conviction: number | null; declining: boolean }) {
   if (conviction == null) return null;
   return (
-    <span style={{ display: 'block', fontSize: FONT_SIZE['2xs'], color: declining ? 'var(--status-negative-text)' : 'var(--t3)', lineHeight: 1.3, whiteSpace: 'nowrap' }}>
+    <span style={{ display: 'block', fontSize: FONT_SIZE['3xs'], color: declining ? 'var(--status-negative-text)' : 'var(--t3)', lineHeight: 1.3, whiteSpace: 'nowrap' }}>
       conviction {conviction}/5{declining ? ' ▼' : ''}
     </span>
   );
@@ -690,7 +690,7 @@ function TailingTab({ groups, portfolioValue, pickMap, decliningTailed, showMone
       <div style={card}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <Badge kind="source" trader={trader} />
-          <span style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)' }}>
+          <span style={{ fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)' }}>
             You tail {trader} on {rows.length} of {groups.length} position{groups.length === 1 ? '' : 's'}
           </span>
         </div>
@@ -712,7 +712,7 @@ function TailingTab({ groups, portfolioValue, pickMap, decliningTailed, showMone
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, background: 'var(--status-negative-bg)', border: '1px solid var(--status-negative-border)', borderRadius: 10, padding: '10px 14px' }}>
               <span style={{ flexShrink: 0, width: 8, height: 8, borderRadius: 999, background: 'var(--status-negative-text)', marginTop: 7 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--text)', lineHeight: 1.5 }}>{trader}&rsquo;s conviction is dropping on {decliningTailed.length} name{decliningTailed.length === 1 ? '' : 's'} you tail</div>
+                <div style={{ fontSize: FONT_SIZE.sms, color: 'var(--text)', lineHeight: 1.5 }}>{trader}&rsquo;s conviction is dropping on {decliningTailed.length} name{decliningTailed.length === 1 ? '' : 's'} you tail</div>
                 <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)', lineHeight: 1.5 }}>
                   {decliningTailed.map((c, i) => (
                     <span key={c.ticker}>{i > 0 && ', '}<TickerLink ticker={c.ticker} onSelect={onSelectTicker} /></span>
@@ -725,7 +725,7 @@ function TailingTab({ groups, portfolioValue, pickMap, decliningTailed, showMone
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, background: 'var(--status-warning-bg)', border: '1px solid var(--status-warning-border)', borderRadius: 10, padding: '10px 14px' }}>
               <span style={{ flexShrink: 0, width: 8, height: 8, borderRadius: 999, background: 'var(--status-warning-text)', marginTop: 7 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--text)', lineHeight: 1.5 }}>You&rsquo;re much heavier than {trader} on {bigOversize.length} name{bigOversize.length === 1 ? '' : 's'}</div>
+                <div style={{ fontSize: FONT_SIZE.sms, color: 'var(--text)', lineHeight: 1.5 }}>You&rsquo;re much heavier than {trader} on {bigOversize.length} name{bigOversize.length === 1 ? '' : 's'}</div>
                 <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)', lineHeight: 1.5 }}>
                   {bigOversize.map((r, i) => {
                     const trim = showMoney && portfolioValue > 0 ? ` (trim ≈ ${fmtMoneyCompact((r.delta! / 100) * portfolioValue)})` : '';
@@ -749,7 +749,7 @@ function TailingTab({ groups, portfolioValue, pickMap, decliningTailed, showMone
         ) : (
           <>
             {!isMobile && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0 8px', borderBottom: '1px solid var(--bsub)', fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: LETTER_SPACING.label, textTransform: 'uppercase', color: 'var(--t3)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0 8px', borderBottom: '1px solid var(--bsub)', fontSize: FONT_SIZE['3xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: LETTER_SPACING.label, textTransform: 'uppercase', color: 'var(--t3)' }}>
                 <span style={{ width: 104, flexShrink: 0 }}>Stock</span>
                 <span style={{ width: 88, flexShrink: 0, textAlign: 'right' }}>You · {trader}</span>
                 <span style={{ flex: 1, textAlign: 'center' }}>◂ you hold less&nbsp;&nbsp;|&nbsp;&nbsp;you hold more ▸</span>
@@ -771,7 +771,7 @@ function TailingTab({ groups, portfolioValue, pickMap, decliningTailed, showMone
                 return (
                   <div key={g.underlying} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderBottom: '1px solid var(--bsub)', flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
                     <span style={{ width: 104, flexShrink: 0 }}>
-                      <TickerLink ticker={g.underlying} onSelect={onSelectTicker} />
+                      <TickerLink ticker={g.underlying} onSelect={onSelectTicker} style={{ fontSize: FONT_SIZE.sms }} />
                       <ConvictionNote conviction={conviction} declining={declining} />
                     </span>
                     <span style={{ width: 88, flexShrink: 0, textAlign: 'right', fontSize: FONT_SIZE.sm, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
@@ -800,7 +800,7 @@ function TailingTab({ groups, portfolioValue, pickMap, decliningTailed, showMone
               return (
                 <button key={g.underlying} onClick={() => onSelectTicker(g.underlying)}
                   style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8, background: 'var(--bg)', border: '1px solid var(--bsub)', borderRadius: 8, padding: '8px 12px', cursor: 'pointer' }}>
-                  <span style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold, color: 'var(--acc)' }}>{g.underlying}</span>
+                  <span style={{ fontSize: FONT_SIZE.sms, fontWeight: FONT_WEIGHT.bold, color: 'var(--acc)' }}>{g.underlying}</span>
                   <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>
                     {wt != null ? `${wt.toFixed(1)}%` : '—'} of your account{showMoney ? ` · ${fmtMoneyCompact(g.marketValue)}` : ''}
                   </span>
@@ -815,10 +815,10 @@ function TailingTab({ groups, portfolioValue, pickMap, decliningTailed, showMone
       <div style={card}>
         <button onClick={() => setGlossaryOpen((v) => !v)}
           style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', padding: 0, cursor: 'pointer', width: '100%', textAlign: 'left' }}>
-          <span style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--t2)' }}>{glossaryOpen ? '▾' : '▸'} What these terms mean</span>
+          <span style={{ fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold, color: 'var(--t2)' }}>{glossaryOpen ? '▾' : '▸'} What these terms mean</span>
         </button>
         {glossaryOpen && (
-          <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8, fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.5 }}>
+          <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8, fontSize: FONT_SIZE.xs, color: 'var(--t2)', lineHeight: 1.5 }}>
             <div><b style={{ color: 'var(--text)' }}>Tailing</b> — you hold the same stock {trader} holds.</div>
             <div><b style={{ color: 'var(--text)' }}>Weight</b> — a position&rsquo;s market value as a % of your whole book.</div>
             <div><b style={{ color: 'var(--text)' }}>Heavier / lighter</b> — your weight vs {trader}&rsquo;s; within ±1 point reads as matched.</div>
@@ -1274,7 +1274,7 @@ export function PortfolioPage() {
         {/* §6 tailing footer */}
         <button onClick={() => changeTab('tailing')}
           style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '12px 16px', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
-          <span style={{ flex: 1, minWidth: 0, fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.5 }}>
+          <span style={{ flex: 1, minWidth: 0, fontSize: FONT_SIZE.sms, color: 'var(--t2)', lineHeight: 1.5 }}>
             You tail STW on {tailedCount} of {allGroups.length} position{allGroups.length === 1 ? '' : 's'} — see where your sizing drifts from theirs.
           </span>
           <span style={{ flexShrink: 0, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--acc)', whiteSpace: 'nowrap' }}>Tailing tab →</span>

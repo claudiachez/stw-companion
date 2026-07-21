@@ -436,7 +436,7 @@ export function SettingsPage() {
                                 fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.semibold,
                                 display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 1,
                               }}>{String.fromCharCode(97 + j)}</span>
-                              <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)', lineHeight: 1.6 }}>{s}</span>
+                              <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', lineHeight: 1.6 }}>{s}</span>
                             </div>
                           ))}
                         </div>

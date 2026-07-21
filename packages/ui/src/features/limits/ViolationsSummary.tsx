@@ -112,7 +112,7 @@ function VerdictBanner({ items }: { items: BannerItem[] }) {
           fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: LETTER_SPACING.label,
           textTransform: 'uppercase', whiteSpace: 'nowrap',
         }}>{pill}</span>
-        <span style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)' }}>{headline}</span>
+        <span style={{ fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)' }}>{headline}</span>
         <span style={{ marginLeft: 'auto', fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>
           Advisory only — we flag, you decide. Nothing is traded for you.
         </span>
@@ -124,14 +124,14 @@ function VerdictBanner({ items }: { items: BannerItem[] }) {
             <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: SPACE[2.5], background: 'var(--surface)', border: '1px solid var(--bsub)', borderRadius: RADIUS.lg, padding: `${SPACE[2]}px ${SPACE[3]}px` }}>
               <span style={{ flexShrink: 0, width: 8, height: 8, borderRadius: RADIUS.full, background: SEV_TEXT[it.severity], marginTop: 6 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--text)', lineHeight: 1.5 }}>{it.main}</div>
+                <div style={{ fontSize: FONT_SIZE.sms, color: 'var(--text)', lineHeight: 1.5 }}>{it.main}</div>
                 <div style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: SEV_TEXT[it.severity], lineHeight: 1.5 }}>{it.sub}</div>
               </div>
             </div>
           ))}
         </div>
       ) : (
-        <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', marginTop: SPACE[2] }}>
+        <div style={{ fontSize: FONT_SIZE.sms, color: 'var(--t2)', marginTop: SPACE[2] }}>
           Nothing is over a cap, near a safety-net step, or past a per-stock stop. Check back after your next sync.
         </div>
       )}
@@ -150,7 +150,7 @@ function MarketLight({ label, state, note }: { label: string; state: RegimeState
       <div style={{ ...sectionLabel, marginTop: 0, marginBottom: SPACE[1] }}>{label}</div>
       <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[1.5] }}>
         <span style={{ width: 10, height: 10, borderRadius: RADIUS.full, background: color, flexShrink: 0 }} />
-        <span style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold, color }}>{text}</span>
+        <span style={{ fontSize: FONT_SIZE.sms, fontWeight: FONT_WEIGHT.bold, color }}>{text}</span>
       </div>
       <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: 2, lineHeight: 1.4 }}>{note}</div>
     </div>
@@ -222,7 +222,7 @@ function MarketCard({ instrument, setInstrument, regimeEnabled, structure, setti
             <MarketLight label="Volatility" state={gate.vol_state} note="VIX vs 3-month VIX" />
             <div style={{ background: 'var(--bg)', border: '1px solid var(--bsub)', borderRadius: RADIUS.lg, padding: `${SPACE[2.5]}px ${SPACE[3]}px` }}>
               <div style={{ ...sectionLabel, marginTop: 0, marginBottom: SPACE[1] }}>Suggested sizing</div>
-              <div style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)' }}>{sizing}</div>
+              <div style={{ fontSize: FONT_SIZE.sms, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)' }}>{sizing}</div>
               <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: 2, lineHeight: 1.4 }}>
                 {regimeEnabled ? 'for any new position you open' : 'Regime guardrail is off'}
               </div>
@@ -283,7 +283,7 @@ function LadderViz({ ladder, maxGross, status }: {
         const txt = txtFor(s);
         return (
           <div key={s.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <span style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, color: 'var(--text)', height: 13, textAlign: 'center' }}>{s.here ? '▼ you are here' : ''}</span>
+            <span style={{ fontSize: FONT_SIZE['3xs'], fontWeight: FONT_WEIGHT.bold, color: 'var(--text)', height: 13, textAlign: 'center' }}>{s.here ? '▼ you are here' : ''}</span>
             <span style={{ fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold, color: txt, ...num }}>{s.top}</span>
             <div style={{ height: 64, background: 'var(--s2)', borderRadius: RADIUS.md, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', overflow: 'hidden', outline: s.here ? `2px solid ${txt}` : 'none' }}>
               <div style={{ height: Math.round(64 * Math.max(0, Math.min(1, s.target / scaleMax))), background: fillFor(s), borderTop: `2px solid ${txt}` }} />
@@ -415,7 +415,7 @@ function CapRow({ entry, ack, onAcknowledge }: {
   return (
     <div style={{ background: 'var(--bg)', border: '1px solid var(--bsub)', borderRadius: RADIUS.lg, padding: `${SPACE[2.5]}px ${SPACE[3]}px` }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap' }}>
-        <span style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)' }}>{v.scope}</span>
+        <span style={{ fontSize: FONT_SIZE.sms, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)' }}>{v.scope}</span>
         <span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>{kind}</span>
         {!unevaluated && (
           <span style={{ marginLeft: 'auto', fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: SEV_TEXT[sev], ...num }}>

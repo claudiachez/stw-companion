@@ -53,23 +53,27 @@ export const BREAKPOINT = { mobile: 640, minSupportedWidth: 390 } as const;
 // handful of local stacking-context values found in the audit.
 export const Z_INDEX = { dropdown: 10, sticky: 100, modal: 1000 } as const;
 
-// Type scale — max 6 sizes, collapsing the 14 distinct inline px values found
-// in the audit (9–28px) into 6 named steps. Rounding decisions (which exact
-// values got folded together) are called out in docs/design-system/tokens.md
-// for review — this is the most judgment-heavy of the numeric scales.
+// Type scale. Originally 6 collapsed steps, EXPANDED 2026-07-20 to the full ladder the
+// webapp redesign uses so redesigned screens are pixel-exact (lint bans literal font-sizes,
+// so every size the design specifies needs a token). Values ARE the design's exact px:
+// 9/10/11/12/13/14/15/16/20/22/26/30. `lg` changed 18→16 (the redesign tops its headings at
+// 16; 18 is unused by the redesign) — a minor shrink on not-yet-redesigned sub-headings.
 export const FONT_SIZE = {
-  '2xs': 10,  // badges, uppercase section/module labels, table headers — collapses 9 & 10
-  xs: 11,     // dense secondary text (table rows, sub-lines)
-  sm: 12,     // dense primary text — the single most common size found (107 occurrences)
-  base: 14,   // emphasis, buttons, form labels — collapses 13 & 14
-  lg: 18,     // section/page sub-headings — collapses 16, 17 & 18
-  display: 26, // KPI hero numbers — collapses 20, 22, 26 & 28
-  // Deliberately NOT `base` (14): mobile Safari zooms the viewport on focus for any
-  // <input> whose computed font-size is under 16px. This is the one type-scale entry
-  // that's a browser-behavior floor, not a visual-rhythm choice — TextInput.tsx is its
-  // only consumer. Added 2026-07-07 (design-system Phase 5, Settings migration) after
-  // the pre-migration SettingsPage.tsx already carried this exact fix as a bare literal
-  // (`fontSize: 16, // 16px prevents iOS auto-zoom on focus`).
+  '3xs': 9,   // table headers, "▼ you are here", the tiniest uppercase labels
+  '2xs': 10,  // badges, uppercase section/module labels, source lines
+  xs: 11,     // dense secondary text (sub-lines, notes)
+  sm: 12,     // dense primary text — the single most common size
+  sms: 13,    // row primary text / plain-English sentences
+  base: 14,   // card section titles, buttons, form labels
+  md: 15,     // verdict / summary headline
+  lg: 16,     // headings, identity name (was 18)
+  xl: 20,     // at-a-glance stat numbers
+  '2xl': 22,  // avatar initial
+  display: 26, // big KPI numbers (drawdown / invested)
+  hero: 30,   // account-value hero
+  // input === lg (16) by value, kept as its own name: mobile Safari zooms the viewport on
+  // focus for any <input> under 16px, so TextInput must never drop below it regardless of
+  // where the heading scale lands. Its own name documents that browser-behavior floor.
   input: 16,
 } as const;
 

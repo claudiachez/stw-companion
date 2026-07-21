@@ -43,7 +43,7 @@ const card: React.CSSProperties = {
   background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: RADIUS.xl, padding: SPACE[4],
 };
 const sectionLabel: React.CSSProperties = {
-  fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: '0.1em',
+  fontSize: FONT_SIZE['3xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: '0.1em',
   textTransform: 'uppercase', color: 'var(--t3)',
 };
 
@@ -165,7 +165,7 @@ export function ProfilePage() {
   };
   const prefLabel = <T extends string>(title: T, hint: string) => (
     <span style={{ flex: 1, minWidth: 180 }}>
-      <span style={{ display: 'block', fontSize: FONT_SIZE.base, color: 'var(--text)' }}>{title}</span>
+      <span style={{ display: 'block', fontSize: FONT_SIZE.sms, color: 'var(--text)' }}>{title}</span>
       <span style={{ display: 'block', fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>{hint}</span>
     </span>
   );
@@ -181,7 +181,7 @@ export function ProfilePage() {
               {profile?.avatar_url ? (
                 <img src={profile.avatar_url} alt="" style={{ width: 52, height: 52, borderRadius: RADIUS.full, objectFit: 'cover', border: '1px solid var(--border)', opacity: uploadingAvatar ? 0.5 : 1 }} />
               ) : (
-                <div style={{ width: 52, height: 52, borderRadius: RADIUS.full, background: 'var(--s2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: FONT_SIZE.display, fontWeight: FONT_WEIGHT.bold, color: 'var(--acc)', opacity: uploadingAvatar ? 0.5 : 1 }}>{initial}</div>
+                <div style={{ width: 52, height: 52, borderRadius: RADIUS.full, background: 'var(--s2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: FONT_SIZE['2xl'], fontWeight: FONT_WEIGHT.bold, color: 'var(--acc)', opacity: uploadingAvatar ? 0.5 : 1 }}>{initial}</div>
               )}
               {editingName && (
                 <button

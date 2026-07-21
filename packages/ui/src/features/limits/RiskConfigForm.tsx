@@ -392,7 +392,7 @@ export function RiskConfigForm({ userId, config }: { userId: string; config: Ris
                 <span style={{ flexShrink: 0, width: 18, height: 18, borderRadius: RADIUS.full, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, border: `1px solid ${active ? 'var(--acc)' : 'var(--border)'}`, background: active ? 'var(--acc)' : 'var(--s2)', color: active ? 'var(--text-inverse)' : 'var(--t2)' }}>{i + 1}</span>
                 <span style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: active ? 'var(--text)' : 'var(--t2)' }}>{t.title}</span>
                 {!enabled && (
-                  <span style={{ marginLeft: 'auto', padding: `1px ${SPACE[1.5]}px`, borderRadius: RADIUS.full, background: 'var(--s2)', border: '1px solid var(--border)', color: 'var(--t3)', fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: LETTER_SPACING.label, textTransform: 'uppercase' }}>Off</span>
+                  <span style={{ marginLeft: 'auto', padding: `1px ${SPACE[1.5]}px`, borderRadius: RADIUS.full, background: 'var(--s2)', border: '1px solid var(--border)', color: 'var(--t3)', fontSize: FONT_SIZE['3xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: LETTER_SPACING.label, textTransform: 'uppercase' }}>Off</span>
                 )}
               </span>
               <span style={{ display: 'block', marginTop: SPACE[0.5], paddingLeft: 26, fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', lineHeight: 1.4 }}>{t.caption}</span>
