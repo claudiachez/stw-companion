@@ -29,6 +29,17 @@ export function formatWeight(w: number | null): string {
   return `${w.toFixed(1)}%`;
 }
 
+/**
+ * USD money. `signed: true` prefixes a GAIN with "+" (for P&L / returns / contributions,
+ * matching the design) — losses keep the standard "-$…"; zero and neutral totals (account
+ * value, market value) stay unsigned. One helper so the "+" treatment reads identically everywhere.
+ */
+export function formatMoney(value: number, opts: { signed?: boolean; maximumFractionDigits?: number } = {}): string {
+  const { signed = false, maximumFractionDigits = 0 } = opts;
+  const s = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits }).format(value);
+  return signed && value > 0 ? `+${s}` : s;
+}
+
 const ET_TZ = { timeZone: 'America/New_York' };
 
 // Canonical timestamp format used across all surfaces: "Jun 4 · 7:46 PM ET"

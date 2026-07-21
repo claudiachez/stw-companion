@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { regimeGate, regimeExitAdvice, classifySeverity, formatDate, fmtDateTime, fmtOptionExpiry, sizingTone, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, RADIUS, SPACE, type ViolationSeverity } from '@stw/shared';
+import { regimeGate, regimeExitAdvice, classifySeverity, formatDate, formatMoney, fmtDateTime, fmtOptionExpiry, sizingTone, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, RADIUS, SPACE, type ViolationSeverity } from '@stw/shared';
 import { useAuthStore } from '../../store/auth';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useQuote } from '../../hooks/useLivePrice';
@@ -267,7 +267,7 @@ export function PortfolioPositionDetail({
           <DetailPaneMetricLabel>Open P&L</DetailPaneMetricLabel>
           {showPnl ? (
             <>
-              <div style={statBig(pnlColor(group.netPnl))}>{fmtMoney(group.netPnl)}</div>
+              <div style={statBig(pnlColor(group.netPnl))}>{formatMoney(group.netPnl, { signed: true })}</div>
               <div style={{ fontSize: FONT_SIZE['2xs'], color: pnlColor(group.netPnl), marginTop: SPACE[0.5], lineHeight: 1.4 }}>
                 {group.returnPct !== null ? `${fmtPct(group.returnPct)} vs what you paid` : 'vs what you paid'}
               </div>
@@ -422,7 +422,7 @@ export function PortfolioPositionDetail({
               </span>
             </span>
             <span style={{ color: pnlColor(p.unrealized_pnl), fontWeight: FONT_WEIGHT.bold, fontVariantNumeric: 'tabular-nums', alignSelf: 'flex-start' }}>
-              {p.unrealized_pnl !== null ? fmtMoney(p.unrealized_pnl) : '—'} {p.unrealized_pnl_pct !== null && `(${fmtPct(p.unrealized_pnl_pct)})`}
+              {p.unrealized_pnl !== null ? formatMoney(p.unrealized_pnl, { signed: true }) : '—'} {p.unrealized_pnl_pct !== null && `(${fmtPct(p.unrealized_pnl_pct)})`}
             </span>
           </div>
         )) : <div style={{ fontSize: FONT_SIZE.sms, color: 'var(--t3)' }}>Hidden</div>}
