@@ -273,10 +273,15 @@ export function PicksView() {
               />
             </div>
           ) : (
-            <div style={{ flex: 1, overflowY: 'auto' }}>
-              {sorted.length === 0
-                ? <EmptyState message="No positions match your filters." />
-                : listContent}
+            <div style={{ flex: 1, overflow: 'hidden', padding: 12, background: 'var(--bg)' }}>
+              <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+                <div style={{ flexShrink: 0, padding: '6px 14px', background: 'var(--s2)', borderBottom: '1px solid var(--bsub)', fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--t3)' }}>Stock Picks · Ticker Details</div>
+                <div style={{ flex: 1, overflowY: 'auto' }}>
+                  {sorted.length === 0
+                    ? <EmptyState message="No positions match your filters." />
+                    : listContent}
+                </div>
+              </div>
             </div>
           )
         ) : (
@@ -284,20 +289,28 @@ export function PicksView() {
             <div
               ref={listPaneRef}
               style={{
-                // hidden-X clips list content at the divider; own stacking context (relative + zIndex 0)
-                // keeps the sticky tier header (zIndex 2) from painting over the detail pane.
-                overflow: 'hidden auto',
+                // The list scrolls INSIDE the pane card below; the pane only clips. Own stacking
+                // context (relative + zIndex 0) keeps the sticky tier header from painting over
+                // the detail pane. Contained (maxWidth + pad) when full-width; fills the pane when split.
+                overflow: 'hidden',
                 position: 'relative', zIndex: 0,
                 flexBasis: selected ? `${listPct}%` : 'auto',
                 flexGrow: selected ? 0 : 1,
                 flexShrink: 0,
                 minWidth: 0,
+                padding: selected ? 0 : '16px 20px',
+                background: 'var(--bg)',
                 ...(dragging ? {} : { transition: 'flex-basis 0.15s ease' }),
               }}
             >
-              {sorted.length === 0
-                ? <EmptyState message="No positions match your filters." />
-                : listContent}
+              <div style={{ height: '100%', maxWidth: selected ? undefined : 1100, margin: selected ? undefined : '0 auto', display: 'flex', flexDirection: 'column', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+                <div style={{ flexShrink: 0, padding: '6px 14px', background: 'var(--s2)', borderBottom: '1px solid var(--bsub)', fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--t3)' }}>Stock Picks · Ticker Details</div>
+                <div style={{ flex: 1, overflowY: 'auto' }}>
+                  {sorted.length === 0
+                    ? <EmptyState message="No positions match your filters." />
+                    : listContent}
+                </div>
+              </div>
             </div>
             {selected && (
               <>
