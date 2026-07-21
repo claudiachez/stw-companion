@@ -179,7 +179,7 @@ function LotRow({ t, isMobile, canEdit, onSelectTicker, onEdit }: {
       <div style={{ fontSize: FONT_SIZE.sms, fontWeight: FONT_WEIGHT.bold, color: t.exercised ? 'var(--t2)' : pnlColor(pnl), fontVariantNumeric: 'tabular-nums' }}>
         {t.exercised ? 'Exercised' : pnlText(pnl)}
       </div>
-      <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 1 }}>{rightSub}</div>
+      <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 1, fontVariantNumeric: 'tabular-nums' }}>{rightSub}</div>
     </div>
   );
   const editBtn = canEdit ? (
@@ -194,7 +194,7 @@ function LotRow({ t, isMobile, canEdit, onSelectTicker, onEdit }: {
 
   return (
     <div style={{
-      padding: `${SPACE[2.5]}px ${SPACE[3]}px`, borderBottom: '1px solid var(--bsub)',
+      padding: `${SPACE[2.5]}px ${SPACE[3.5]}px`, borderBottom: '1px solid var(--bsub)',
       opacity: t.isOpen ? 1 : 0.65,
     }}>
       {isMobile ? (
@@ -210,7 +210,7 @@ function LotRow({ t, isMobile, canEdit, onSelectTicker, onEdit }: {
           <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', marginTop: SPACE[1.5], lineHeight: 1.5 }}>{story}</div>
         </>
       ) : (
-        <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[3] }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2.5] }}>
           <div style={{ width: 96, flexShrink: 0, minWidth: 0 }}>
             <div>{ticker}</div>
             {instrument}
@@ -261,8 +261,8 @@ export function TradesTable({ holdings, onSelectTicker }: Props) {
 
       <TradesFilterBar holdings={holdings} sectors={sectorOptions} count={trades.length} total={allTrades.length} />
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '14px 12px' : '20px 24px' }}>
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: RADIUS.lg, overflow: 'hidden', boxShadow: 'var(--shadow)' }}>
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div>
           {trades.length === 0 ? (
             <p style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', padding: `${SPACE[3]}px ${SPACE[3]}px` }}>
               {allTrades.length === 0 ? 'No trades yet.' : 'No trades match your filters.'}
@@ -282,7 +282,7 @@ export function TradesTable({ holdings, onSelectTicker }: Props) {
         </div>
 
         {/* Footer note — how to read the two row states. */}
-        <p style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: SPACE[2.5], lineHeight: 1.5 }}>
+        <p style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', padding: '8px 14px', lineHeight: 1.5 }}>
           One row per lot. Open rows show live P&amp;L; closed rows show what was booked and its contribution to the whole book.
         </p>
       </div>

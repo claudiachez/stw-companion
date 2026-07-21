@@ -33,7 +33,7 @@ const TYPE_SEGMENTS: SegmentOption<TradeType>[] = [
 // inline style.border always wins over a stylesheet class, which would make
 // `focus:border-acc` silently never take effect).
 const ctrlStyle: React.CSSProperties = {
-  height: 34, padding: '0 8px', fontSize: FONT_SIZE.sm, borderRadius: 5,
+  height: 30, padding: '0 6px', fontSize: FONT_SIZE.sm, borderRadius: 5,
   background: 'var(--bg)', color: 'var(--text)',
   cursor: 'pointer', flexShrink: 0,
 };
@@ -61,14 +61,14 @@ export function TradesFilterBar({ holdings, sectors, count, total }: Props) {
   return (
     <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', flexShrink: 0 }}>
       {/* Row 1 — search + dropdown filters + count */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderBottom: '1px solid var(--bsub)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' as never }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderBottom: '1px solid var(--bsub)', flexWrap: 'wrap' }}>
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search ticker…"
           className={ctrlBorderClass}
-          style={{ ...ctrlStyle, width: 120, cursor: 'text' }}
+          style={{ ...ctrlStyle, width: 112, padding: '0 8px', cursor: 'text' }}
         />
 
         <select value={basket} onChange={(e) => setBasket(e.target.value)} className={ctrlBorderClass} style={ctrlStyle}>
@@ -103,13 +103,13 @@ export function TradesFilterBar({ holdings, sectors, count, total }: Props) {
           </button>
         )}
 
-        <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginLeft: 'auto', paddingLeft: 8, whiteSpace: 'nowrap' }}>
+        <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginLeft: 'auto', paddingLeft: 0, whiteSpace: 'nowrap' }}>
           {count < total ? `${count} of ${total} lots` : `${total} lot${total === 1 ? '' : 's'}`}
         </span>
       </div>
 
       {/* Row 2 — segmented axes: Show (open/closed) + Type (instrument) */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '6px 12px', background: 'var(--bg)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' as never }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 12px', background: 'var(--bg)', borderBottom: '1px solid var(--bsub)', flexWrap: 'wrap' }}>
         <SegmentedControl
           label="Show"
           options={SHOW_SEGMENTS}
