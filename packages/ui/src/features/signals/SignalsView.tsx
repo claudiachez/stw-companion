@@ -120,9 +120,14 @@ export function SignalsView() {
           <div style={{ padding: '8px 13px', background: 'var(--s2)', borderBottom: '1px solid var(--bsub)' }}>
             <span style={sectionLabel}>🗺️ Where price sits vs today&apos;s levels</span>
           </div>
-          <div style={{ padding: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
-            <LevelCard symbol="SPY" levels={spyLevels} currentPrice={spyPrice} priceTime={spyPriceTime} onOpenChart={openChart} />
-            <LevelCard symbol="QQQ" levels={gx.qqq} currentPrice={qqqPrice} priceTime={qqqPriceTime} onOpenChart={openChart} />
+          <div style={{ padding: 12 }}>
+            <p style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', lineHeight: 1.5, margin: '0 0 12px' }}>
+              Above the gamma-flat line, dealers dampen moves (calmer). Below it, they chase moves (faster, both ways). Below put support, the floor is gone.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+              <LevelCard symbol="SPY" levels={spyLevels} currentPrice={spyPrice} priceTime={spyPriceTime} onOpenChart={openChart} />
+              <LevelCard symbol="QQQ" levels={gx.qqq} currentPrice={qqqPrice} priceTime={qqqPriceTime} onOpenChart={openChart} />
+            </div>
           </div>
         </div>
 
