@@ -58,7 +58,7 @@ export function PicksView() {
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
   // Resizable split: the list pane's width as a % of the row; user drags the divider to set it.
   const splitRef = useRef<HTMLDivElement>(null);
-  const [listPct, setListPct] = useState(42);
+  const [listPct, setListPct] = useState(55);
   const [dragging, setDragging] = useState(false);
   // When the list pane is narrow (split dragged small), rows drop their secondary badges so nothing
   // overlaps. Measured live so it tracks both the divider and window resizes.
@@ -314,17 +314,16 @@ export function PicksView() {
             </div>
             {selected && (
               <>
-                {/* Draggable divider — click and drag to set the split width */}
+                {/* Draggable divider — click and drag to set the split width (matches Portfolio) */}
                 <div
                   onMouseDown={startResize}
                   title="Drag to resize"
                   style={{
-                    flexShrink: 0, width: 6, cursor: 'col-resize',
+                    flexShrink: 0, width: 5, cursor: 'col-resize',
                     background: dragging ? 'var(--acc)' : 'var(--border)',
-                    borderLeft: '1px solid var(--bsub)', borderRight: '1px solid var(--bsub)',
                   }}
                 />
-                <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', position: 'relative', zIndex: 0, background: 'var(--bg)' }}>
+                <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', position: 'relative', zIndex: 0, borderLeft: '1px solid var(--bsub)' }}>
                   <HoldingDetail
                     holding={selected}
                     totalCount={holdings.length}
