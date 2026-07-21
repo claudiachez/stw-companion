@@ -372,8 +372,8 @@ export function RiskConfigForm({ userId, config }: { userId: string; config: Ris
         </Button>
       </div>
       <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginBottom: SPACE[3], lineHeight: 1.5 }}>
-        Four guardrails, each one optional — switch off any that fights your strategy. Everything here is
-        {' '}<b style={{ color: 'var(--t2)' }}>advisory</b>: you get flags and alerts; nothing ever places or blocks a trade.
+        Four guardrails, each one optional — switch off any that fights your strategy. Everything on this page is
+        {' '}<b style={{ color: 'var(--t2)' }}>advisory</b> — you get flags and alerts; nothing here ever places or blocks a trade.
       </div>
 
       {/* Tab selector */}
@@ -450,7 +450,7 @@ export function RiskConfigForm({ userId, config }: { userId: string; config: Ris
         <div>
           <ToggleBar on={ladderEnabled} onToggle={() => toggleTab(1)} />
           <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.55, marginBottom: SPACE[3] }}>
-            If your <b style={{ color: 'var(--text)' }}>whole account</b> falls from its high point, step down how much you have invested. You get an alert at each step — you decide whether to act; nothing is sold for you. It watches shares and options together.
+            If your <b style={{ color: 'var(--text)' }}>whole account</b> falls from its high point, step down how much you have invested. You get an alert at each step — you decide whether to act; nothing is sold for you. It watches your <b style={{ color: 'var(--text)' }}>whole account</b> — shares and options together.
           </div>
           <LadderViz segs={ladderSegs} caption={<>How much stays invested as your account drawdown deepens. <b style={{ color: 'var(--t2)' }}>Drag a bar</b> to set its level, or type below.</>} />
           <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE[2.5] }}>
@@ -491,7 +491,7 @@ export function RiskConfigForm({ userId, config }: { userId: string; config: Ris
         <div>
           <ToggleBar on={perStockEnabled} onToggle={() => toggleTab(2)} />
           <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.55, marginBottom: SPACE[3] }}>
-            The same idea, one position at a time: based on how far it has fallen from <b style={{ color: 'var(--text)' }}>your entry</b>, keep at most this share of the position. Stocks and options each have their <b style={{ color: 'var(--text)' }}>own ladder</b> — options move faster, so that one cuts sooner. Advisory only.
+            The same idea, one position at a time: based on how far it has fallen from <b style={{ color: 'var(--text)' }}>your entry</b>, keep at most this share of the position. Stocks and options each have their <b style={{ color: 'var(--text)' }}>own ladder</b> — options move faster, so that one cuts sooner. Alerts show per position on the Risk tab — advisory only.
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[1.5], flexWrap: 'wrap', marginBottom: SPACE[1.5] }}>
             <span style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>Editing the ladder for:</span>

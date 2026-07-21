@@ -466,7 +466,7 @@ export function SettingsPage() {
               <div style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)', marginBottom: SPACE[1] }}>Alert delivery</div>
               <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginBottom: SPACE[3], lineHeight: 1.5 }}>
                 Drawdown alerts are always shown in-app on the Risk tab. To also get a Discord DM when a
-                rung is crossed or approached, join the STW Discord server and enter your Discord username
+                step is crossed or approached, join the STW Discord server and enter your Discord username
                 below — we’ll link it. Email alerts use your account email.
               </div>
               <FormRow label="Discord username">
