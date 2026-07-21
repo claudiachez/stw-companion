@@ -129,7 +129,7 @@ export function PositionEditor({ holding: h, onDone }: Props) {
               <input style={field} type="date" value={actionDate} onChange={(e) => setActionDate(e.target.value)} /></div>
           </div>
           <div style={{ fontSize: FONT_SIZE['2xs'], color: isClosing ? 'var(--status-warning-text)' : 'var(--t3)', marginTop: 6 }}>
-            ⚠ Setting Status to Closed or Expired zeroes the current weight when you save.
+            ⚠ Setting Status to Closed or Expired zeroes the current weight — subscribers see the position leave the list.
           </div>
         </section>
 
@@ -139,13 +139,13 @@ export function PositionEditor({ holding: h, onDone }: Props) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
             <div><label style={label}>Basket</label>
               <select style={field} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}><option value="">— Uncategorized —</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-            <div><label style={label}>Sector</label>
+            <div><label style={label}>Sector (GICS)</label>
               <select style={field} value={sector} onChange={(e) => setSectorDraft(e.target.value)}><option value="">— Unmapped —</option>{SECTOR_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
             <div><label style={label}>Equity % of split</label>
               <input style={field} type="number" step="1" min="0" max="100" value={equityPct} placeholder="default 90" onChange={(e) => setEquityPct(e.target.value)} /></div>
           </div>
           <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 6 }}>
-            Equity % sets this position’s equity:options split (e.g. 30 → 30:70); blank uses the Config default (90:10).
+            Equity % sets this position’s shares:options split (e.g. 30 → 30:70); blank uses the Config default (90:10).
           </div>
         </section>
 
