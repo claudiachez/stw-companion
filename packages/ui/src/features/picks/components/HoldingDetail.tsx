@@ -531,13 +531,19 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
           </DetailPaneSection>
         )}
 
-        {/* Commentary — one unified conviction_comments feed (host Discord/stream notes +
-            subscriber personal notes), newest first. The subscriber's own "+ Add Personal
-            Note" affordance lives here too (ConvictionTimeline), so a personal note is the
-            same one-source feed, not a second store. */}
+        {/* Commentary — STW's public conviction_comments (user_id null: Discord/stream notes),
+            newest first. The subscriber's own private note is its own section below. */}
         {showHistory && h.ticker !== 'CASH' && (
           <DetailPaneSection title="Commentary">
-            <ConvictionTimeline ticker={h.ticker} currentConviction={h.conviction} />
+            <ConvictionTimeline ticker={h.ticker} currentConviction={h.conviction} scope="stw" />
+          </DetailPaneSection>
+        )}
+
+        {/* Your personal note — the subscriber's own private note (RLS: only they can read it),
+            a distinct section per the design. Subscriber-only; admins author STW commentary. */}
+        {showHistory && !isAdmin && h.ticker !== 'CASH' && (
+          <DetailPaneSection title="Your personal note" action={<span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>only you see this</span>}>
+            <ConvictionTimeline ticker={h.ticker} currentConviction={h.conviction} scope="personal" />
           </DetailPaneSection>
         )}
 
