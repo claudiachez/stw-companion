@@ -257,7 +257,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
           {holdsOwn ? 'Tailing' : 'Not held'}
         </div>
         <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 4 }}>
-          {holdsOwn ? 'you hold this' : "you don't tail this"}
+          {holdsOwn ? 'you hold this' : "you don't tail this pick"}
         </div>
       </>
     );
