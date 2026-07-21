@@ -512,10 +512,19 @@ function SizeCapsCard({ entries, ackFor, onAcknowledge }: {
 
 interface StopRow { ticker: string; kind: 'shares' | 'options'; info: PerStockLadderInfo; }
 
-function PerStockStopsCard({ rows, ladderRungs, optionRungs }: {
+type Rung = { drawdownPct: number; holdFractionPct: number };
+
+/** "5%→keep ≤75% · 10%→keep ≤50% · … · 20%→sell all" — the full ladder, matching the mock. */
+function fmtStops(rungs: Rung[]): string {
+  return rungs.map((x) => `${Math.abs(x.drawdownPct)}%→${x.holdFractionPct === 0 ? 'sell all' : `keep ≤${x.holdFractionPct}%`}`).join(' · ');
+}
+
+function PerStockStopsCard({ rows, ladderRungs, optionRungs, showMoney, money }: {
   rows: StopRow[];
-  ladderRungs: { drawdownPct: number }[];
-  optionRungs: { drawdownPct: number }[];
+  ladderRungs: Rung[];
+  optionRungs: Rung[];
+  showMoney: boolean;
+  money: (n: number | null) => string;
 }) {
   const exceptions = rows
     .filter((r) => r.info.status.severity === 'near' || r.info.status.severity === 'breach')
@@ -525,7 +534,7 @@ function PerStockStopsCard({ rows, ladderRungs, optionRungs }: {
     <div style={card}>
       <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap', marginBottom: 2 }}>
         <span style={cardTitle}>Per-stock stops</span>
-        <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>{exceptions.length ? `${exceptions.length} near / past a stop` : 'none near a stop'}</span>
+        <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>{exceptions.length ? `${exceptions.length} ${exceptions.length === 1 ? 'position needs' : 'positions need'} a look` : 'all quiet'}</span>
       </div>
       <div style={{ ...cardDesc, marginBottom: SPACE[2.5] }}>Each position measured against your buy price. One appears here only when it's near or past one of your stop steps.</div>
       {exceptions.length === 0 ? (
@@ -538,17 +547,35 @@ function PerStockStopsCard({ rows, ladderRungs, optionRungs }: {
             const s = r.info.status;
             const sev = s.severity as Sev3;
             const rungs = r.kind === 'options' ? optionRungs : ladderRungs;
-            const plan = sev === 'breach'
-              ? (s.targetHoldPct !== null
-                ? `Down past a stop — your plan is to reduce to ${s.targetHoldPct}% of peak size.`
-                : 'Down past a stop.')
-              : s.nextRung
-                ? `Approaching your next stop at ${s.nextRung.drawdownPct}% from entry.`
-                : 'Near a stop.';
-            const hold = r.info.historyIncomplete || s.currentHoldPct === null
-              ? 'holding vs peak unknown (incomplete fill history)'
-              : `now holding ${s.currentHoldPct.toFixed(0)}% of peak`;
-            const detail = `Stops: ${rungs.map((x) => `${x.drawdownPct}%`).join(' / ')} · ${hold}`;
+            // Position value ≈ |qty| × price (× the standard 100 multiplier for options).
+            const posVal = Math.abs(r.info.currentQty) * r.info.currentPrice * (r.kind === 'options' ? 100 : 1);
+            const holdKnown = s.currentHoldPct !== null && !r.info.historyIncomplete;
+
+            let plan: string;
+            if (sev === 'breach' && s.activeRung) {
+              const dd = Math.abs(s.activeRung.drawdownPct);
+              const keep = s.activeRung.holdFractionPct;
+              if (holdKnown) {
+                const held = s.currentHoldPct! >= 99.5 ? 'all of it' : `${s.currentHoldPct!.toFixed(0)}%`;
+                const trimAmt = (Math.max(0, s.currentHoldPct! - keep) / 100) * posVal;
+                const trim = showMoney && trimAmt > 0 ? ` → trim ≈ ${money(trimAmt)}` : '';
+                plan = `Past the ${dd}% stop — your plan: keep at most ${keep}% of the position. You still hold ${held}${trim}.`;
+              } else {
+                plan = `Past the ${dd}% stop — your plan: keep at most ${keep}% of the position. (Holding vs peak unknown — incomplete fill history.)`;
+              }
+            } else if (sev === 'near' && s.nextRung) {
+              const dd = Math.abs(s.nextRung.drawdownPct);
+              const keep = s.nextRung.holdFractionPct;
+              const away = s.distanceToNextPp !== null ? Math.abs(s.distanceToNextPp).toFixed(1) : '—';
+              plan = `${away} points from its next stop (${dd}% down → keep at most ${keep}%). Nothing to do yet.`;
+            } else {
+              plan = 'Near a stop.';
+            }
+
+            const detail = showMoney
+              ? `Position ≈ ${money(posVal)} · your stops: ${fmtStops(rungs)}`
+              : `Your stops: ${fmtStops(rungs)}`;
+
             return (
               <div key={`${r.kind}-${r.ticker}`} style={{ background: 'var(--bg)', border: '1px solid var(--bsub)', borderRadius: RADIUS.lg, padding: `${SPACE[2.5]}px ${SPACE[3]}px` }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap' }}>
@@ -556,7 +583,7 @@ function PerStockStopsCard({ rows, ladderRungs, optionRungs }: {
                   <span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>{r.kind}</span>
                   <span style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: SEV_TEXT[sev], ...num }}>{fmtDrawdown(s.drawdownPct)}</span>
                   <span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>from entry</span>
-                  <span style={{ marginLeft: 'auto' }}><StatusPill variant={sev}>{sev === 'breach' ? 'Past stop' : 'Near'}</StatusPill></span>
+                  <span style={{ marginLeft: 'auto' }}><StatusPill variant={sev}>{sev === 'breach' ? 'Action' : 'Heads-up'}</StatusPill></span>
                 </div>
                 <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.55, marginTop: SPACE[1] }}>{plan}</div>
                 <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[1], ...num }}>{detail}</div>
@@ -769,7 +796,7 @@ export function ViolationsSummary({ showSyncButton = false, settingsTo, bindingG
       )}
 
       {perStockEnabled ? (
-        <PerStockStopsCard rows={stopRows} ladderRungs={config.per_stock_ladder} optionRungs={config.per_stock_option_ladder} />
+        <PerStockStopsCard rows={stopRows} ladderRungs={config.per_stock_ladder} optionRungs={config.per_stock_option_ladder} showMoney={showMoney} money={money} />
       ) : (
         <OffState title="Per-stock stops" help="Your per-position stops are off — individual names aren't being measured against your entry." settingsRef={settingsRef} />
       )}
