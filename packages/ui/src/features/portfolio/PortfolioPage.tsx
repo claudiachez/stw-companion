@@ -766,8 +766,8 @@ function TailingTab({ groups, portfolioValue, pickMap, decliningTailed, showMone
                   ? ` — matching them = ${overD ? 'trim' : 'add'} ≈ ${fmtMoney((Math.abs(delta) / 100) * portfolioValue)}`
                   : '';
                 const note = delta == null ? '—'
-                  : tone.state === 'oversized' ? `${delta.toFixed(1)} points more than ${trader}${matchClause}`
-                  : tone.state === 'undersized' ? `${Math.abs(delta).toFixed(1)} points less than ${trader}${matchClause}`
+                  : tone.state === 'oversized' ? `${delta.toFixed(1)} points heavier than ${trader}${matchClause}`
+                  : tone.state === 'undersized' ? `${Math.abs(delta).toFixed(1)} points lighter than ${trader}${matchClause}`
                   : 'sized like STW (within 1 point)';
                 const noteColor = tone.state === 'inline' ? 'var(--status-positive-text)' : tone.textVar;
                 return (

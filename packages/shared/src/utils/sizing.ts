@@ -9,7 +9,7 @@ export type SizingState = 'inline' | 'oversized' | 'undersized';
 
 export interface SizingTone {
   state: SizingState;
-  /** e.g. "in line", "+1.2% oversized", "-1.2% undersized". */
+  /** Canonical wording, used identically everywhere: "in line", "1.2 points heavier", "1.2 points lighter". */
   label: string;
   textVar: string;
   bgVar: string;
@@ -26,7 +26,7 @@ export function sizingTone(deltaPct: number | null, threshold = 0.5): SizingTone
     return { state: 'inline', label: 'in line', textVar: 'var(--t3)', bgVar: 'var(--s2)', borderVar: 'var(--border)' };
   }
   if (deltaPct > 0) {
-    return { state: 'oversized', label: `+${deltaPct.toFixed(1)}% oversized`, textVar: 'var(--status-warning-text)', bgVar: 'var(--status-warning-bg)', borderVar: 'var(--status-warning-border)' };
+    return { state: 'oversized', label: `${deltaPct.toFixed(1)} points heavier`, textVar: 'var(--status-warning-text)', bgVar: 'var(--status-warning-bg)', borderVar: 'var(--status-warning-border)' };
   }
-  return { state: 'undersized', label: `${deltaPct.toFixed(1)}% undersized`, textVar: 'var(--status-info-text)', bgVar: 'var(--status-info-bg)', borderVar: 'var(--status-info-border)' };
+  return { state: 'undersized', label: `${Math.abs(deltaPct).toFixed(1)} points lighter`, textVar: 'var(--status-info-text)', bgVar: 'var(--status-info-bg)', borderVar: 'var(--status-info-border)' };
 }

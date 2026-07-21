@@ -344,7 +344,7 @@ export function PortfolioPositionDetail({
               You hold {ownPortfolioPct !== null ? `${ownPortfolioPct.toFixed(1)}%` : '—'} of your account — STW holds {stwWeight !== null ? `${stwWeight.toFixed(1)}%` : '—'} of theirs.
               {tone.state !== 'inline' && (
                 <span style={{ color: tone.textVar, fontWeight: FONT_WEIGHT.semibold }}>
-                  {' '}{tone.label}{dollarDelta !== null ? ` ≈ ${fmtMoney(Math.abs(dollarDelta))}` : ''}.
+                  {' '}{tone.label}{dollarDelta !== null ? ` ≈ ${fmtMoney(Math.abs(dollarDelta))} ${tone.state === 'oversized' ? 'more' : 'less'}` : ''}.
                 </span>
               )}
             </div>
