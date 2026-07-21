@@ -33,6 +33,14 @@ const BUCKET_COLOR: Record<TrendBucket, string> = {
   risk_off:         'var(--status-negative-text)',
 };
 
+const BUCKET_BG: Record<TrendBucket, string> = {
+  momentum:         'var(--status-positive-bg)',
+  healthy_pullback: 'var(--status-positive-bg)',
+  mid_caution:      'var(--status-warning-bg)',
+  bear_rally:       'var(--status-warning-bg)',
+  risk_off:         'var(--status-negative-bg)',
+};
+
 /** Best-available day-over-day-ish trend note (5D with its direction phrase, else 3D). */
 function trendNote(entry: TrendHistoryEntry | undefined): { text: string; color: string } {
   const resolved = entry ? resolveDelta(entry) : { value: null, label: '5D' as const };
@@ -126,7 +134,7 @@ export function TrendStructureTable({ indicators, visibleSymbols, onToggle, asOf
             return (
               <div key={bucket}>
                 <div style={{
-                  background: 'var(--s2)', color: BUCKET_COLOR[bucket], fontSize: FONT_SIZE['3xs'], fontWeight: FONT_WEIGHT.bold,
+                  background: BUCKET_BG[bucket], color: BUCKET_COLOR[bucket], fontSize: FONT_SIZE['3xs'], fontWeight: FONT_WEIGHT.bold,
                   letterSpacing: '0.06em', textTransform: 'uppercase', padding: '4px 8px', borderRadius: 4, margin: '2px 0',
                 }}>
                   {TREND_BUCKET_META[bucket].groupLabel}
@@ -139,7 +147,7 @@ export function TrendStructureTable({ indicators, visibleSymbols, onToggle, asOf
         </div>
       </div>
 
-      <SourceNote source="Quotes: Finnhub (live, ≤15m) · MAs: TwelveData daily" href="https://twelvedata.com" asOf={asOf} updatedAt={updatedAt} />
+      <SourceNote source="Quotes: Finnhub (live, ≤15m) · MAs: TwelveData daily" href="https://twelvedata.com" asOf={asOf} updatedAt={updatedAt} marginTop={8} />
     </Card>
   );
 }

@@ -87,7 +87,7 @@ export function RegimeCard({ regime, updatedAt, series, helpOpen, onToggleHelp, 
 
       {helpOpen && <HelpPanel>{help}</HelpPanel>}
 
-      <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: 6 }}>
+      <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: 2 }}>
         Source: STW regime model{stamp ? ` · ${stamp}` : ''} · refreshes daily after the close
       </div>
     </Card>

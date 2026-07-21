@@ -127,7 +127,7 @@ export function ComingUpCard({ events, earnings, ownTickers, stwTickers, loading
           const risk = RISK_STYLE[r.risk];
           return (
             <div key={r.key} style={{ display: 'flex', alignItems: 'baseline', gap: 10, padding: '7px 0', borderTop: '1px solid var(--bsub)', flexWrap: 'wrap' }}>
-              <span style={{ width: 132, flexShrink: 0, fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold, color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>{r.when}</span>
+              <span style={{ width: 104, flexShrink: 0, fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold, color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>{r.when}</span>
               <span title={r.holderTip} style={{ width: 14, flexShrink: 0, textAlign: 'center', fontSize: FONT_SIZE.xs, color: r.holder, cursor: 'help' }}>●</span>
               <span style={{ flex: 1, minWidth: 160, fontSize: FONT_SIZE.sm, color: 'var(--text)' }}>
                 {r.what}

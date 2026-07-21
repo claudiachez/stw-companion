@@ -76,16 +76,16 @@ export function RegimeTrajectory({ series, days = 9 }: Props) {
           <div
             key={slot.placeholder ? `pad-${i}` : `${slot.date}-${i}`}
             onMouseEnter={() => setHovered(i)}
-            style={{ width: SLOT_W, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}
+            style={{ width: SLOT_W, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}
           >
             <span style={{
-              width: 12, height: 12, borderRadius: '50%',
+              width: 10, height: 10, borderRadius: '50%',
               background: color,
               border: slot.score === null ? '1.5px dashed var(--t3)' : 'none',
               boxShadow: isNow && slot.score !== null ? `0 0 5px ${color}` : 'none',
             }} />
             <span style={{
-              fontSize: FONT_SIZE['2xs'],
+              fontSize: FONT_SIZE['3xs'],
               color: isNow ? 'var(--text)' : 'var(--t3)',
               fontWeight: isNow ? FONT_WEIGHT.semibold : undefined,
             }}>

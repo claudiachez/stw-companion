@@ -5,6 +5,7 @@ import {
 } from '@stw/shared';
 import { useCapabilities } from '../../context/AppCapabilities';
 import { useAppConfig } from '../../hooks/useAppConfig';
+import { useIsMobile } from '../../hooks/useIsMobile';
 import {
   useMacroIndicators, ALL_INDICATORS,
   DEFAULT_TREND_SYMBOLS, EXPERT_TREND_SYMBOLS,
@@ -46,6 +47,9 @@ export function MacroView() {
   const { finnhubKey, twelveDataKey, canEdit } = useCapabilities();
   const { regimeWeights } = useAppConfig();
   const { prefs, toggle } = useMacroPrefs();
+  // Ref collapses the internals/GEX/fear 3-up from 3 columns straight to 1 at ≤860px
+  // (no intermediate 2-col stage that auto-fit would produce).
+  const threeUpNarrow = useIsMobile(860);
 
   // One-open-at-a-time ⓘ: a single section id in state, toggled per card header.
   const [help, setHelp] = useState<string | null>(null);
@@ -250,7 +254,7 @@ export function MacroView() {
         />
 
         {/* 6 — Under the hood · Dealer positioning · Fear vs greed */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, alignItems: 'stretch' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: threeUpNarrow ? '1fr' : '1fr 1fr 1fr', gap: 12, alignItems: 'stretch' }}>
           <MarketInternalsCard
             volatility={volatility}
             credit={credit}

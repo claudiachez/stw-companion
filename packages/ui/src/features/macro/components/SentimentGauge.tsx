@@ -23,6 +23,9 @@ function zone(s: number): { label: string; color: string } {
   return { label: 'extreme greed', color: 'var(--acc)' };
 }
 
+// The ref gauge uses literal hexes (warn / bsub / #a3c76d olive) with no matching design
+// tokens, and the no-literal-color rule forbids them — so we keep the app's tokenized
+// sentiment palette, which also stays consistent with zone()'s sentence-text colors above.
 const GRADIENT =
   'linear-gradient(90deg,'
   + ' var(--status-negative-text) 0 25%,'

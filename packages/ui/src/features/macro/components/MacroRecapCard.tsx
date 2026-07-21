@@ -83,7 +83,7 @@ export function MacroRecapCard({ recap, recapDate, recapSession, loading, error,
             <button
               type="button"
               onClick={() => setExpanded((v) => !v)}
-              style={{ alignSelf: 'flex-start', background: 'none', border: 'none', padding: '4px 0', cursor: 'pointer', fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold, color: 'var(--acc)' }}
+              style={{ alignSelf: 'flex-start', background: 'none', border: 'none', padding: '6px 0', cursor: 'pointer', fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold, color: 'var(--acc)' }}
             >
               {expanded ? 'Hide the full recap ▴' : 'Read the full recap ▾'}
             </button>

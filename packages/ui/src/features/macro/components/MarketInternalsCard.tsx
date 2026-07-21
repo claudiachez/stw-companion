@@ -68,7 +68,7 @@ export function MarketInternalsCard({ volatility, credit, rates, helpOpen, onTog
         })}
       </div>
       <div style={{ marginTop: 'auto' }}>
-        <SourceNote source="FRED + CBOE" href="https://fred.stlouisfed.org" asOf={volatility?.asOf} updatedAt={volatility?.updatedAt} />
+        <SourceNote source="FRED + CBOE" href="https://fred.stlouisfed.org" asOf={volatility?.asOf} updatedAt={volatility?.updatedAt} marginTop={8} />
       </div>
     </Card>
   );

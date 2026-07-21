@@ -31,7 +31,7 @@ export function InfoButton({ open, onClick }: { open: boolean; onClick: () => vo
       aria-expanded={open}
       style={{
         width: 18, height: 18, borderRadius: '50%', border: '1px solid var(--border)',
-        background: open ? 'var(--s2)' : 'transparent', color: 'var(--t3)',
+        background: 'var(--s2)', color: 'var(--t3)',
         cursor: 'pointer', padding: 0, flexShrink: 0,
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       }}
@@ -145,9 +145,9 @@ export function ModuleHeader({ title, color = 'var(--t3)', help }: { title: stri
  * footer is a clickable source, matching the GEX card (host: consistency across
  * the board, 2026-07-13).
  */
-export function SourceNote({ source, href, asOf, updatedAt }: { source: string; href?: string; asOf?: string | null; updatedAt?: Date | string | null }) {
+export function SourceNote({ source, href, asOf, updatedAt, marginTop = 10 }: { source: string; href?: string; asOf?: string | null; updatedAt?: Date | string | null; marginTop?: number }) {
   return (
-    <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 10, lineHeight: 1.4 }}>
+    <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop, lineHeight: 1.4 }}>
       {href
         ? <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--t3)', textDecoration: 'underline' }}>{source}</a>
         : source}

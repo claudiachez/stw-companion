@@ -31,6 +31,14 @@ const BUCKET_COLOR: Record<TrendBucket, string> = {
   risk_off:         'var(--status-negative-text)',
 };
 
+const BUCKET_BG: Record<TrendBucket, string> = {
+  momentum:         'var(--status-positive-bg)',
+  healthy_pullback: 'var(--status-positive-bg)',
+  mid_caution:      'var(--status-warning-bg)',
+  bear_rally:       'var(--status-warning-bg)',
+  risk_off:         'var(--status-negative-bg)',
+};
+
 const COLS: { key: 'rsWeek' | 'rs1M' | 'rs3M'; label: string }[] = [
   { key: 'rsWeek', label: 'W' },
   { key: 'rs1M', label: '1M' },
@@ -142,12 +150,13 @@ export function SectorRotationCard({ rows, loading, asOf, updatedAt, constituent
             const showBand = row.bucket !== prevBucket;
             prevBucket = row.bucket;
             const bandColorTok = row.bucket ? BUCKET_COLOR[row.bucket] : 'var(--t3)';
+            const bandBgTok = row.bucket ? BUCKET_BG[row.bucket] : 'var(--s2)';
             const bandLabel = row.bucket ? TREND_BUCKET_META[row.bucket].groupLabel : 'Unclassified';
             return (
               <div key={row.symbol}>
                 {showBand && (
                   <div style={{
-                    background: 'var(--s2)', color: bandColorTok, fontSize: FONT_SIZE['3xs'], fontWeight: FONT_WEIGHT.bold,
+                    background: bandBgTok, color: bandColorTok, fontSize: FONT_SIZE['3xs'], fontWeight: FONT_WEIGHT.bold,
                     letterSpacing: '0.06em', textTransform: 'uppercase', padding: '4px 8px', borderRadius: 4, margin: '3px 0',
                   }}>{bandLabel}</div>
                 )}
@@ -176,6 +185,7 @@ export function SectorRotationCard({ rows, loading, asOf, updatedAt, constituent
         href="https://twelvedata.com"
         asOf={asOf}
         updatedAt={updatedAt}
+        marginTop={8}
       />
     </Card>
   );
