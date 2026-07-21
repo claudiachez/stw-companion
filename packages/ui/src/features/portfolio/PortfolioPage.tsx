@@ -715,7 +715,7 @@ function TailingTab({ groups, portfolioValue, pickMap, decliningTailed, showMone
                 <div style={{ fontSize: FONT_SIZE.sms, color: 'var(--text)', lineHeight: 1.5 }}>{trader}&rsquo;s conviction is dropping on {decliningTailed.length} name{decliningTailed.length === 1 ? '' : 's'} you tail</div>
                 <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)', lineHeight: 1.5 }}>
                   {decliningTailed.map((c, i) => (
-                    <span key={c.ticker}>{i > 0 && ', '}<TickerLink ticker={c.ticker} onSelect={onSelectTicker} /></span>
+                    <span key={c.ticker}>{i > 0 && ', '}<TickerLink ticker={c.ticker} onSelect={onSelectTicker} style={{ fontSize: FONT_SIZE.sm }} /></span>
                   ))}
                 </div>
               </div>
@@ -729,7 +729,7 @@ function TailingTab({ groups, portfolioValue, pickMap, decliningTailed, showMone
                 <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)', lineHeight: 1.5 }}>
                   {bigOversize.map((r, i) => {
                     const trim = showMoney && portfolioValue > 0 ? ` (trim ≈ ${fmtMoneyCompact((r.delta! / 100) * portfolioValue)})` : '';
-                    return <span key={r.g.underlying}>{i > 0 && ', '}{r.g.underlying} +{r.delta!.toFixed(1)}pt{trim}</span>;
+                    return <span key={r.g.underlying}>{i > 0 && ', '}<TickerLink ticker={r.g.underlying} onSelect={onSelectTicker} style={{ fontSize: FONT_SIZE.sm }} /> +{r.delta!.toFixed(1)}pt{trim}</span>;
                   })}
                 </div>
               </div>
