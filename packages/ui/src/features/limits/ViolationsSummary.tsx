@@ -604,7 +604,7 @@ function Glossary() {
   return (
     <div style={{ ...card, padding: `${SPACE[3]}px ${SPACE[4]}px` }}>
       <button onClick={() => setOpen((v) => !v)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t3)', fontSize: FONT_SIZE.xs, padding: 0, textDecoration: 'underline' }}>
-        {open ? 'Hide the plain-English glossary' : 'What do these terms mean?'}
+        {open ? 'Hide the plain-English glossary' : '? What do these terms mean'}
       </button>
       {open && (
         <div style={{ marginTop: SPACE[2], fontSize: FONT_SIZE.xs, color: 'var(--t2)', lineHeight: 1.7 }}>
