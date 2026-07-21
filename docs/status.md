@@ -11,11 +11,10 @@
   Done (15 commits): both detail panes; G1; G2; **+ this session (8 commits): Profile, Settings,
   GEX, Risk, Tailing, Positions/Trades conviction band, Trades footer, Admin Edit-position.**
   Branch typecheck-green, lint 0 errors, 358 tests pass; **nothing pushed.**
-  - **Resolved:** T1 (keep the position-pane ↗ to STW's pick), S1 (keep FormRow uppercase cap labels).
-  - **Open questions for the host (non-blocking, in REQA.md):** G-GEX (GEX emoji/uppercase section
-    headers vs the mock's 14px sentence-case titles — cosmetic, left as-is); P-LIST (Picks-list row
-    shows weight%·date vs the mock's price·weight% — deliberate, pairs w/ status + Newest/Oldest sort).
-  - **Next:** host reviews the flags → on go-ahead, `/stw-review` → push → ONE PR to `staging`.
+  - **All host decisions resolved:** T1 (keep the position-pane ↗ to STW's pick), S1 (keep FormRow
+    uppercase cap labels), **G-GEX** (converted GEX section headers to the mock's sentence-case titles),
+    **P-LIST** (Picks-list row now shows `$price · weight%`, dropped the date). No open questions remain.
+  - **Next:** on go-ahead, `/stw-review` → push → ONE PR to `staging`.
 - **The full webapp redesign is DONE but LIVES ONLY ON THE LOCAL BRANCH `claude/webapp-redesign`
   — NOT pushed, NO PR, NOT on `staging`/`main`.** 21 commits (see session-history). Host is holding
   the push for a **QA session next** (log in + eyeball every screen, light + dark), then `/stw-review`
