@@ -283,7 +283,7 @@ export function TradesTable({ holdings, onSelectTicker }: Props) {
 
         {/* Footer note — how to read the two row states. */}
         <p style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: SPACE[2.5], lineHeight: 1.5 }}>
-          One row per lot. Open rows show live P&amp;L; closed rows show what was booked and its contribution to the book.
+          One row per lot. Open rows show live P&amp;L; closed rows show what was booked and its contribution to the whole book.
         </p>
       </div>
     </div>
