@@ -1,8 +1,7 @@
-import { useMemo, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useMemo, useState, type ReactNode } from 'react';
 import {
   environmentScore, regimeBand, trendSleeveScore, trendSleeveLabel, trendSubScore,
-  gexPositioningLabel, stressLabel, creditLabel, ratesDollarLabel, isTradingDay, MARKET_MOVERS, FONT_SIZE,
+  gexPositioningLabel, stressLabel, creditLabel, ratesDollarLabel, isTradingDay, MARKET_MOVERS,
 } from '@stw/shared';
 import { useCapabilities } from '../../context/AppCapabilities';
 import { useAppConfig } from '../../hooks/useAppConfig';
@@ -25,124 +24,41 @@ import { useHoldings } from '../picks/useHoldings';
 import { useUserPositions } from '../portfolio/useUserPositions';
 import { useGraddox } from '../signals/useGraddox';
 import { RegimeCard } from './components/RegimeCard';
-import { ModuleScoreStrip } from './components/ModuleScoreStrip';
-import { MacroEventRiskCard } from './components/MacroEventRiskCard';
+import { SleeveDriversCard, type SleeveItem } from './components/SleeveDriversCard';
+import { MacroRecapCard } from './components/MacroRecapCard';
+import { ComingUpCard } from './components/ComingUpCard';
 import { TrendStructureTable } from './components/TrendStructureTable';
 import { MarketInternalsCard } from './components/MarketInternalsCard';
 import { GexPositioningCard } from './components/GexPositioningCard';
 import { SentimentGauge } from './components/SentimentGauge';
-import { MacroRecapCard } from './components/MacroRecapCard';
 import { SectorRotationCard } from './components/SectorRotationCard';
-import { EarningsAheadCard, type EarningsCat } from './components/EarningsAheadCard';
-import { ModuleHeader } from './components/macroVisuals';
 
-// Concise "what is this / why it matters / how to read it" blurbs, shown via the
-// collapsible ⓘ on each module header (collapsed by default — no clutter). Each
-// help blurb is structured into short lines (lead → detail → muted footer) via
-// <Help>, not a wall of text — same legibility pass as the Market Internals rows.
-function Help({ children }: { children: ReactNode }) {
-  return <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{children}</div>;
-}
+// The webapp redesign lays Macro out as a single 900px column of surface cards
+// (gap 12). This view is a RE-LAYOUT only — every number still comes from the
+// existing macro hooks + shared scorers (environmentScore / regimeBand /
+// trendSleeveScore / the sleeve hooks / relativeStrength / gexSleeveScore /
+// sentiment composite / useMacroTrendHistory). The regime gate is frozen (engine
+// 1.1.0) and read-only; the gate and the Macro composite never blend.
+
 const dim = { color: 'var(--t3)' } as const;
 
-const HELP = {
-  // regime help is built in the component (regimeHelp) so it shows the live,
-  // admin-configured weights (migration 061) rather than a hardcoded line.
-  strip: (
-    <Help>
-      <div>Each sleeve's 0–100 score at a glance — <strong>higher = more risk-on</strong>.</div>
-      <div style={dim}>Shows what's actually driving the regime: trend, stress, credit, rates or positioning.</div>
-      <div style={dim}>Refreshed: on load; underlying sleeves update daily after the close.</div>
-    </Help>
-  ),
-  trend: (
-    <Help>
-      <div>Are risk assets technically intact? Each index vs its 9-, 21- and 200-day moving averages. The heaviest sleeve (30%).</div>
-      <div><strong>Above all three</strong> — momentum.</div>
-      <div><strong>Below the 200-day</strong> — risk-off.</div>
-      <div><strong>Below the 200-day but bouncing above the short ones</strong> — a bear-market rally, not bullish.</div>
-      <div style={dim}>Refreshed: quotes live (≤15m); moving averages daily after the close.</div>
-    </Help>
-  ),
-  internals: (
-    <Help>
-      <div><strong>Volatility / Stress</strong> — VIX (expected S&P volatility) + IV premium (VIX ÷ realized vol). Higher = calmer.</div>
-      <div><strong>Credit / Liquidity</strong> — HY OAS spread vs its 50-day average. A widening spread warns of credit stress before stocks.</div>
-      <div><strong>Rates + Dollar</strong> — 10-year yield + broad dollar. Both rising is a headwind for growth stocks (a yield drop during stress is flight-to-safety, not a tailwind).</div>
-      <div style={dim}>Each sleeve is scored 0–100 — higher = more risk-on.</div>
-      <div style={dim}>Refreshed: daily after the close (FRED posts VIX/rates with a ~1-day lag).</div>
-    </Help>
-  ),
-  gex: (
-    <Help>
-      <div>Options-positioning read (dealer gamma exposure) for SPX, with the <strong>gamma flip</strong>, <strong>call wall</strong> and <strong>put wall</strong>.</div>
-      <div><strong>Above the flip</strong> — positive gamma: dealers dampen moves, dips tend to hold (a grind, not a chase).</div>
-      <div><strong>Below the flip</strong> — negative gamma: dealers amplify moves, breaks accelerate; keep size down.</div>
-      <div style={dim}>A tactical overlay — helps time entries and spot pivots. Levels via SPX Gamma Edge.</div>
-      <div style={dim}>Refreshed: twice each weekday — pre-market (~8:30am ET) and after the close (~4:30pm ET).</div>
-    </Help>
-  ),
-  riskAppetite: (
-    <Help>
-      <div>How much <strong>fear vs greed</strong> is priced right now (0 = extreme fear, 100 = extreme greed).</div>
-      <div>Different from the regime: the regime is what the environment <em>is</em>; this is how emotional the tape is.</div>
-      <div style={dim}>Built from momentum, VIX, IV premium, GEX, credit and breadth.</div>
-      <div style={dim}>Refreshed: quotes live (≤15m); daily metrics once per session.</div>
-    </Help>
-  ),
-  recap: (
-    <Help>
-      <div>An AI note that turns all the module scores into a plain-English read plus a suggested trading mode.</div>
-      <div style={dim}>Refreshed: twice each weekday — pre-market at 8am ET, post-market at 4:30pm ET.</div>
-    </Help>
-  ),
-  eventRisk: (
-    <Help>
-      <div>Scheduled macro events (CPI, PPI, PCE, jobs, GDP, retail sales, housing, sentiment, Philly Fed, FOMC) that could move the setup over the next few days.</div>
-      <div>A temporary <strong>overlay</strong>, not a permanent regime change — it fades a few trading days after the print unless the structure actually shifted.</div>
-      <div style={dim}>Source: FRED economic-release calendar + the published FOMC schedule. Consensus isn't published on a public calendar, so it reads "—"; Previous is the last released print.</div>
-      <div style={dim}>Refreshed: hourly.</div>
-    </Help>
-  ),
-  earnings: (
-    <Help>
-      <div>Upcoming quarterly <strong>earnings reports</strong> — the biggest single-ticker volatility events. Covers <strong>your own positions</strong>, STW's holdings, and the mega-caps whose prints move the whole index.</div>
-      <div><strong>before open</strong> / <strong>after close</strong> tells you when the move lands; the EPS estimate is the consensus the print is judged against.</div>
-      <div style={dim}><span style={{ color: 'var(--acc)' }}>●</span> a name you hold · <span style={{ color: 'var(--c3)' }}>●</span> a name STW holds · ● a market-mover shown for index context.</div>
-      <div style={dim}>Refreshed: daily.</div>
-    </Help>
-  ),
-  sectorRotation: (
-    <Help>
-      <div>Where money is rotating across the 11 SPDR sectors, ranked #1 (leading) → #11 (lagging) by structure + 1-month relative strength.</div>
-      <div><strong>Structure</strong> — the same 9/21/200-day trend bucketing as the Trend module.</div>
-      <div><strong>Radar</strong> — each sector's RS vs SPY (percentage points) across Week/1M/3M/6M/1Y.</div>
-      <div><strong>Leaders / Setting Up</strong> — names from that sector with confirmed bullish structure (Leaders) or turning positive on 1M RS (Setting Up).</div>
-      <div style={dim}>Refreshed: daily after the close.</div>
-    </Help>
-  ),
-};
-
 export function MacroView() {
-  const { finnhubKey, twelveDataKey, canEdit, isAdmin } = useCapabilities();
-  const navigate = useNavigate();
-  // Held earnings tickers link to their detail page: a "yours" name → My Portfolio
-  // (web only — admin has no /portfolio, and its book ≈ STW's), everything else → Stock
-  // Picks. Market-movers aren't linked (no detail page); the card gates on category.
-  const openEarningsTicker = (symbol: string, cat: EarningsCat) => {
-    navigate(cat === 'yours' && !isAdmin ? `/portfolio?ticker=${symbol}` : `/picks?ticker=${symbol}`);
-  };
+  const { finnhubKey, twelveDataKey, canEdit } = useCapabilities();
   const { regimeWeights } = useAppConfig();
   const { prefs, toggle } = useMacroPrefs();
-  // Graddox is retained only to ground the AI recap; the visible GEX card, the
-  // regime GEX sleeve and the score strip read the SPX Gamma Edge snapshot via
-  // useGexExposure.
+
+  // One-open-at-a-time ⓘ: a single section id in state, toggled per card header.
+  const [help, setHelp] = useState<string | null>(null);
+  const toggleHelp = (id: string) => setHelp((h) => (h === id ? null : id));
+
+  // Graddox is retained only to ground the AI recap; the visible GEX card + the GEX
+  // sleeve read the SPX Gamma Edge snapshot via useGexExposure.
   const { data: graddox } = useGraddox();
   const { data: gex, loading: gexLoading } = useGexExposure();
 
-  // Fetch the FULL trend set always (so the recap can speak to small-caps/
-  // equal-weight rotation even when those rows are toggled off); the table and the
-  // regime sleeve use only the visible subset.
+  // Fetch the FULL trend set always (so the recap can speak to small-caps/equal-
+  // weight rotation even when those rows are hidden); the table + the regime sleeve
+  // use only the visible subset.
   const allSymbols = useMemo(() => ALL_INDICATORS.map((i) => i.symbol), []);
   const visibleSymbols = useMemo(() => {
     const base = [...DEFAULT_TREND_SYMBOLS];
@@ -153,8 +69,6 @@ export function MacroView() {
   const { indicators, loading: indLoading, asOf: trendAsOf } = useMacroIndicators(allSymbols, finnhubKey, twelveDataKey);
   const { data: volatility, loading: volLoading } = useVolatilityStress(twelveDataKey);
   const { data: credit, loading: creditLoading } = useCreditLiquidity();
-  // Stress rising = VIX climbing or the HY spread wide vs its 50D — feeds the
-  // US10Y flight-to-safety cross-check so a fast yield drop in stress isn't read bullish.
   const stressRising = (volatility?.vixDelta5 ?? 0) > 0.5 || credit?.belowMa50 === false;
   const { data: rates, loading: ratesLoading } = useRatesDollar(stressRising);
   const { score, loading: sentLoading } = useSentimentGauge(twelveDataKey);
@@ -163,12 +77,8 @@ export function MacroView() {
   const { data: holdings } = useHoldings();
   const { data: userPositions } = useUserPositions();
   const { upcomingFor: upcomingEarningsFor, loading: earningsLoading } = useEarningsCalendar();
-  // Earnings calendar covers the signed-in user's OWN positions ∪ STW holdings ∪ the
-  // mega-cap market-movers. On the subscriber web app `ownTickers` is their IBKR book;
-  // on admin it's empty (no user_positions), so the set collapses to STW ∪ movers.
-  // Earnings only matters for positions you still HOLD — exclude closed ones on both
-  // sides (a closed STW holding = current_weight 0 / last_action Closed; a user position
-  // is open by construction but guard on non-zero qty anyway).
+
+  // Earnings covers the user's OWN positions ∪ STW holdings ∪ mega-cap movers.
   const ownTickers = useMemo(
     () => Array.from(new Set(
       (userPositions ?? [])
@@ -192,10 +102,8 @@ export function MacroView() {
   const { rows: sectorRows, loading: sectorLoading, asOf: sectorAsOf, constituents: sectorConstituents, constituentsLoading: sectorConstituentsLoading } = useSectorRotation(twelveDataKey);
 
   const visibleIndicators = indicators.filter((i) => visibleSymbols.includes(i.symbol));
-  const qqqBucket = indicators.find((i) => i.symbol === 'QQQ')?.bucket ?? null;
 
-  // Market Regime — weighted module scores across all five sleeves
-  // (a missing sleeve redistributes its weight across the present ones).
+  // Market Regime — weighted module scores across all five sleeves.
   const trendSleeve = useMemo(
     () => trendSleeveScore(visibleIndicators.map((i) => i.bucket)),
     [visibleIndicators],
@@ -214,9 +122,6 @@ export function MacroView() {
     return env === null ? null : regimeBand(env);
   }, [trendSleeve, volatility?.sleeveScore, credit?.sleeveScore, rates?.sleeveScore, gexSleeve, regimeWeights]);
 
-  // P2: 5D trend engine — one localStorage snapshot/day, read back as 5D/20D
-  // deltas + a direction classification. Deltas stay null until ~5 trading
-  // days of history accrue (expected, not a bug).
   const dataReady = !indLoading && !volLoading && !creditLoading && !ratesLoading;
   const trendHistory = useMacroTrendHistory({
     ready: dataReady,
@@ -230,27 +135,22 @@ export function MacroView() {
     indicators: indicators.map((i) => ({ symbol: i.symbol, score: trendSubScore(i.bucket) })),
   });
 
-  // Module 2: per-sleeve score strip. Every sleeve shows its best-available trend
-  // (5D, or 3D as a fallback while history is short) so none reads as "missing";
-  // GEX stays fixed on 3D (it moves fast — spec Module 8/2).
   const trendD = resolveDelta(trendHistory.deltas.trend);
   const volD = resolveDelta(trendHistory.deltas.volatility);
   const creditD = resolveDelta(trendHistory.deltas.credit);
   const ratesD = resolveDelta(trendHistory.deltas.rates_dollar);
-  const stripItems = [
-    { key: 'trend',       title: 'Trend',     score: trendSleeve,                 detail: trendSleeveLabel(trendSleeve), delta: trendD.value, deltaLabel: trendD.label },
-    { key: 'volatility',  title: 'Volatility', score: volatility?.sleeveScore ?? null, detail: stressLabel(volatility?.sleeveScore ?? null), delta: volD.value, deltaLabel: volD.label },
-    { key: 'credit',      title: 'Credit',    score: credit?.sleeveScore ?? null,  detail: creditLabel(credit?.sleeveScore ?? null), delta: creditD.value, deltaLabel: creditD.label },
-    { key: 'rates',       title: 'Rates/USD', score: rates?.sleeveScore ?? null,   detail: ratesDollarLabel(rates?.sleeveScore ?? null), delta: ratesD.value, deltaLabel: ratesD.label },
-    { key: 'gex',         title: 'GEX',       score: gexSleeve,                    detail: gexPositioning, delta: trendHistory.deltas.gex.threeDayDelta, deltaLabel: '3D' as const },
+  const sleeveItems: SleeveItem[] = [
+    { key: 'trend',      name: 'Trend',      weight: `${regimeWeights.trend}%`,        score: trendSleeve,                    note: trendSleeveLabel(trendSleeve),                    delta: trendD.value,  deltaLabel: trendD.label },
+    { key: 'volatility', name: 'Volatility', weight: `${regimeWeights.volatility}%`,   score: volatility?.sleeveScore ?? null, note: stressLabel(volatility?.sleeveScore ?? null),     delta: volD.value,    deltaLabel: volD.label },
+    { key: 'credit',     name: 'Credit',     weight: `${regimeWeights.credit}%`,       score: credit?.sleeveScore ?? null,     note: creditLabel(credit?.sleeveScore ?? null),         delta: creditD.value, deltaLabel: creditD.label },
+    { key: 'rates',      name: 'Rates / USD', weight: `${regimeWeights.rates_dollar}%`, score: rates?.sleeveScore ?? null,      note: ratesDollarLabel(rates?.sleeveScore ?? null),     delta: ratesD.value,  deltaLabel: ratesD.label },
+    { key: 'gex',        name: 'GEX',        weight: `${regimeWeights.gex}%`,          score: gexSleeve,                       note: gexPositioning,                                   delta: trendHistory.deltas.gex.threeDayDelta, deltaLabel: '3D' },
   ];
 
   const updatedAt = useMemo(() => (indLoading ? null : new Date()), [indLoading]);
 
   // On a non-trading day the live recompute drifts slightly from the last persisted
-  // snapshot (different sleeve reads / feed lag), so the headline (62) could disagree
-  // with the trajectory's newest lamp (63). Show the last COMPLETE session's regime
-  // when the market's closed, so the current-status score == the newest lamp.
+  // snapshot, so show the last COMPLETE session's regime when the market's closed.
   const todayET = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
   const lastSeriesScore = [...trendHistory.regimeSeries].reverse().find((p) => p.score !== null)?.score ?? null;
   const displayRegime = (isTradingDay(todayET) || lastSeriesScore === null) ? regime : regimeBand(lastSeriesScore);
@@ -266,9 +166,6 @@ export function MacroView() {
         ratesDollar: { score: rates?.sleeveScore ?? null, label: ratesDollarLabel(rates?.sleeveScore ?? null), fiveDayDelta: trendHistory.deltas.rates_dollar.fiveDayDelta },
         gex:         { score: gexSleeve, label: gexPositioning, fiveDayDelta: trendHistory.deltas.gex.threeDayDelta },
       },
-      // Grounding context for a richer, non-fabricated weekly narrative.
-      // Always pass the full trend set (incl. IWM/RSP/VEA) so the rotation/breadth
-      // story is grounded even when those rows are hidden in the table.
       context: {
         indicators: indicators.map((i) => ({ symbol: i.symbol, name: i.name, bucket: i.bucket, close: i.close, chgPct: i.chgPct })),
         volatility: volatility ? { vix: volatility.vix, ivPremium: volatility.ivPremium } : null,
@@ -286,118 +183,31 @@ export function MacroView() {
     }, note, session);
   }
 
-  // Auto-generate today's PM recap on first load once the sleeves have settled.
-  // Only fires if there's no recap for TODAY yet (date check). Subscribers just
-  // wait for the cross-device row to come back; only the editor auto-triggers it.
-  // No auto-generate for daily recaps — the AM and PM scheduled Netlify functions
-  // own generation. Admin uses the Regenerate button for intentional rewrites only.
-
   return (
     // Layout's <main> is overflow:hidden inside a 100dvh shell — this view owns its scroll.
     <div style={{ height: '100%', overflowY: 'auto' }}>
-    <div style={{ padding: '16px', maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: '16px 16px 32px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-      {/* ── Module 1: Market Regime Banner ─────────────────────────── */}
-      <section>
-        <ModuleHeader
-          title="Market Regime"
-          help={(
-            <Help>
-              <div>The overall market read — <strong>how aggressive to be right now</strong> — from weighted sleeve scores.</div>
-              <div>75–100 <strong>Risk-On</strong> · 60–74 Constructive · 45–59 Cautious · 30–44 Defensive · 0–29 <strong>Risk-Off</strong>.</div>
-              <div style={dim}>Weights: Trend {regimeWeights.trend}% · Volatility {regimeWeights.volatility}% · Credit {regimeWeights.credit}% · Rates+Dollar {regimeWeights.rates_dollar}% · GEX {regimeWeights.gex}%.</div>
-              <div>The <strong>arrow</strong> shows the 5-day direction — whether the regime is improving, deteriorating or mixed.</div>
-              <div>
-                The <strong>dots</strong> track the last 10 trading days (oldest → today):{' '}
-                <span style={{ color: 'var(--c5)' }}>green</span> risk-on ·{' '}
-                <span style={{ color: 'var(--c3)' }}>amber</span> neutral ·{' '}
-                <span style={{ color: 'var(--c1)' }}>red</span> risk-off. Read left → right to see if the backdrop is getting better or worse.
-              </div>
-              <div style={dim}>Refreshed: on load; underlying sleeves update daily after the close.</div>
-            </Help>
-          )}
+        {/* 1 — Regime verdict banner */}
+        <RegimeCard
+          regime={dataReady ? displayRegime : null}
+          updatedAt={updatedAt}
+          series={trendHistory.regimeSeries}
+          helpOpen={help === 'verdict'}
+          onToggleHelp={() => toggleHelp('verdict')}
+          help={HELP.verdict(regimeWeights)}
         />
-        <RegimeCard regime={dataReady ? displayRegime : null} updatedAt={updatedAt} series={trendHistory.regimeSeries} />
-      </section>
 
-      {/* ── Module 2: Module Score Strip ───────────────────────────── */}
-      <section>
-        <ModuleHeader title="Module Scores" help={HELP.strip} />
-        <ModuleScoreStrip items={stripItems} />
-      </section>
+        {/* 2 — What's driving it (5 weighted sleeves) */}
+        <SleeveDriversCard
+          items={sleeveItems}
+          updatedAt={updatedAt}
+          helpOpen={help === 'sleeves'}
+          onToggleHelp={() => toggleHelp('sleeves')}
+          help={HELP.sleeves}
+        />
 
-      {/* ── Module 3: Macro Event Risk ─────────────────────────────── */}
-      <section>
-        <ModuleHeader title="Event Risk" help={HELP.eventRisk} />
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
-          <MacroEventRiskCard
-            read={eventsRead}
-            events={eventsList}
-            loading={eventsLoading}
-            error={eventsError}
-            warning={eventsWarning}
-            qqqBucket={qqqBucket}
-            vix={volatility?.vix ?? null}
-            vixDelta1={volatility?.vixDelta1 ?? null}
-            us10y={rates?.us10y ?? null}
-            us10yDelta1={rates?.us10yDelta1 ?? null}
-            us10yDelta5={rates?.us10yDelta5 ?? null}
-          />
-        </div>
-      </section>
-
-      {/* ── Module 3b: Earnings Ahead ──────────────────────────────── */}
-      <section>
-        <ModuleHeader title="Earnings Ahead" help={HELP.earnings} />
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
-          <EarningsAheadCard events={upcomingEarnings} ownTickers={ownTickers} stwTickers={stwTickers} loading={earningsLoading} onSelectTicker={openEarningsTicker} />
-        </div>
-      </section>
-
-      {/* ── Module 4: Trend / Market Structure ─────────────────────── */}
-      <section>
-        <ModuleHeader title="Trend / Market Structure" help={HELP.trend} />
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
-          {indLoading && indicators.length === 0 ? (
-            <div style={{ color: 'var(--t3)', fontSize: FONT_SIZE.sm }}>Loading market structure…</div>
-          ) : (
-            <TrendStructureTable
-              indicators={indicators}
-              visibleSymbols={visibleSymbols}
-              onToggle={toggle}
-              asOf={trendAsOf}
-              updatedAt={updatedAt}
-              indicatorDeltas={trendHistory.indicatorDeltas}
-            />
-          )}
-        </div>
-      </section>
-
-      {/* ── Modules 5–7: Market Internals (Volatility · Credit · Rates+Dollar) ── */}
-      <section>
-        <ModuleHeader title="Market Internals" help={HELP.internals} />
-        <MarketInternalsCard volatility={volatility} credit={credit} rates={rates} />
-      </section>
-
-      {/* ── Module 8: GEX / Positioning ────────────────────────────── */}
-      <section>
-        <ModuleHeader title="GEX / Positioning" help={HELP.gex} />
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
-          <GexPositioningCard data={gex} loading={gexLoading} threeDayDelta={trendHistory.deltas.gex.threeDayDelta} />
-        </div>
-      </section>
-
-      {/* ── Module 9: Risk Appetite (gauge) ────────────────────────── */}
-      <section>
-        <ModuleHeader title="Risk Appetite" help={HELP.riskAppetite} />
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
-          <SentimentGauge score={score} loading={sentLoading} fiveDayDelta={trendHistory.deltas.risk_appetite.fiveDayDelta} />
-        </div>
-      </section>
-
-      {/* ── Module 10: AI Recap ────────────────────────────────────── */}
-      <section>
-        <ModuleHeader title="Market Recap" help={HELP.recap} />
+        {/* 3 — AI recap */}
         <MacroRecapCard
           recap={recap}
           recapDate={recapDate}
@@ -406,25 +216,148 @@ export function MacroView() {
           error={recapError}
           canEdit={canEdit}
           onRefresh={handleRefreshRecap}
+          helpOpen={help === 'recap'}
+          onToggleHelp={() => toggleHelp('recap')}
+          help={HELP.recap}
         />
-      </section>
 
-      {/* ── Module 11: Sector Rotation ──────────────────────────────── */}
-      <section>
-        <ModuleHeader title="Sector Rotation" help={HELP.sectorRotation} />
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
-          <SectorRotationCard
-            rows={sectorRows}
-            loading={sectorLoading}
-            asOf={sectorAsOf}
-            updatedAt={updatedAt}
-            constituents={sectorConstituents}
-            constituentsLoading={sectorConstituentsLoading}
+        {/* 4 — Coming up (macro prints + earnings, next 7 days) */}
+        <ComingUpCard
+          events={eventsList}
+          earnings={upcomingEarnings}
+          ownTickers={ownTickers}
+          stwTickers={stwTickers}
+          loading={eventsLoading || earningsLoading}
+          error={eventsError}
+          warning={eventsWarning}
+          updatedAt={updatedAt}
+          helpOpen={help === 'coming'}
+          onToggleHelp={() => toggleHelp('coming')}
+          help={HELP.coming}
+        />
+
+        {/* 5 — Trend / market structure */}
+        <TrendStructureTable
+          indicators={indicators}
+          visibleSymbols={visibleSymbols}
+          onToggle={toggle}
+          asOf={trendAsOf}
+          updatedAt={updatedAt}
+          indicatorDeltas={trendHistory.indicatorDeltas}
+          helpOpen={help === 'trend'}
+          onToggleHelp={() => toggleHelp('trend')}
+          help={HELP.trend}
+        />
+
+        {/* 6 — Under the hood · Dealer positioning · Fear vs greed */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, alignItems: 'stretch' }}>
+          <MarketInternalsCard
+            volatility={volatility}
+            credit={credit}
+            rates={rates}
+            helpOpen={help === 'internals'}
+            onToggleHelp={() => toggleHelp('internals')}
+            help={HELP.internals}
+          />
+          <GexPositioningCard
+            data={gex}
+            loading={gexLoading}
+            helpOpen={help === 'gex'}
+            onToggleHelp={() => toggleHelp('gex')}
+            help={HELP.gex}
+          />
+          <SentimentGauge
+            score={score}
+            loading={sentLoading}
+            fiveDayDelta={trendHistory.deltas.risk_appetite.fiveDayDelta}
+            helpOpen={help === 'fear'}
+            onToggleHelp={() => toggleHelp('fear')}
+            help={HELP.fear}
           />
         </div>
-      </section>
 
-    </div>
+        {/* 7 — Where money is rotating */}
+        <SectorRotationCard
+          rows={sectorRows}
+          loading={sectorLoading}
+          asOf={sectorAsOf}
+          updatedAt={updatedAt}
+          constituents={sectorConstituents}
+          constituentsLoading={sectorConstituentsLoading}
+          helpOpen={help === 'sectors'}
+          onToggleHelp={() => toggleHelp('sectors')}
+          help={HELP.sectors}
+        />
+
+      </div>
     </div>
   );
 }
+
+// Concise "what / why / how to read it" blurbs, shown inline via each card's ⓘ.
+type Weights = { trend: number; volatility: number; credit: number; rates_dollar: number; gex: number };
+const HELP = {
+  verdict: (w: Weights): ReactNode => (
+    <>
+      <div>STW's daily market-health score (0–100), a weighted blend of the five inputs below: trend {w.trend}%, volatility {w.volatility}%, credit {w.credit}%, rates/USD {w.rates_dollar}%, GEX {w.gex}%.</div>
+      <div style={dim}><b style={{ color: 'var(--status-positive-text)' }}>Green ≥ 60</b> risk-on · <b style={{ color: 'var(--status-warning-text)' }}>amber 45–59</b> selective · <b style={{ color: 'var(--status-negative-text)' }}>red &lt; 45</b> defensive.</div>
+      <div style={dim}>The pill is today's label + score; the chip is the change vs the prior session; the dots are the last 9 sessions — hover one for that day's score. Refreshes daily after the close.</div>
+    </>
+  ),
+  sleeves: (
+    <>
+      <div>Each of the five inputs is scored 0–100 against its own multi-year history — 50 is typical, higher is more risk-on.</div>
+      <div style={dim}>The percentage by each name is its weight in the verdict; the bar + number are today's score; the note is what's driving it; the arrow is the lookback change.</div>
+      <div style={dim}>When the verdict moves, whichever input moved most is usually the story of the day.</div>
+    </>
+  ),
+  recap: (
+    <>
+      <div>Written fresh each session by AI from the numbers on this page only — it never sees headlines.</div>
+      <div style={dim}>The preview is the one-paragraph read plus the suggested mode; expand it for scenarios, the playbook and the one thing to watch.</div>
+      <div style={dim}>Treat it as a briefing, not a signal — your guardrails in Settings are the actual rules.</div>
+    </>
+  ),
+  coming: (
+    <>
+      <div>Every scheduled catalyst in the next 7 days: macro prints (CPI, FOMC, claims…) plus earnings for names you hold, STW holds, or broad market movers (context).</div>
+      <div style={dim}>The Risk pill is the expected impact on the indexes, not on any single stock. Once a print is out, its row shows the actual vs the prior print.</div>
+      <div style={dim}>These are temporary overlays — they fade within days unless the market's structure actually shifts.</div>
+    </>
+  ),
+  trend: (
+    <>
+      <div><b>Structure</b> is the bucket from each index's position vs its 9-, 21- and 200-day averages — the group headers spell out the combination.</div>
+      <div style={dim}><b>Trend</b> is the change in that structure score: ↓ deterioration, → flat, ↑ improvement. IWM (small caps), RSP (breadth) and VEA (international) ride alongside SPY/QQQ as early-warning indicators.</div>
+      <div style={dim}>Quotes are live (Finnhub, ≤15m); moving averages update daily (TwelveData).</div>
+    </>
+  ),
+  internals: (
+    <>
+      <div>Stress usually shows here before it shows in prices — the early-warning layer behind the verdict.</div>
+      <div style={dim}><b>Volatility</b>: the VIX level + how options are priced vs realized moves. <b>Credit</b>: junk-bond spreads vs their 50-day. <b>Rates + $</b>: a rising 10Y yield and dollar squeeze growth valuations.</div>
+      <div style={dim}>Dot colors: green calm · amber a building headwind · red active stress.</div>
+    </>
+  ),
+  gex: (
+    <>
+      <div>Dealers who sell options hedge mechanically, and that hedging moves the market.</div>
+      <div style={dim}>Above the <b style={{ color: 'var(--status-warning-text)' }}>gamma flip</b> they trade against moves (calmer tape, dips hold); below it they trade with moves (faster swings). The <b style={{ color: 'var(--status-positive-text)' }}>put wall</b> and <b style={{ color: 'var(--status-negative-text)' }}>call wall</b> act like a floor and a ceiling until options expire.</div>
+      <div style={dim}>The black marker is SPX right now — hover any marker for its level.</div>
+    </>
+  ),
+  fear: (
+    <>
+      <div>A 0–100 blend of momentum, options pricing and breadth — what the tape is <i>feeling</i>, not what it should feel.</div>
+      <div style={dim}>Below ~25 = extreme fear (historically a contrarian buy zone); above ~75 = extreme greed (where chasing gets punished); the middle is just weather.</div>
+      <div style={dim}>"Loudest" shows what's driving today's number — a big split between drivers is itself a warning.</div>
+    </>
+  ),
+  sectors: (
+    <>
+      <div>Where money is rotating across the 11 SPDR sectors, ranked #1 (leading) → #11 (lagging) by structure + 1-month relative strength.</div>
+      <div style={dim}><b>Structure</b> — the same 9/21/200-day bucketing as the Trend module. <b>W / 1M / 3M</b> — each sector's RS vs SPY in percentage points; the bar shows the size of the move.</div>
+      <div style={dim}><b>On the radar</b> — a solid badge is a leader (confirmed bullish structure), a dashed badge is setting up (turning positive on 1M RS). Refreshed daily after the close.</div>
+    </>
+  ),
+};
