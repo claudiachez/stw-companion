@@ -61,13 +61,17 @@ const thR: React.CSSProperties = { ...th, textAlign: 'right' };
 const td: React.CSSProperties = { padding: '9px 13px', borderBottom: '1px solid var(--bsub)', verticalAlign: 'middle', lineHeight: 1.4, whiteSpace: 'nowrap' };
 const tdR: React.CSSProperties = { ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' };
 
-function fmtMoney(n: number | null): string {
+// `signed` prefixes a GAIN with "+" (for P&L), matching the design; losses keep "-$…",
+// neutral totals (account value, market value, trim amounts) pass signed=false.
+function fmtMoney(n: number | null, signed = false): string {
   if (n === null) return '—';
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
+  const s = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
+  return signed && n > 0 ? `+${s}` : s;
 }
-function fmtMoneyCompact(n: number | null): string {
+function fmtMoneyCompact(n: number | null, signed = false): string {
   if (n === null) return '—';
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 }).format(n);
+  const s = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 1 }).format(n);
+  return signed && n > 0 ? `+${s}` : s;
 }
 function fmtPct(n: number | null): string {
   if (n === null) return '—';
@@ -162,7 +166,7 @@ function FlatLegRow({ row, onSelectTicker, showMoney, isMobile, portfolioValue, 
       {!isMobile && showMoney && <td style={{ ...tdR, color: 'var(--t2)' }}>{fmtPrice(p.mark_price)}</td>}
       {!isMobile && showMoney && <td style={{ ...tdR, color: 'var(--t2)' }}>{fmtMoney(posMV(p))}</td>}
       <td style={{ ...tdR, color: 'var(--t2)' }}>{weightPct !== null ? `${weightPct.toFixed(1)}%` : '—'}</td>
-      {showMoney && <td style={{ ...tdR, color: pnlColor(p.unrealized_pnl), fontWeight: 600 }}>{fmtMoney(p.unrealized_pnl)}</td>}
+      {showMoney && <td style={{ ...tdR, color: pnlColor(p.unrealized_pnl), fontWeight: 600 }}>{fmtMoney(p.unrealized_pnl, true)}</td>}
     </tr>
   );
 }
@@ -215,7 +219,7 @@ function LegRow({ pos, showMoney }: { pos: UserPosition; showMoney: boolean }) {
       {showMoney && (
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
           {pos.unrealized_pnl_pct !== null && <div style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: pnlColor(pos.unrealized_pnl_pct), fontVariantNumeric: 'tabular-nums' }}>{fmtPct(pos.unrealized_pnl_pct)}</div>}
-          {pos.unrealized_pnl !== null && <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(pos.unrealized_pnl)}</div>}
+          {pos.unrealized_pnl !== null && <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(pos.unrealized_pnl, true)}</div>}
         </div>
       )}
     </div>
@@ -268,13 +272,13 @@ function GroupHeader({ group, onSelectTicker, showMoney, isMobile, portfolioValu
       </div>
       {showMoney && (isMobile ? (
         <div style={{ flexShrink: 0, textAlign: 'right' }}>
-          <div style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: pnlColor(netPnl), fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(netPnl)}</div>
+          <div style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: pnlColor(netPnl), fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(netPnl, true)}</div>
           {marketValue > 0 && <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(marketValue)} mkt</div>}
         </div>
       ) : (
         <>
           <div style={{ width: COL.ret, textAlign: 'right', flexShrink: 0, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>{weightPct !== null ? `${weightPct.toFixed(1)}%` : '—'}</div>
-          <div style={{ width: COL.pnl, textAlign: 'right', flexShrink: 0, fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: pnlColor(netPnl), fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(netPnl)}</div>
+          <div style={{ width: COL.pnl, textAlign: 'right', flexShrink: 0, fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: pnlColor(netPnl), fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(netPnl, true)}</div>
           <div style={{ width: COL.val, textAlign: 'right', flexShrink: 0, fontSize: FONT_SIZE.sm, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(marketValue)}</div>
         </>
       ))}
@@ -518,7 +522,7 @@ function MoversCard({ groups, portfolioValue, onOpenPosition }: { groups: Portfo
               <span style={{ flex: 1, height: 8, background: 'var(--s2)', borderRadius: 4, overflow: 'hidden' }}>
                 <span style={{ display: 'block', height: '100%', width: barW, background: color, borderRadius: 4 }} />
               </span>
-              <span style={{ width: 64, flexShrink: 0, textAlign: 'right', fontSize: FONT_SIZE.sms, fontWeight: FONT_WEIGHT.semibold, color, fontVariantNumeric: 'tabular-nums' }}>{fmtMoneyCompact(g.netPnl)}</span>
+              <span style={{ width: 64, flexShrink: 0, textAlign: 'right', fontSize: FONT_SIZE.sms, fontWeight: FONT_WEIGHT.semibold, color, fontVariantNumeric: 'tabular-nums' }}>{fmtMoneyCompact(g.netPnl, true)}</span>
             </button>
           );
         })}
