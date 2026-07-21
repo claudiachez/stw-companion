@@ -208,7 +208,7 @@ function LegRow({ pos, showMoney }: { pos: UserPosition; showMoney: boolean }) {
         <span style={{
           // Option-leg kind chip uses the semantic info token (not a raw sky-blue rgba) per the
           // Listing Pages redesign; STOCK stays neutral.
-          fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.semibold, padding: '1px 5px', borderRadius: 4, flexShrink: 0,
+          fontSize: FONT_SIZE['3xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: '0.05em', padding: '1px 6px', borderRadius: 4, flexShrink: 0,
           color: isOpt ? 'var(--status-info-text)' : 'var(--t2)', background: isOpt ? 'var(--status-info-bg)' : 'var(--s2)',
           border: isOpt ? '1px solid var(--status-info-border)' : '1px solid var(--border)',
         }}>
@@ -235,7 +235,7 @@ function PositionMetrics({ group, portfolioValue, showMoney }: { group: Portfoli
   const showRisk = group.hasOption && showMoney;
   if (!hasBoth && !showRisk) return null;
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px 16px', padding: '8px 14px 8px 40px', background: 'var(--bg)', borderBottom: '1px solid var(--bsub)', fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px 16px', padding: '6px 14px 6px 41px', background: 'var(--bg)', borderBottom: '1px solid var(--bsub)', fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>
       {hasBoth && <span>Shares : Options <strong style={{ color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>{sharesPct} : {optionsPct}</strong></span>}
       {showRisk && (
         <span>Options risk <strong style={{ color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(group.optionsRisk)}</strong>
@@ -392,7 +392,7 @@ function AttentionStrip({ warnings, sectorCap, onOpenRisk, onOpenStops }: {
         <span style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)' }}>{headline}</span>
       </div>
       {rows.length === 0 ? (
-        <div style={{ marginTop: 8, fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.5 }}>
+        <div style={{ marginTop: 6, fontSize: FONT_SIZE.sms, color: 'var(--t2)', lineHeight: 1.5 }}>
           No drawdown steps, per-stock stops, or sector caps are triggered.{' '}
           <button onClick={onOpenRisk} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--acc)', fontWeight: FONT_WEIGHT.semibold }}>See the full Risk tab →</button>
         </div>
@@ -571,7 +571,7 @@ function ConcentrationCard({ sectors, sectorCap, showMoney, heatmapCells, onSele
                 <span key={s.sector} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>
                   <span style={{ width: 9, height: 9, borderRadius: 3, background: s.color, flexShrink: 0 }} />
                   {s.sector}{' '}
-                  <b style={{ color: over ? 'var(--status-negative-text)' : near ? 'var(--status-warning-text)' : 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>{s.exposurePct.toFixed(1)}%</b>
+                  <b style={{ color: over ? 'var(--status-negative-text)' : near ? 'var(--status-warning-text)' : 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{s.exposurePct.toFixed(1)}%</b>
                   {over && <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--status-negative-text)' }}>⚠ over cap</span>}
                 </span>
               );
@@ -756,7 +756,7 @@ function TailingTab({ groups, portfolioValue, pickMap, decliningTailed, showMone
           <>
             {!isMobile && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0 8px', borderBottom: '1px solid var(--bsub)', fontSize: FONT_SIZE['3xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: LETTER_SPACING.label, textTransform: 'uppercase', color: 'var(--t3)' }}>
-                <span style={{ width: 104, flexShrink: 0 }}>Stock</span>
+                <span style={{ width: 64, flexShrink: 0 }}>Stock</span>
                 <span style={{ width: 88, flexShrink: 0, textAlign: 'right' }}>You · {trader}</span>
                 <span style={{ flex: 1, textAlign: 'center' }}>◂ you hold less&nbsp;&nbsp;|&nbsp;&nbsp;you hold more ▸</span>
                 <span style={{ width: 210, flexShrink: 0 }} />
@@ -773,10 +773,10 @@ function TailingTab({ groups, portfolioValue, pickMap, decliningTailed, showMone
                   : tone.state === 'oversized' ? `${delta.toFixed(1)} points heavier than ${trader}${matchClause}`
                   : tone.state === 'undersized' ? `${Math.abs(delta).toFixed(1)} points lighter than ${trader}${matchClause}`
                   : 'sized like STW (within 1 point)';
-                const noteColor = tone.state === 'inline' ? 'var(--status-positive-text)' : tone.textVar;
+                const noteColor = tone.state === 'inline' ? 'var(--t3)' : tone.textVar;
                 return (
                   <div key={g.underlying} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderBottom: '1px solid var(--bsub)', flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
-                    <span style={{ width: 104, flexShrink: 0 }}>
+                    <span style={{ width: 64, flexShrink: 0 }}>
                       <TickerLink ticker={g.underlying} onSelect={onSelectTicker} style={{ fontSize: FONT_SIZE.sms }} />
                       <ConvictionNote conviction={conviction} declining={declining} />
                     </span>
@@ -784,7 +784,7 @@ function TailingTab({ groups, portfolioValue, pickMap, decliningTailed, showMone
                       <b>{yourPct.toFixed(1)}%</b> <span style={{ color: 'var(--t3)' }}>· {stwWeight != null ? `${stwWeight.toFixed(1)}%` : '—'}</span>
                     </span>
                     <span style={{ flex: isMobile ? '1 1 120px' : 1 }}><SizingBar delta={delta} /></span>
-                    <span style={{ width: isMobile ? '100%' : 210, flexShrink: 0, paddingLeft: isMobile ? 114 : 0, fontSize: FONT_SIZE.xs, color: noteColor, lineHeight: 1.4 }}>{note}</span>
+                    <span style={{ width: isMobile ? '100%' : 210, flexShrink: 0, paddingLeft: isMobile ? 74 : 0, fontSize: FONT_SIZE.xs, color: noteColor, lineHeight: 1.4 }}>{note}</span>
                   </div>
                 );
               })}
@@ -818,13 +818,13 @@ function TailingTab({ groups, portfolioValue, pickMap, decliningTailed, showMone
       )}
 
       {/* §5 — glossary */}
-      <div style={card}>
+      <div style={{ ...card, padding: '12px 16px' }}>
         <button onClick={() => setGlossaryOpen((v) => !v)}
           style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t3)', fontSize: FONT_SIZE.xs, padding: 0, textDecoration: 'underline' }}>
           {glossaryOpen ? 'Hide the plain-English glossary' : '? What do these terms mean'}
         </button>
         {glossaryOpen && (
-          <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8, fontSize: FONT_SIZE.xs, color: 'var(--t2)', lineHeight: 1.5 }}>
+          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8, fontSize: FONT_SIZE.xs, color: 'var(--t2)', lineHeight: 1.7 }}>
             <div><b style={{ color: 'var(--text)' }}>Tailing</b> — you hold the same stock {trader} holds.</div>
             <div><b style={{ color: 'var(--text)' }}>Weight</b> — a position&rsquo;s market value as a % of your whole book.</div>
             <div><b style={{ color: 'var(--text)' }}>Heavier / lighter</b> — your weight vs {trader}&rsquo;s; within ±1 point reads as matched.</div>
@@ -1135,7 +1135,7 @@ export function PortfolioPage() {
   const grouped = filters.groupByTicker;
   const visibleCount = grouped ? visibleGroups.length : visibleLegs.length;
   const totalCount = grouped ? allGroups.length : positions.length;
-  const pad = isMobile ? '14px 12px' : '20px 24px';
+  const pad = isMobile ? '16px 12px 32px' : '16px 16px 32px';
 
   const selectedGroup = selected ? allGroups.find((g) => g.underlying === selected) ?? null : null;
   const mobileDetail = isMobile && !!selectedGroup;
@@ -1323,9 +1323,9 @@ export function PortfolioPage() {
       {/* Filter toolbar — scoped to Positions only. The two-row bar owns its own surface. */}
       <PortfolioFilterBar filters={filters} onChange={setFilters} baskets={baskets} sectors={sectors} filtered={visibleCount} total={totalCount} />
       <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)', padding: pad }}>
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', boxShadow: 'var(--shadow)' }}>
-          <div style={{ padding: '8px 13px', background: 'var(--s2)', borderBottom: '1px solid var(--bsub)', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, textTransform: 'uppercase', letterSpacing: '0.09em', color: 'var(--t2)' }}>📊 Positions</span>
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+          <div style={{ padding: '6px 14px', background: 'var(--s2)', borderBottom: '1px solid var(--bsub)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, textTransform: 'uppercase', letterSpacing: LETTER_SPACING.label, color: 'var(--t3)' }}>My Portfolio · Positions</span>
             <span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginLeft: 'auto' }}>{visibleCount}</span>
           </div>
           {visibleCount === 0 ? (
@@ -1333,10 +1333,10 @@ export function PortfolioPage() {
           ) : grouped ? (
             <>
               {!isMobile && showMoney && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, textTransform: 'uppercase', letterSpacing: LETTER_SPACING.label, color: 'var(--t3)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 14px', background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', fontSize: FONT_SIZE['3xs'], fontWeight: FONT_WEIGHT.bold, textTransform: 'uppercase', letterSpacing: LETTER_SPACING.label, color: 'var(--t3)' }}>
                   <span style={{ width: 8, flexShrink: 0 }} />
                   <span style={{ width: 3, flexShrink: 0 }} />
-                  <span style={{ flex: 1 }}>Ticker</span>
+                  <span style={{ flex: 1 }}>Position</span>
                   <span style={{ width: COL.ret, textAlign: 'right', flexShrink: 0 }}>Weight</span>
                   <span style={{ width: COL.pnl, textAlign: 'right', flexShrink: 0 }}>P&L</span>
                   <span style={{ width: COL.val, textAlign: 'right', flexShrink: 0 }}>Value</span>
