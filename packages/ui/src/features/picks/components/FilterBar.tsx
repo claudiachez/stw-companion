@@ -48,7 +48,7 @@ const STANDING_SEGMENTS: SegmentOption<SectorStanding | ''>[] = [
 // PortfolioFilterBar.tsx earlier this same session — see TextInput.tsx's header
 // comment for the full story).
 const ctrlStyle: React.CSSProperties = {
-  height: 34,
+  height: 30,
   padding: '0 8px',
   fontSize: FONT_SIZE.sm,
   borderRadius: 5,

@@ -93,7 +93,7 @@ export function HoldingRow({ holding: h, isSelected, maxWeight, onClick, isUserH
       {/* Right side: weight bar + P&L + weight */}
       <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, minWidth: 60 }}>
         {/* Weight bar */}
-        <div style={{ width: 48, height: 3, borderRadius: 2, background: 'var(--border)' }}>
+        <div style={{ width: 48, height: 3, borderRadius: 2, background: 'var(--bsub)' }}>
           <div style={{ width: `${Math.max(0, wPct)}%`, height: '100%', borderRadius: 2, background: tier.color }} />
         </div>
 
