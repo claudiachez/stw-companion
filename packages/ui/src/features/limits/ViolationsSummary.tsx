@@ -579,7 +579,7 @@ function PerStockStopsCard({ rows, ladderRungs, optionRungs, showMoney, money }:
             return (
               <div key={`${r.kind}-${r.ticker}`} style={{ background: 'var(--bg)', border: '1px solid var(--bsub)', borderRadius: RADIUS.lg, padding: `${SPACE[2.5]}px ${SPACE[3]}px` }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap' }}>
-                  <TickerLink ticker={r.ticker} style={{ color: 'var(--acc)' }} />
+                  <TickerLink ticker={r.ticker} style={{ color: 'var(--acc)', fontSize: FONT_SIZE.sms }} />
                   <span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>{r.kind}</span>
                   <span style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: SEV_TEXT[sev], ...num }}>{fmtDrawdown(s.drawdownPct)}</span>
                   <span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>from entry</span>
