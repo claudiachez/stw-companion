@@ -7,7 +7,7 @@ export type ConvictionBand = '' | 'high' | 'medium' | 'low' | 'legacy';
 
 export const CONVICTION_BAND_OPTIONS: { value: Exclude<ConvictionBand, ''>; label: string }[] = [
   { value: 'high',   label: 'High (Tier 4–5)' },
-  { value: 'medium', label: 'Medium (Tier 3)' },
+  { value: 'medium', label: 'Moderate (Tier 3)' },
   { value: 'low',    label: 'Low / declining (Tier 1–2)' },
   { value: 'legacy', label: 'Legacy (Tier 0)' },
 ];
