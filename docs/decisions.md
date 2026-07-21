@@ -267,3 +267,38 @@ run DDL locally — apply migrations via the Supabase SQL editor). Prod service 
   `aea1699f-e0b8-4ed4-80b9-4abb5d0a7711`; the underlying skill is `skill_01UY6zPNf9Do8eR4voyUvtm6`. Being
   cleared via Anthropic support / desktop skill-delete. Also smoke-test the routines on their next live runs.
 
+
+**Decisions locked — webapp redesign (host 2026-07-21, `plans/20260720_webapp_redesign/`):**
+The full app was redesigned from a Claude Design project (11 `.dc.html` high-fidelity refs; project
+`665f2470-f119-40cb-9e5c-de3d86ad62d8`). The `.dc.html` files are design references, NOT production code —
+recreate in-codebase (React + `@stw/ui`/`@stw/shared` tokens + primitives), never ship the HTML/support.js.
+Match pixel-perfectly (exact hex/spacing/font-size/radii/pills, tabular-nums, BOTH themes — dark stays the
+codebase default; the mocks are light-default but per-theme values are byte-identical so a given theme renders
+the same). Per-screen deviations are logged in `plans/20260720_webapp_redesign/FLAGS.md`. The design was
+authored FROM the existing token set, so the light `[data-theme="light"]` palette already matched — this was a
+per-screen re-layout, not a token rebuild. Standing consequences:
+- **Type scale expanded to the design's exact px ladder** (`packages/shared/src/constants/tokens.ts`
+  `FONT_SIZE`): added 9(`3xs`)/13(`sms`)/15(`md`)/20(`xl`)/22(`2xl`)/30(`hero`); **`lg` changed 18→16**
+  (the redesign tops headings at 16; 18 is unused by it). Token values ARE the design px, so lint's
+  no-literal-fontSize rule still holds and every specified size has a token. Not-yet-touched screens get a
+  minor sub-heading shrink (transient). Rule: font sizes are pixel-exact via `FONT_SIZE` tokens — never a literal.
+- **`showMoney` is a global privacy preference** (`usePrivacyStore` + `profiles.preferences.showMoney`,
+  synced via `usePreferencesSync`). ONE toggle (Profile "Show dollar amounts" + the My-Portfolio header eye)
+  hides $ everywhere. Default ON.
+- **Per-guardrail on/off + a per-option ladder** (migration 078): `risk_config` gained
+  `caps_enabled`/`ladder_enabled`/`per_stock_enabled`/`regime_enabled` (default true) + `per_stock_option_ladder`
+  (jsonb — the per-OPTION drawdown stop ladder, sibling to `per_stock_ladder`). Chosen as discrete columns
+  (host, matching the existing per-field style) over one jsonb blob. A disabled guardrail must show a muted
+  "off" state and contribute nothing (no flag/breach). The Risk tab HONORS these; **the drawdown-alert cron
+  does NOT yet honor them — a flagged follow-up.** `usePerStockLadders(…, assetClass)` picks the option
+  ladder for OPT positions, the stock ladder for shares.
+- **Profile self-edits go through SECURITY DEFINER RPCs** (no broad UPDATE policy on `profiles` — same
+  pattern as `set_my_preferences`): `set_my_display_name` (077; name stored as `display_name = "First Last"`,
+  no first/last columns) and `set_my_avatar_url` (079; avatar in a public `avatars` storage bucket, own-folder
+  RLS keyed by `<uid>/…`). The masked IBKR account number comes from `user_executions.account` (`maskAccount`).
+- **`RegimeLight` presentation is replaced by the Risk-tab "market health" card on the subscriber side**;
+  `RegimeLight.tsx` itself is untouched and still used on the admin Limits tab.
+- **Regime trend one-source (#151, merged):** `trendStructure(closes)` in `@stw/shared` is the single
+  `closes → {close, ma9/21/200, bucket}` read — the classified `close` is the latest DAILY close (same series
+  the MAs use), so Macro's trend table and the Risk-tab per-ticker bucket never disagree. A live intraday quote
+  may be DISPLAYED but must never be substituted into `trendBucket` (that was the "SPY reads two states" bug).

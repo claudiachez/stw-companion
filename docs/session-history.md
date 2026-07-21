@@ -2,6 +2,51 @@
 
 > Dated handoff/status narratives + old Next Steps, moved out of CLAUDE.md. Historical record only — durable rules live in CLAUDE.md / docs/decisions.md / docs/ui-conventions.md. Current status is docs/status.md.
 
+## Session — full webapp redesign built (2026-07-21)
+
+Recreated the entire "STW Companion Web App Redesign" (Claude Design project
+`665f2470-f119-40cb-9e5c-de3d86ad62d8`, 11 `.dc.html` surfaces) in the codebase. **All on the local
+branch `claude/webapp-redesign` — 21 commits, NOT pushed, NO PR** (host is holding for a **QA session
+next**, then `/stw-review` → push → single PR to `staging`). Verified locally each commit (typecheck both
+apps + lint 0 errors + 358 tests + boot clean); **no screen visually verified** — auth-gated, that's QA's job.
+Full per-screen deviations: `plans/20260720_webapp_redesign/FLAGS.md`.
+
+Also merged separately: **#151 regime one-source fix** — `trendStructure(closes)` in `@stw/shared`; both the
+Macro trend table and the Risk-tab per-ticker bucket now classify off the SAME daily close (was live-quote on
+Macro vs daily-close on Risk → "SPY reads two states"). Applied via MCP + merged to `staging` before the redesign.
+
+Shipped on the redesign branch (order = commits):
+- **Foundation:** `FONT_SIZE` EXPANDED to the design's exact px ladder (`lg` 18→16; added 9/13/15/20/22/30) so
+  redesigned screens are pixel-exact while lint's no-literal-fontSize rule holds. New `SegmentedControl`
+  primitive; `DetailPane` gained an eyebrow strip / N-col stat grid / exported `DetailPaneSection`. New
+  **`showMoney`** global privacy pref (`usePrivacyStore` + `profiles.preferences.showMoney`) — one toggle
+  drives $ across My Portfolio + Profile.
+- **Profile** — identity + editable First/Last name + avatar upload/change/remove + masked IBKR account;
+  pending pill amber (new StatusPill `warning` variant); theme moved OFF the hamburger menu onto Profile.
+- **Settings** — 4-tab guardrails (per-guardrail on/off toggles + draggable monotonic ladder columns +
+  stocks/options per-position ladders) + re-skinned IBKR connection editor (Reveal/Test/Disconnect, masked
+  account). IMPORT stays a Flex-XML file upload (the mock's one-click 365-day fetch isn't possible).
+- **My Portfolio** — Overview (hero, attention strip reusing the Risk warnings, movers, concentration +
+  heatmap), Risk (verdict banner + market health + account-vs-plan cards; HONORS the new guardrail flags +
+  routes options to the option ladder), Tailing (diverging sizing-vs-STW bars).
+- **Stock Picks** — unified Listing (Picks + Positions, shared row anatomy + SegmentedControl filters),
+  unified Detail panes (position + pick over the shared skeleton; admin leg edit/note preserved), Overview
+  & Trades (dashboard + one-row-per-lot blotter).
+- **Macro** — 7-section rebuild (merged Event-Risk + Earnings into one "Coming up" feed; removed
+  ModuleScoreStrip/MacroEventRiskCard/EarningsAheadCard). **GEX Signals** — verdict + zoned price-map
+  ladders + setups + day log (per-setup sparkline omitted: no intraday series in the real data).
+- **Admin** — Log-a-transaction + Edit-position modals re-skinned; every locked event-sourcing rule +
+  IBKR order gate byte-identical (the mock's "Save + place real IBKR order" footer button NOT added — no
+  combined handler exists).
+
+Migrations authored + **applied to PROD via MCP** (host authorized MCP-apply this session): **077**
+`set_my_display_name` RPC · **078** `risk_config` guardrail toggles (`caps/ladder/per_stock/regime_enabled`)
++ `per_stock_option_ladder` · **079** `profiles.avatar_url` + public `avatars` bucket + own-folder RLS +
+`set_my_avatar_url`. Not applied to sandbox.
+
+Durable rules recorded: `docs/decisions.md` (redesign block), `docs/ui-conventions.md` (TickerLink must be
+explicitly sized; the expanded type scale), CLAUDE.md index lines.
+
 ## Session — drawdown-protection overhaul built + alerts + Whop direction (2026-07-19, cont.)
 
 Built the overhaul the prior session diagnosed (`plans/20260719_drawdown-protection-overhaul.md`).
