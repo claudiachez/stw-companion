@@ -126,6 +126,26 @@ history. All existing wiring preserved: `PositionEditor` (canEdit Edit), `LegTim
 - Header title weight 700 (mock 800, no token); section radius 8 (mock 10, no token); pick ticker
   keeps its conviction-tier color (existing signal) vs the mock's plain text.
 
+## Listing pages (committed)
+Picks list (`FilterBar`/`HoldingRow`; `PicksView` untouched) + Positions list (`PortfolioFilterBar` +
+`PortfolioPage` positions body; Overview/Tailing/Risk untouched) re-skinned to the two-row filter bar
+(selects + segmented chip groups) + shared row anatomy. New shared primitive `SegmentedControl` (used by
+both bars). ALL existing filters/sorts/search + conviction-tier grouping + group-by-ticker expand + per-leg
+P&L split preserved. Compliance fixes: unsized flat-table TickerLink → `FONT_SIZE.base`; options-leg chip
+`--c4*` → semantic `--status-info-*`.
+- **Follow-up:** `SegmentedControl` isn't in the DesignSystemGallery yet (used internally; add a card later).
+
+## Admin edit forms (committed)
+`LegTimeline` "Log a transaction" form + `PositionEditor` re-skinned to the 520px modal design (numbered
+sections / derived read-only block / rating+status / classification / open-legs). **Layout only — every
+locked event-sourcing rule is byte-identical** (weightLocked for Closed/Exercised/Expired, Expired price 0,
+`isClosing → current_weight:0` position-only write, ledger-only leg editing) and the IBKR order gate
+(`ibkrReady`, `IbkrOrderModal`, `--action-broker`) is unchanged.
+- **Deviation:** the mock's "Save + place real IBKR order…" footer button was NOT added — no combined
+  save-then-order handler exists; IBKR ordering stays the existing per-row post-save flow (adding one would
+  be new order-write orchestration, which the frozen-flow constraint forbids). Modal-title ticker kept as
+  plain text (a form title, not a navigation affordance), matching the current mount.
+
 **Deviations from the mock:**
 - **Omitted the mock's "STW playbook / Reset to preset" banner** — there's no client-side PRESET in
   our data model; defaults live server-side (`DEFAULT_RISK_CONFIG`). Add a reset-to-defaults if wanted.
