@@ -163,6 +163,18 @@ Today's-setups rows, day log, glossary — reusing useGraddox + gex scorers; Gex
   The per-level "±X pts" in the price maps IS real (from the live price). Build the sparkline only if we
   start capturing an intraday series + machine-readable trigger levels.
 
+## Picks Overview & Trades (committed) — FINAL screen
+Overview (`PortfolioDashboard`): eyebrow + 4-col stat strip (Active holdings / Avg return / Shares:Options
+by mkt value / Cash %) + "What changed this week" conviction-change card + "The book" treemap (Today/Total
+toggle, basket-grouped) + weight-by-basket bars + data-health card. Transactions (`TradesTable` +
+`TradesFilterBar`): filter bar + Show/Type `SegmentedControl` + one-row-per-lot (story + P&L% + booked
+contribution), closed rows dimmed. Reuses useHoldings/conviction-changes/sector map/`buildTrades` +
+the LOCKED P&L-split (closed contribution = realized% × sold weight) — untouched. `PortfolioHeatmap` got an
+optional `defaultGroup` prop (defaults 'all' → My Portfolio unchanged).
+- **Deviations:** compact `Stat` strip instead of `KpiCard` (design px 9/20/10 differ from KpiCard's 26/11);
+  the stat values carry NO "vs yesterday" delta — no such comparison data is plumbed for these + it's a
+  no-new-data re-skin (the prior KpiCards didn't either). Flagged, not fabricated.
+
 **Deviations from the mock:**
 - **Omitted the mock's "STW playbook / Reset to preset" banner** — there's no client-side PRESET in
   our data model; defaults live server-side (`DEFAULT_RISK_CONFIG`). Add a reset-to-defaults if wanted.

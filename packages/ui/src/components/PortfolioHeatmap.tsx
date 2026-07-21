@@ -37,6 +37,9 @@ interface PortfolioHeatmapProps {
   title?: string;
   /** Right-aligned "Updated: …" slot passed straight through to SectionHeader. */
   updated?: React.ReactNode;
+  /** Initial grouping (All | By Basket | By Sector). Defaults to 'all' so existing
+   * callers (My Portfolio) are unchanged; Stock Picks' "The book" opens on 'basket'. */
+  defaultGroup?: GroupMode;
 }
 
 // ±full-saturation scale per mode: intraday moves are small (±3% is a big day), total
@@ -96,10 +99,10 @@ function Segmented<T extends string>({ value, onChange, options }: {
 interface PlacedTile extends TreemapRect { cell: HeatmapCell }
 interface GroupBlock { label: string; x: number; y: number; w: number; h: number }
 
-export function PortfolioHeatmap({ cells, onSelectTicker, showToday = false, title = 'Portfolio Heatmap', updated }: PortfolioHeatmapProps) {
+export function PortfolioHeatmap({ cells, onSelectTicker, showToday = false, title = 'Portfolio Heatmap', updated, defaultGroup = 'all' }: PortfolioHeatmapProps) {
   const isMobile = useIsMobile();
   const [mode, setMode] = useState<HeatmapMode>(showToday ? 'today' : 'total');
-  const [group, setGroup] = useState<GroupMode>('all');
+  const [group, setGroup] = useState<GroupMode>(defaultGroup);
 
   // Measure the container width so the treemap lays out in real pixels — that lets us gate
   // per-tile text on the tile's actual rendered size (labels stay tappable, never clipped).

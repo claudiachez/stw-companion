@@ -1,6 +1,7 @@
 import type { Holding } from '../api';
 import { useTradesFiltersStore, type TradeOpenClosed, type TradeSort, type TradeType } from '../useTradesFilters';
-import { FONT_SIZE, FONT_WEIGHT, CONVICTION_BAND_OPTIONS, type ConvictionBand } from '@stw/shared';
+import { FONT_SIZE, CONVICTION_BAND_OPTIONS, type ConvictionBand } from '@stw/shared';
+import { SegmentedControl, type SegmentOption } from '../../../primitives/SegmentedControl';
 
 const SORT_OPTIONS: { value: TradeSort; label: string }[] = [
   { value: 'opened_desc', label: 'Sort: Opened newest' },
@@ -14,10 +15,17 @@ const SORT_OPTIONS: { value: TradeSort; label: string }[] = [
   { value: 'za',          label: 'Sort: Z → A' },
 ];
 
-const OPEN_CLOSED: { value: TradeOpenClosed; label: string }[] = [
+// Row-2 segmented groups (shared SegmentedControl primitive) — the "Show" state axis and the
+// "Type" instrument axis, wired to the same store fields the old toggle/select used.
+const SHOW_SEGMENTS: SegmentOption<TradeOpenClosed>[] = [
+  { value: 'all',    label: 'All' },
   { value: 'open',   label: 'Open' },
   { value: 'closed', label: 'Closed' },
-  { value: 'all',    label: 'All' },
+];
+const TYPE_SEGMENTS: SegmentOption<TradeType>[] = [
+  { value: '',        label: 'All' },
+  { value: 'shares',  label: 'Shares' },
+  { value: 'options', label: 'Options' },
 ];
 
 // Shares the FilterBar control styling so the two tabs read as one app. Border color
@@ -34,15 +42,14 @@ const ctrlBorderClass = 'border border-[var(--border)] focus:outline-none focus:
 interface Props {
   holdings: Holding[];
   sectors: string[];
-  /** rows matching the current filter / total candidate rows — shown as "N of M". */
+  /** rows matching the current filter / total candidate rows — shown as "N of M lots". */
   count: number;
   total: number;
 }
 
-// Filter bar for the Trades blotter. Deliberately mirrors the Ticker Details FilterBar chrome
-// (full-bleed surface bar, same control style, "All Baskets" wording, horizontal scroll — no wrap)
-// so the two tabs stay visually consistent. The status axis is an Open/Closed/All toggle (the
-// leg's own state) and Type is Shares/Options only.
+// Filter bar for the Transactions blotter. Mirrors the Ticker Details FilterBar chrome
+// (full-bleed surface, two rows: dropdown filters up top, segmented axes below) so the two
+// tabs stay visually consistent. Show = the leg's own open/closed state; Type = Shares/Options.
 export function TradesFilterBar({ holdings, sectors, count, total }: Props) {
   const { search, basket, conviction, sector, type, openClosed, sort,
     setSearch, setBasket, setConviction, setSector, setType, setOpenClosed, setSort, reset } =
@@ -52,27 +59,9 @@ export function TradesFilterBar({ holdings, sectors, count, total }: Props) {
   const hasFilter = !!search || !!basket || !!conviction || !!sector || !!type || openClosed !== 'all';
 
   return (
-    <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' as never, flexShrink: 0 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', minWidth: 'max-content' }}>
-
-        {/* Open / Closed / All segmented toggle (replaces the position-level status dropdown) */}
-        <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 5, overflow: 'hidden', flexShrink: 0, height: 34 }}>
-          {OPEN_CLOSED.map((o) => (
-            <button
-              key={o.value}
-              onClick={() => setOpenClosed(o.value)}
-              style={{
-                padding: '0 12px', fontSize: FONT_SIZE.sm, border: 'none', cursor: 'pointer',
-                background: openClosed === o.value ? 'var(--acc)' : 'var(--bg)',
-                color: openClosed === o.value ? 'var(--text-inverse)' : 'var(--t2)',
-                fontWeight: openClosed === o.value ? FONT_WEIGHT.semibold : 400,
-              }}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
-
+    <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', flexShrink: 0 }}>
+      {/* Row 1 — search + dropdown filters + count */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderBottom: '1px solid var(--bsub)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' as never }}>
         <input
           type="text"
           value={search}
@@ -99,12 +88,6 @@ export function TradesFilterBar({ holdings, sectors, count, total }: Props) {
           </select>
         )}
 
-        <select value={type} onChange={(e) => setType(e.target.value as TradeType)} className={ctrlBorderClass} style={ctrlStyle}>
-          <option value="">All Types</option>
-          <option value="shares">Shares</option>
-          <option value="options">Options</option>
-        </select>
-
         <select value={sort} onChange={(e) => setSort(e.target.value as TradeSort)} className={ctrlBorderClass} style={ctrlStyle}>
           {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
@@ -120,9 +103,25 @@ export function TradesFilterBar({ holdings, sectors, count, total }: Props) {
           </button>
         )}
 
-        <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginLeft: 4, whiteSpace: 'nowrap' }}>
-          {count < total ? `${count} of ${total}` : `${total} trade${total === 1 ? '' : 's'}`}
+        <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginLeft: 'auto', paddingLeft: 8, whiteSpace: 'nowrap' }}>
+          {count < total ? `${count} of ${total} lots` : `${total} lot${total === 1 ? '' : 's'}`}
         </span>
+      </div>
+
+      {/* Row 2 — segmented axes: Show (open/closed) + Type (instrument) */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '6px 12px', background: 'var(--bg)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' as never }}>
+        <SegmentedControl
+          label="Show"
+          options={SHOW_SEGMENTS}
+          value={openClosed}
+          onChange={setOpenClosed}
+        />
+        <SegmentedControl
+          label="Type"
+          options={TYPE_SEGMENTS}
+          value={type}
+          onChange={setType}
+        />
       </div>
     </div>
   );
