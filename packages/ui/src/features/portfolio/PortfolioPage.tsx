@@ -820,8 +820,8 @@ function TailingTab({ groups, portfolioValue, pickMap, decliningTailed, showMone
       {/* §5 — glossary */}
       <div style={card}>
         <button onClick={() => setGlossaryOpen((v) => !v)}
-          style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', padding: 0, cursor: 'pointer', width: '100%', textAlign: 'left' }}>
-          <span style={{ fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold, color: 'var(--t2)' }}>{glossaryOpen ? '▾' : '▸'} What these terms mean</span>
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t3)', fontSize: FONT_SIZE.xs, padding: 0, textDecoration: 'underline' }}>
+          {glossaryOpen ? 'Hide the plain-English glossary' : '? What do these terms mean'}
         </button>
         {glossaryOpen && (
           <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8, fontSize: FONT_SIZE.xs, color: 'var(--t2)', lineHeight: 1.5 }}>
