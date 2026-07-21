@@ -88,6 +88,29 @@ muted "off" card and contributes no banner items; per-stock stops route OPTION p
 - Not visually verified (auth + IBKR data required) — needs a logged-in pass (toggle a guardrail off in
   Settings → confirm it drops from the Risk banner + shows the muted card).
 
+## Overview + Tailing tabs (committed)
+Both rebuilt in `PortfolioPage.tsx`, reusing existing data/sub-components.
+- **Overview:** account-value hero (live NLV + P&L), a new `AttentionStrip` (worst-severity, one-line
+  rows reading the SAME risk warnings the Risk verdict uses — not recomputed, links to Risk/Tailing),
+  at-a-glance stats grid, `MoversCard` (top-3 gainers/losers), `ConcentrationCard` (stacked sector bar +
+  legend + the reused `PortfolioHeatmap` treemap + over-cap callout), tailing footer link.
+- **Tailing:** summary + count chips, alerts (declining conviction / big oversize), the diverging
+  sizing-vs-STW bars (reused `SizingBar`/`sizingTone`), own-calls chips, glossary.
+- **Privacy unified:** the local `showPnl` toggle is gone — the global `showMoney` pref
+  (`usePrivacyStore`) now drives Overview/Positions/Tailing, and the header eye toggle wires to it. So
+  the Profile "Show dollar amounts" switch controls the portfolio dollars too.
+- **One-source:** the concentration card + attention-strip cap count use `classifySeverity` + the
+  **live NLV** denominator — same source as the Risk verdict.
+
+**Deviations/notes:**
+- `--blue` ("you hold less") maps to our existing **info token** (`--status-info-*` via `sizingTone`) —
+  no sky-blue token added (host directive).
+- Hero big numbers use `FONT_SIZE.display` (26px) vs the mock's 30px — lint bans raw font-sizes, no 30
+  token; the app's type scale is canonical.
+- The old Overview declining-conviction banner is dropped from Overview and now surfaced in Tailing §2
+  alerts (per the redesign).
+- Not visually verified (auth + IBKR data) — needs a logged-in pass.
+
 **Deviations from the mock:**
 - **Omitted the mock's "STW playbook / Reset to preset" banner** — there's no client-side PRESET in
   our data model; defaults live server-side (`DEFAULT_RISK_CONFIG`). Add a reset-to-defaults if wanted.
