@@ -147,7 +147,7 @@ function MarketLight({ label, state, note }: { label: string; state: RegimeState
     : state === 'RED' ? (label === 'Trend' ? 'Downtrend' : 'Stressed') : 'Unknown';
   return (
     <div style={{ background: 'var(--bg)', border: '1px solid var(--bsub)', borderRadius: RADIUS.lg, padding: `${SPACE[2.5]}px ${SPACE[3]}px` }}>
-      <div style={{ ...sectionLabel, marginTop: 0, marginBottom: SPACE[1] }}>{label}</div>
+      <div style={{ ...sectionLabel, marginTop: 0, marginBottom: SPACE[1], letterSpacing: '0.08em' }}>{label}</div>
       <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[1.5] }}>
         <span style={{ width: 10, height: 10, borderRadius: RADIUS.full, background: color, flexShrink: 0 }} />
         <span style={{ fontSize: FONT_SIZE.sms, fontWeight: FONT_WEIGHT.bold, color }}>{text}</span>
@@ -221,7 +221,7 @@ function MarketCard({ instrument, setInstrument, regimeEnabled, structure, setti
             <MarketLight label="Trend" state={gate.trend_state} note={trendNote} />
             <MarketLight label="Volatility" state={gate.vol_state} note="VIX vs 3-month VIX" />
             <div style={{ background: 'var(--bg)', border: '1px solid var(--bsub)', borderRadius: RADIUS.lg, padding: `${SPACE[2.5]}px ${SPACE[3]}px` }}>
-              <div style={{ ...sectionLabel, marginTop: 0, marginBottom: SPACE[1] }}>Suggested sizing</div>
+              <div style={{ ...sectionLabel, marginTop: 0, marginBottom: SPACE[1], letterSpacing: '0.08em' }}>Suggested sizing</div>
               <div style={{ fontSize: FONT_SIZE.sms, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)' }}>{sizing}</div>
               <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: 2, lineHeight: 1.4 }}>
                 {regimeEnabled ? 'for any new position you open' : 'Regime guardrail is off'}
@@ -438,7 +438,7 @@ function CapRow({ entry, ack, onAcknowledge }: {
           </button>
         )}
         {canAck && status !== 'new' && (
-          <span style={{ marginLeft: 'auto', fontSize: FONT_SIZE.xs, color: 'var(--status-positive-text)', whiteSpace: 'nowrap' }}>Acknowledged ✓</span>
+          <span style={{ marginLeft: 'auto', fontSize: FONT_SIZE.xs, color: 'var(--t3)', whiteSpace: 'nowrap' }}>Acknowledged ✓</span>
         )}
       </div>
       {canAck && status !== 'new' && (
@@ -600,7 +600,7 @@ function PerStockStopsCard({ rows, ladderRungs, optionRungs, showMoney, money }:
 
 function Glossary() {
   const [open, setOpen] = useState(false);
-  const term: CSSProperties = { color: 'var(--text)', fontWeight: FONT_WEIGHT.semibold };
+  const term: CSSProperties = { color: 'var(--text)', fontWeight: FONT_WEIGHT.bold };
   return (
     <div style={{ ...card, padding: `${SPACE[3]}px ${SPACE[4]}px` }}>
       <button onClick={() => setOpen((v) => !v)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t3)', fontSize: FONT_SIZE.xs, padding: 0, textDecoration: 'underline' }}>
@@ -636,7 +636,7 @@ export function ViolationsSummary({ showSyncButton = false, settingsTo, bindingG
   const showMoney = usePrivacyStore((s) => s.showMoney);
 
   const settingsRef: ReactNode = settingsTo
-    ? <Link to={settingsTo} style={{ color: 'var(--acc)', fontWeight: FONT_WEIGHT.semibold }}>Settings</Link>
+    ? <Link to={settingsTo} style={{ color: 'var(--acc)', fontWeight: 400 }}>Settings</Link>
     : 'Settings';
 
   const { data: positions, isLoading: positionsLoading } = useUserPositions();
