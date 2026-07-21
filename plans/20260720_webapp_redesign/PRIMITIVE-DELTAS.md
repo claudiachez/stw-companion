@@ -1,11 +1,13 @@
 # Visual re-QA — shared-primitive deltas (for host review)
 
-These 48 deltas live in **shared primitives** reused across many surfaces (Badge, RegimeBadge,
-StatusPill, Button, TextInput, FormRow, AlertStrip, SegmentedControl, DetailPane, etc.). Per your
-call, they are **flagged, not auto-fixed** — changing a primitive to match one ref ripples to every
-surface that uses it (and refs sometimes disagree on the same primitive). Decide per group whether to
-(a) change the primitive globally, (b) add a size/variant prop so each surface matches its own ref, or
-(c) keep as-is. Source: parallel pixel-audit workflow wf_4a51f5a2-8c4.
+**RESOLVED (host: change primitives globally)** — commit 68f25c3. All groups below applied at the
+primitive: StatusPill, Badge (incl. solid source pill), AlertStrip (full-border box, no icon),
+Button (transparent secondary / pale destructive / 12px·6·14·r6), TickerLink 700, SegmentedControl
+r6, AccordionList (chevron 16 / bar 32 / no expand tint), RegimeBadge (plain colored text),
+DetailPane (radius 10 / inset stat grid / gaps), Modal (neutral border / r12 / plain title).
+Two groups **kept, not changed** (would break intent): **FormRow** horizontal-label style (the S1
+decision — reversing it restyles every config form) and **TextInput** 16px font floor (prevents
+mobile-Safari focus zoom, documented in tokens.ts). Source: pixel-audit workflow wf_4a51f5a2-8c4.
 
 
 ### Profile (12)
