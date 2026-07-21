@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { regimeGate, regimeExitAdvice, classifySeverity, formatDate, formatMoney, fmtDateTime, fmtOptionExpiry, sizingTone, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, RADIUS, SPACE, type ViolationSeverity } from '@stw/shared';
+import { Fragment, useState } from 'react';
+import { regimeGate, regimeExitAdvice, classifySeverity, formatDate, formatMoney, fmtDateTime, fmtOptionExpiry, tradingDateET, sizingTone, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, RADIUS, SPACE, type ViolationSeverity } from '@stw/shared';
 import { useAuthStore } from '../../store/auth';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useQuote } from '../../hooks/useLivePrice';
@@ -40,16 +40,25 @@ const statBig = (color: string): React.CSSProperties => ({ fontSize: FONT_SIZE.x
 const riskRow: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap' };
 const riskText: React.CSSProperties = { fontSize: FONT_SIZE.sm, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums', flex: 1, minWidth: 0 };
 const riskDot = (c: string): React.CSSProperties => ({ width: 8, height: 8, borderRadius: RADIUS.full, background: c, flexShrink: 0 });
+// Transaction-history flat table (ref: 5-col grid, 9px uppercase heads, hairline-topped cells).
+const txHeadCell: React.CSSProperties = { fontSize: FONT_SIZE['3xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: LETTER_SPACING.label, textTransform: 'uppercase', color: 'var(--t3)' };
+const txCell: React.CSSProperties = { paddingTop: 3, borderTop: '1px solid var(--bsub)' };
 const fmtDd2 = (pct: number) => `${pct >= 0 ? '+' : '−'}${Math.abs(pct).toFixed(1)}%`;
-function stopLadderSummary(info: PerStockLadderInfo): string {
+/** The stop-ladder line's leading drawdown value (bolded + gain/loss-colored, per the mock). */
+function stopLadderLead(info: PerStockLadderInfo): { text: string; color: string } {
+  const pct = info.status.drawdownPct;
+  return { text: fmtDd2(pct), color: pct >= 0 ? 'var(--pnl-gain)' : 'var(--pnl-loss)' };
+}
+/** The trailing text after the leading value ("vs entry — first stop …"). */
+function stopLadderRest(info: PerStockLadderInfo): string {
   const s = info.status;
   if (s.activeRung && s.alreadyComplies !== true) {
-    return `${fmtDd2(s.drawdownPct)} vs entry — past the ${s.activeRung.drawdownPct}% rung, keep ≤${s.targetHoldPct}% of peak`;
+    return ` vs entry — past the ${s.activeRung.drawdownPct}% rung, keep ≤${s.targetHoldPct}% of peak`;
   }
   if (s.nextRung) {
-    return `${fmtDd2(s.drawdownPct)} vs entry — first stop ${s.distanceToNextPp != null ? `${s.distanceToNextPp.toFixed(1)}pp away ` : ''}(${s.nextRung.drawdownPct}% → keep ≤${s.nextRung.holdFractionPct}%)`;
+    return ` vs entry — first stop ${s.distanceToNextPp != null ? `${s.distanceToNextPp.toFixed(1)}pp away ` : ''}(${s.nextRung.drawdownPct}% → keep ≤${s.nextRung.holdFractionPct}%)`;
   }
-  return `${fmtDd2(s.drawdownPct)} vs entry`;
+  return ` vs entry`;
 }
 
 function fmtMoney(n: number): string {
@@ -109,6 +118,46 @@ function buildExecGroups(execs: UserExecution[]): ExecGroup[] {
   return groups.sort((a, b) => (a.fills[0].executed_at < b.fills[0].executed_at ? 1 : -1));
 }
 
+interface TxRow {
+  id: string;
+  executedAt: string;
+  side: 'BUY' | 'SELL';
+  qty: number;
+  detail: string;   // instrument label
+  closed: boolean;  // the instrument group this fill belongs to is fully closed
+  price: number | null;
+  realized: number | null;  // populated only on the closing sell of a closed group
+  returnPct: number | null;
+}
+
+/**
+ * Flatten fills into one chronological ledger row each (ref: the flat DATE · ACTION ·
+ * DETAILS · PRICE · REALIZED P&L table). A group's proceeds-exact realized P&L is attributed
+ * to its most-recent SELL — the transaction that closed it — so the closing row carries the
+ * figure and every other row shows "—", matching the mock.
+ */
+function buildTxRows(groups: ExecGroup[]): TxRow[] {
+  const rows: TxRow[] = [];
+  for (const g of groups) {
+    const retPct = g.closed && g.costBasis > 0 ? (g.realized / g.costBasis) * 100 : null;
+    const closingIdx = g.closed ? g.fills.findIndex((f) => f.side === 'SELL') : -1; // fills are newest-first
+    g.fills.forEach((f, i) => {
+      rows.push({
+        id: f.id,
+        executedAt: f.executed_at,
+        side: f.side === 'SELL' ? 'SELL' : 'BUY',
+        qty: f.quantity !== null ? Math.abs(f.quantity) : 0,
+        detail: g.label,
+        closed: g.closed,
+        price: f.price,
+        realized: i === closingIdx ? g.realized : null,
+        returnPct: i === closingIdx ? retPct : null,
+      });
+    });
+  }
+  return rows.sort((a, b) => (a.executedAt < b.executedAt ? 1 : -1));
+}
+
 export interface DetailGroup {
   underlying: string;
   positions: UserPosition[];
@@ -127,14 +176,15 @@ export interface DetailGroup {
 
 type TxFilter = 'all' | 'open' | 'closed';
 
-/** All/Open/Closed segmented control — the same idiom LegTimeline's history filter uses. */
+/** All/Open/Closed filter — three separate bordered buttons (ref: gap 3px, radius 4, active = solid --acc). */
 function FilterChips({ value, onChange }: { value: TxFilter; onChange: (f: TxFilter) => void }) {
   return (
-    <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: RADIUS.md, overflow: 'hidden' }}>
+    <div style={{ display: 'flex', gap: 3 }}>
       {(['all', 'open', 'closed'] as const).map((f) => (
         <button key={f} onClick={() => onChange(f)}
           style={{
-            fontSize: FONT_SIZE['2xs'], padding: '3px 9px', border: 'none', cursor: 'pointer', textTransform: 'capitalize',
+            fontSize: FONT_SIZE['2xs'], padding: '2px 9px', borderRadius: RADIUS.DEFAULT, cursor: 'pointer', textTransform: 'capitalize',
+            border: '1px solid var(--border)', fontWeight: FONT_WEIGHT.semibold,
             background: value === f ? 'var(--acc)' : 'transparent', color: value === f ? 'var(--text-inverse)' : 'var(--t2)',
           }}>
           {f}
@@ -205,7 +255,8 @@ export function PortfolioPositionDetail({
   const { data: allExecutions } = useUserExecutions();
   const execs = (allExecutions ?? []).filter((x) => x.underlying?.toUpperCase() === group.underlying.toUpperCase());
   const execGroups = buildExecGroups(execs);
-  const filteredGroups = execGroups.filter((g) => txFilter === 'all' || (txFilter === 'open' ? !g.closed : g.closed));
+  const txRows = buildTxRows(execGroups);
+  const filteredRows = txRows.filter((r) => txFilter === 'all' || (txFilter === 'open' ? !r.closed : r.closed));
 
   // Current price of the underlying — live Finnhub quote (the one decided source for
   // equity quotes), falling back to the stored IBKR stock-leg mark when the market's
@@ -338,9 +389,8 @@ export function PortfolioPositionDetail({
               {group.traders.map((t) => <Badge key={t} kind="source" trader={t} />)}
               {group.basket && <Badge kind="category" category={group.basket} />}
               {group.conviction !== null && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: SPACE[1] }}>
-                  <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)' }}>Conviction {group.conviction}/5</span>
-                  <Badge kind="tier" tier={group.conviction} />
+                <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>
+                  Conviction <b style={{ color: 'var(--text)' }}>{group.conviction}/5</b>
                 </span>
               )}
               <button
@@ -356,8 +406,8 @@ export function PortfolioPositionDetail({
                 ↗
               </button>
             </div>
-            <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.5, fontVariantNumeric: 'tabular-nums' }}>
-              You hold {ownPortfolioPct !== null ? `${ownPortfolioPct.toFixed(1)}%` : '—'} of your account — STW holds {stwWeight !== null ? `${stwWeight.toFixed(1)}%` : '—'} of theirs.
+            <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.55, fontVariantNumeric: 'tabular-nums' }}>
+              You hold <b style={{ color: 'var(--text)' }}>{ownPortfolioPct !== null ? `${ownPortfolioPct.toFixed(1)}%` : '—'}</b> of your account — STW holds <b style={{ color: 'var(--text)' }}>{stwWeight !== null ? `${stwWeight.toFixed(1)}%` : '—'}</b> of theirs.
               {tone.state !== 'inline' && (
                 <span style={{ color: tone.textVar, fontWeight: FONT_WEIGHT.semibold }}>
                   {' '}{tone.label}{dollarDelta !== null ? ` ≈ ${fmtMoney(Math.abs(dollarDelta))} ${tone.state === 'oversized' ? 'more' : 'less'}` : ''}.
@@ -378,7 +428,7 @@ export function PortfolioPositionDetail({
             <div style={riskRow}>
               <span style={riskDot(posSeverity ? SEVERITY_COLOR[posSeverity] : 'var(--t3)')} />
               <span style={riskText}>
-                Size: {posPct.toFixed(1)}% of your {config.max_position_pct}% one-stock cap
+                Size: <b style={{ color: 'var(--text)' }}>{posPct.toFixed(1)}%</b> of your <b style={{ color: 'var(--text)' }}>{config.max_position_pct}%</b> one-stock cap
                 {config.max_position_pct - posPct >= 0
                   ? ` — ${(config.max_position_pct - posPct).toFixed(1)} points of room left`
                   : ` — ${(posPct - config.max_position_pct).toFixed(1)} points over`}
@@ -389,7 +439,7 @@ export function PortfolioPositionDetail({
             {group.hasStock && perStockLadder && (
               <div style={riskRow}>
                 <span style={riskDot(SEVERITY_COLOR[perStockLadder.status.severity] ?? 'var(--t3)')} />
-                <span style={riskText}>Stop ladder: {stopLadderSummary(perStockLadder)}</span>
+                <span style={riskText}>Stop ladder: <b style={{ color: stopLadderLead(perStockLadder).color }}>{stopLadderLead(perStockLadder).text}</b>{stopLadderRest(perStockLadder)}</span>
                 <StatusPill variant={perStockLadder.status.severity === 'ok' ? 'ok' : perStockLadder.status.severity}>{SEVERITY_LABEL[perStockLadder.status.severity]}</StatusPill>
               </div>
             )}
@@ -455,44 +505,45 @@ export function PortfolioPositionDetail({
         )) : <div style={{ fontSize: FONT_SIZE.sms, color: 'var(--t3)' }}>Hidden</div>}
       </DetailPaneSection>
 
-      {/* Transaction history — the user's OWN fills, GROUPED into the position each belongs to
-          (a contract, or all shares) so every group states its outcome. From user_executions;
-          the entry-history equivalent of Stock Picks' Transaction History. */}
-      <DetailPaneSection title="Transaction history" action={execGroups.length > 0 ? <FilterChips value={txFilter} onChange={setTxFilter} /> : undefined}>
-        {execGroups.length === 0 ? (
+      {/* Transaction history — the user's OWN fills as one flat chronological ledger (ref:
+          DATE · ACTION · DETAILS · PRICE · REALIZED P&L). From user_executions; the entry-
+          history equivalent of Stock Picks' Transaction History. Realized P&L rides on the
+          closing sell of a now-closed instrument group (see buildTxRows). */}
+      <DetailPaneSection title="Transaction history" action={txRows.length > 0 ? <FilterChips value={txFilter} onChange={setTxFilter} /> : undefined}>
+        {txRows.length === 0 ? (
           <EmptyState
             icon="🧾"
             message="No synced fills for this position yet. Import your IBKR trade history from Settings to see your transactions here."
           />
         ) : (
-          <div>
-            {filteredGroups.map((g) => {
-              const retPct = g.closed && g.costBasis > 0 ? (g.realized / g.costBasis) * 100 : null;
-              return (
-                <div key={g.key} style={{ display: 'flex', justifyContent: 'space-between', gap: SPACE[2], padding: '6px 0', borderTop: '1px solid var(--bsub)', fontSize: FONT_SIZE.sms, color: 'var(--t2)' }}>
-                  <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <span style={{ color: 'var(--text)', fontWeight: FONT_WEIGHT.medium }}>{g.label}</span>
-                    {g.fills.map((x) => (
-                      <span key={x.id} style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>
-                        <span style={{ color: x.side === 'SELL' ? 'var(--pnl-loss)' : 'var(--acc)', fontWeight: FONT_WEIGHT.semibold }}>{x.side === 'SELL' ? 'Sell' : 'Buy'}</span>
-                        {' '}{x.quantity !== null ? Math.abs(x.quantity) : '—'} @ {x.price !== null ? `$${x.price.toFixed(2)}` : '—'} · {fmtDateTime(x.executed_at)}
-                      </span>
-                    ))}
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: '66px 66px 1fr 60px 86px', gap: '4px 8px', fontSize: FONT_SIZE.xs, alignItems: 'baseline' }}>
+              <span style={txHeadCell}>Date</span>
+              <span style={txHeadCell}>Action</span>
+              <span style={txHeadCell}>Details</span>
+              <span style={{ ...txHeadCell, textAlign: 'right' }}>Price</span>
+              <span style={{ ...txHeadCell, textAlign: 'right' }}>Realized P&L</span>
+              {filteredRows.map((r) => (
+                <Fragment key={r.id}>
+                  <span style={{ ...txCell, color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>{formatDate(tradingDateET(r.executedAt))}</span>
+                  <span style={txCell}>
+                    <b style={{ color: r.side === 'SELL' ? 'var(--pnl-loss)' : 'var(--pnl-gain)' }}>{r.side === 'SELL' ? 'Sell' : 'Buy'}</b>{' '}
+                    <span style={{ color: 'var(--t2)' }}>{r.qty}</span>
                   </span>
-                  <span style={{ alignSelf: 'flex-start', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                    {g.closed
-                      ? (showPnl
-                          ? <span style={{ color: pnlColor(g.realized), fontWeight: FONT_WEIGHT.semibold, fontVariantNumeric: 'tabular-nums' }}>{g.realized >= 0 ? '+' : ''}{fmtMoney(g.realized)}{retPct !== null ? ` (${fmtPct(retPct)})` : ''}</span>
-                          : <span style={{ color: 'var(--t3)' }}>Closed</span>)
-                      : <span style={{ color: 'var(--t3)' }}>Open · {Math.abs(g.netQty)}</span>}
+                  <span style={{ ...txCell, color: 'var(--t2)' }}>
+                    {r.detail}{r.closed && <span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}> · closed</span>}
                   </span>
-                </div>
-              );
-            })}
+                  <span style={{ ...txCell, color: 'var(--t2)', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.price !== null ? `$${r.price.toFixed(2)}` : '—'}</span>
+                  <span style={{ ...txCell, textAlign: 'right', fontWeight: FONT_WEIGHT.semibold, fontVariantNumeric: 'tabular-nums', color: (showPnl && r.realized !== null) ? pnlColor(r.realized) : 'var(--t3)' }}>
+                    {showPnl && r.realized !== null ? `${formatMoney(r.realized, { signed: true })}${r.returnPct !== null ? ` (${fmtPct(r.returnPct)})` : ''}` : '—'}
+                  </span>
+                </Fragment>
+              ))}
+            </div>
             <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[2] }}>
               Source: IBKR executions{syncTime ? ` · synced ${syncTime}` : ''}
             </div>
-          </div>
+          </>
         )}
       </DetailPaneSection>
     </DetailPane>

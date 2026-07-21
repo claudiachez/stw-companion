@@ -34,7 +34,7 @@ export interface DetailPaneProps {
 export function DetailPane({ eyebrow, title, subtitle, badges, metrics, isMobile, onClose, children }: DetailPaneProps) {
   const cols = metrics ? (isMobile ? 2 : metrics.length) : 0;
   return (
-    <div style={{ height: '100%', overflowY: 'auto' }}>
+    <div style={{ height: '100%', overflowY: 'auto', background: 'var(--surface)' }}>
       {/* Eyebrow top strip — full-bleed, names the surface (shared anatomy). */}
       {eyebrow && (
         <div style={{
