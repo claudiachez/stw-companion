@@ -633,7 +633,7 @@ function SizingBar({ delta }: { delta: number | null }) {
 function ConvictionNote({ conviction, declining }: { conviction: number | null; declining: boolean }) {
   if (conviction == null) return null;
   return (
-    <span style={{ display: 'block', fontSize: FONT_SIZE['2xs'], color: declining ? 'var(--status-negative-text)' : 'var(--t3)', lineHeight: 1.3 }}>
+    <span style={{ display: 'block', fontSize: FONT_SIZE['2xs'], color: declining ? 'var(--status-negative-text)' : 'var(--t3)', lineHeight: 1.3, whiteSpace: 'nowrap' }}>
       conviction {conviction}/5{declining ? ' ▼' : ''}
     </span>
   );
@@ -750,7 +750,7 @@ function TailingTab({ groups, portfolioValue, pickMap, decliningTailed, showMone
           <>
             {!isMobile && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0 8px', borderBottom: '1px solid var(--bsub)', fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: LETTER_SPACING.label, textTransform: 'uppercase', color: 'var(--t3)' }}>
-                <span style={{ width: 64, flexShrink: 0 }}>Stock</span>
+                <span style={{ width: 104, flexShrink: 0 }}>Stock</span>
                 <span style={{ width: 88, flexShrink: 0, textAlign: 'right' }}>You · {trader}</span>
                 <span style={{ flex: 1, textAlign: 'center' }}>◂ you hold less&nbsp;&nbsp;|&nbsp;&nbsp;you hold more ▸</span>
                 <span style={{ width: 210, flexShrink: 0 }} />
@@ -770,7 +770,7 @@ function TailingTab({ groups, portfolioValue, pickMap, decliningTailed, showMone
                 const noteColor = tone.state === 'inline' ? 'var(--status-positive-text)' : tone.textVar;
                 return (
                   <div key={g.underlying} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderBottom: '1px solid var(--bsub)', flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
-                    <span style={{ width: 64, flexShrink: 0 }}>
+                    <span style={{ width: 104, flexShrink: 0 }}>
                       <TickerLink ticker={g.underlying} onSelect={onSelectTicker} />
                       <ConvictionNote conviction={conviction} declining={declining} />
                     </span>
@@ -778,7 +778,7 @@ function TailingTab({ groups, portfolioValue, pickMap, decliningTailed, showMone
                       <b>{yourPct.toFixed(1)}%</b> <span style={{ color: 'var(--t3)' }}>· {stwWeight != null ? `${stwWeight.toFixed(1)}%` : '—'}</span>
                     </span>
                     <span style={{ flex: isMobile ? '1 1 120px' : 1 }}><SizingBar delta={delta} /></span>
-                    <span style={{ width: isMobile ? '100%' : 210, flexShrink: 0, paddingLeft: isMobile ? 74 : 0, fontSize: FONT_SIZE.xs, color: noteColor, lineHeight: 1.4 }}>{note}</span>
+                    <span style={{ width: isMobile ? '100%' : 210, flexShrink: 0, paddingLeft: isMobile ? 114 : 0, fontSize: FONT_SIZE.xs, color: noteColor, lineHeight: 1.4 }}>{note}</span>
                   </div>
                 );
               })}
