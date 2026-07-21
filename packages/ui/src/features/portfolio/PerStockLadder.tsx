@@ -93,7 +93,7 @@ export function PerStockLadderDetail({ info, ladder }: {
               background: isActive ? 'var(--s2)' : 'transparent',
               fontWeight: isActive ? FONT_WEIGHT.semibold : undefined,
             }}>
-              {r.drawdownPct}% → {r.holdFractionPct === 0 ? 'exit' : `≤${r.holdFractionPct}%`}
+              {r.drawdownPct}% → {r.holdFractionPct === 0 ? 'exit' : `keep ≤${r.holdFractionPct}%`}
             </span>
           );
         })}

@@ -172,6 +172,12 @@ export function PortfolioPositionDetail({
 
   const legCount = group.positions.length;
   const composition = group.hasStock && group.hasOption ? 'Shares + options' : group.hasOption ? 'Options only' : 'Shares only';
+  // Lowercase, count-aware composition for the stat sub-line, matching the mock's "shares + an option".
+  const optionLegCount = group.positions.filter((p) => p.asset_class !== 'STK').length;
+  const holdingsComposition = [
+    group.hasStock ? 'shares' : null,
+    optionLegCount === 1 ? 'an option' : optionLegCount > 1 ? `${optionLegCount} options` : null,
+  ].filter(Boolean).join(' + ');
 
   // Position concentration vs the configured cap, scored with the SAME tiering as the
   // Risk tab (ok / near / breach) — measured as this position's share of the whole book.
@@ -235,7 +241,7 @@ export function PortfolioPositionDetail({
           <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[0.5] }}>
             {ownPortfolioPct !== null ? `${ownPortfolioPct.toFixed(1)}% of your account` : 'market value'}
           </div>
-          <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[0.5] }}>{legCount} leg{legCount !== 1 ? 's' : ''} · {composition}</div>
+          <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[0.5] }}>{legCount} holding{legCount !== 1 ? 's' : ''} · {holdingsComposition}</div>
         </>
       ),
     },
@@ -356,8 +362,11 @@ export function PortfolioPositionDetail({
           {/* Size vs cap */}
           <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap' }}>
             <span style={{ width: 8, height: 8, borderRadius: RADIUS.full, background: posSeverity ? SEVERITY_COLOR[posSeverity] : 'var(--t3)', flexShrink: 0 }} />
-            <span style={{ fontSize: FONT_SIZE.sms, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>
+            <span style={{ fontSize: FONT_SIZE.sms, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums', flex: 1, minWidth: 0 }}>
               Size: {posPct.toFixed(1)}% of your {config.max_position_pct}% one-stock cap
+              {config.max_position_pct - posPct >= 0
+                ? ` — ${(config.max_position_pct - posPct).toFixed(1)} points of room left`
+                : ` — ${(posPct - config.max_position_pct).toFixed(1)} points over`}
             </span>
             {posSeverity && <StatusPill variant={posSeverity}>{SEVERITY_LABEL[posSeverity]}</StatusPill>}
           </div>
@@ -365,26 +374,24 @@ export function PortfolioPositionDetail({
           {/* Per-stock stop ladder — its own labelled sub-block (kept distinct from the
               account-wide Portfolio drawdown + the market-regime read). */}
           {group.hasStock && (
-            <div style={{ marginTop: SPACE[3], paddingTop: SPACE[3], borderTop: '1px solid var(--bsub)' }}>
-              <DetailPaneMetricLabel>Per-stock stop ladder</DetailPaneMetricLabel>
+            <div style={{ marginTop: SPACE[2.5], paddingTop: SPACE[2.5], borderTop: '1px solid var(--bsub)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], marginBottom: SPACE[1.5] }}>
+                <span style={{ width: 8, height: 8, borderRadius: RADIUS.full, background: 'var(--t3)', flexShrink: 0 }} />
+                <span style={{ fontSize: FONT_SIZE.sms, color: 'var(--t2)' }}>Stop ladder</span>
+              </div>
               <PerStockLadderDetail info={perStockLadder} ladder={perStockLadderConfig} />
             </div>
           )}
 
           {/* Market lights — trend + volatility from the frozen regime gate. */}
-          <div style={{ marginTop: SPACE[3], paddingTop: SPACE[3], borderTop: '1px solid var(--bsub)' }}>
-            <DetailPaneMetricLabel>Market lights</DetailPaneMetricLabel>
+          <div style={{ marginTop: SPACE[2.5], paddingTop: SPACE[2.5], borderTop: '1px solid var(--bsub)' }}>
             {regimeLoading ? null : gate ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[3], flexWrap: 'wrap', fontSize: FONT_SIZE.sms, color: 'var(--t2)' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: RADIUS.full, background: STATE_COLOR[gate.trend_state] }} />
-                  Trend {gate.trend_state}
+              <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap', fontSize: FONT_SIZE.sms, color: 'var(--t2)' }}>
+                <span style={{ width: 8, height: 8, borderRadius: RADIUS.full, background: 'var(--t3)', flexShrink: 0 }} />
+                <span>
+                  Market lights: Trend <b style={{ color: STATE_COLOR[gate.trend_state], fontWeight: FONT_WEIGHT.semibold }}>{gate.trend_state}</b> · Volatility <b style={{ color: STATE_COLOR[gate.vol_state], fontWeight: FONT_WEIGHT.semibold }}>{gate.vol_state}</b>
+                  {regime && <span style={{ color: 'var(--t3)' }}> · as of {formatDate(regime.trading_date)}</span>}
                 </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: RADIUS.full, background: STATE_COLOR[gate.vol_state] }} />
-                  Volatility {gate.vol_state}
-                </span>
-                {regime && <span style={{ color: 'var(--t3)' }}>as of {formatDate(regime.trading_date)}</span>}
               </div>
             ) : (
               <div style={{ fontSize: FONT_SIZE.sms, color: 'var(--t3)' }}>No market regime data yet.</div>
@@ -397,7 +404,7 @@ export function PortfolioPositionDetail({
           </div>
 
           <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[2.5], fontStyle: 'italic' }}>
-            Advisory — flags only, nothing is traded for you. Under forward validation.
+            Advisory — flags only, nothing is traded for you.
           </div>
         </DetailPaneSection>
       )}
