@@ -1,8 +1,9 @@
-import { regimeGate, regimeExitAdvice, classifySeverity, formatDate, fmtDateTime, fmtOptionExpiry, sizingTone, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, SPACE, RADIUS, type ViolationSeverity } from '@stw/shared';
+import { useState } from 'react';
+import { regimeGate, regimeExitAdvice, classifySeverity, formatDate, fmtDateTime, fmtOptionExpiry, sizingTone, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, RADIUS, SPACE, type ViolationSeverity } from '@stw/shared';
 import { useAuthStore } from '../../store/auth';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { useQuote } from '../../hooks/useLivePrice';
-import { DetailPane, DetailPaneMetricLabel } from '../../primitives/DetailPane';
+import { DetailPane, DetailPaneMetricLabel, DetailPaneSection } from '../../primitives/DetailPane';
 import { Badge } from '../../primitives/Badge';
 import { StatusPill } from '../../primitives/StatusPill';
 import { EmptyState } from '../../primitives/EmptyState';
@@ -27,6 +28,13 @@ const STATE_COLOR: Record<'GREEN' | 'RED' | 'UNKNOWN', string> = {
 const SEVERITY_LABEL: Record<ViolationSeverity, string> = {
   ok: 'OK', near: 'Near', breach: 'Breach', unevaluated: 'Unevaluated',
 };
+const SEVERITY_COLOR: Record<ViolationSeverity, string> = {
+  ok: 'var(--acc)', near: 'var(--status-warning-text)', breach: 'var(--status-negative-text)', unevaluated: 'var(--t3)',
+};
+
+// The stat block's "big" value. Design calls for 19px; there is no 19 token, so this uses
+// FONT_SIZE.xl (20) — the token documented for "at-a-glance stat numbers", 1px over spec.
+const statBig = (color: string): React.CSSProperties => ({ fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, color, lineHeight: 1.15 });
 
 function fmtMoney(n: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
@@ -101,21 +109,32 @@ export interface DetailGroup {
   basket: string | null;
 }
 
-function Section({ title, children }: { title: React.ReactNode; children: React.ReactNode }) {
+type TxFilter = 'all' | 'open' | 'closed';
+
+/** All/Open/Closed segmented control — the same idiom LegTimeline's history filter uses. */
+function FilterChips({ value, onChange }: { value: TxFilter; onChange: (f: TxFilter) => void }) {
   return (
-    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: RADIUS.lg, padding: SPACE[4], marginBottom: SPACE[3] }}>
-      <DetailPaneMetricLabel>{title}</DetailPaneMetricLabel>
-      <div style={{ marginTop: SPACE[2] }}>{children}</div>
+    <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: RADIUS.md, overflow: 'hidden' }}>
+      {(['all', 'open', 'closed'] as const).map((f) => (
+        <button key={f} onClick={() => onChange(f)}
+          style={{
+            fontSize: FONT_SIZE['2xs'], padding: '3px 9px', border: 'none', cursor: 'pointer', textTransform: 'capitalize',
+            background: value === f ? 'var(--acc)' : 'transparent', color: value === f ? 'var(--text-inverse)' : 'var(--t2)',
+          }}>
+          {f}
+        </button>
+      ))}
     </div>
   );
 }
 
 /**
- * My Portfolio's own-position detail pane — now an instance of the shared DetailPane
- * (same component family as the Stock Picks / ADEA pane): header + badge strip, a 3-col
- * metric block (Your Position / Open P&L / Weight-drift), then stacked section cards.
- * Ticker-click default is this pane, not STW's tracked position (host, 2026-07-06) —
- * STW's view is an explicit link inside the Tailing section.
+ * My Portfolio's own-position detail pane — an instance of the shared DetailPane (same
+ * skeleton as the Stock Picks pane): eyebrow strip + 22px header + 4-col stat block, then
+ * stacked section cards (Tailing / Against your risk plan / Open P&L by holding /
+ * Transaction history). Reuses the position's existing risk / tailing / ladder / execution
+ * data — this is a re-layout, not new logic. Ticker-click default is this pane, not STW's
+ * tracked position (host, 2026-07-06) — STW's view is an explicit link in the Tailing card.
  */
 export function PortfolioPositionDetail({
   group, ownPortfolioPct, stwWeight, showPnl, tickerRegime, perStockLadder, perStockLadderConfig, onClose, onViewStwPosition,
@@ -141,6 +160,7 @@ export function PortfolioPositionDetail({
   const { data: sectorMap } = useSectorMap();
   const regimeInstrument = useRegimeInstrumentStore((s) => s.instrument);
   const { data: regime, isLoading: regimeLoading } = useLatestRegime(regimeInstrument);
+  const [txFilter, setTxFilter] = useState<TxFilter>('all');
 
   const gate = regime ? regimeGate(
     { close: regime.close, sma200: regime.sma200 },
@@ -163,6 +183,7 @@ export function PortfolioPositionDetail({
   const { data: allExecutions } = useUserExecutions();
   const execs = (allExecutions ?? []).filter((x) => x.underlying?.toUpperCase() === group.underlying.toUpperCase());
   const execGroups = buildExecGroups(execs);
+  const filteredGroups = execGroups.filter((g) => txFilter === 'all' || (txFilter === 'open' ? !g.closed : g.closed));
 
   // Current price of the underlying — live Finnhub quote (the one decided source for
   // equity quotes), falling back to the stored IBKR stock-leg mark when the market's
@@ -179,13 +200,19 @@ export function PortfolioPositionDetail({
   const priceSource = isLivePrice ? (quoteTime ? `Finnhub · ${quoteTime}` : 'Finnhub') : (syncTime ? `IBKR · ${syncTime}` : 'IBKR');
 
   const sizeDelta = ownPortfolioPct !== null && stwWeight !== null ? ownPortfolioPct - stwWeight : null;
+  const tone = sizingTone(sizeDelta);
+  // Dollar weight the size gap represents, ≈ (delta pp) × account value. Account value is
+  // backed out of this position's market value and its book share — no new data path.
+  const dollarDelta = sizeDelta !== null && ownPortfolioPct !== null && ownPortfolioPct !== 0
+    ? group.marketValue * (sizeDelta / ownPortfolioPct)
+    : null;
 
   // Header badges = the ticker's market SECTOR (universal to the position) + its own
   // technical read: trend structure + sector-rotation standing (RegimeBadge), the same
   // two chips the Stock Picks detail shows. The tailed-pick info (trader / basket /
   // conviction / sizing) stays in the Tailing section, not the header (host, 2026-07-08).
   const badges = (sector || tickerRegime || nextEarnings) ? (
-    <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+    <>
       {sector && (
         <span style={{
           fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: LETTER_SPACING.label,
@@ -195,22 +222,20 @@ export function PortfolioPositionDetail({
       )}
       <RegimeBadge regime={tickerRegime} />
       {nextEarnings && <EarningsBadge event={nextEarnings} />}
-    </span>
+    </>
   ) : null;
-
-  const tone = sizingTone(sizeDelta);
 
   const metrics = [
     {
       key: 'position',
       content: (
         <>
-          <DetailPaneMetricLabel>Your Position</DetailPaneMetricLabel>
-          <div style={{ fontSize: FONT_SIZE.display, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)', lineHeight: 1.1 }}>{fmtMoney(group.marketValue)}</div>
-          <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: SPACE[0.5] }}>
+          <DetailPaneMetricLabel>Your position</DetailPaneMetricLabel>
+          <div style={statBig('var(--text)')}>{fmtMoney(group.marketValue)}</div>
+          <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[0.5] }}>
             market value{ownPortfolioPct !== null ? ` · ${ownPortfolioPct.toFixed(1)}% of book` : ''}
           </div>
-          <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', marginTop: SPACE[1.5] }}>{legCount} leg{legCount !== 1 ? 's' : ''} · {composition}</div>
+          <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[0.5] }}>{legCount} leg{legCount !== 1 ? 's' : ''} · {composition}</div>
         </>
       ),
     },
@@ -218,12 +243,10 @@ export function PortfolioPositionDetail({
       key: 'price',
       content: (
         <>
-          <DetailPaneMetricLabel>{isLivePrice ? 'Current Price' : 'Last Price'}</DetailPaneMetricLabel>
-          <div style={{ fontSize: FONT_SIZE.display, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)', lineHeight: 1.1 }}>
-            {price !== null ? `$${price.toFixed(2)}` : '—'}
-          </div>
+          <DetailPaneMetricLabel>{isLivePrice ? 'Current price' : 'Last price'}</DetailPaneMetricLabel>
+          <div style={statBig('var(--text)')}>{price !== null ? `$${price.toFixed(2)}` : '—'}</div>
           {isLivePrice && dayPct !== null && (
-            <div style={{ fontSize: FONT_SIZE.xs, marginTop: SPACE[0.5], fontWeight: FONT_WEIGHT.semibold, color: dayPct >= 0 ? 'var(--pnl-gain)' : 'var(--pnl-loss)' }}>
+            <div style={{ fontSize: FONT_SIZE['2xs'], marginTop: SPACE[0.5], fontWeight: FONT_WEIGHT.semibold, color: dayPct >= 0 ? 'var(--pnl-gain)' : 'var(--pnl-loss)' }}>
               {dayPct >= 0 ? '+' : ''}{dayPct.toFixed(2)}% today
             </div>
           )}
@@ -238,8 +261,8 @@ export function PortfolioPositionDetail({
           <DetailPaneMetricLabel>Open P&L</DetailPaneMetricLabel>
           {showPnl ? (
             <>
-              <div style={{ fontSize: FONT_SIZE.display, fontWeight: FONT_WEIGHT.bold, color: pnlColor(group.netPnl), lineHeight: 1.1 }}>{fmtMoney(group.netPnl)}</div>
-              <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: SPACE[0.5] }}>
+              <div style={statBig(pnlColor(group.netPnl))}>{fmtMoney(group.netPnl)}</div>
+              <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[0.5] }}>
                 unrealized{group.returnPct !== null ? ` · ${fmtPct(group.returnPct)}` : ''}
               </div>
             </>
@@ -250,15 +273,19 @@ export function PortfolioPositionDetail({
       ),
     },
     {
-      key: 'weight',
+      key: 'cap',
       content: (
         <>
-          <DetailPaneMetricLabel>Weight</DetailPaneMetricLabel>
-          <div style={{ fontSize: FONT_SIZE.display, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)', lineHeight: 1.1 }}>
-            {ownPortfolioPct !== null ? `${ownPortfolioPct.toFixed(1)}%` : '—'}
-          </div>
-          {/* STW comparison lives in the Tailing section now — this stays a clean book %. */}
-          <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: SPACE[0.5] }}>of your book</div>
+          <DetailPaneMetricLabel>Vs your cap</DetailPaneMetricLabel>
+          {config ? (
+            <>
+              <div style={statBig(posSeverity ? SEVERITY_COLOR[posSeverity] : 'var(--text)')}>{posPct.toFixed(1)}%</div>
+              <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[0.5] }}>of your {config.max_position_pct}% cap</div>
+              {posSeverity && <div style={{ marginTop: SPACE[0.5] }}><StatusPill variant={posSeverity}>{SEVERITY_LABEL[posSeverity]}</StatusPill></div>}
+            </>
+          ) : (
+            <div style={{ fontSize: FONT_SIZE.base, color: 'var(--t3)' }}>—</div>
+          )}
         </>
       ),
     },
@@ -266,6 +293,7 @@ export function PortfolioPositionDetail({
 
   return (
     <DetailPane
+      eyebrow="My Portfolio · your position"
       title={group.underlying}
       subtitle={group.companyName ?? composition}
       badges={badges}
@@ -273,98 +301,106 @@ export function PortfolioPositionDetail({
       isMobile={isMobile}
       onClose={onClose}
     >
-      {/* Tailing — all the tailed-pick info on one line (trader · basket · conviction ·
-          your-vs-trader sizing) with a compact link icon to STW's tracked position, so
-          nothing about the pick is scattered into the header (host, 2026-07-08). */}
-      <Section title="Tailing">
+      {/* Tailing — the tailed-pick info on one line (trader · basket · conviction · your-vs-STW
+          sizing with the ≈$ gap) + a compact link to STW's tracked position. */}
+      <DetailPaneSection title="Tailing">
         {group.isTailed ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap' }}>
-            {group.traders.map((t) => <Badge key={t} kind="source" trader={t} />)}
-            {group.basket && <Badge kind="category" category={group.basket} />}
-            {group.conviction !== null && (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: SPACE[1] }}>
-                <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>Conviction {group.conviction}</span>
-                <Badge kind="tier" tier={group.conviction} />
-              </span>
-            )}
-            {stwWeight !== null && (
-              <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>
-                You {ownPortfolioPct !== null ? `${ownPortfolioPct.toFixed(1)}%` : '—'} · STW {stwWeight.toFixed(1)}%
-                {tone.state !== 'inline' && <span style={{ color: tone.textVar, fontWeight: FONT_WEIGHT.semibold }}> · {tone.label}</span>}
-              </span>
-            )}
-            <button
-              onClick={onViewStwPosition}
-              title="View STW's tracked position"
-              aria-label="View STW's tracked position"
-              style={{
-                marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                width: 28, height: 28, flexShrink: 0, borderRadius: RADIUS.md,
-                border: '1px solid var(--c5b)', background: 'none', color: 'var(--acc)', cursor: 'pointer', fontSize: FONT_SIZE.base,
-              }}
-            >
-              ↗
-            </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE[2] }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap' }}>
+              {group.traders.map((t) => <Badge key={t} kind="source" trader={t} />)}
+              {group.basket && <Badge kind="category" category={group.basket} />}
+              {group.conviction !== null && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: SPACE[1] }}>
+                  <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>Conviction {group.conviction}/5</span>
+                  <Badge kind="tier" tier={group.conviction} />
+                </span>
+              )}
+              <button
+                onClick={onViewStwPosition}
+                title="View STW's tracked position"
+                aria-label="View STW's tracked position"
+                style={{
+                  marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: 28, height: 28, flexShrink: 0, borderRadius: RADIUS.md,
+                  border: '1px solid var(--c5b)', background: 'none', color: 'var(--acc)', cursor: 'pointer', fontSize: FONT_SIZE.base,
+                }}
+              >
+                ↗
+              </button>
+            </div>
+            <div style={{ fontSize: FONT_SIZE.sms, color: 'var(--t2)', lineHeight: 1.5, fontVariantNumeric: 'tabular-nums' }}>
+              You hold {ownPortfolioPct !== null ? `${ownPortfolioPct.toFixed(1)}%` : '—'} of your account — STW holds {stwWeight !== null ? `${stwWeight.toFixed(1)}%` : '—'} of theirs.
+              {tone.state !== 'inline' && (
+                <span style={{ color: tone.textVar, fontWeight: FONT_WEIGHT.semibold }}>
+                  {' '}{tone.label}{dollarDelta !== null ? ` ≈ ${fmtMoney(Math.abs(dollarDelta))}` : ''}.
+                </span>
+              )}
+            </div>
           </div>
         ) : (
-          <div style={{ fontSize: FONT_SIZE.base, color: 'var(--t3)' }}>Not currently tailing any tracked pick for {group.underlying}.</div>
+          <div style={{ fontSize: FONT_SIZE.sms, color: 'var(--t3)' }}>Not currently tailing any tracked pick for {group.underlying}.</div>
         )}
-      </Section>
+      </DetailPaneSection>
 
-      {/* Risk indicators — same OK/NEAR/BREACH pill vocabulary as the Risk tab */}
+      {/* Against your risk plan — size vs cap + this name's stop ladder + the market lights,
+          each a distinct sub-block (the three de-risking surfaces stay visually separate),
+          advisory-only. */}
       {config && (
-        <Section title="Risk indicators">
-          <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap', marginBottom: SPACE[2] }}>
-            <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>Position concentration</span>
-            <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>{posPct.toFixed(1)}% / {config.max_position_pct}%</span>
+        <DetailPaneSection title="Against your risk plan">
+          {/* Size vs cap */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap' }}>
+            <span style={{ width: 8, height: 8, borderRadius: RADIUS.full, background: posSeverity ? SEVERITY_COLOR[posSeverity] : 'var(--t3)', flexShrink: 0 }} />
+            <span style={{ fontSize: FONT_SIZE.sms, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>
+              Size: {posPct.toFixed(1)}% of your {config.max_position_pct}% one-stock cap
+            </span>
             {posSeverity && <StatusPill variant={posSeverity}>{SEVERITY_LABEL[posSeverity]}</StatusPill>}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[2], flexWrap: 'wrap', marginBottom: SPACE[2] }}>
-            <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>Sector</span>
-            {sector
-              ? <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--text)' }}>{sector}</span>
-              : <><span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)' }}>no sector data yet</span><StatusPill variant="unevaluated">Unevaluated</StatusPill></>}
-          </div>
-          {regimeLoading ? null : gate ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: STATE_COLOR[gate.trend_state] }} />
-                Trend (200D): {gate.trend_state}
-              </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: STATE_COLOR[gate.vol_state] }} />
-                Volatility: {gate.vol_state}
-              </span>
-              {regime && <span style={{ color: 'var(--t3)' }}>as of {formatDate(regime.trading_date)}</span>}
-            </div>
-          ) : (
-            <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)' }}>No market regime data yet.</div>
-          )}
-          {regimeAdvice && (
-            <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', marginTop: SPACE[1.5], borderLeft: '2px solid var(--status-warning-text)', paddingLeft: SPACE[2] }}>
-              Your rule: {regimeAdvice}
+
+          {/* Per-stock stop ladder — its own labelled sub-block (kept distinct from the
+              account-wide Portfolio drawdown + the market-regime read). */}
+          {group.hasStock && (
+            <div style={{ marginTop: SPACE[3], paddingTop: SPACE[3], borderTop: '1px solid var(--bsub)' }}>
+              <DetailPaneMetricLabel>Per-stock stop ladder</DetailPaneMetricLabel>
+              <PerStockLadderDetail info={perStockLadder} ladder={perStockLadderConfig} />
             </div>
           )}
-          <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[2], fontStyle: 'italic' }}>
-            Advisory — under forward validation. Not a trade signal.
+
+          {/* Market lights — trend + volatility from the frozen regime gate. */}
+          <div style={{ marginTop: SPACE[3], paddingTop: SPACE[3], borderTop: '1px solid var(--bsub)' }}>
+            <DetailPaneMetricLabel>Market lights</DetailPaneMetricLabel>
+            {regimeLoading ? null : gate ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[3], flexWrap: 'wrap', fontSize: FONT_SIZE.sms, color: 'var(--t2)' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: RADIUS.full, background: STATE_COLOR[gate.trend_state] }} />
+                  Trend {gate.trend_state}
+                </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: RADIUS.full, background: STATE_COLOR[gate.vol_state] }} />
+                  Volatility {gate.vol_state}
+                </span>
+                {regime && <span style={{ color: 'var(--t3)' }}>as of {formatDate(regime.trading_date)}</span>}
+              </div>
+            ) : (
+              <div style={{ fontSize: FONT_SIZE.sms, color: 'var(--t3)' }}>No market regime data yet.</div>
+            )}
+            {regimeAdvice && (
+              <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', marginTop: SPACE[1.5], borderLeft: '2px solid var(--status-warning-text)', paddingLeft: SPACE[2] }}>
+                Your rule: {regimeAdvice}
+              </div>
+            )}
           </div>
-        </Section>
+
+          <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[2.5], fontStyle: 'italic' }}>
+            Advisory — flags only, nothing is traded for you. Under forward validation.
+          </div>
+        </DetailPaneSection>
       )}
 
-      {/* Per-stock stop ladder (Item 4) — this name's own drawdown ladder, kept a SEPARATE
-          section from the account-wide Portfolio drawdown + the market-regime read above. */}
-      {group.hasStock && (
-        <Section title="Per-stock stop ladder">
-          <PerStockLadderDetail info={perStockLadder} ladder={perStockLadderConfig} />
-        </Section>
-      )}
-
-      {/* P&L — Shares / Options breakdown for the OPEN legs, each showing its cost
-          basis (avg entry → current mark) alongside the unrealized return. */}
-      <Section title="P&L">
-        <div style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--t2)', marginBottom: SPACE[1.5] }}>Open</div>
+      {/* Open P&L by holding — Shares / Options breakdown for the OPEN legs, each with its
+          cost basis (avg entry → current mark) alongside the unrealized return. */}
+      <DetailPaneSection title="Open P&L by holding">
         {showPnl ? group.positions.map((p) => (
-          <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', gap: SPACE[2], fontSize: FONT_SIZE.sm, padding: '4px 0', color: 'var(--t2)' }}>
+          <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', gap: SPACE[2], fontSize: FONT_SIZE.sms, padding: '4px 0', color: 'var(--t2)' }}>
             <span style={{ display: 'flex', flexDirection: 'column' }}>
               <span>{instrumentLabel(p)}</span>
               <span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>
@@ -372,19 +408,17 @@ export function PortfolioPositionDetail({
                 {p.mark_price !== null ? ` · mark $${p.mark_price.toFixed(2)}` : ''}
               </span>
             </span>
-            <span style={{ color: pnlColor(p.unrealized_pnl), fontVariantNumeric: 'tabular-nums', alignSelf: 'flex-start' }}>
+            <span style={{ color: pnlColor(p.unrealized_pnl), fontWeight: FONT_WEIGHT.bold, fontVariantNumeric: 'tabular-nums', alignSelf: 'flex-start' }}>
               {p.unrealized_pnl !== null ? fmtMoney(p.unrealized_pnl) : '—'} {p.unrealized_pnl_pct !== null && `(${fmtPct(p.unrealized_pnl_pct)})`}
             </span>
           </div>
-        )) : <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)' }}>Hidden</div>}
-      </Section>
+        )) : <div style={{ fontSize: FONT_SIZE.sms, color: 'var(--t3)' }}>Hidden</div>}
+      </DetailPaneSection>
 
-      {/* Transaction History — the user's OWN fills, GROUPED into the position each
-          belongs to (a contract, or all shares) so every group states its outcome:
-          a closed group shows realized P&L, an open one shows it's still on. The fills
-          nest underneath. From user_executions; the entry-history equivalent of Stock
-          Picks' Transaction History. */}
-      <Section title="Transaction History">
+      {/* Transaction history — the user's OWN fills, GROUPED into the position each belongs to
+          (a contract, or all shares) so every group states its outcome. From user_executions;
+          the entry-history equivalent of Stock Picks' Transaction History. */}
+      <DetailPaneSection title="Transaction history" action={execGroups.length > 0 ? <FilterChips value={txFilter} onChange={setTxFilter} /> : undefined}>
         {execGroups.length === 0 ? (
           <EmptyState
             icon="🧾"
@@ -392,11 +426,10 @@ export function PortfolioPositionDetail({
           />
         ) : (
           <div>
-            {execGroups.map((g) => {
+            {filteredGroups.map((g) => {
               const retPct = g.closed && g.costBasis > 0 ? (g.realized / g.costBasis) * 100 : null;
               return (
-                <div key={g.key} style={{ display: 'flex', justifyContent: 'space-between', gap: SPACE[2], padding: '6px 0', borderTop: '1px solid var(--bsub)', fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>
-                  {/* Instrument + its fills (same instrument · muted-subline idiom as the P&L section) */}
+                <div key={g.key} style={{ display: 'flex', justifyContent: 'space-between', gap: SPACE[2], padding: '6px 0', borderTop: '1px solid var(--bsub)', fontSize: FONT_SIZE.sms, color: 'var(--t2)' }}>
                   <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <span style={{ color: 'var(--text)', fontWeight: FONT_WEIGHT.medium }}>{g.label}</span>
                     {g.fills.map((x) => (
@@ -406,8 +439,6 @@ export function PortfolioPositionDetail({
                       </span>
                     ))}
                   </span>
-                  {/* Outcome (right-aligned value, same as the P&L section): realized when
-                      closed, else still-open status. */}
                   <span style={{ alignSelf: 'flex-start', textAlign: 'right', whiteSpace: 'nowrap' }}>
                     {g.closed
                       ? (showPnl
@@ -423,7 +454,7 @@ export function PortfolioPositionDetail({
             </div>
           </div>
         )}
-      </Section>
+      </DetailPaneSection>
     </DetailPane>
   );
 }

@@ -46,7 +46,7 @@ export { Button } from './primitives/Button';
 export type { ButtonProps, ButtonVariant } from './primitives/Button';
 export { DataTable } from './primitives/DataTable';
 export type { DataTableColumn, DataTableProps } from './primitives/DataTable';
-export { DetailPane, DetailPaneMetricLabel } from './primitives/DetailPane';
+export { DetailPane, DetailPaneMetricLabel, DetailPaneSection } from './primitives/DetailPane';
 export type { DetailPaneProps, DetailPaneMetric } from './primitives/DetailPane';
 export { ListDetailSplit } from './primitives/ListDetailSplit';
 export type { ListDetailSplitProps } from './primitives/ListDetailSplit';

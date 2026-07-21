@@ -111,6 +111,21 @@ Both rebuilt in `PortfolioPage.tsx`, reusing existing data/sub-components.
   alerts (per the redesign).
 - Not visually verified (auth + IBKR data) — needs a logged-in pass.
 
+## Detail panes (committed)
+`PortfolioPositionDetail` (your position) + `HoldingDetail` (STW pick) rebuilt to the unified design
+over a shared `DetailPane` skeleton (added: eyebrow strip, 22px header title, N-col stat grid,
+exported `DetailPaneSection` card). Position pane: stat block (incl. new severity "Vs your cap") +
+Tailing / Against-your-risk-plan (size-cap + per-stock ladder + market lights, kept visually
+distinct) / Open-P&L-by-holding / Transaction history (All/Open/Closed). Pick pane: stat block
+(incl. new "Your side") + conviction bar / Why STW holds it / Key points / Commentary / Transaction
+history. All existing wiring preserved: `PositionEditor` (canEdit Edit), `LegTimeline` (admin add/
+✎/✕ + IBKR order flow, canEdit-gated), `ConvictionTimeline` (personal note), tx filters.
+- **19px stat → `FONT_SIZE.xl` (20)** — no 19 token; 1px overshoot, xl's role is "stat numbers".
+- **Personal note stays unified with Commentary** (notes ARE `conviction_comments` — one source; no
+  separate "Your personal note" store as the mock's separate section implied).
+- Header title weight 700 (mock 800, no token); section radius 8 (mock 10, no token); pick ticker
+  keeps its conviction-tier color (existing signal) vs the mock's plain text.
+
 **Deviations from the mock:**
 - **Omitted the mock's "STW playbook / Reset to preset" banner** — there's no client-side PRESET in
   our data model; defaults live server-side (`DEFAULT_RISK_CONFIG`). Add a reset-to-defaults if wanted.
