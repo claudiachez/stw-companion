@@ -29,8 +29,8 @@ export function GexCharts({ spyLevels, qqqLevels }: Props) {
 
   return (
     <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', boxShadow: 'var(--shadow)', flexShrink: 0 }}>
-      <div style={{ padding: '8px 13px', background: 'var(--s2)', borderBottom: '1px solid var(--bsub)', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, textTransform: 'uppercase', letterSpacing: '0.09em', color: 'var(--t2)' }}>📈 SPY &amp; QQQ</span>
+      <div style={{ padding: '14px 13px 8px', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>Live chart · SPY &amp; QQQ</span>
         <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', marginLeft: 'auto' }}>
           {TFS.map((t) => (
             <button key={t} style={tfBtn(tf === t)} onClick={() => setTf(t)}>{t}</button>

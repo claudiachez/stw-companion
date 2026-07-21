@@ -1,4 +1,4 @@
-import { FONT_SIZE, FONT_WEIGHT, LETTER_SPACING } from '@stw/shared';
+import { FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
 import type { LogEntry } from '../api';
 
 // "How the session unfolded" — the host's time-stamped stream, straight from the reused
@@ -10,8 +10,8 @@ export function DayLog({ log, date }: { log: LogEntry[]; date?: string }) {
 
   return (
     <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', boxShadow: 'var(--shadow)' }}>
-      <div style={{ padding: '8px 13px', background: 'var(--s2)', borderBottom: '1px solid var(--bsub)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <span style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, textTransform: 'uppercase', letterSpacing: LETTER_SPACING.label, color: 'var(--t2)' }}>📝 How the session unfolded</span>
+      <div style={{ padding: '14px 13px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <span style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>How the session unfolded</span>
         {dateLabel && <span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>{dateLabel}</span>}
       </div>
       {log.map((m, i) => (

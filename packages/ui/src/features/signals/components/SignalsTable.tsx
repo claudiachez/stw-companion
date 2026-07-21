@@ -49,8 +49,8 @@ export function SignalsTable({ signals }: Props) {
 
   return (
     <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', boxShadow: 'var(--shadow)' }}>
-      <div style={{ padding: '8px 13px', background: 'var(--s2)', borderBottom: '1px solid var(--bsub)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, textTransform: 'uppercase', letterSpacing: LETTER_SPACING.label, color: 'var(--t2)' }}>📋 Today&apos;s setups</span>
+      <div style={{ padding: '14px 13px 8px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>Today&apos;s setups</span>
         <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>{ready} ready · {half} half size · {skip} skip</span>
         <div style={{ display: 'flex', gap: 3, marginLeft: 'auto' }}>
           {(['all', 'spy', 'qqq'] as const).map((f) => (

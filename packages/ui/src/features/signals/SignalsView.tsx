@@ -9,7 +9,7 @@ import { Glossary } from './components/Glossary';
 import { LoadingSpinner } from '../../primitives/LoadingSpinner';
 import { EmptyState } from '../../primitives/EmptyState';
 import { AlertStrip } from '../../primitives/AlertStrip';
-import { fmtDateTime, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING } from '@stw/shared';
+import { fmtDateTime, FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import type { LevelSet } from './api';
 
@@ -77,9 +77,8 @@ export function SignalsView() {
     document.getElementById(CHART_ANCHOR)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  const sectionLabel: React.CSSProperties = {
-    fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, textTransform: 'uppercase',
-    letterSpacing: LETTER_SPACING.label, color: 'var(--t2)',
+  const sectionTitle: React.CSSProperties = {
+    fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)',
   };
 
   return (
@@ -117,10 +116,8 @@ export function SignalsView() {
 
         {/* 2. Price maps. */}
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: 'var(--shadow)', overflow: 'hidden' }}>
-          <div style={{ padding: '8px 13px', background: 'var(--s2)', borderBottom: '1px solid var(--bsub)' }}>
-            <span style={sectionLabel}>🗺️ Where price sits vs today&apos;s levels</span>
-          </div>
-          <div style={{ padding: 12 }}>
+          <div style={{ padding: 16 }}>
+            <div style={{ ...sectionTitle, marginBottom: 4 }}>Where price sits vs today&apos;s levels</div>
             <p style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', lineHeight: 1.5, margin: '0 0 12px' }}>
               Above the gamma-flat line, dealers dampen moves (calmer). Below it, they chase moves (faster, both ways). Below put support, the floor is gone.
             </p>
