@@ -7,7 +7,6 @@ import { PerStockLadderChip } from './PerStockLadder';
 import { useSyncPortfolio } from './useSyncPortfolio';
 import { useHoldings } from '../picks/useHoldings';
 import { useConvictionChanges, type HoldingRef } from '../picks/useConvictionChanges';
-import { ConvictionBadge } from '../picks/components/ConvictionBadge';
 import { useTickerRegime, type TickerRegime } from '../picks/useTickerRegime';
 import { RegimeBadge } from '../picks/components/RegimeBadge';
 import { LoadingSpinner } from '../../primitives/LoadingSpinner';
@@ -53,7 +52,6 @@ const PORTFOLIO_TABS: { value: PortfolioTab; label: string }[] = [
 ];
 
 // desktop grouped-view column widths — shared by the column header + rows so they line up
-const COL = { ret: 58, pnl: 80, val: 92 };
 
 // flat-table cell styles — copied from the Trades blotter so the two tables read identically
 const th: React.CSSProperties = { textAlign: 'left', fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, textTransform: 'uppercase', letterSpacing: LETTER_SPACING.label, color: 'var(--t3)', background: 'var(--s2)', padding: '7px 13px', borderBottom: '1px solid var(--bsub)', whiteSpace: 'nowrap' };
@@ -132,6 +130,19 @@ function composition(g: PortfolioGroup): string {
   if (g.hasStock && g.optionCount) return `Shares + ${g.optionCount} option${g.optionCount > 1 ? 's' : ''}`;
   if (g.optionCount) return `${g.optionCount} option${g.optionCount > 1 ? 's' : ''}`;
   return 'Shares';
+}
+
+// Row sub-line: for a single-lot position, the ref shows the entry detail ("Shares · 43 @ avg
+// $65.02"); mixed/multi-leg groups keep the composition summary.
+function entryDetail(g: PortfolioGroup): string {
+  const c = composition(g);
+  if (g.positions.length === 1) {
+    const p = g.positions[0];
+    if (p.quantity != null && p.avg_cost != null) {
+      return `${c} · ${Math.round(Math.abs(p.quantity))} @ avg $${p.avg_cost.toFixed(2)}`;
+    }
+  }
+  return c;
 }
 
 // ── flat table (default view) ─────────────────────────────────
@@ -248,40 +259,48 @@ function PositionMetrics({ group, portfolioValue, showMoney }: { group: Portfoli
 
 // header content for a group's accordion row (ticker/badges/composition + P&L columns) —
 // the AccordionList call site below supplies this as `renderHeader`.
-function GroupHeader({ group, onSelectTicker, showMoney, isMobile, portfolioValue, regime, ladderInfo }: {
-  group: PortfolioGroup; onSelectTicker: (t: string) => void; showMoney: boolean; isMobile: boolean; portfolioValue: number; regime?: TickerRegime; ladderInfo?: PerStockLadderInfo;
+function GroupHeader({ group, onSelectTicker, showMoney, isMobile, portfolioValue, maxWeight, regime, ladderInfo }: {
+  group: PortfolioGroup; onSelectTicker: (t: string) => void; showMoney: boolean; isMobile: boolean; portfolioValue: number; maxWeight: number; regime?: TickerRegime; ladderInfo?: PerStockLadderInfo;
 }) {
-  const { underlying, netPnl, marketValue, isTailed, traders, conviction } = group;
+  const { underlying, netPnl, marketValue, isTailed, traders, conviction, basket } = group;
   const weightPct = portfolioValue > 0 ? (marketValue / portfolioValue) * 100 : null;
+  const barColor = conviction !== null ? (TIERS[conviction]?.color ?? 'var(--border)') : 'var(--border)';
+  const barW = weightPct !== null && maxWeight > 0 ? `${Math.min(100, (weightPct / maxWeight) * 100)}%` : '0%';
+  // Right metric cluster (ref anatomy): weight mini-bar + P&L + "value · weight%" subline.
+  const cluster = (
+    <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, minWidth: 72 }}>
+      {!isMobile && (
+        <div style={{ width: 48, height: 3, borderRadius: 2, background: 'var(--bsub)' }}>
+          <div style={{ width: barW, height: '100%', borderRadius: 2, background: barColor }} />
+        </div>
+      )}
+      <div style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: pnlColor(netPnl), fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(netPnl, true)}</div>
+      {marketValue > 0 && (
+        <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>
+          {fmtMoney(marketValue)}{weightPct !== null ? ` · ${weightPct.toFixed(1)}%` : ''}
+        </div>
+      )}
+    </div>
+  );
   return (
     <>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 1, flexWrap: 'wrap' }}>
           {/* Every position's ticker links to its own detail pane, tailed or not. */}
           <span onClick={(e) => e.stopPropagation()} style={{ flexShrink: 0 }}>
             <TickerLink ticker={underlying} onSelect={onSelectTicker} style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.bold }} />
           </span>
-          {isTailed && traders.map((t) => <Badge key={t} kind="source" trader={t} />)}
-          {conviction !== null && <ConvictionBadge level={conviction} />}
-          {/* Compact = trend-structure chip only (matches the Stock Picks list rows). */}
-          <RegimeBadge regime={regime} compact />
+          {isTailed
+            ? <>{traders.map((t) => <Badge key={t} kind="source" trader={t} />)}{basket && <Badge kind="category" category={basket} />}</>
+            : <span style={{ fontSize: FONT_SIZE['3xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: '0.05em', textTransform: 'uppercase', padding: '1px 6px', borderRadius: 4, color: 'var(--t2)', background: 'var(--s2)', border: '1px solid var(--border)', flexShrink: 0 }}>Your call</span>}
           {/* Per-stock drawdown stop for the group's underlying (shown only when actionable). */}
           <PerStockLadderChip info={ladderInfo} />
+          {/* Compact = trend-structure chip only (matches the Stock Picks list rows). */}
+          <RegimeBadge regime={regime} compact />
         </div>
-        <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{composition(group)}</div>
+        <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entryDetail(group)}</div>
       </div>
-      {showMoney && (isMobile ? (
-        <div style={{ flexShrink: 0, textAlign: 'right' }}>
-          <div style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: pnlColor(netPnl), fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(netPnl, true)}</div>
-          {marketValue > 0 && <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(marketValue)} mkt</div>}
-        </div>
-      ) : (
-        <>
-          <div style={{ width: COL.ret, textAlign: 'right', flexShrink: 0, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>{weightPct !== null ? `${weightPct.toFixed(1)}%` : '—'}</div>
-          <div style={{ width: COL.pnl, textAlign: 'right', flexShrink: 0, fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: pnlColor(netPnl), fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(netPnl, true)}</div>
-          <div style={{ width: COL.val, textAlign: 'right', flexShrink: 0, fontSize: FONT_SIZE.sm, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(marketValue)}</div>
-        </>
-      ))}
+      {showMoney && cluster}
     </>
   );
 }
@@ -1337,9 +1356,7 @@ export function PortfolioPage() {
                   <span style={{ width: 8, flexShrink: 0 }} />
                   <span style={{ width: 3, flexShrink: 0 }} />
                   <span style={{ flex: 1 }}>Position</span>
-                  <span style={{ width: COL.ret, textAlign: 'right', flexShrink: 0 }}>Weight</span>
-                  <span style={{ width: COL.pnl, textAlign: 'right', flexShrink: 0 }}>P&L</span>
-                  <span style={{ width: COL.val, textAlign: 'right', flexShrink: 0 }}>Value</span>
+                  <span style={{ minWidth: 72, textAlign: 'right', flexShrink: 0 }}>Weight · P&L · Value</span>
                 </div>
               )}
               <AccordionList
@@ -1349,7 +1366,7 @@ export function PortfolioPage() {
                 onToggle={toggleGroup}
                 accentColor={(g) => (g.conviction !== null ? (TIERS[g.conviction]?.color ?? 'var(--border)') : 'var(--border)')}
                 renderHeader={(g) => (
-                  <GroupHeader group={g} onSelectTicker={onSelectTicker} showMoney={showMoney} isMobile={isMobile} portfolioValue={portfolioValue} regime={regimes[g.underlying]} ladderInfo={perStockLadders.get(g.underlying)} />
+                  <GroupHeader group={g} onSelectTicker={onSelectTicker} showMoney={showMoney} isMobile={isMobile} portfolioValue={portfolioValue} maxWeight={Math.max(1, ...visibleGroups.map((x) => portfolioValue > 0 ? (x.marketValue / portfolioValue) * 100 : 0))} regime={regimes[g.underlying]} ladderInfo={perStockLadders.get(g.underlying)} />
                 )}
                 renderExpanded={(g) => (
                   <>
