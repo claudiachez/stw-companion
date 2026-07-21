@@ -238,8 +238,10 @@ export function PicksView() {
         </div>
       )}
 
-      {/* FilterBar belongs to the position list only */}
-      {activeTab === 'positions' && !mobileDetail && (
+      {/* FilterBar belongs to the position list only. On DESKTOP it lives inside the split's
+          left pane (below) so — exactly like My Portfolio — it's confined to the list column
+          and the detail pane rises to the top beside it. On mobile it's a full-width bar here. */}
+      {isMobile && activeTab === 'positions' && !mobileDetail && (
         <FilterBar holdings={holdings} sectors={sectorOptions} filtered={positionCount} />
       )}
 
@@ -289,26 +291,30 @@ export function PicksView() {
             <div
               ref={listPaneRef}
               style={{
-                // The list scrolls INSIDE the pane card below; the pane only clips. Own stacking
-                // context (relative + zIndex 0) keeps the sticky tier header from painting over
-                // the detail pane. Contained (maxWidth + pad) when full-width; fills the pane when split.
+                // FilterBar + list live together in this column, so — exactly like My Portfolio —
+                // the bar is confined to the list and the detail pane rises to the top beside it.
+                // The list scrolls INSIDE the card below; own stacking context (relative + zIndex 0)
+                // keeps the sticky tier header from painting over the detail pane.
+                display: 'flex', flexDirection: 'column',
                 overflow: 'hidden',
                 position: 'relative', zIndex: 0,
                 flexBasis: selected ? `${listPct}%` : 'auto',
                 flexGrow: selected ? 0 : 1,
                 flexShrink: 0,
                 minWidth: 0,
-                padding: selected ? 0 : '16px 20px',
-                background: 'var(--bg)',
                 ...(dragging ? {} : { transition: 'flex-basis 0.15s ease' }),
               }}
             >
-              <div style={{ height: '100%', maxWidth: selected ? undefined : 1100, margin: selected ? undefined : '0 auto', display: 'flex', flexDirection: 'column', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
-                <div style={{ flexShrink: 0, padding: '6px 14px', background: 'var(--s2)', borderBottom: '1px solid var(--bsub)', fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--t3)' }}>Stock Picks · Ticker Details</div>
-                <div style={{ flex: 1, overflowY: 'auto' }}>
-                  {sorted.length === 0
-                    ? <EmptyState message="No positions match your filters." />
-                    : listContent}
+              <FilterBar holdings={holdings} sectors={sectorOptions} filtered={positionCount} />
+              {/* Full-width padded card (same width criteria as My Portfolio's positions list) */}
+              <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', background: 'var(--bg)', padding: '16px 16px 24px' }}>
+                <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+                  <div style={{ flexShrink: 0, padding: '6px 14px', background: 'var(--s2)', borderBottom: '1px solid var(--bsub)', fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--t3)' }}>Stock Picks · Ticker Details</div>
+                  <div style={{ flex: 1, overflowY: 'auto' }}>
+                    {sorted.length === 0
+                      ? <EmptyState message="No positions match your filters." />
+                      : listContent}
+                  </div>
                 </div>
               </div>
             </div>
