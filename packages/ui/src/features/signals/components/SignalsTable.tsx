@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FONT_SIZE, FONT_WEIGHT, LETTER_SPACING } from '@stw/shared';
+import { FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
 import type { Signal } from '../api';
 
 // Today's setups. Each row = the host's verdict (a fixed-width pill), the trade + trigger +
@@ -24,11 +24,11 @@ function sigTicker(s: Signal): Tk {
 }
 
 const filterBtn = (on: boolean): React.CSSProperties => ({
-  padding: '2px 8px', borderRadius: 4,
+  padding: '2px 10px', borderRadius: 4,
   border: `1px solid ${on ? 'var(--acc)' : 'var(--border)'}`,
-  background: on ? 'var(--c5bg)' : 'transparent',
-  color: on ? 'var(--acc)' : 'var(--t2)',
-  fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.semibold, fontFamily: 'inherit', cursor: 'pointer',
+  background: on ? 'var(--acc)' : 'transparent',
+  color: on ? 'var(--text-inverse)' : 'var(--t2)',
+  fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold, fontFamily: 'inherit', cursor: 'pointer',
 });
 
 interface Props {
@@ -48,8 +48,8 @@ export function SignalsTable({ signals }: Props) {
   const skip = signals.filter((s) => s.verdict === 'red').length;
 
   return (
-    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', boxShadow: 'var(--shadow)' }}>
-      <div style={{ padding: '14px 13px 8px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', boxShadow: 'var(--shadow)' }}>
+      <div style={{ padding: '14px 16px 8px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <span style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>Today&apos;s setups</span>
         <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>{ready} ready · {half} half size · {skip} skip</span>
         <div style={{ display: 'flex', gap: 3, marginLeft: 'auto' }}>
@@ -62,7 +62,7 @@ export function SignalsTable({ signals }: Props) {
       </div>
 
       {shown.length === 0 ? (
-        <p style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', padding: '12px 13px' }}>No setups for this filter.</p>
+        <p style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', padding: '12px 16px' }}>No setups for this filter.</p>
       ) : (
         shown.map((s, i) => {
           const v = VERDICT[s.verdict] ?? { role: 'neutral' as Role, label: s.verdict };
@@ -71,7 +71,7 @@ export function SignalsTable({ signals }: Props) {
               key={i}
               style={{
                 display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: 11,
-                padding: '11px 13px',
+                padding: '11px 16px',
                 borderBottom: i === shown.length - 1 ? '1px solid transparent' : '1px solid var(--bsub)',
               }}
             >
@@ -80,7 +80,7 @@ export function SignalsTable({ signals }: Props) {
                 style={{
                   width: 108, flexShrink: 0, textAlign: 'center',
                   fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, textTransform: 'uppercase',
-                  letterSpacing: LETTER_SPACING.label, padding: '4px 6px', borderRadius: 9999,
+                  letterSpacing: '0.04em', padding: '3px 8px', borderRadius: 9999,
                   background: `var(--status-${v.role}-bg)`, color: `var(--status-${v.role}-text)`,
                   border: `1px solid var(--status-${v.role}-border)`, lineHeight: 1.3,
                 }}

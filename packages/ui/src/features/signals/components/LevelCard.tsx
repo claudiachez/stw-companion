@@ -62,9 +62,9 @@ export function LevelCard({ symbol, levels, currentPrice, priceTime, onOpenChart
     : null;
 
   return (
-    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', boxShadow: 'var(--shadow)', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
       {/* header */}
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '9px 12px', borderBottom: '1px solid var(--bsub)', background: 'var(--s2)' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 8 }}>
         <span style={{ fontSize: FONT_SIZE.sms, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)' }}>{symbol}</span>
         {currentPrice != null && (
           <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>now {fmtPrice(currentPrice)}</span>
@@ -84,14 +84,17 @@ export function LevelCard({ symbol, levels, currentPrice, priceTime, onOpenChart
       {hasLadder ? (
         <div style={{ position: 'relative', height: LADDER_H }}>
           {/* background zones */}
+          {/* Zone tints: the ref uses faint ~7-8% literal rgba of each hue, which the no-literal-color
+              lint rule forbids and no token matches exactly — so we use the status-*-bg tokens at low
+              opacity as the closest tokenized approximation. */}
           {yGex1 != null && (
-            <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: yGex1, background: 'var(--status-positive-bg)', opacity: 0.5 }} />
+            <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: yGex1, background: 'var(--status-positive-bg)', opacity: 0.45 }} />
           )}
           {yGex1 != null && (
-            <div style={{ position: 'absolute', left: 0, right: 0, top: yGex1, height: (yPut ?? LADDER_H) - yGex1, background: 'var(--status-warning-bg)', opacity: 0.5 }} />
+            <div style={{ position: 'absolute', left: 0, right: 0, top: yGex1, height: (yPut ?? LADDER_H) - yGex1, background: 'var(--status-warning-bg)', opacity: 0.45 }} />
           )}
           {yPut != null && (
-            <div style={{ position: 'absolute', left: 0, right: 0, top: yPut, height: LADDER_H - yPut, background: 'var(--status-negative-bg)', opacity: 0.5 }} />
+            <div style={{ position: 'absolute', left: 0, right: 0, top: yPut, height: LADDER_H - yPut, background: 'var(--status-negative-bg)', opacity: 0.45 }} />
           )}
 
           {/* level lines */}
@@ -101,9 +104,9 @@ export function LevelCard({ symbol, levels, currentPrice, priceTime, onOpenChart
             const ptsStr = pd != null ? ` · ${pd >= 0 ? '+' : ''}${fmtPrice(+pd.toFixed(2))} pts` : '';
             return (
               <div key={i} style={{ position: 'absolute', top: t, left: 6, right: 6, height: 16, display: 'flex', alignItems: 'center', gap: 6, pointerEvents: 'none' }}>
-                <span style={{ width: 44, textAlign: 'right', flexShrink: 0, fontSize: FONT_SIZE['3xs'], fontWeight: FONT_WEIGHT.bold, color: `var(--status-${l.role}-text)`, fontVariantNumeric: 'tabular-nums' }}>{fmtPrice(l.price)}</span>
+                <span style={{ width: 44, textAlign: 'right', flexShrink: 0, fontSize: FONT_SIZE.xs, fontWeight: l.role === 'warning' ? FONT_WEIGHT.bold : FONT_WEIGHT.semibold, color: `var(--status-${l.role}-text)`, fontVariantNumeric: 'tabular-nums' }}>{fmtPrice(l.price)}</span>
                 <span style={{ flex: 1, borderTop: `1.5px ${l.dashed ? 'dashed' : 'solid'} var(--status-${l.role}-text)` }} />
-                <span style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.semibold, color: `var(--status-${l.role}-text)`, background: 'var(--surface)', padding: '0 4px', whiteSpace: 'nowrap' }}>{l.label}{ptsStr}</span>
+                <span style={{ fontSize: FONT_SIZE['2xs'], fontWeight: l.role === 'warning' ? FONT_WEIGHT.bold : FONT_WEIGHT.semibold, color: `var(--status-${l.role}-text)`, background: 'var(--surface)', padding: '0 4px', whiteSpace: 'nowrap' }}>{l.label}{ptsStr}</span>
               </div>
             );
           })}
@@ -111,7 +114,7 @@ export function LevelCard({ symbol, levels, currentPrice, priceTime, onOpenChart
           {/* current-price marker */}
           {markerY != null && currentPrice != null && (
             <div style={{ position: 'absolute', top: markerY - 8, left: 6, right: 6, height: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ width: 44, textAlign: 'right', flexShrink: 0, fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>{fmtPrice(currentPrice)}</span>
+              <span style={{ width: 44, textAlign: 'right', flexShrink: 0, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)', background: 'var(--surface)', borderRadius: 3, padding: '0 4px', fontVariantNumeric: 'tabular-nums' }}>{fmtPrice(currentPrice)}</span>
               <span style={{ flex: 1, borderTop: '2px solid var(--text)' }} />
               <span style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, color: 'var(--text)', background: 'var(--surface)', padding: '0 4px', whiteSpace: 'nowrap' }}>◀ price now</span>
             </div>

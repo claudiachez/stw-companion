@@ -1,4 +1,4 @@
-import { FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, gexBiasLabel } from '@stw/shared';
+import { FONT_SIZE, FONT_WEIGHT, gexBiasLabel } from '@stw/shared';
 
 // Session-verdict bias pill. The label is the shared `gexBiasLabel` scorer's canonical
 // word (Bullish / Bearish / Flat / Conflicted) — no re-derivation here — and the tone
@@ -24,12 +24,11 @@ export function BiasChip({ bias }: { bias: string }) {
     <span
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 5,
-        fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold, letterSpacing: LETTER_SPACING.label,
-        textTransform: 'uppercase', padding: '3px 10px', borderRadius: 6,
+        fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.bold,
+        padding: '3px 10px', borderRadius: 9999,
         whiteSpace: 'nowrap', flexShrink: 0,
         background: `var(--status-${tone}-bg)`,
         color: `var(--status-${tone}-text)`,
-        border: `1px solid var(--status-${tone}-border)`,
       }}
     >
       {arrow && <span aria-hidden style={{ fontWeight: FONT_WEIGHT.bold }}>{arrow}</span>}

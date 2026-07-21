@@ -95,33 +95,31 @@ export function SignalsView() {
         )}
 
         {/* 1. Session verdict banner. */}
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: 'var(--shadow)', overflow: 'hidden' }}>
-          <div style={{ padding: '12px 14px 0', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, boxShadow: 'var(--shadow)', overflow: 'hidden' }}>
+          <div style={{ padding: '14px 16px 0', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <BiasChip bias={gx.bias} />
-            <span style={{ fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>{headline}</span>
+            <span style={{ fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)' }}>{headline}</span>
             <span style={{ marginLeft: isMobile ? 0 : 'auto', fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', whiteSpace: 'nowrap', width: isMobile ? '100%' : undefined }}>
               GEX read · {dateStr} · as of {updStr}
               {isStale && lastMorningRun ? <> · checked {fmtDateTime(lastMorningRun)}</> : null}
             </span>
           </div>
-          <div style={{ padding: '8px 14px 12px' }}>
-            {gx.bias_note && (
-              <p style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.5, margin: 0 }}>{gx.bias_note}</p>
-            )}
-            <p style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', lineHeight: 1.5, margin: '6px 0 0' }}>
-              Advisory only — these are the GEX read&apos;s levels and setups, not orders.
+          <div style={{ padding: '8px 16px 14px' }}>
+            <p style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.5, margin: 0 }}>
+              {gx.bias_note && <>{gx.bias_note}{' '}</>}
+              <span style={{ color: 'var(--t3)' }}>Advisory only — these are the GEX read&apos;s levels and setups, not orders.</span>
             </p>
           </div>
         </div>
 
         {/* 2. Price maps. */}
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: 'var(--shadow)', overflow: 'hidden' }}>
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, boxShadow: 'var(--shadow)', overflow: 'hidden' }}>
           <div style={{ padding: 16 }}>
             <div style={{ ...sectionTitle, marginBottom: 4 }}>Where price sits vs today&apos;s levels</div>
             <p style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', lineHeight: 1.5, margin: '0 0 12px' }}>
               Above the gamma-flat line, dealers dampen moves (calmer). Below it, they chase moves (faster, both ways). Below put support, the floor is gone.
             </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 20 }}>
               <LevelCard symbol="SPY" levels={spyLevels} currentPrice={spyPrice} priceTime={spyPriceTime} onOpenChart={openChart} />
               <LevelCard symbol="QQQ" levels={gx.qqq} currentPrice={qqqPrice} priceTime={qqqPriceTime} onOpenChart={openChart} />
             </div>

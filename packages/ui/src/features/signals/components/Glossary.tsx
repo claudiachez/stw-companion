@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FONT_SIZE, FONT_WEIGHT, LETTER_SPACING } from '@stw/shared';
+import { FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
 
 // Collapsible plain-English glossary for the GEX terms on this page. Display-only.
 const TERMS: { term: string; def: string }[] = [
@@ -13,26 +13,24 @@ const TERMS: { term: string; def: string }[] = [
 export function Glossary() {
   const [open, setOpen] = useState(false);
   return (
-    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', boxShadow: 'var(--shadow)' }}>
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, boxShadow: 'var(--shadow)', padding: '12px 16px' }}>
       <button
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         style={{
-          width: '100%', display: 'flex', alignItems: 'center', gap: 8,
-          padding: '8px 13px', background: 'var(--s2)', border: 'none', borderBottom: open ? '1px solid var(--bsub)' : 'none',
-          cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+          background: 'none', border: 'none', cursor: 'pointer', color: 'var(--t3)',
+          fontSize: FONT_SIZE.xs, padding: 0, textDecoration: 'underline', fontFamily: 'inherit',
         }}
       >
-        <span style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, textTransform: 'uppercase', letterSpacing: LETTER_SPACING.label, color: 'var(--t2)' }}>📖 Glossary</span>
-        <span style={{ marginLeft: 'auto', fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>{open ? 'Hide ▲' : 'Show ▼'}</span>
+        {open ? 'Hide the plain-English glossary' : '? What do these terms mean'}
       </button>
       {open && (
-        <div style={{ padding: '4px 0' }}>
-          {TERMS.map((t) => (
-            <div key={t.term} style={{ padding: '8px 13px', display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <span style={{ fontSize: FONT_SIZE.sms, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)' }}>{t.term}</span>
-              <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', lineHeight: 1.5 }}>{t.def}</span>
-            </div>
+        <div style={{ marginTop: 8, fontSize: FONT_SIZE.xs, color: 'var(--t2)', lineHeight: 1.7 }}>
+          {TERMS.map((t, i) => (
+            <span key={t.term}>
+              <b style={{ color: 'var(--text)', fontWeight: FONT_WEIGHT.bold }}>{t.term}</b> — {t.def}
+              {i < TERMS.length - 1 && <br />}
+            </span>
           ))}
         </div>
       )}
