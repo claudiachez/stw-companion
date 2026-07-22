@@ -57,7 +57,7 @@ export function RegimeCard({ regime, updatedAt, series, helpOpen, onToggleHelp, 
   const todayET = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
   const marketOpen = isTradingDay(todayET);
   const stamp = updatedAt
-    ? marketOpen ? `updated ${fmtDateTime(updatedAt)}` : `as of ${formatDate(lastTradingDay(todayET))} · market closed`
+    ? marketOpen ? `Updated ${fmtDateTime(updatedAt)}` : `as of ${formatDate(lastTradingDay(todayET))} · market closed`
     : null;
 
   return (

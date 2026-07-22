@@ -1,6 +1,5 @@
-import { FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
+import { fmtDateTime, FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
 import { Card, CardHeader, HelpPanel, bandColor } from './macroVisuals';
-import { SourceNote } from './macroVisuals';
 
 export interface SleeveItem {
   key: string;
@@ -71,7 +70,11 @@ export function SleeveDriversCard({ items, helpOpen, onToggleHelp, help, updated
         })}
       </div>
 
-      <SourceNote source="STW model inputs" updatedAt={updatedAt} />
+      {updatedAt && (
+        <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 10 }}>
+          Updated: {fmtDateTime(updatedAt)}
+        </div>
+      )}
     </Card>
   );
 }

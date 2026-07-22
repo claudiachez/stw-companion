@@ -212,21 +212,7 @@ export function MacroView() {
           help={HELP.sleeves}
         />
 
-        {/* 3 — AI recap */}
-        <MacroRecapCard
-          recap={recap}
-          recapDate={recapDate}
-          recapSession={recapSession}
-          loading={recapLoading}
-          error={recapError}
-          canEdit={canEdit}
-          onRefresh={handleRefreshRecap}
-          helpOpen={help === 'recap'}
-          onToggleHelp={() => toggleHelp('recap')}
-          help={HELP.recap}
-        />
-
-        {/* 4 — Coming up (macro prints + earnings, next 7 days) */}
+        {/* 3 — Coming up (macro prints + earnings, next 7 days) */}
         <ComingUpCard
           events={eventsList}
           earnings={upcomingEarnings}
@@ -282,7 +268,21 @@ export function MacroView() {
           />
         </div>
 
-        {/* 7 — Where money is rotating */}
+        {/* AI recap — the plain-English summary, placed just before sector rotation */}
+        <MacroRecapCard
+          recap={recap}
+          recapDate={recapDate}
+          recapSession={recapSession}
+          loading={recapLoading}
+          error={recapError}
+          canEdit={canEdit}
+          onRefresh={handleRefreshRecap}
+          helpOpen={help === 'recap'}
+          onToggleHelp={() => toggleHelp('recap')}
+          help={HELP.recap}
+        />
+
+        {/* Where money is rotating */}
         <SectorRotationCard
           rows={sectorRows}
           loading={sectorLoading}

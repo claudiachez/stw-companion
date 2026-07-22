@@ -62,10 +62,9 @@ function printGlyph(t: EventPrintTrend): string {
 // arrive already computed (useMacroEvents + useEarningsCalendar); this only merges,
 // sorts and lays them out. A macro print that already released earlier today shows
 // its actual-vs-previous read (via the shared eventPrintTrend scorer).
-// The default horizon; "Show more" extends it to cover the full fetched calendar
-// (earnings are fetched ~45 days out; monitored macro prints ride alongside).
+// The default horizon; "Show more" extends it to the far horizon (monitored events).
 const NEAR_DAYS = 7;
-const FAR_DAYS = 45;
+const FAR_DAYS = 30;
 
 export function ComingUpCard({ events, earnings, ownTickers, stwTickers, loading, error, earningsError, warning, helpOpen, onToggleHelp, help, updatedAt }: Props) {
   const own = new Set(ownTickers.map((t) => t.toUpperCase()));
@@ -74,8 +73,10 @@ export function ComingUpCard({ events, earnings, ownTickers, stwTickers, loading
 
   const now = Date.now();
   const todayStartMs = new Date(new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' })).getTime();
-  const nearCutoff = now + NEAR_DAYS * 86_400_000;
-  const cutoff = now + FAR_DAYS * 86_400_000; // build the full set; the view slices to the near window unless expanded
+  // Calendar-day windows anchored to the start of today, so an event N days out but later in the
+  // day isn't clipped by a rolling now+N×24h boundary (e.g. a 2 PM FOMC on the 7th day still shows).
+  const nearCutoff = todayStartMs + (NEAR_DAYS + 1) * 86_400_000;
+  const cutoff = todayStartMs + (FAR_DAYS + 1) * 86_400_000; // build the full set; the view slices to the near window unless expanded
 
   const eventRows: Row[] = events
     .map((e) => ({ e, ms: new Date(e.releaseTimeEt).getTime() }))
@@ -140,7 +141,7 @@ export function ComingUpCard({ events, earnings, ownTickers, stwTickers, loading
           const risk = RISK_STYLE[r.risk];
           return (
             <div key={r.key} style={{ display: 'flex', alignItems: 'baseline', gap: 10, padding: '7px 0', borderTop: '1px solid var(--bsub)', flexWrap: 'wrap' }}>
-              <span style={{ width: 104, flexShrink: 0, fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold, color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>{r.when}</span>
+              <span style={{ width: 150, flexShrink: 0, fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold, color: 'var(--t3)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{r.when}</span>
               <span title={r.holderTip} style={{ width: 14, flexShrink: 0, textAlign: 'center', fontSize: FONT_SIZE.xs, color: r.holder, cursor: 'help' }}>●</span>
               <span style={{ flex: 1, minWidth: 160, fontSize: FONT_SIZE.sm, color: 'var(--text)' }}>
                 {r.what}
