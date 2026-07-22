@@ -1,5 +1,6 @@
 import { useGraddox, useLastMorningRun } from './useGraddox';
 import { useLiveSignalQuotes } from './useLiveSignalQuotes';
+import { useLiveSpxSpot } from '../macro/useLiveSpxSpot';
 import { LevelCard } from './components/LevelCard';
 import { SignalsTable } from './components/SignalsTable';
 import { BiasChip } from './components/BiasChip';
@@ -10,11 +11,8 @@ import { EmptyState } from '../../primitives/EmptyState';
 import { AlertStrip } from '../../primitives/AlertStrip';
 import { fmtDateTime, FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
 import { useIsMobile } from '../../hooks/useIsMobile';
-import type { LevelSet } from './api';
 
 const ET = { timeZone: 'America/New_York' } as const;
-
-const scale10 = (v: number | null | undefined) => (v != null ? +(v / 10).toFixed(2) : null);
 
 // ── Signals content (shared by web + admin) ───────────────────
 // A single 900px column of stacked cards (gap 12). RE-LAYOUT of the existing GEX read —
@@ -25,6 +23,7 @@ export function SignalsView() {
   const { data: gx, isLoading, error } = useGraddox();
   const { data: lastMorningRun } = useLastMorningRun();
   const liveQuotes = useLiveSignalQuotes();
+  const liveSpx = useLiveSpxSpot();
   const isMobile = useIsMobile();
 
   if (isLoading) return <LoadingSpinner className="mt-16" />;
@@ -46,29 +45,22 @@ export function SignalsView() {
     ? new Date(gx.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })
     : '';
 
-  // SPY levels = SPX ÷ 10 (both the chart + ladder show SPY scale).
-  const spyLevels: LevelSet = {
-    resistance: scale10(gx.spx.resistance),
-    gex1: scale10(gx.spx.gex1),
-    put_support: scale10(gx.spx.put_support),
-    key_target: scale10(gx.spx.key_target),
-    downside_risk: scale10(gx.spx.downside_risk),
-  };
-  // "now" prefers the LIVE Finnhub quote (same source as the Macro GEX spot — one value across
-  // the platform), falling back to the GEX read's captured spot when no live quote is available.
-  const spyPrice = liveQuotes.spy ?? scale10(gx.spx_price);
+  // The GEX read + the session verdict speak in SPX, so the price map does too (SPX-native
+  // levels, no SPY scaling). "now" prefers the LIVE SPX spot (useLiveSpxSpot — the same
+  // Finnhub-derived source the Macro GEX card shows, so one "current SPX" across the platform),
+  // falling back to the read's captured spot. QQQ rides the live Finnhub QQQ quote.
+  const liveTag = (ms: number) => '@ ' + new Date(ms).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', ...ET }) + ' live';
+  const spxPrice = liveSpx?.spx ?? gx.spx_price;
   const qqqPrice = liveQuotes.qqq ?? gx.qqq_price;
-  const liveTimeTag = liveQuotes.at
-    ? '@ ' + new Date(liveQuotes.at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', ...ET }) + ' live'
-    : null;
-  const spyPriceTime = liveQuotes.spy != null ? (liveTimeTag ?? priceTime) : priceTime;
-  const qqqPriceTime = liveQuotes.qqq != null ? (liveTimeTag ?? priceTime) : priceTime;
+  const spxPriceTime = liveSpx ? liveTag(liveSpx.at) : priceTime;
+  const qqqPriceTime = liveQuotes.qqq != null ? (liveQuotes.at ? liveTag(liveQuotes.at) : priceTime) : priceTime;
 
   const ready = gx.signals.filter((s) => s.verdict === 'green').length;
   const half = gx.signals.filter((s) => s.verdict === 'yellow').length;
   const skip = gx.signals.filter((s) => s.verdict === 'red').length;
+  const unconfirmed = gx.signals.filter((s) => s.verdict === 'gray').length;
   const headline = gx.signals.length
-    ? `${ready} ready · ${half} half size · ${skip} skip`
+    ? `${ready} ready · ${half} half size · ${skip} skip${unconfirmed ? ` · ${unconfirmed} unconfirmed` : ''}`
     : 'No setups published today.';
 
   const sectionTitle: React.CSSProperties = {
@@ -114,7 +106,7 @@ export function SignalsView() {
               Above the gamma-flat line, dealers dampen moves (calmer). Below it, they chase moves (faster, both ways). Below put support, the floor is gone.
             </p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 20 }}>
-              <LevelCard symbol="SPY" levels={spyLevels} currentPrice={spyPrice} priceTime={spyPriceTime} />
+              <LevelCard symbol="SPX" levels={gx.spx} currentPrice={spxPrice} priceTime={spxPriceTime} />
               <LevelCard symbol="QQQ" levels={gx.qqq} currentPrice={qqqPrice} priceTime={qqqPriceTime} />
             </div>
           </div>

@@ -1,4 +1,6 @@
-export type SignalVerdict = 'green' | 'yellow' | 'red';
+// green/yellow/red are the confirmed IV/flow verdicts; 'gray' = the confirmation
+// source (optioncharts.io) wasn't checked, so the setup is unconfirmed, not a skip.
+export type SignalVerdict = 'green' | 'yellow' | 'red' | 'gray';
 // Host-authored bias text is free-form (e.g. 'bullish', 'bearish', 'flat',
 // 'conflicted'); the UI normalizes it case-insensitively, so keep this a string.
 export type BiasLabel = string;

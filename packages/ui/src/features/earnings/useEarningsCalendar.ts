@@ -52,6 +52,9 @@ async function fetchEarnings(finnhubKey: string): Promise<EarningsEvent[]> {
 
 export interface EarningsCalendar {
   loading: boolean;
+  /** Feed error (Finnhub non-200 / network), so a silent empty calendar is distinguishable
+   *  from a genuinely empty one — e.g. a premium-gated or rate-limited earnings endpoint. */
+  error: string | null;
   /** The soonest upcoming report for one ticker, or null. */
   getNext: (ticker: string) => EarningsEvent | null;
   /** Next report per ticker for the given set, soonest-first (tickers with none are dropped). */
@@ -99,5 +102,9 @@ export function useEarningsCalendar(): EarningsCalendar {
     [getNext],
   );
 
-  return { loading: query.isLoading, getNext, upcomingFor };
+  const error = query.isError
+    ? (query.error instanceof Error ? query.error.message : 'Earnings feed unavailable')
+    : (!finnhubKey ? 'No market-data key configured' : null);
+
+  return { loading: query.isLoading, error, getNext, upcomingFor };
 }

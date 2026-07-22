@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import {
   environmentScore, regimeBand, trendSleeveScore, trendSleeveLabel, trendSubScore,
   gexPositioningLabel, stressLabel, creditLabel, ratesDollarLabel, isTradingDay, MARKET_MOVERS,
+  RISK_APPETITE_WEIGHTS,
 } from '@stw/shared';
 import { useCapabilities } from '../../context/AppCapabilities';
 import { useAppConfig } from '../../hooks/useAppConfig';
@@ -80,7 +81,7 @@ export function MacroView() {
   const { events: eventsList, read: eventsRead, loading: eventsLoading, error: eventsError, warning: eventsWarning } = useMacroEvents();
   const { data: holdings } = useHoldings();
   const { data: userPositions } = useUserPositions();
-  const { upcomingFor: upcomingEarningsFor, loading: earningsLoading } = useEarningsCalendar();
+  const { upcomingFor: upcomingEarningsFor, loading: earningsLoading, error: earningsError } = useEarningsCalendar();
 
   // Earnings covers the user's OWN positions ∪ STW holdings ∪ mega-cap movers.
   const ownTickers = useMemo(
@@ -233,6 +234,7 @@ export function MacroView() {
           stwTickers={stwTickers}
           loading={eventsLoading || earningsLoading}
           error={eventsError}
+          earningsError={earningsError}
           warning={eventsWarning}
           updatedAt={updatedAt}
           helpOpen={help === 'coming'}
@@ -298,6 +300,15 @@ export function MacroView() {
   );
 }
 
+// Risk-appetite input weights (one source: RISK_APPETITE_WEIGHTS) → a readable
+// "Momentum 21% · VIX 18% · …" line for the Fear-vs-greed explainer.
+const RISK_APPETITE_WEIGHT_LABELS: Record<keyof typeof RISK_APPETITE_WEIGHTS, string> = {
+  momentum: 'Momentum', vix: 'VIX', ivPremium: 'IV premium', gex: 'GEX', credit: 'Credit', breadth: 'Breadth',
+};
+const RISK_APPETITE_WEIGHT_LINE = (Object.keys(RISK_APPETITE_WEIGHTS) as (keyof typeof RISK_APPETITE_WEIGHTS)[])
+  .map((k) => `${RISK_APPETITE_WEIGHT_LABELS[k]} ${Math.round(RISK_APPETITE_WEIGHTS[k] * 100)}%`)
+  .join(' · ');
+
 // Concise "what / why / how to read it" blurbs, shown inline via each card's ⓘ.
 type Weights = { trend: number; volatility: number; credit: number; rates_dollar: number; gex: number };
 const HELP = {
@@ -354,6 +365,7 @@ const HELP = {
     <>
       <div>A 0–100 blend of momentum, options pricing and breadth — what the tape is <i>feeling</i>, not what it should feel.</div>
       <div style={dim}>Below ~25 = extreme fear (historically a contrarian buy zone); above ~75 = extreme greed (where chasing gets punished); the middle is just weather.</div>
+      <div style={dim}>Weights: {RISK_APPETITE_WEIGHT_LINE}. (An input drops out when its feed is missing; the rest re-weight to keep the total at 100%.)</div>
       <div style={dim}>"Loudest" shows what's driving today's number — a big split between drivers is itself a warning.</div>
     </>
   ),

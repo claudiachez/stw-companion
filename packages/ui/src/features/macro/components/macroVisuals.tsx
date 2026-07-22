@@ -21,17 +21,24 @@ export function Card({ children, style }: { children: ReactNode; style?: CSSProp
   );
 }
 
-/** The 18px round ⓘ toggle in a card header. Controlled by the parent. */
+/** The 18px round ⓘ toggle in a card header. Controlled by the parent. Matches the
+ *  shared HelpToggle (Risk tab): muted --s2 by default, filling to accent on hover/open. */
 export function InfoButton({ open, onClick }: { open: boolean; onClick: () => void }) {
+  const [hover, setHover] = useState(false);
+  const active = open || hover;
   return (
     <button
       type="button"
       onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
       aria-label={open ? 'Hide explanation' : 'What is this?'}
       aria-expanded={open}
       style={{
-        width: 18, height: 18, borderRadius: '50%', border: '1px solid var(--border)',
-        background: 'var(--s2)', color: 'var(--t3)',
+        width: 18, height: 18, borderRadius: '50%',
+        border: `1px solid ${active ? 'var(--acc)' : 'var(--border)'}`,
+        background: active ? 'var(--acc)' : 'var(--s2)',
+        color: active ? 'var(--text-inverse)' : 'var(--t3)',
         cursor: 'pointer', padding: 0, flexShrink: 0,
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       }}

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { fmtDateTime, formatDate, eventPrintTrend, earningsHourLabel, fmtEpsEstimate, FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
 import type { MacroEvent, EarningsEvent, EventImportance, EventPrintTrend } from '@stw/shared';
 import { Card, CardHeader, HelpPanel } from './macroVisuals';
@@ -11,6 +12,9 @@ interface Props {
   stwTickers: string[];
   loading: boolean;
   error: string | null;
+  /** Earnings-feed error (separate from the macro-prints `error`), so a silently-empty
+   *  earnings calendar surfaces a reason instead of reading as "nothing scheduled". */
+  earningsError?: string | null;
   warning?: string | null;
   helpOpen: boolean;
   onToggleHelp: () => void;
@@ -58,13 +62,20 @@ function printGlyph(t: EventPrintTrend): string {
 // arrive already computed (useMacroEvents + useEarningsCalendar); this only merges,
 // sorts and lays them out. A macro print that already released earlier today shows
 // its actual-vs-previous read (via the shared eventPrintTrend scorer).
-export function ComingUpCard({ events, earnings, ownTickers, stwTickers, loading, error, warning, helpOpen, onToggleHelp, help, updatedAt }: Props) {
+// The default horizon; "Show more" extends it to cover the full fetched calendar
+// (earnings are fetched ~45 days out; monitored macro prints ride alongside).
+const NEAR_DAYS = 7;
+const FAR_DAYS = 45;
+
+export function ComingUpCard({ events, earnings, ownTickers, stwTickers, loading, error, earningsError, warning, helpOpen, onToggleHelp, help, updatedAt }: Props) {
   const own = new Set(ownTickers.map((t) => t.toUpperCase()));
   const stw = new Set(stwTickers.map((t) => t.toUpperCase()));
+  const [expanded, setExpanded] = useState(false);
 
   const now = Date.now();
   const todayStartMs = new Date(new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' })).getTime();
-  const cutoff = now + 7 * 86_400_000;
+  const nearCutoff = now + NEAR_DAYS * 86_400_000;
+  const cutoff = now + FAR_DAYS * 86_400_000; // build the full set; the view slices to the near window unless expanded
 
   const eventRows: Row[] = events
     .map((e) => ({ e, ms: new Date(e.releaseTimeEt).getTime() }))
@@ -106,11 +117,13 @@ export function ComingUpCard({ events, earnings, ownTickers, stwTickers, loading
       };
     });
 
-  const rows = [...eventRows, ...earningsRows].sort((a, b) => a.whenMs - b.whenMs);
+  const allRows = [...eventRows, ...earningsRows].sort((a, b) => a.whenMs - b.whenMs);
+  const rows = expanded ? allRows : allRows.filter((r) => r.whenMs <= nearCutoff);
+  const hiddenCount = allRows.length - rows.length;
 
   return (
     <Card>
-      <CardHeader title="Coming up — what could move things" meta="next 7 days" helpOpen={helpOpen} onToggleHelp={onToggleHelp} />
+      <CardHeader title="Coming up — what could move things" meta={expanded ? `next ${FAR_DAYS} days` : `next ${NEAR_DAYS} days`} helpOpen={helpOpen} onToggleHelp={onToggleHelp} />
       <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', lineHeight: 1.5, marginTop: 2, marginBottom: 8 }}>
         Scheduled prints and earnings are temporary overlays — they fade in a few days unless the structure actually shifts.
       </div>
@@ -119,7 +132,7 @@ export function ComingUpCard({ events, earnings, ownTickers, stwTickers, loading
       {loading && rows.length === 0 && <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)' }}>Loading the calendar…</div>}
       {error && <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--status-negative-text)' }}>Calendar unavailable: {error}</div>}
       {!loading && !error && rows.length === 0 && (
-        <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)' }}>Nothing scheduled in the next 7 days.</div>
+        <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)' }}>Nothing scheduled in the next {expanded ? FAR_DAYS : NEAR_DAYS} days.</div>
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -147,6 +160,25 @@ export function ComingUpCard({ events, earnings, ownTickers, stwTickers, loading
           );
         })}
       </div>
+
+      {(expanded || hiddenCount > 0) && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          style={{
+            display: 'block', marginTop: 8, background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+            fontFamily: 'inherit', fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold, color: 'var(--acc)',
+          }}
+        >
+          {expanded ? 'Show less ↑' : `Show more — ${hiddenCount} further out (next ${FAR_DAYS} days) ↓`}
+        </button>
+      )}
+
+      {earningsError && (
+        <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--status-warning-text)', marginTop: 8 }}>
+          Earnings feed unavailable ({earningsError}) — only macro prints are shown.
+        </div>
+      )}
 
       {warning && <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: 8 }}>{warning}</div>}
 

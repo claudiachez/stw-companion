@@ -1,4 +1,4 @@
-import { useState, type ReactNode, type CSSProperties } from 'react';
+import { useState, useEffect, type ReactNode, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import {
   evaluateRiskConfig, cashflowAdjustedDrawdownPct, bindingGrossTarget, drawdownLadderStatus,
@@ -95,23 +95,36 @@ function OffState({ title, help, settingsRef }: { title: string; help: string; s
 interface BannerItem { severity: 'near' | 'breach'; main: string; sub: string; }
 
 const BANNER_DISMISS_KEY = 'stw-risk-verdict-dismissed';
+const alertKey = (i: BannerItem) => `${i.severity}:${i.main}`;
 
 function VerdictBanner({ items }: { items: BannerItem[] }) {
-  const breaches = items.filter((i) => i.severity === 'breach').length;
-  const worst: Sev3 = breaches > 0 ? 'breach' : items.length > 0 ? 'near' : 'ok';
-  // A signature of the current warnings — dismissal is remembered against THIS exact set, so
-  // the banner stays closed until the breaches change, then re-announces itself once.
-  const sig = items.map((i) => `${i.severity}:${i.main}`).join('|');
-  const [dismissedSig, setDismissedSig] = useState<string | null>(() => {
-    try { return localStorage.getItem(BANNER_DISMISS_KEY); } catch { return null; }
+  // Dismissal is now PER-ALERT: each alert is remembered by its own signature (severity + text),
+  // so clearing one leaves the rest, and any single alert re-announces itself once its wording
+  // changes (the % is in the text) or it resolves and later recurs.
+  const [dismissed, setDismissed] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(BANNER_DISMISS_KEY) || '[]'); } catch { return []; }
   });
-  const dismissable = items.length > 0;
-  if (dismissable && dismissedSig === sig) return null;
-
-  const dismiss = () => {
-    setDismissedSig(sig);
-    try { localStorage.setItem(BANNER_DISMISS_KEY, sig); } catch { /* ignore */ }
+  const persist = (next: string[]) => {
+    setDismissed(next);
+    try { localStorage.setItem(BANNER_DISMISS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
   };
+  // Prune signatures for alerts that no longer exist, so a resolved-then-recurring alert shows again.
+  const liveKeys = items.map(alertKey).join('|');
+  useEffect(() => {
+    setDismissed((prev) => {
+      const keep = prev.filter((k) => liveKeys.split('|').includes(k));
+      if (keep.length === prev.length) return prev;
+      try { localStorage.setItem(BANNER_DISMISS_KEY, JSON.stringify(keep)); } catch { /* ignore */ }
+      return keep;
+    });
+  }, [liveKeys]);
+
+  const visible = items.filter((i) => !dismissed.includes(alertKey(i)));
+  // Everything the user has waved off → hide the banner entirely (details stay in Size caps below).
+  if (items.length > 0 && visible.length === 0) return null;
+
+  const breaches = visible.filter((i) => i.severity === 'breach').length;
+  const worst: Sev3 = breaches > 0 ? 'breach' : visible.length > 0 ? 'near' : 'ok';
 
   const pill = worst === 'breach'
     ? `${breaches} action${breaches === 1 ? '' : 's'}`
@@ -133,31 +146,29 @@ function VerdictBanner({ items }: { items: BannerItem[] }) {
         <span style={{ marginLeft: 'auto', fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>
           Advisory only — we flag, you decide. Nothing is traded for you.
         </span>
-        {dismissable && (
-          <button
-            onClick={dismiss}
-            aria-label="Dismiss — the details stay in Size caps below"
-            title="Dismiss — the details stay in Size caps below"
-            style={{
-              flexShrink: 0, width: 24, height: 24, borderRadius: RADIUS.md, border: '1px solid var(--bsub)',
-              background: 'var(--surface)', color: 'var(--t3)', cursor: 'pointer', padding: 0,
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            }}
-          >
-            <Icon name="close" size={13} />
-          </button>
-        )}
       </div>
 
-      {items.length > 0 ? (
+      {visible.length > 0 ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE[2], marginTop: SPACE[3] }}>
-          {items.map((it, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: SPACE[2.5], background: 'var(--surface)', border: '1px solid var(--bsub)', borderRadius: RADIUS.lg, padding: `${SPACE[2]}px ${SPACE[3]}px` }}>
+          {visible.map((it) => (
+            <div key={alertKey(it)} style={{ display: 'flex', alignItems: 'flex-start', gap: SPACE[2.5], background: 'var(--surface)', border: '1px solid var(--bsub)', borderRadius: RADIUS.lg, padding: `${SPACE[2]}px ${SPACE[3]}px` }}>
               <span style={{ flexShrink: 0, width: 8, height: 8, borderRadius: RADIUS.full, background: SEV_TEXT[it.severity], marginTop: 6 }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: FONT_SIZE.sms, color: 'var(--text)', lineHeight: 1.5 }}>{it.main}</div>
                 <div style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: SEV_TEXT[it.severity], lineHeight: 1.5 }}>{it.sub}</div>
               </div>
+              <button
+                onClick={() => persist([...dismissed, alertKey(it)])}
+                aria-label="Dismiss this alert — the details stay in Size caps below"
+                title="Dismiss this alert — the details stay in Size caps below"
+                style={{
+                  flexShrink: 0, width: 22, height: 22, borderRadius: RADIUS.md, border: '1px solid var(--bsub)',
+                  background: 'var(--surface)', color: 'var(--t3)', cursor: 'pointer', padding: 0,
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <Icon name="close" size={12} />
+              </button>
             </div>
           ))}
         </div>

@@ -507,7 +507,7 @@ function PortfolioSummary({ groups, showMoney, nlv, warnings, sectorCap, onOpenR
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 10 }}>
         {stat('Positions', positionCount, 'var(--text)', `${t.legs} holding${t.legs === 1 ? '' : 's'} (legs)`)}
         {stat('How much is invested', t.grossPct != null ? `${t.grossPct.toFixed(0)}%` : '—', t.grossPct != null && t.grossPct > 100 ? 'var(--pnl-loss)' : 'var(--text)', 'gross exposure vs account')}
-        {stat('Shares vs options', t.equityPct != null ? `${t.equityPct}% / ${t.optionsPct}%` : '—', 'var(--text)', 'shares · options (mkt value)')}
+        {stat('Shares : Options', t.equityPct != null ? `${t.equityPct} : ${t.optionsPct}` : '—', 'var(--text)', 'by current market value')}
         {stat('Options at risk', showMoney ? fmtMoneyCompact(t.optRisk) : MONEY_MASK, 'var(--text)', t.optRiskPct != null ? `${t.optRiskPct.toFixed(1)}% of your account` : 'premium at risk')}
       </div>
     </>
