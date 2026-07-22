@@ -4,69 +4,52 @@
 > (by `/wrap-up`). Durable rules live in CLAUDE.md; dated history in docs/session-history.md.
 
 ## State
-- **RIGOROUS element-level re-QA COMPLETE** on `claude/webapp-redesign` — all 14 surfaces diffed
-  live-DOM-vs-byte-exact-ref + matched to the mock. Full handover — operating principles, host
-  rulings, per-view status, global G1/G2/G3, open questions —
-  → **[plans/20260720_webapp_redesign/REQA.md](../plans/20260720_webapp_redesign/REQA.md)** (READ FIRST for redesign work).
-  Done (15 commits): both detail panes; G1; G2; **+ this session (8 commits): Profile, Settings,
-  GEX, Risk, Tailing, Positions/Trades conviction band, Trades footer, Admin Edit-position.**
-  Branch typecheck-green, lint 0 errors, 358 tests pass; **nothing pushed.**
-  - **All host decisions resolved:** T1 (keep the position-pane ↗ to STW's pick), S1 (keep FormRow
-    uppercase cap labels), **G-GEX** (converted GEX section headers to the mock's sentence-case titles),
-    **P-LIST** (Picks-list row now shows `$price · weight%`, dropped the date). No open questions remain.
-  - **Next:** on go-ahead, `/stw-review` → push → ONE PR to `staging`.
-- **The full webapp redesign is DONE but LIVES ONLY ON THE LOCAL BRANCH `claude/webapp-redesign`
-  — NOT pushed, NO PR, NOT on `staging`/`main`.** 21 commits (see session-history). Host is holding
-  the push for a **QA session next** (log in + eyeball every screen, light + dark), then `/stw-review`
-  → push → single PR to `staging` (host merges). **Do NOT push or open the PR without explicit go-ahead.**
-- **Migrations at `079`.** 077 (`set_my_display_name` RPC), 078 (`risk_config` guardrail toggles +
-  `per_stock_option_ladder`), 079 (`profiles.avatar_url` + `avatars` storage bucket/RLS +
-  `set_my_avatar_url`) — **all applied to PROD (`usmqbohcjcyszjxxvnqu`) via MCP this session.** NOT applied
-  to sandbox (sandbox has no `profiles`; risk_config columns not needed there for QA).
-- **The `staging → main` promotion is STILL PENDING** (approval-gated) — `origin/main..origin/staging` is
-  the pre-redesign batch (drawdown overhaul #145–#149 + earlier). Scheduled fns only run on `main`.
-- The **regime one-source fix shipped separately as PR #151 (MERGED to `staging`)** — `trendStructure`
-  in `@stw/shared`; the redesign branch is based on staging-with-#151.
-- CI (typecheck/lint/test/fn-parity) green on #151. The redesign branch is verified locally
-  (typecheck both apps + lint 0 errors + 358 tests + boot clean on every commit) but **CI hasn't run it**
-  (unpushed) and **no screen was visually verified** (auth-gated — that's the QA session's job).
+- **Webapp redesign is COMPLETE, pixel-QA'd, and PUSHED — `claude/webapp-redesign` → [PR #152](https://github.com/claudiachez/stw-companion/pull/152) open to `staging`** (host merges). ~76 commits.
+  typecheck + lint (0 errors) + 358 tests green locally; CI runs on the PR. Every changed surface was
+  rendered + screenshot-verified this session (dev server + the host's authed browser session), light theme
+  (dark not re-swept — the tokens are theme-aware but a dark pass is worth doing post-merge).
+- **This session** (on top of the earlier redesign + element-level re-QA): built the remaining ref screens
+  and applied the host's QA refinements — see the session-history entry for the full list. New screens:
+  **Stock Picks · Trades** (flat per-lot blotter), **Stock Picks · Portfolio Overview** (ref card system),
+  **GEX Signals** (setup sparklines from real TwelveData closes; live chart removed), **My Portfolio position
+  detail** (flat tx table). Plus: tooltip-icon restyle (app-wide), a **Default view** preference, several
+  filter/nav refinements, and a **dismissible Risk verdict banner**.
+- **Migrations at `079`** — all applied to PROD (`usmqbohcjcyszjxxvnqu`). **No new migrations this session:**
+  the Default-view pref rides the existing `profiles.preferences` (jsonb) + `set_my_preferences` RPC.
+- **`staging → main` promotion STILL PENDING** (approval-gated). `origin/main..origin/staging` = the
+  pre-redesign batch (drawdown overhaul #145–#149 + regime one-source #151); the redesign joins it once
+  #152 merges. Scheduled fns run only on `main`.
 
-## Webapp redesign — DONE on `claude/webapp-redesign` (plans/20260720_webapp_redesign/)
-All 11 design surfaces + foundation, recreated from the `.dc.html` refs. Full deviation/flag list +
-per-screen notes: **plans/20260720_webapp_redesign/FLAGS.md** (READ before QA). Highlights:
-- Foundation: `FONT_SIZE` expanded to the design's exact px ladder (`lg` 18→16, added 9/13/15/20/22/30);
-  new `SegmentedControl` primitive; `DetailPane` eyebrow/stat-grid/`DetailPaneSection`; `showMoney` global
-  privacy pref (`usePrivacyStore` + `profiles.preferences.showMoney`) drives $ across My Portfolio + Profile.
-- Profile (editable name + avatar upload + masked IBKR account; theme moved off the hamburger menu),
-  Settings (4-tab guardrails w/ toggles + draggable monotonic ladders + stocks/options + re-skinned IBKR
-  connection editor), My Portfolio (Overview / Risk / Tailing), Stock Picks (unified Listing + Detail panes
-  + Overview & Trades), Macro, GEX Signals, Admin edit modals (Log-a-transaction + Edit-position).
-- Reuse-not-rebuild throughout: no re-derived numbers, frozen regime gate untouched, locked event-sourcing
-  + P&L-split byte-identical, IBKR order flow preserved. Guardrail on/off flags + option ladder are HONORED
-  on the Risk tab; **the drawdown-alert cron does NOT yet honor the `*_enabled` flags (follow-up).**
+## Redesign detail (plans/20260720_webapp_redesign/)
+All 11 design surfaces + foundation, recreated from the `.dc.html` refs, reuse-not-rebuild (no re-derived
+numbers, frozen regime gate untouched, event-sourcing + P&L-split byte-identical, IBKR order flow preserved).
+Per-screen flags/deviations → **plans/20260720_webapp_redesign/FLAGS.md**; element-level re-QA handover →
+**plans/20260720_webapp_redesign/REQA.md**. Design refs at `plans/20260720_webapp_redesign/refs/` are
+gitignored — re-fetch via the Claude Design MCP (project `665f2470-f119-40cb-9e5c-de3d86ad62d8`).
 
 ## Pending host actions
-1. **QA the redesign** on the local branch (see "How to run" below), then greenlight `/stw-review` + push
-   + one PR to `staging`. Fix QA findings first.
-2. **Confirm the Delete-account support email** (interim `cc@claudiachez.com` in ProfilePage).
-3. **`staging → main` promotion** (approval-gated) — still required for scheduled fns (incl. the drawdown
-   alert cron) to run on prod. The redesign will ride the NEXT promotion after it reaches staging.
+1. **Review + merge [PR #152](https://github.com/claudiachez/stw-companion/pull/152)** to `staging`.
+2. **`staging → main` promotion** (approval-gated) — required for scheduled fns (incl. the drawdown-alert
+   cron) to run on prod. The redesign rides the next promotion after it reaches staging.
+3. Confirm the Delete-account support email (interim `cc@claudiachez.com` in ProfilePage).
 
-## Next work
-1. **QA session** on `claude/webapp-redesign` — walk every screen logged-in, light + dark, ≤390px; check
-   against `plans/20260720_webapp_redesign/refs/*.dc.html` + FLAGS.md; fix discrepancies; then push + PR.
-2. **Deferred from the redesign:** wire the guardrail `*_enabled` flags into the drawdown-alert cron
-   (Risk tab already honors them); add `SegmentedControl` to the DesignSystemGallery.
-3. **Parked (pre-redesign):** RegimeLight ↔ Macro-trend was resolved (#151); Whop integration (locked
-   direction, not built) remains the big next feature.
-
-## How to run locally (for QA)
-`git checkout claude/webapp-redesign` → `corepack pnpm --filter web dev` (→ localhost:5173) and
-`corepack pnpm --filter admin dev` (→ :5174). Sign in; toggle theme in Profile → Preferences. Admin
-edit modals: a Stock Pick detail → Edit position / the ledger's + Add event. `pnpm` not on PATH → use
-`~/.local/bin/pnpm` or `corepack pnpm`.
+## Next work (after #152 merges)
+1. **Deferred redesign follow-ups:**
+   - Rebuild the Stock Picks `HoldingDetail` tx table to the flat DATE·ACTION·DETAILS·PRICE·**Weight**
+     form (its mock variant has a Weight column + admin add/edit) — bring it to parity with the Portfolio
+     twin's new flat table. **Flagged/known divergence** — the shared `DetailPane` skeleton matches; only
+     the tx-table body differs.
+   - Wire the `useDefaultView` landing into the **admin** shell (web is wired; admin index still hardcoded).
+   - Wire the guardrail `*_enabled` flags into the **drawdown-alert cron** (the Risk tab already honors them).
+   - Add `SegmentedControl` to the DesignSystemGallery.
+   - Optional: a dark-theme visual sweep of the redesigned screens.
+2. **Parked (pre-redesign):** Whop integration (locked direction, not built); multi-trader tailing (needs a
+   proposal + host conflict rule before building); transcripts library tab; global activity feed; subscriber
+   closed-position P&L history (postponed). Full context in session-history.md.
 
 ## Notes
 - `ibkr_nlv` refreshes on every sync (`ibkr_nlv_at` stamps it); only `cumulative_cashflow` is import-only.
-- Design refs live at `plans/20260720_webapp_redesign/refs/` (gitignored — local only; re-fetch any via the
-  Claude Design MCP, project `665f2470-f119-40cb-9e5c-de3d86ad62d8`).
+- The GEX setup sparklines + the old live chart both pull TwelveData intraday; local dev has no market-data
+  key, so sparklines/quotes are empty there (graceful) and populate on staging/prod where the keys are set.
+- **Sandbox gaps (dev-only, not blocking):** `prev_conviction_level` backfill + `recent_changes` view
+  (migration 008) never applied to sandbox — those Overview blocks hide there; both render on PROD.

@@ -211,3 +211,13 @@
   redesign's full ladder (9/10/11/12/13/14/15/16/20/22/26/30 → `3xs/2xs/xs/sm/sms/base/md/lg/xl/2xl/display/hero`;
   `input`=16 kept for the iOS-zoom floor). Never a literal numeric `fontSize` (lint bans it). If the design
   uses a px with no token, use the nearest and note it — don't hand-roll a literal.
+
+## Help affordances — two distinct things (2026-07-21)
+
+The app has **two separate** help patterns; don't conflate or restyle one into the other:
+- **Inline tooltip = `HelpToggle`** (the **ⓘ** next to a section header). Ref style: an 18px circle with a
+  bold text **"i"** (not a lucide SVG), `--s2` background by default, filling to accent (white "i", accent
+  border) on hover/open. It's the shared primitive — one change covers every page.
+- **Glossary = a plain "? What do these terms mean" text link** at the bottom of a card (Risk / GEX /
+  Tailing), toggling a plain-English block. Leave it as a text link — it is **not** an icon and must not be
+  merged into the `HelpToggle` treatment.
