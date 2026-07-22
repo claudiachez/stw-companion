@@ -4,16 +4,19 @@ import { FONT_SIZE, CONVICTION_BAND_OPTIONS, type ConvictionBand } from '@stw/sh
 import { SegmentedControl, type SegmentOption } from '../../../primitives/SegmentedControl';
 
 const SORT_OPTIONS: { value: TradeSort; label: string }[] = [
-  { value: 'opened_desc', label: 'Sort: Opened newest' },
-  { value: 'opened_asc',  label: 'Sort: Opened oldest' },
-  { value: 'closed_desc', label: 'Sort: Closed newest' },
-  { value: 'closed_asc',  label: 'Sort: Closed oldest' },
-  { value: 'pnl_desc',    label: 'Sort: P&L ↓' },
-  { value: 'pnl_asc',     label: 'Sort: P&L ↑' },
-  { value: 'conviction',  label: 'Sort: Conviction' },
-  { value: 'az',          label: 'Sort: A → Z' },
-  { value: 'za',          label: 'Sort: Z → A' },
+  { value: 'last', label: 'Sort: Last action' },
+  { value: 'new',  label: 'Sort: Opened newest' },
+  { value: 'old',  label: 'Sort: Opened oldest' },
+  { value: 'pnlD', label: 'Sort: P&L ↓' },
+  { value: 'pnlU', label: 'Sort: P&L ↑' },
+  { value: 'wtD',  label: 'Sort: Init Wt ↓' },
+  { value: 'az',   label: 'Sort: A → Z' },
 ];
+
+// Lot lifecycle actions we can derive from a leg's own state (open → New; closed → Close;
+// closed-worthless → Expired). Add/Trim/Roll are position-narrative verbs that don't exist at
+// the leg grain, so they're intentionally omitted rather than shown as dead filters.
+const ACTION_OPTIONS = ['New', 'Close', 'Expired'];
 
 // Row-2 segmented groups (shared SegmentedControl primitive) — the "Show" state axis and the
 // "Type" instrument axis, wired to the same store fields the old toggle/select used.
@@ -51,12 +54,12 @@ interface Props {
 // (full-bleed surface, two rows: dropdown filters up top, segmented axes below) so the two
 // tabs stay visually consistent. Show = the leg's own open/closed state; Type = Shares/Options.
 export function TradesFilterBar({ holdings, sectors, count, total }: Props) {
-  const { search, basket, conviction, sector, type, openClosed, sort,
-    setSearch, setBasket, setConviction, setSector, setType, setOpenClosed, setSort, reset } =
+  const { search, basket, conviction, sector, action, type, openClosed, sort,
+    setSearch, setBasket, setConviction, setSector, setAction, setType, setOpenClosed, setSort, reset } =
     useTradesFiltersStore();
 
   const baskets = [...new Set(holdings.map((h) => h.basket).filter(Boolean))].sort();
-  const hasFilter = !!search || !!basket || !!conviction || !!sector || !!type || openClosed !== 'all';
+  const hasFilter = !!search || !!basket || !!conviction || !!sector || !!action || !!type || openClosed !== 'all';
 
   return (
     <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', flexShrink: 0 }}>
@@ -88,6 +91,11 @@ export function TradesFilterBar({ holdings, sectors, count, total }: Props) {
           </select>
         )}
 
+        <select value={action} onChange={(e) => setAction(e.target.value)} className={ctrlBorderClass} style={ctrlStyle} title="Filter by the lot's lifecycle action">
+          <option value="">All Actions</option>
+          {ACTION_OPTIONS.map((a) => <option key={a} value={a}>{a}</option>)}
+        </select>
+
         <select value={sort} onChange={(e) => setSort(e.target.value as TradeSort)} className={ctrlBorderClass} style={ctrlStyle}>
           {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
@@ -104,7 +112,7 @@ export function TradesFilterBar({ holdings, sectors, count, total }: Props) {
         )}
 
         <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginLeft: 'auto', paddingLeft: 0, whiteSpace: 'nowrap' }}>
-          {count < total ? `${count} of ${total} lots` : `${total} lot${total === 1 ? '' : 's'}`}
+          {count} of {total} lots
         </span>
       </div>
 
