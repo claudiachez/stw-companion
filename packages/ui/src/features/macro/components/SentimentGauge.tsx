@@ -81,7 +81,7 @@ export function SentimentGauge({ score, loading, fiveDayDelta, helpOpen, onToggl
       </div>
 
       <div style={{ marginTop: 'auto', paddingTop: 8, fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>
-        Source: <a href="https://finnhub.io" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--t3)', textDecoration: 'underline' }}>STW composite</a> · momentum · IV premium · breadth
+        Composite of momentum · IV premium · breadth
       </div>
     </Card>
   );

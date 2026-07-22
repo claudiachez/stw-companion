@@ -10,10 +10,13 @@ import type { Signal } from '../api';
 // (useSignalCloses), the trigger is parsed from the host's own trigger/trade text, and both
 // gracefully drop out when there's no price series or no plausible level to plot.
 type Role = 'positive' | 'warning' | 'negative' | 'neutral';
-const VERDICT: Record<string, { role: Role; label: string }> = {
+const VERDICT: Record<string, { role: Role; label: string; tip?: string }> = {
   green:  { role: 'positive', label: 'All ✓ — Enter' },
   yellow: { role: 'warning',  label: 'Half size' },
   red:    { role: 'negative', label: 'Skip today' },
+  // 'gray' = the IV/flow confirmation source (optioncharts.io) wasn't checked today, so this
+  // setup carries no confirmed verdict — read the levels + logic and confirm it yourself.
+  gray:   { role: 'neutral',  label: 'Unconfirmed', tip: 'IV/flow not checked today — no confirmed verdict' },
 };
 
 type Tk = 'spy' | 'qqq' | 'other';
@@ -96,12 +99,13 @@ export function SignalsTable({ signals }: Props) {
   const ready = signals.filter((s) => s.verdict === 'green').length;
   const half = signals.filter((s) => s.verdict === 'yellow').length;
   const skip = signals.filter((s) => s.verdict === 'red').length;
+  const unconfirmed = signals.filter((s) => s.verdict === 'gray').length;
 
   return (
     <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', boxShadow: 'var(--shadow)' }}>
       <div style={{ padding: '14px 16px 8px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <span style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>Today&apos;s setups</span>
-        <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>{ready} ready · {half} half size · {skip} skip</span>
+        <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>{ready} ready · {half} half size · {skip} skip{unconfirmed ? ` · ${unconfirmed} unconfirmed` : ''}</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginLeft: 'auto' }}>
           {(['all', 'spy', 'qqq'] as const).map((f) => (
             <button key={f} style={filterBtn(sym === f)} onClick={() => setSym(f)}>
@@ -137,6 +141,7 @@ export function SignalsTable({ signals }: Props) {
             >
               {/* verdict pill (fixed 108px) */}
               <span
+                title={v.tip}
                 style={{
                   width: 108, flexShrink: 0, textAlign: 'center',
                   fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, textTransform: 'uppercase',

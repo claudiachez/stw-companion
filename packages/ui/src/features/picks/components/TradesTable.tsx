@@ -210,7 +210,8 @@ export function TradesTable({ holdings, onSelectTicker }: Props) {
     () => [...new Set(holdings.map((h) => sectorMap[h.ticker]).filter((s): s is string => !!s))].sort(),
     [holdings, sectorMap],
   );
-  const stats = useMemo(() => buildStats(allTrades), [allTrades]);
+  // Summary cards reflect the ACTIVE filter (the FilterBar's "N of {total}" shows the scope).
+  const stats = useMemo(() => buildStats(trades), [trades]);
 
   const gridCols = canEdit ? `${GRID} 44px` : GRID;
 
