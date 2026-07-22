@@ -81,7 +81,6 @@ export function MacroView() {
   const { events: eventsList, read: eventsRead, loading: eventsLoading, error: eventsError, warning: eventsWarning } = useMacroEvents();
   const { data: holdings } = useHoldings();
   const { data: userPositions } = useUserPositions();
-  const { upcomingFor: upcomingEarningsFor, loading: earningsLoading, error: earningsError } = useEarningsCalendar();
 
   // Earnings covers the user's OWN positions ∪ STW holdings ∪ mega-cap movers.
   const ownTickers = useMemo(
@@ -100,9 +99,16 @@ export function MacroView() {
       .filter((t): t is string => !!t && t !== 'CASH'),
     [holdings],
   );
+  // Fetch earnings per-symbol for the tracked union (own book ∪ STW ∪ movers) — the bulk
+  // Finnhub calendar hides the nearest ~3 weeks, so we fan out over exactly these names.
+  const earningsTickers = useMemo(
+    () => Array.from(new Set([...ownTickers, ...stwTickers, ...MARKET_MOVERS])),
+    [ownTickers, stwTickers],
+  );
+  const { upcomingFor: upcomingEarningsFor, loading: earningsLoading, error: earningsError } = useEarningsCalendar(earningsTickers);
   const upcomingEarnings = useMemo(
-    () => upcomingEarningsFor([...ownTickers, ...stwTickers, ...MARKET_MOVERS]),
-    [upcomingEarningsFor, ownTickers, stwTickers],
+    () => upcomingEarningsFor(earningsTickers),
+    [upcomingEarningsFor, earningsTickers],
   );
   const { rows: sectorRows, loading: sectorLoading, asOf: sectorAsOf, constituents: sectorConstituents, constituentsLoading: sectorConstituentsLoading } = useSectorRotation(twelveDataKey);
 
