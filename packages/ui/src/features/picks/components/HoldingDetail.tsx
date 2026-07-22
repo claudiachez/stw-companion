@@ -60,7 +60,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
   const holdsOwn = !isAdmin && h.ticker !== 'CASH' && ownPositions.some((p) => cleanUnderlying(p.underlying) === h.ticker);
   const [editing, setEditing] = useState(false);
 
-  const { getNext: getNextEarnings } = useEarningsCalendar();
+  const { getNext: getNextEarnings } = useEarningsCalendar([h.ticker]);
   const nextEarnings = h.ticker !== 'CASH' ? getNextEarnings(h.ticker) : null;
 
   const quote       = useQuote(h.ticker);

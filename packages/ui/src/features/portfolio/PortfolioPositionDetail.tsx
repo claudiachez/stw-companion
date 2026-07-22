@@ -250,7 +250,7 @@ export function PortfolioPositionDetail({
   const posPct = ownPortfolioPct ?? 0;
   const posSeverity: ViolationSeverity | null = config ? classifySeverity(posPct, config.max_position_pct) : null;
   const sector = (sectorMap ?? {})[group.underlying] ?? null;
-  const { getNext: getNextEarnings } = useEarningsCalendar();
+  const { getNext: getNextEarnings } = useEarningsCalendar([group.underlying]);
   const nextEarnings = getNextEarnings(group.underlying);
   const { data: allExecutions } = useUserExecutions();
   const execs = (allExecutions ?? []).filter((x) => x.underlying?.toUpperCase() === group.underlying.toUpperCase());

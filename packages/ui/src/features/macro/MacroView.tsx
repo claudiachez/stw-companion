@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import {
   environmentScore, regimeBand, trendSleeveScore, trendSleeveLabel, trendSubScore,
   gexPositioningLabel, stressLabel, creditLabel, ratesDollarLabel, isTradingDay, MARKET_MOVERS,
-  RISK_APPETITE_WEIGHTS,
+  RISK_APPETITE_WEIGHTS, formatPct,
 } from '@stw/shared';
 import { useCapabilities } from '../../context/AppCapabilities';
 import { useAppConfig } from '../../hooks/useAppConfig';
@@ -81,7 +81,6 @@ export function MacroView() {
   const { events: eventsList, read: eventsRead, loading: eventsLoading, error: eventsError, warning: eventsWarning } = useMacroEvents();
   const { data: holdings } = useHoldings();
   const { data: userPositions } = useUserPositions();
-  const { upcomingFor: upcomingEarningsFor, loading: earningsLoading, error: earningsError } = useEarningsCalendar();
 
   // Earnings covers the user's OWN positions ∪ STW holdings ∪ mega-cap movers.
   const ownTickers = useMemo(
@@ -100,9 +99,16 @@ export function MacroView() {
       .filter((t): t is string => !!t && t !== 'CASH'),
     [holdings],
   );
+  // Fetch earnings per-symbol for the tracked union (own book ∪ STW ∪ movers) — the bulk
+  // Finnhub calendar hides the nearest ~3 weeks, so we fan out over exactly these names.
+  const earningsTickers = useMemo(
+    () => Array.from(new Set([...ownTickers, ...stwTickers, ...MARKET_MOVERS])),
+    [ownTickers, stwTickers],
+  );
+  const { upcomingFor: upcomingEarningsFor, loading: earningsLoading, error: earningsError } = useEarningsCalendar(earningsTickers);
   const upcomingEarnings = useMemo(
-    () => upcomingEarningsFor([...ownTickers, ...stwTickers, ...MARKET_MOVERS]),
-    [upcomingEarningsFor, ownTickers, stwTickers],
+    () => upcomingEarningsFor(earningsTickers),
+    [upcomingEarningsFor, earningsTickers],
   );
   const { rows: sectorRows, loading: sectorLoading, asOf: sectorAsOf, constituents: sectorConstituents, constituentsLoading: sectorConstituentsLoading } = useSectorRotation(twelveDataKey);
 
@@ -160,6 +166,31 @@ export function MacroView() {
   const lastSeriesScore = [...trendHistory.regimeSeries].reverse().find((p) => p.score !== null)?.score ?? null;
   const displayRegime = (isTradingDay(todayET) || lastSeriesScore === null) ? regime : regimeBand(lastSeriesScore);
 
+  // Honest live-price CONTEXT for the regime card: the composite score is the daily-close
+  // read (structure = price vs the daily MAs — see #151), but this shows how the headline
+  // indexes are moving intraday so the card reflects today without faking a recompute.
+  const liveDrift = useMemo(() => {
+    const spy = indicators.find((i) => i.symbol === 'SPY');
+    const qqq = indicators.find((i) => i.symbol === 'QQQ');
+    const parts: string[] = [];
+    if (spy?.chgPct != null) parts.push(`S&P ${formatPct(spy.chgPct)}`);
+    if (qqq?.chgPct != null) parts.push(`Nasdaq ${formatPct(qqq.chgPct)}`);
+    if (parts.length === 0) return null;
+    // If the S&P's live price is hugging one of its daily MA lines, name it — that's where a
+    // structure change would show up at the close.
+    let maNote = '';
+    if (spy && spy.close != null) {
+      const spyClose = spy.close;
+      const mas: Array<[string, number | null | undefined]> = [['9-day', spy.ma9], ['21-day', spy.ma21], ['200-day', spy.ma200]];
+      const present = mas.filter((m): m is [string, number] => typeof m[1] === 'number');
+      if (present.length) {
+        const nearest = present.reduce((b, m) => (Math.abs(m[1] - spyClose) < Math.abs(b[1] - spyClose) ? m : b));
+        if (Math.abs((spyClose - nearest[1]) / nearest[1]) * 100 <= 0.6) maNote = ` · testing the ${nearest[0]} line`;
+      }
+    }
+    return `${parts.join(' · ')} today${maNote} — the score re-reads at the close.`;
+  }, [indicators]);
+
   function handleRefreshRecap(note?: string, session?: 'am' | 'pm') {
     if (!regime) return;
     generate({
@@ -198,6 +229,7 @@ export function MacroView() {
           regime={dataReady ? displayRegime : null}
           updatedAt={updatedAt}
           series={trendHistory.regimeSeries}
+          liveDrift={liveDrift}
           helpOpen={help === 'verdict'}
           onToggleHelp={() => toggleHelp('verdict')}
           help={HELP.verdict(regimeWeights)}
@@ -212,21 +244,7 @@ export function MacroView() {
           help={HELP.sleeves}
         />
 
-        {/* 3 — AI recap */}
-        <MacroRecapCard
-          recap={recap}
-          recapDate={recapDate}
-          recapSession={recapSession}
-          loading={recapLoading}
-          error={recapError}
-          canEdit={canEdit}
-          onRefresh={handleRefreshRecap}
-          helpOpen={help === 'recap'}
-          onToggleHelp={() => toggleHelp('recap')}
-          help={HELP.recap}
-        />
-
-        {/* 4 — Coming up (macro prints + earnings, next 7 days) */}
+        {/* 3 — Coming up (macro prints + earnings, next 7 days) */}
         <ComingUpCard
           events={eventsList}
           earnings={upcomingEarnings}
@@ -282,7 +300,21 @@ export function MacroView() {
           />
         </div>
 
-        {/* 7 — Where money is rotating */}
+        {/* AI recap — the plain-English summary, placed just before sector rotation */}
+        <MacroRecapCard
+          recap={recap}
+          recapDate={recapDate}
+          recapSession={recapSession}
+          loading={recapLoading}
+          error={recapError}
+          canEdit={canEdit}
+          onRefresh={handleRefreshRecap}
+          helpOpen={help === 'recap'}
+          onToggleHelp={() => toggleHelp('recap')}
+          help={HELP.recap}
+        />
+
+        {/* Where money is rotating */}
         <SectorRotationCard
           rows={sectorRows}
           loading={sectorLoading}

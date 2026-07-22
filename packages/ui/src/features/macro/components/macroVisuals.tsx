@@ -39,11 +39,12 @@ export function InfoButton({ open, onClick }: { open: boolean; onClick: () => vo
         border: `1px solid ${active ? 'var(--acc)' : 'var(--border)'}`,
         background: active ? 'var(--acc)' : 'var(--s2)',
         color: active ? 'var(--text-inverse)' : 'var(--t3)',
+        fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, lineHeight: 1,
         cursor: 'pointer', padding: 0, flexShrink: 0,
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       }}
     >
-      <Icon name="info" size={11} />
+      i
     </button>
   );
 }
