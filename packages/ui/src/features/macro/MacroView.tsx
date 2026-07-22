@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import {
   environmentScore, regimeBand, trendSleeveScore, trendSleeveLabel, trendSubScore,
   gexPositioningLabel, stressLabel, creditLabel, ratesDollarLabel, isTradingDay, MARKET_MOVERS,
-  RISK_APPETITE_WEIGHTS,
+  RISK_APPETITE_WEIGHTS, formatPct,
 } from '@stw/shared';
 import { useCapabilities } from '../../context/AppCapabilities';
 import { useAppConfig } from '../../hooks/useAppConfig';
@@ -166,6 +166,31 @@ export function MacroView() {
   const lastSeriesScore = [...trendHistory.regimeSeries].reverse().find((p) => p.score !== null)?.score ?? null;
   const displayRegime = (isTradingDay(todayET) || lastSeriesScore === null) ? regime : regimeBand(lastSeriesScore);
 
+  // Honest live-price CONTEXT for the regime card: the composite score is the daily-close
+  // read (structure = price vs the daily MAs — see #151), but this shows how the headline
+  // indexes are moving intraday so the card reflects today without faking a recompute.
+  const liveDrift = useMemo(() => {
+    const spy = indicators.find((i) => i.symbol === 'SPY');
+    const qqq = indicators.find((i) => i.symbol === 'QQQ');
+    const parts: string[] = [];
+    if (spy?.chgPct != null) parts.push(`S&P ${formatPct(spy.chgPct)}`);
+    if (qqq?.chgPct != null) parts.push(`Nasdaq ${formatPct(qqq.chgPct)}`);
+    if (parts.length === 0) return null;
+    // If the S&P's live price is hugging one of its daily MA lines, name it — that's where a
+    // structure change would show up at the close.
+    let maNote = '';
+    if (spy && spy.close != null) {
+      const spyClose = spy.close;
+      const mas: Array<[string, number | null | undefined]> = [['9-day', spy.ma9], ['21-day', spy.ma21], ['200-day', spy.ma200]];
+      const present = mas.filter((m): m is [string, number] => typeof m[1] === 'number');
+      if (present.length) {
+        const nearest = present.reduce((b, m) => (Math.abs(m[1] - spyClose) < Math.abs(b[1] - spyClose) ? m : b));
+        if (Math.abs((spyClose - nearest[1]) / nearest[1]) * 100 <= 0.6) maNote = ` · testing the ${nearest[0]} line`;
+      }
+    }
+    return `${parts.join(' · ')} today${maNote} — the score re-reads at the close.`;
+  }, [indicators]);
+
   function handleRefreshRecap(note?: string, session?: 'am' | 'pm') {
     if (!regime) return;
     generate({
@@ -204,6 +229,7 @@ export function MacroView() {
           regime={dataReady ? displayRegime : null}
           updatedAt={updatedAt}
           series={trendHistory.regimeSeries}
+          liveDrift={liveDrift}
           helpOpen={help === 'verdict'}
           onToggleHelp={() => toggleHelp('verdict')}
           help={HELP.verdict(regimeWeights)}
