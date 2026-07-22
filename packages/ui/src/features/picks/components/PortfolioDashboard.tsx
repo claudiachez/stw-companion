@@ -100,20 +100,20 @@ function ConvictionChangeRow({ c, onSelectTicker }: {
   );
 }
 
-// One column of the top stat strip: 9px uppercase label / 20px big value / 10px sub.
-function Stat({ label, value, sub, color = 'var(--text)', divider = false }: {
-  label: string; value: React.ReactNode; sub?: React.ReactNode; color?: string; divider?: boolean;
+// One stat card: its own bordered card, 9px uppercase label / 19px big value / 10px sub (ref).
+function StatCard({ label, value, sub, color = 'var(--text)' }: {
+  label: string; value: React.ReactNode; sub?: React.ReactNode; color?: string;
 }) {
   return (
-    <div style={{ minWidth: 0, padding: '10px 12px 12px', borderLeft: divider ? '1px solid var(--bsub)' : undefined }}>
+    <div style={{ minWidth: 0, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px' }}>
       <div style={{ fontSize: FONT_SIZE['3xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: LETTER_SPACING.label, textTransform: 'uppercase', color: 'var(--t3)' }}>
         {label}
       </div>
-      <div style={{ fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, color, marginTop: SPACE[1], fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+      <div style={{ fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, color, marginTop: SPACE[0.5], fontVariantNumeric: 'tabular-nums', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {value}
       </div>
       {sub != null && (
-        <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[0.5], whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[0.5], lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {sub}
         </div>
       )}
@@ -235,63 +235,43 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
   const dataHealthClean = unpricedLegs.length === 0 && stalePrices.length === 0;
 
   const avgColor = avgPnl == null ? 'var(--text)' : avgPnl >= 0 ? 'var(--pnl-gain)' : 'var(--pnl-loss)';
-  const pad = isMobile ? '16px 14px' : '14px 16px';
+  const openLots = active.reduce((n, h) => n + h.legs.filter(legIsOpen).length, 0);
+
+  // Each Overview block is its own card in a max-1100 column (ref: no single pane / eyebrow —
+  // the sub-tab bar already names the surface), matching the My Portfolio Overview tab.
+  const card: React.CSSProperties = { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px' };
 
   return (
     <div style={{ height: '100%', overflowY: 'auto', background: 'var(--bg)' }}>
-      {/* Contained column + single pane card (matches the ref pane + the sibling Overview tab,
-          instead of sprawling full-bleed). */}
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: isMobile ? 12 : '16px 20px' }}>
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
-      {/* Eyebrow strip — names the surface (shared anatomy with DetailPane). */}
-      <div style={{
-        background: 'var(--s2)', borderBottom: '1px solid var(--bsub)',
-        padding: `${SPACE[1.5]}px ${SPACE[3.5]}px`,
-        fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: LETTER_SPACING.label,
-        textTransform: 'uppercase', color: 'var(--t3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-      }}>
-        Stock Picks · Portfolio Overview
-      </div>
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: isMobile ? '16px 12px 32px' : '16px 16px 40px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-      <div style={{ padding: pad, display: 'flex', flexDirection: 'column', gap: SPACE[3] }}>
-        {/* 1 · Stat strip — bsub top/bottom, 4-up (2-up mobile). */}
-        <div style={{
-          display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)',
-          gap: 0,
-          borderTop: '1px solid var(--bsub)', borderBottom: '1px solid var(--bsub)',
-          padding: `${SPACE[3.5]}px 0`,
-        }}>
-          <Stat label="Active holdings" value={active.length} sub={`${baskets.length} basket${baskets.length === 1 ? '' : 's'}`} />
-          <Stat
+        {/* 1 · Stat cards — four separate bordered cards (2-up mobile). */}
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: 10 }}>
+          <StatCard label="Active holdings" value={active.length} sub={`${openLots} open lots · CASH excluded`} />
+          <StatCard
             label="Avg return"
             value={avgPnl != null ? `${avgPnl >= 0 ? '+' : ''}${avgPnl.toFixed(1)}%` : '—'}
-            sub={pnlValues.length > 0 ? `${pnlValues.length} positions` : 'no live prices'}
+            sub={pnlValues.length > 0 ? `across ${pnlValues.length} priced position${pnlValues.length === 1 ? '' : 's'}` : 'no live prices'}
             color={avgColor}
-            divider={!isMobile}
           />
-          <Stat
+          <StatCard
             label="Shares : Options"
             value={equityPct != null ? `${equityPct} : ${optionsPct}` : '—'}
-            sub="by market value"
-            divider={!isMobile}
+            sub="by current market value"
           />
-          <Stat
+          <StatCard
             label="Cash"
             value={cashPct != null ? `${cashPct.toFixed(1)}%` : '—'}
-            sub="of book weight"
-            divider={!isMobile}
+            sub="of the book, uninvested"
           />
         </div>
 
-        {/* 2 · What changed this week — conviction moves + reaffirmations + the run digest. */}
+        {/* 2 · What changed this week — conviction moves + reaffirmations + the run digest,
+            inside the ref's green highlight card (label + stamp on top). */}
         {hasWhatChanged && (
-          <div>
-            <SectionHeader title="What changed this week" right={updatedStamp(webinarDate)} />
-            <div style={{
-              padding: `${SPACE[3]}px ${SPACE[3.5]}px`, borderRadius: 10,
-              background: 'var(--status-positive-bg)', border: '1px solid var(--status-positive-border)',
-              fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.6,
-            }}>
+          <div style={{ ...card, background: 'var(--status-positive-bg)', border: '1px solid var(--status-positive-border)' }}>
+            <SectionHeader title="What changed this week" color="var(--status-positive-text)" right={updatedStamp(webinarDate)} />
+            <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.6 }}>
               {meaningful.map((c) => (
                 <ConvictionChangeRow key={c.ticker} c={c} onSelectTicker={onSelectTicker} />
               ))}
@@ -321,7 +301,7 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
         )}
 
         {/* 3 · The book — treemap (box ∝ weight, color = return), grouped by basket. */}
-        <div>
+        <div style={card}>
           <PortfolioHeatmap
             cells={heatmapCells}
             onSelectTicker={onSelectTicker}
@@ -333,7 +313,7 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
         </div>
 
         {/* 4 · Weight by basket — bars sized against the largest basket. */}
-        <div>
+        <div style={card}>
           <SectionHeader title="Weight by basket" />
           <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE[2] }}>
             {baskets.map(([name, w]) => {
@@ -345,7 +325,7 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
                   <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[1.5], flex: `0 1 ${isMobile ? 108 : 150}px`, minWidth: 0 }}>
                     <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
                   </div>
-                  <div style={{ flex: 1, minWidth: 0, height: 6, borderRadius: RADIUS.sm, background: 'var(--bsub)' }}>
+                  <div style={{ flex: 1, minWidth: 0, height: 5, borderRadius: RADIUS.sm, background: 'var(--bsub)' }}>
                     <div style={{ width: `${barPct}%`, height: '100%', borderRadius: RADIUS.sm, background: c, opacity: 0.85 }} />
                   </div>
                   <span style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)', width: 38, textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
@@ -358,13 +338,13 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
         </div>
 
         {/* 5 · Data health — unpriced + stale option marks, naming the tickers. */}
-        <div>
+        <div style={card}>
           <SectionHeader
             title="Data health"
             color={dataHealthClean ? 'var(--t3)' : 'var(--status-warning-text)'}
             right={optionsSynced ? updatedStamp(optionsSynced) : null}
           />
-          <div style={{ padding: `${SPACE[2.5]}px ${SPACE[3.5]}px`, borderRadius: 10, background: 'transparent', border: '1px solid var(--bsub)', fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.6 }}>
+          <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.6 }}>
             {dataHealthClean && (
               <div style={{ color: 'var(--t3)' }}>
                 All open option marks are priced and current{optionsSynced ? <> as of <span style={{ color: 'var(--t2)' }}>{fmtDateTime(optionsSynced)}</span></> : ''}.
@@ -406,8 +386,7 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
             )}
           </div>
         </div>
-      </div>
-        </div>
+
       </div>
     </div>
   );
