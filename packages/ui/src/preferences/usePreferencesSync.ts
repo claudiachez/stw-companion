@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/auth';
 import { useThemeStore } from '../store/theme';
 import { useFiltersStore, selectPicksFilters } from '../features/picks/useFilters';
 import { usePicksTabStore } from '../features/picks/usePicksTab';
+import { useDefaultViewStore } from '../store/defaultView';
 import { useRegimeInstrumentStore } from '../features/regime/useRegimeInstrument';
 import { usePrivacyStore } from '../store/privacy';
 import { loadPreferences, savePreferences } from './preferences';
@@ -21,6 +22,8 @@ export function usePreferencesSync() {
   const hydrate  = useFiltersStore((s) => s.hydrate);
   const defaultTab    = usePicksTabStore((s) => s.defaultTab);
   const hydrateTab    = usePicksTabStore((s) => s.hydrate);
+  const defaultView   = useDefaultViewStore((s) => s.defaultView);
+  const hydrateView   = useDefaultViewStore((s) => s.hydrate);
   const regimeInstrument = useRegimeInstrumentStore((s) => s.instrument);
   const setRegimeInstrument = useRegimeInstrumentStore((s) => s.setInstrument);
   const showMoney = usePrivacyStore((s) => s.showMoney);
@@ -37,6 +40,7 @@ export function usePreferencesSync() {
       if (prefs?.theme) setTheme(prefs.theme);
       if (prefs?.picksFilters) hydrate(prefs.picksFilters);
       if (prefs?.picksDefaultTab) hydrateTab(prefs.picksDefaultTab);
+      if (prefs?.defaultView) hydrateView(prefs.defaultView);
       if (prefs?.regimeInstrument) setRegimeInstrument(prefs.regimeInstrument);
       if (prefs?.showMoney !== undefined) setShowMoney(prefs.showMoney);
       loadedFor.current = userId;
@@ -48,8 +52,8 @@ export function usePreferencesSync() {
   useEffect(() => {
     if (!userId || loadedFor.current !== userId) return;
     const t = setTimeout(() => {
-      savePreferences({ theme, picksFilters: filters, picksDefaultTab: defaultTab, regimeInstrument, showMoney });
+      savePreferences({ theme, picksFilters: filters, picksDefaultTab: defaultTab, defaultView, regimeInstrument, showMoney });
     }, 800);
     return () => clearTimeout(t);
-  }, [userId, theme, filters, defaultTab, regimeInstrument, showMoney]);
+  }, [userId, theme, filters, defaultTab, defaultView, regimeInstrument, showMoney]);
 }

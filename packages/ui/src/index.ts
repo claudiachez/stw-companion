@@ -22,6 +22,7 @@ export type { Quote, PriceFetchStatus } from './store/priceCache';
 export { useAuthStore } from './store/auth';
 export { useThemeStore } from './store/theme';
 export { usePrivacyStore } from './store/privacy';
+export { useDefaultViewStore } from './store/defaultView';
 
 // ── Hooks ─────────────────────────────────────────────────────
 export { useQuote, useLivePrice } from './hooks/useLivePrice';

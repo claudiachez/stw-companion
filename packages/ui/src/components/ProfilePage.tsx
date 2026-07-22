@@ -17,6 +17,7 @@ import { TextInput } from '../primitives/TextInput';
 import { useIbkrSettings, useIbkrAccount } from '../features/portfolio/useUserPositions';
 import { useRiskConfig } from '../features/limits/useRiskConfig';
 import { usePicksTabStore, coercePicksTab, PICKS_TABS, PICKS_TAB_LABELS, type PicksTab } from '../features/picks/usePicksTab';
+import { useDefaultViewStore, coerceDefaultView, DEFAULT_VIEWS, DEFAULT_VIEW_LABELS, type DefaultView } from '../store/defaultView';
 
 const TIER_LABELS: Record<string, string> = { free: 'Free', basic: 'Basic', premium: 'Premium' };
 
@@ -58,6 +59,8 @@ export function ProfilePage() {
   const toggleMoney = usePrivacyStore((s) => s.toggle);
   const defaultTab = usePicksTabStore((s) => s.defaultTab);
   const setDefaultTab = usePicksTabStore((s) => s.setDefaultTab);
+  const defaultView = useDefaultViewStore((s) => s.defaultView);
+  const setDefaultView = useDefaultViewStore((s) => s.setDefaultView);
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ['profile', user?.id],
@@ -285,6 +288,20 @@ export function ProfilePage() {
         <div style={card}>
           <div style={{ ...sectionLabel, marginBottom: SPACE[1] }}>Preferences</div>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <div style={{ ...prefRow, borderBottom: '1px solid var(--bsub)' }}>
+              {prefLabel('Default view', 'Which page opens when you sign in.')}
+              <select
+                value={coerceDefaultView(defaultView)}
+                onChange={(e) => setDefaultView(e.target.value as DefaultView)}
+                style={{
+                  height: 34, padding: `0 ${SPACE[2]}px`, fontSize: FONT_SIZE.sm, borderRadius: RADIUS.md,
+                  border: '1px solid var(--border)', background: 'var(--s2)', color: 'var(--text)', fontFamily: 'inherit',
+                }}
+              >
+                {DEFAULT_VIEWS.map((v) => <option key={v} value={v}>{DEFAULT_VIEW_LABELS[v]}</option>)}
+              </select>
+            </div>
+
             <div style={{ ...prefRow, borderBottom: '1px solid var(--bsub)' }}>
               {prefLabel('Default Stock Picks tab', 'Which sub-tab opens first on Stock Picks.')}
               <select

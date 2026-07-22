@@ -8,6 +8,8 @@ export interface UserPreferences {
   theme?: Theme;
   picksFilters?: Partial<PicksFilters>;
   picksDefaultTab?: PicksTab;
+  /** Preferred landing view (a top-level route, e.g. '/picks'). */
+  defaultView?: string;
   /** Which index drives the My Portfolio regime light (IWM/SPY/QQQ). */
   regimeInstrument?: string;
   /** "Show dollar amounts" — off = percentages only everywhere (screen-sharing). */
