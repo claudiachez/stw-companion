@@ -3,7 +3,6 @@ import { useLiveSignalQuotes } from './useLiveSignalQuotes';
 import { LevelCard } from './components/LevelCard';
 import { SignalsTable } from './components/SignalsTable';
 import { BiasChip } from './components/BiasChip';
-import { GexCharts } from './components/GexCharts';
 import { DayLog } from './components/DayLog';
 import { Glossary } from './components/Glossary';
 import { LoadingSpinner } from '../../primitives/LoadingSpinner';
@@ -14,7 +13,6 @@ import { useIsMobile } from '../../hooks/useIsMobile';
 import type { LevelSet } from './api';
 
 const ET = { timeZone: 'America/New_York' } as const;
-const CHART_ANCHOR = 'stw-gex-live-chart';
 
 const scale10 = (v: number | null | undefined) => (v != null ? +(v / 10).toFixed(2) : null);
 
@@ -73,10 +71,6 @@ export function SignalsView() {
     ? `${ready} ready · ${half} half size · ${skip} skip`
     : 'No setups published today.';
 
-  const openChart = () => {
-    document.getElementById(CHART_ANCHOR)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-
   const sectionTitle: React.CSSProperties = {
     fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)',
   };
@@ -120,15 +114,10 @@ export function SignalsView() {
               Above the gamma-flat line, dealers dampen moves (calmer). Below it, they chase moves (faster, both ways). Below put support, the floor is gone.
             </p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 20 }}>
-              <LevelCard symbol="SPY" levels={spyLevels} currentPrice={spyPrice} priceTime={spyPriceTime} onOpenChart={openChart} />
-              <LevelCard symbol="QQQ" levels={gx.qqq} currentPrice={qqqPrice} priceTime={qqqPriceTime} onOpenChart={openChart} />
+              <LevelCard symbol="SPY" levels={spyLevels} currentPrice={spyPrice} priceTime={spyPriceTime} />
+              <LevelCard symbol="QQQ" levels={gx.qqq} currentPrice={qqqPrice} priceTime={qqqPriceTime} />
             </div>
           </div>
-        </div>
-
-        {/* Live chart (existing GexChart, untouched) — the price-maps' "Open the live chart ↗" target. */}
-        <div id={CHART_ANCHOR} style={{ scrollMarginTop: 12 }}>
-          <GexCharts spyLevels={spyLevels} qqqLevels={gx.qqq} />
         </div>
 
         {/* 3. Today's setups. */}

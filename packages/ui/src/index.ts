@@ -115,7 +115,4 @@ export type { Signal, LevelSet, LogEntry, GraddoxData } from './features/signals
 export { LevelCard } from './features/signals/components/LevelCard';
 export { SignalsTable } from './features/signals/components/SignalsTable';
 export { BiasChip } from './features/signals/components/BiasChip';
-export { GexCharts } from './features/signals/components/GexCharts';
-export { GexChart } from './features/signals/components/GexChart';
-export type { Timeframe } from './features/signals/components/GexChart';
 export { DayLog } from './features/signals/components/DayLog';

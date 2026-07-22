@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
+import { useSignalCloses } from '../useSignalCloses';
 import type { Signal } from '../api';
 
 // Today's setups. Each row = the host's verdict (a fixed-width pill), the trade + trigger +
-// expiry, and the GEX logic line. Verdict → tone follows the design: green → Enter (positive),
-// yellow → Half size (warning), red → Skip (negative). No re-derivation — `verdict` is authored
-// upstream. (The design's per-row price sparkline is intentionally omitted — see SignalsView:
-// the reused GEX read carries no recent-price series and free-form triggers have no reliable
-// numeric level to plot, so fabricating one is declined.)
+// expiry, a mini price sparkline vs the trigger, and the GEX logic line. Verdict → tone follows
+// the design: green → Enter (positive), yellow → Half size (warning), red → Skip (negative).
+// No re-derivation — `verdict` is authored upstream; the spark path is real 15-min closes
+// (useSignalCloses), the trigger is parsed from the host's own trigger/trade text, and both
+// gracefully drop out when there's no price series or no plausible level to plot.
 type Role = 'positive' | 'warning' | 'negative' | 'neutral';
 const VERDICT: Record<string, { role: Role; label: string }> = {
   green:  { role: 'positive', label: 'All ✓ — Enter' },
@@ -23,6 +24,24 @@ function sigTicker(s: Signal): Tk {
   return 'other';
 }
 
+type Side = 'calls' | 'puts' | 'other';
+function sigSide(s: Signal): Side {
+  const t = `${s.trade} ${s.trigger}`.toLowerCase();
+  if (/\bput/.test(t)) return 'puts';
+  if (/\bcall/.test(t)) return 'calls';
+  return 'other';
+}
+
+// The nearest plausible price level named in the setup's trade/trigger text (within ±15% of
+// where price actually is), used as the sparkline's dashed trigger line. Returns null when the
+// trigger is free-form with no price (e.g. "hold the range through 11 AM").
+function parseTrigger(s: Signal, ref: number): number | null {
+  const nums = `${s.trade} ${s.trigger}`.match(/\d+(?:\.\d+)?/g)?.map(Number) ?? [];
+  const plausible = nums.filter((n) => ref > 0 && Math.abs(n - ref) / ref <= 0.15);
+  if (!plausible.length) return null;
+  return plausible.reduce((best, n) => (Math.abs(n - ref) < Math.abs(best - ref) ? n : best));
+}
+
 const filterBtn = (on: boolean): React.CSSProperties => ({
   padding: '2px 10px', borderRadius: 4,
   border: `1px solid ${on ? 'var(--acc)' : 'var(--border)'}`,
@@ -31,17 +50,48 @@ const filterBtn = (on: boolean): React.CSSProperties => ({
   fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold, fontFamily: 'inherit', cursor: 'pointer',
 });
 
+// The per-row mini price chart: dashed trigger line (verdict-colored) + the real 15-min close
+// path + a dot on the latest print, with the live distance to the trigger beneath it.
+function Spark({ series, trig, role }: { series: number[]; trig: number | null; role: Role }) {
+  if (series.length < 2) return null;
+  const last = series[series.length - 1];
+  const all = trig != null ? [...series, trig] : series;
+  const max = Math.max(...all), min = Math.min(...all), span = (max - min) || 1;
+  const y = (p: number) => 4 + ((max - p) / span) * 32;
+  const points = series.map((p, i) => `${((i / (series.length - 1)) * 118).toFixed(1)},${y(p).toFixed(1)}`).join(' ');
+  const gap = trig != null ? trig - last : null;
+  return (
+    <span style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
+      <svg width={120} height={40} viewBox="0 0 120 40" style={{ display: 'block' }}>
+        {trig != null && (
+          <line x1={0} y1={y(trig).toFixed(1)} x2={120} y2={y(trig).toFixed(1)} stroke={`var(--status-${role}-text)`} strokeWidth={1} strokeDasharray="3 3" />
+        )}
+        <polyline points={points} fill="none" stroke="var(--t2)" strokeWidth={1.5} strokeLinejoin="round" />
+        <circle cx={118} cy={y(last).toFixed(1)} r={2.5} fill="var(--text)" />
+      </svg>
+      {gap != null && (
+        <span style={{ fontSize: FONT_SIZE['3xs'], color: 'var(--t3)', whiteSpace: 'nowrap' }}>
+          {Math.abs(gap).toFixed(1)} pts {gap > 0 ? 'below' : 'above'} trigger
+        </span>
+      )}
+    </span>
+  );
+}
+
 interface Props {
   signals: Signal[];
 }
 
 export function SignalsTable({ signals }: Props) {
-  const [filter, setFilter] = useState<'all' | 'spy' | 'qqq'>('all');
+  const [sym, setSym] = useState<'all' | 'spy' | 'qqq'>('all');
+  const [side, setSide] = useState<'all' | 'calls' | 'puts'>('all');
+  const closes = useSignalCloses();
 
   // SPY first, then QQQ, then anything else — matches the host's ordering.
   const order: Record<Tk, number> = { spy: 0, qqq: 1, other: 2 };
   const sorted = [...signals].sort((a, b) => order[sigTicker(a)] - order[sigTicker(b)]);
-  const shown = sorted.filter((s) => filter === 'all' || sigTicker(s) === filter);
+  const shown = sorted.filter((s) =>
+    (sym === 'all' || sigTicker(s) === sym) && (side === 'all' || sigSide(s) === side));
 
   const ready = signals.filter((s) => s.verdict === 'green').length;
   const half = signals.filter((s) => s.verdict === 'yellow').length;
@@ -52,10 +102,16 @@ export function SignalsTable({ signals }: Props) {
       <div style={{ padding: '14px 16px 8px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <span style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>Today&apos;s setups</span>
         <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>{ready} ready · {half} half size · {skip} skip</span>
-        <div style={{ display: 'flex', gap: 3, marginLeft: 'auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginLeft: 'auto' }}>
           {(['all', 'spy', 'qqq'] as const).map((f) => (
-            <button key={f} style={filterBtn(filter === f)} onClick={() => setFilter(f)}>
+            <button key={f} style={filterBtn(sym === f)} onClick={() => setSym(f)}>
               {f === 'all' ? 'All' : f.toUpperCase()}
+            </button>
+          ))}
+          <span style={{ width: 1, height: 18, background: 'var(--border)', margin: '0 4px' }} />
+          {(['all', 'calls', 'puts'] as const).map((f) => (
+            <button key={f} style={filterBtn(side === f)} onClick={() => setSide(f)}>
+              {f === 'all' ? 'All' : f === 'calls' ? 'Calls' : 'Puts'}
             </button>
           ))}
         </div>
@@ -66,6 +122,10 @@ export function SignalsTable({ signals }: Props) {
       ) : (
         shown.map((s, i) => {
           const v = VERDICT[s.verdict] ?? { role: 'neutral' as Role, label: s.verdict };
+          const tk = sigTicker(s);
+          const series = tk === 'qqq' ? closes.QQQ : closes.SPY; // SPX plots on the SPY series (SPX÷10 scale)
+          const ref = series.length ? series[series.length - 1] : 0;
+          const trig = ref ? parseTrigger(s, ref) : null;
           return (
             <div
               key={i}
@@ -96,6 +156,9 @@ export function SignalsTable({ signals }: Props) {
                   {s.exp && <span style={{ color: 'var(--t3)' }}> · expires {s.exp}</span>}
                 </div>
               </div>
+
+              {/* mini price sparkline vs trigger (real 15-min closes) */}
+              <Spark series={tk === 'other' ? [] : series} trig={trig} role={v.role} />
 
               {/* logic (wraps below on mobile) */}
               <div style={{ flex: '1 1 230px', minWidth: 0, fontSize: FONT_SIZE.xs, color: 'var(--t3)', lineHeight: 1.45 }}>{s.logic}</div>
