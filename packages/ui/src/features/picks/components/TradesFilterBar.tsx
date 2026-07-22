@@ -1,5 +1,5 @@
 import type { Holding } from '../api';
-import { useTradesFiltersStore, type TradeOpenClosed, type TradeSort, type TradeType } from '../useTradesFilters';
+import { useTradesFiltersStore, type TradeOpenClosed, type TradeOutcome, type TradeSort, type TradeType } from '../useTradesFilters';
 import { FONT_SIZE, CONVICTION_BAND_OPTIONS, type ConvictionBand } from '@stw/shared';
 import { SegmentedControl, type SegmentOption } from '../../../primitives/SegmentedControl';
 
@@ -30,6 +30,11 @@ const TYPE_SEGMENTS: SegmentOption<TradeType>[] = [
   { value: 'shares',  label: 'Shares' },
   { value: 'options', label: 'Options' },
 ];
+const OUTCOME_SEGMENTS: SegmentOption<TradeOutcome>[] = [
+  { value: 'all',    label: 'All' },
+  { value: 'profit', label: 'Profit' },
+  { value: 'loss',   label: 'Loss' },
+];
 
 // Shares the FilterBar control styling so the two tabs read as one app. Border color
 // lives in ctrlBorderClass, never inline — see FilterBar.tsx's identical note (an
@@ -54,8 +59,8 @@ interface Props {
 // (full-bleed surface, two rows: dropdown filters up top, segmented axes below) so the two
 // tabs stay visually consistent. Show = the leg's own open/closed state; Type = Shares/Options.
 export function TradesFilterBar({ holdings, sectors, count, total }: Props) {
-  const { search, basket, conviction, sector, action, type, openClosed, sort,
-    setSearch, setBasket, setConviction, setSector, setAction, setType, setOpenClosed, setSort, reset } =
+  const { search, basket, conviction, sector, action, type, openClosed, outcome, sort,
+    setSearch, setBasket, setConviction, setSector, setAction, setType, setOpenClosed, setOutcome, setSort, reset } =
     useTradesFiltersStore();
 
   const baskets = [...new Set(holdings.map((h) => h.basket).filter(Boolean))].sort();
@@ -129,6 +134,13 @@ export function TradesFilterBar({ holdings, sectors, count, total }: Props) {
           options={TYPE_SEGMENTS}
           value={type}
           onChange={setType}
+        />
+        <SegmentedControl
+          label="Outcome"
+          title="Filter closed lots by whether they booked a profit or a loss"
+          options={OUTCOME_SEGMENTS}
+          value={outcome}
+          onChange={setOutcome}
         />
       </div>
     </div>

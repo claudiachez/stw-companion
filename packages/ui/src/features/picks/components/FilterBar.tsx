@@ -129,6 +129,19 @@ export function FilterBar({ holdings, sectors, filtered }: Props) {
           {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
 
+        <label
+          style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: FONT_SIZE.xs, color: hideClosed ? 'var(--t2)' : 'var(--text)', cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}
+          title="Show closed positions"
+        >
+          <input
+            type="checkbox"
+            checked={!hideClosed}
+            onChange={(e) => setHideClosed(!e.target.checked)}
+            style={{ accentColor: 'var(--acc)', cursor: 'pointer' }}
+          />
+          Show closed
+        </label>
+
         {hasFilter && (
           <button
             onClick={reset}
@@ -167,18 +180,6 @@ export function FilterBar({ holdings, sectors, filtered }: Props) {
           value={standing}
           onChange={(v) => setStanding(v as SectorStanding | '')}
         />
-        <label
-          style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: FONT_SIZE.xs, color: hideClosed ? 'var(--t2)' : 'var(--text)', cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}
-          title="Show closed positions"
-        >
-          <input
-            type="checkbox"
-            checked={!hideClosed}
-            onChange={(e) => setHideClosed(!e.target.checked)}
-            style={{ accentColor: 'var(--acc)', cursor: 'pointer' }}
-          />
-          Show closed
-        </label>
       </div>
     </div>
   );

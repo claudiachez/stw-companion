@@ -159,6 +159,16 @@ export function PortfolioFilterBar({ filters, onChange, baskets, sectors, filter
           {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
 
+        <label style={{ ...toggleStyle(tailedOnly), flexShrink: 0, whiteSpace: 'nowrap' }} title="Show only positions that match a followed trader's pick">
+          <input type="checkbox" checked={tailedOnly} onChange={(e) => onChange({ ...filters, tailedOnly: e.target.checked })} style={{ accentColor: 'var(--acc)', cursor: 'pointer' }} />
+          Tailed only
+        </label>
+
+        <label style={{ ...toggleStyle(groupByTicker), flexShrink: 0, whiteSpace: 'nowrap' }} title="Group legs by underlying ticker (off = flat per-leg table)">
+          <input type="checkbox" checked={groupByTicker} onChange={(e) => onChange({ ...filters, groupByTicker: e.target.checked })} style={{ accentColor: 'var(--acc)', cursor: 'pointer' }} />
+          Group by ticker
+        </label>
+
         {hasFilter && (
           <button
             onClick={() => onChange({ ...filters, search: '', basket: '', conviction: '', structure: '', standing: '', sector: '', stop: '', type: '', tailedOnly: false })}
@@ -204,16 +214,6 @@ export function PortfolioFilterBar({ filters, onChange, baskets, sectors, filter
           value={standing}
           onChange={(v) => onChange({ ...filters, standing: v })}
         />
-
-        <label style={toggleStyle(tailedOnly)} title="Show only positions that match a followed trader's pick">
-          <input type="checkbox" checked={tailedOnly} onChange={(e) => onChange({ ...filters, tailedOnly: e.target.checked })} style={{ accentColor: 'var(--acc)', cursor: 'pointer' }} />
-          Tailed only
-        </label>
-
-        <label style={toggleStyle(groupByTicker)} title="Group legs by underlying ticker (off = flat per-leg table)">
-          <input type="checkbox" checked={groupByTicker} onChange={(e) => onChange({ ...filters, groupByTicker: e.target.checked })} style={{ accentColor: 'var(--acc)', cursor: 'pointer' }} />
-          Group by ticker
-        </label>
       </div>
     </div>
   );

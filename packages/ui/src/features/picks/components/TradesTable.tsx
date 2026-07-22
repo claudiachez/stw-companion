@@ -111,6 +111,9 @@ function applyTradeFilters(rows: TradeRow[], f: TradesFilters, sectorMap: Record
     if (f.openClosed === 'closed' && r.isOpen) return false;
     if (f.type === 'shares' && r.instrumentType !== 'SHARES') return false;
     if (f.type === 'options' && r.instrumentType !== 'OPTION') return false;
+    // Profit/Loss = closed lots only, split by booked realized P&L sign.
+    if (f.outcome === 'profit' && !(!r.isOpen && (r.realizedPnl ?? 0) > 0)) return false;
+    if (f.outcome === 'loss' && !(!r.isOpen && (r.realizedPnl ?? 0) < 0)) return false;
     if (f.basket && r.holding.basket !== f.basket) return false;
     if (!matchConvictionBand(r.holding.conviction ?? null, f.conviction)) return false;
     if (f.sector && (sectorMap[r.holding.ticker] ?? '') !== f.sector) return false;

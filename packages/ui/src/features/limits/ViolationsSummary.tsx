@@ -11,6 +11,7 @@ import { useAuthStore } from '../../store/auth';
 import { usePrivacyStore } from '../../store/privacy';
 import { LoadingSpinner } from '../../primitives/LoadingSpinner';
 import { HelpToggle } from '../../primitives/HelpToggle';
+import { Icon } from '../../primitives/Icon';
 import { StatusPill } from '../../primitives/StatusPill';
 import { TickerLink } from '../../primitives/TickerLink';
 import { useUserPositions, useUserExecutions } from '../portfolio/useUserPositions';
@@ -93,9 +94,25 @@ function OffState({ title, help, settingsRef }: { title: string; help: string; s
 
 interface BannerItem { severity: 'near' | 'breach'; main: string; sub: string; }
 
+const BANNER_DISMISS_KEY = 'stw-risk-verdict-dismissed';
+
 function VerdictBanner({ items }: { items: BannerItem[] }) {
   const breaches = items.filter((i) => i.severity === 'breach').length;
   const worst: Sev3 = breaches > 0 ? 'breach' : items.length > 0 ? 'near' : 'ok';
+  // A signature of the current warnings — dismissal is remembered against THIS exact set, so
+  // the banner stays closed until the breaches change, then re-announces itself once.
+  const sig = items.map((i) => `${i.severity}:${i.main}`).join('|');
+  const [dismissedSig, setDismissedSig] = useState<string | null>(() => {
+    try { return localStorage.getItem(BANNER_DISMISS_KEY); } catch { return null; }
+  });
+  const dismissable = items.length > 0;
+  if (dismissable && dismissedSig === sig) return null;
+
+  const dismiss = () => {
+    setDismissedSig(sig);
+    try { localStorage.setItem(BANNER_DISMISS_KEY, sig); } catch { /* ignore */ }
+  };
+
   const pill = worst === 'breach'
     ? `${breaches} action${breaches === 1 ? '' : 's'}`
     : worst === 'near' ? 'Heads-up' : 'All clear';
@@ -116,6 +133,20 @@ function VerdictBanner({ items }: { items: BannerItem[] }) {
         <span style={{ marginLeft: 'auto', fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>
           Advisory only — we flag, you decide. Nothing is traded for you.
         </span>
+        {dismissable && (
+          <button
+            onClick={dismiss}
+            aria-label="Dismiss — the details stay in Size caps below"
+            title="Dismiss — the details stay in Size caps below"
+            style={{
+              flexShrink: 0, width: 24, height: 24, borderRadius: RADIUS.md, border: '1px solid var(--bsub)',
+              background: 'var(--surface)', color: 'var(--t3)', cursor: 'pointer', padding: 0,
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <Icon name="close" size={13} />
+          </button>
+        )}
       </div>
 
       {items.length > 0 ? (

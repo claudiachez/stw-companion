@@ -10,6 +10,9 @@ import type { ConvictionBand } from '@stw/shared';
 
 export type TradeOpenClosed = 'all' | 'open' | 'closed';
 export type TradeType = '' | 'shares' | 'options';
+// Closed-lot result filter: 'profit' / 'loss' show only lots CLOSED green / red (open lots have
+// no booked outcome, so they're excluded when this is set).
+export type TradeOutcome = 'all' | 'profit' | 'loss';
 // Sort keys mirror the redesigned blotter's Sort dropdown + sortable column heads.
 export type TradeSort =
   | 'last'   // last action (max of open/close date), desc — the default
@@ -27,6 +30,7 @@ export interface TradesFilters {
   action: string;              // lot's lifecycle action (New / Close / Expired); '' = all
   type: TradeType;
   openClosed: TradeOpenClosed;
+  outcome: TradeOutcome;       // closed-in-profit / closed-at-loss
   sort: TradeSort;
 }
 
@@ -38,12 +42,13 @@ interface TradesFiltersState extends TradesFilters {
   setAction:     (v: string) => void;
   setType:       (v: TradeType) => void;
   setOpenClosed: (v: TradeOpenClosed) => void;
+  setOutcome:    (v: TradeOutcome) => void;
   setSort:       (v: TradeSort) => void;
   reset:         () => void;
 }
 
 const DEFAULTS: TradesFilters = {
-  search: '', basket: '', conviction: '', sector: '', action: '', type: '', openClosed: 'all', sort: 'last',
+  search: '', basket: '', conviction: '', sector: '', action: '', type: '', openClosed: 'all', outcome: 'all', sort: 'last',
 };
 
 export const useTradesFiltersStore = create<TradesFiltersState>()(
@@ -57,6 +62,7 @@ export const useTradesFiltersStore = create<TradesFiltersState>()(
       setAction:     (action)     => set({ action }),
       setType:       (type)       => set({ type }),
       setOpenClosed: (openClosed) => set({ openClosed }),
+      setOutcome:    (outcome)    => set({ outcome }),
       setSort:       (sort)       => set({ sort }),
       reset: () => set({ ...DEFAULTS }),
     }),
