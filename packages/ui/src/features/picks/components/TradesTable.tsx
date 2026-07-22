@@ -6,6 +6,7 @@ import { TradesFilterBar } from './TradesFilterBar';
 import { TickerLink } from '../../../primitives/TickerLink';
 import { usePriceCacheStore, type Quote } from '../../../store/priceCache';
 import { useCapabilities } from '../../../context/AppCapabilities';
+import { useIsMobile } from '../../../hooks/useIsMobile';
 import { useTradesFiltersStore, type TradesFilters, type TradeSort } from '../useTradesFilters';
 import type { Holding } from '../api';
 
@@ -197,6 +198,7 @@ interface Props {
 export function TradesTable({ holdings, onSelectTicker }: Props) {
   const { canEdit } = useCapabilities();
   const priceCache = usePriceCacheStore((s) => s.cache);
+  const isMobile = useIsMobile();
   const [editing, setEditing] = useState<Holding | null>(null);
 
   const filters = useTradesFiltersStore();
@@ -235,8 +237,8 @@ export function TradesTable({ holdings, onSelectTicker }: Props) {
       <TradesFilterBar holdings={holdings} sectors={sectorOptions} count={trades.length} total={allTrades.length} />
 
       <div style={{ maxWidth: 1240, margin: '0 auto', padding: '16px 16px 40px' }}>
-        {/* Summary stat cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, marginBottom: 14 }}>
+        {/* Summary stat cards — 2-up on mobile (ref @media), 5 across on desktop. */}
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(5, 1fr)', gap: 10, marginBottom: 14 }}>
           {stats.map((s) => (
             <div key={s.label} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px' }}>
               <div style={{ fontSize: FONT_SIZE['3xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: LETTER_SPACING.label, textTransform: 'uppercase', color: 'var(--t3)' }}>{s.label}</div>
