@@ -1,5 +1,5 @@
 import { FONT_SIZE, RADIUS, SPACE } from '@stw/shared';
-import { Icon, type IconName } from './Icon';
+import { Icon } from './Icon';
 
 // Phase 3 core component (plans/stw-design-system.md §3.10). Severity variants,
 // dismissible, optional action link — consumes only `status.*` tokens. Uses the `Icon`
@@ -11,8 +11,6 @@ export type AlertSeverity = 'info' | 'positive' | 'warning' | 'negative';
 const SEVERITY_ROLE: Record<AlertSeverity, 'info' | 'positive' | 'warning' | 'negative'> = {
   info: 'info', positive: 'positive', warning: 'warning', negative: 'negative',
 };
-
-const SEVERITY_ICON: Record<AlertSeverity, IconName> = { info: 'info', positive: 'positive', warning: 'warning', negative: 'negative' };
 
 export interface AlertStripProps {
   severity: AlertSeverity;
@@ -27,18 +25,15 @@ export function AlertStrip({ severity, children, onDismiss, action }: AlertStrip
     <div
       style={{
         display: 'flex', alignItems: 'flex-start', gap: SPACE[2],
-        padding: `${SPACE[2]}px ${SPACE[3]}px`,
-        borderRadius: RADIUS.md,
-        borderLeft: `3px solid var(--status-${role}-border)`,
+        padding: '9px 14px',
+        borderRadius: RADIUS.lg,
+        border: `1px solid var(--status-${role}-border)`,
         background: `var(--status-${role}-bg)`,
-        color: `var(--status-${role}-text)`,
+        color: 'var(--t2)',
         fontSize: FONT_SIZE.sm,
       }}
     >
-      <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center', height: '1.4em' }}>
-        <Icon name={SEVERITY_ICON[severity]} size={14} />
-      </span>
-      <div style={{ flex: 1, minWidth: 0, lineHeight: 1.4 }}>
+      <div style={{ flex: 1, minWidth: 0, lineHeight: 1.5 }}>
         {children}
         {action && (
           <button

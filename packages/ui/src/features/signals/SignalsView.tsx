@@ -3,10 +3,11 @@ import { useLiveSignalQuotes } from './useLiveSignalQuotes';
 import { LevelCard } from './components/LevelCard';
 import { SignalsTable } from './components/SignalsTable';
 import { BiasChip } from './components/BiasChip';
-import { GexCharts } from './components/GexCharts';
 import { DayLog } from './components/DayLog';
+import { Glossary } from './components/Glossary';
 import { LoadingSpinner } from '../../primitives/LoadingSpinner';
 import { EmptyState } from '../../primitives/EmptyState';
+import { AlertStrip } from '../../primitives/AlertStrip';
 import { fmtDateTime, FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import type { LevelSet } from './api';
@@ -16,7 +17,10 @@ const ET = { timeZone: 'America/New_York' } as const;
 const scale10 = (v: number | null | undefined) => (v != null ? +(v / 10).toFixed(2) : null);
 
 // ── Signals content (shared by web + admin) ───────────────────
-// Paywall/tier gating lives in each app shell, not here.
+// A single 900px column of stacked cards (gap 12). RE-LAYOUT of the existing GEX read —
+// all data (bias, per-symbol level sets, signals, day-log, freshness) comes from useGraddox
+// + the shared scorers; no new data logic. Advisory / display-only. Paywall/tier gating lives
+// in each app shell, not here.
 export function SignalsView() {
   const { data: gx, isLoading, error } = useGraddox();
   const { data: lastMorningRun } = useLastMorningRun();
@@ -34,16 +38,15 @@ export function SignalsView() {
   const updStr = upd ? fmtDateTime(upd) : '–';
   const priceTime = upd ? '@ ' + upd.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', ...ET }) : '';
 
-  // Stale = the latest read is from a day before today (ET) — i.e. there's no fresh GEX report for
-  // the current session (e.g. host on break). We still show the last read's levels below, but the
-  // subheader makes clear it's the last read, not today's, and surfaces any resume note.
-  const todayET = new Date().toLocaleDateString('en-CA', ET); // YYYY-MM-DD in ET
+  // Stale = the latest read predates today (ET) — no fresh GEX report for the current session
+  // (e.g. the host on break). We still show the last read below; the banner makes that clear.
+  const todayET = new Date().toLocaleDateString('en-CA', ET);
   const isStale = !!gx.date && gx.date < todayET;
   const shortDate = gx.date
     ? new Date(gx.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })
     : '';
 
-  // SPY levels = SPX ÷ 10 (the chart + ladder both show SPY scale).
+  // SPY levels = SPX ÷ 10 (both the chart + ladder show SPY scale).
   const spyLevels: LevelSet = {
     resistance: scale10(gx.spx.resistance),
     gex1: scale10(gx.spx.gex1),
@@ -51,9 +54,8 @@ export function SignalsView() {
     key_target: scale10(gx.spx.key_target),
     downside_risk: scale10(gx.spx.downside_risk),
   };
-  // "Current Price" prefers the LIVE Finnhub quote (same source as the Macro GEX
-  // spot) — one value across the platform — falling back to the Graddox report
-  // spot only when no live quote is available.
+  // "now" prefers the LIVE Finnhub quote (same source as the Macro GEX spot — one value across
+  // the platform), falling back to the GEX read's captured spot when no live quote is available.
   const spyPrice = liveQuotes.spy ?? scale10(gx.spx_price);
   const qqqPrice = liveQuotes.qqq ?? gx.qqq_price;
   const liveTimeTag = liveQuotes.at
@@ -62,53 +64,70 @@ export function SignalsView() {
   const spyPriceTime = liveQuotes.spy != null ? (liveTimeTag ?? priceTime) : priceTime;
   const qqqPriceTime = liveQuotes.qqq != null ? (liveTimeTag ?? priceTime) : priceTime;
 
+  const ready = gx.signals.filter((s) => s.verdict === 'green').length;
+  const half = gx.signals.filter((s) => s.verdict === 'yellow').length;
+  const skip = gx.signals.filter((s) => s.verdict === 'red').length;
+  const headline = gx.signals.length
+    ? `${ready} ready · ${half} half size · ${skip} skip`
+    : 'No setups published today.';
+
+  const sectionTitle: React.CSSProperties = {
+    fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)',
+  };
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Subheader: date + bias + note + updated. When stale, lead with "No new report" and frame
-          the read as the last one, plus any resume note (status_note). */}
-      <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', padding: '9px 20px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        {isStale ? (
-          <>
-            <span style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.bold, color: 'var(--c3)' }}>No new report</span>
-            <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>Last GEX read:</span>
-            <BiasChip bias={gx.bias} />
-            <span style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>{shortDate}</span>
-            {gx.status_note && <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)' }}>· {gx.status_note}</span>}
-          </>
-        ) : (
-          <>
-            <span style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>{dateStr}</span>
-            <BiasChip bias={gx.bias} />
-            {gx.bias_note && <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)' }}>{gx.bias_note}</span>}
-          </>
-        )}
-        {isStale ? (
-          <span style={{ marginLeft: isMobile ? 0 : 'auto', fontSize: FONT_SIZE.xs, color: 'var(--t3)', whiteSpace: 'nowrap', width: isMobile ? '100%' : undefined }}>
-            {lastMorningRun
-              ? <>Checked: <span style={{ color: 'var(--t2)' }}>{fmtDateTime(lastMorningRun)}</span> · Last report: {updStr}</>
-              : `Last report: ${updStr}`}
-          </span>
-        ) : (
-          <span style={{ marginLeft: isMobile ? 0 : 'auto', fontSize: FONT_SIZE.xs, color: 'var(--t3)', whiteSpace: 'nowrap', width: isMobile ? '100%' : undefined }}>
-            Updated: {updStr}
-          </span>
-        )}
-      </div>
+    <div style={{ height: '100%', overflowY: 'auto' }}>
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: isMobile ? 12 : '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-      {/* Body */}
-      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', flex: 1, overflow: isMobile ? 'auto' : 'hidden' }}>
-        {/* Left: level ladders */}
-        <div style={{ flex: isMobile ? 'none' : '0 0 300px', width: isMobile ? '100%' : undefined, overflowY: isMobile ? 'visible' : 'auto', padding: isMobile ? 10 : 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <LevelCard title="📊 SPY Levels" levels={spyLevels} currentPrice={spyPrice} priceTime={spyPriceTime} />
-          <LevelCard title="📊 QQQ Levels" levels={gx.qqq} currentPrice={qqqPrice} priceTime={qqqPriceTime} isQQQ />
+        {/* 0. Stale banner — only when there's no fresh report today. */}
+        {isStale && (
+          <AlertStrip severity="warning">
+            <span style={{ fontWeight: FONT_WEIGHT.bold }}>No new GEX report today.</span>{' '}
+            Showing the last read from {shortDate}.
+            {gx.status_note ? ` ${gx.status_note}` : ''}
+          </AlertStrip>
+        )}
+
+        {/* 1. Session verdict banner. */}
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, boxShadow: 'var(--shadow)', overflow: 'hidden' }}>
+          <div style={{ padding: '14px 16px 0', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <BiasChip bias={gx.bias} />
+            <span style={{ fontSize: FONT_SIZE.md, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)' }}>{headline}</span>
+            <span style={{ marginLeft: isMobile ? 0 : 'auto', fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', whiteSpace: 'nowrap', width: isMobile ? '100%' : undefined }}>
+              GEX read · {dateStr} · as of {updStr}
+              {isStale && lastMorningRun ? <> · checked {fmtDateTime(lastMorningRun)}</> : null}
+            </span>
+          </div>
+          <div style={{ padding: '8px 16px 14px' }}>
+            <p style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.5, margin: 0 }}>
+              {gx.bias_note && <>{gx.bias_note}{' '}</>}
+              <span style={{ color: 'var(--t3)' }}>Advisory only — these are the GEX read&apos;s levels and setups, not orders.</span>
+            </p>
+          </div>
         </div>
 
-        {/* Right: charts + signals + log */}
-        <div style={{ flex: 1, overflowY: isMobile ? 'visible' : 'auto', padding: isMobile ? 10 : 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <GexCharts spyLevels={spyLevels} qqqLevels={gx.qqq} />
-          {gx.signals.length > 0 && <SignalsTable signals={gx.signals} />}
-          {gx.log.length > 0 && <DayLog log={gx.log} date={gx.date} />}
+        {/* 2. Price maps. */}
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, boxShadow: 'var(--shadow)', overflow: 'hidden' }}>
+          <div style={{ padding: 16 }}>
+            <div style={{ ...sectionTitle, marginBottom: 4 }}>Where price sits vs today&apos;s levels</div>
+            <p style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', lineHeight: 1.5, margin: '0 0 12px' }}>
+              Above the gamma-flat line, dealers dampen moves (calmer). Below it, they chase moves (faster, both ways). Below put support, the floor is gone.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 20 }}>
+              <LevelCard symbol="SPY" levels={spyLevels} currentPrice={spyPrice} priceTime={spyPriceTime} />
+              <LevelCard symbol="QQQ" levels={gx.qqq} currentPrice={qqqPrice} priceTime={qqqPriceTime} />
+            </div>
+          </div>
         </div>
+
+        {/* 3. Today's setups. */}
+        {gx.signals.length > 0 && <SignalsTable signals={gx.signals} />}
+
+        {/* 4. Day log. */}
+        {gx.log.length > 0 && <DayLog log={gx.log} date={gx.date} />}
+
+        {/* 5. Glossary. */}
+        <Glossary />
       </div>
     </div>
   );

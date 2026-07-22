@@ -2,6 +2,7 @@ import type { Holding } from '../api';
 import { useFiltersStore, type SortMode } from '../useFilters';
 import { FONT_SIZE, TREND_BUCKET_META, TREND_BUCKET_ORDER } from '@stw/shared';
 import type { TrendBucket, SectorStanding } from '@stw/shared';
+import { SegmentedControl, type SegmentOption } from '../../../primitives/SegmentedControl';
 
 // Sector-regime (rotation standing) options — labels mirror RegimeBadge's chips.
 const STANDING_OPTIONS: { value: SectorStanding; label: string }[] = [
@@ -22,14 +23,33 @@ const SORT_OPTIONS: { value: SortMode; label: string }[] = [
   { value: 'pnl_asc',     label: 'Sort: P&L ↑' },
 ];
 
+// Row-2 segmented groups (Listing Pages redesign): the axes that read best as one-tap
+// segments rather than a dropdown. Wired to the same store fields the old <select>s used.
+const TYPE_SEGMENTS: SegmentOption<string>[] = [
+  { value: '',        label: 'All' },
+  { value: 'shares',  label: 'Shares' },
+  { value: 'options', label: 'Options' },
+  { value: 'mixed',   label: 'Mixed' },
+];
+// Full 9/21/200 trend-bucket set (keeps every existing structure filter working — the design's
+// 3-way demo is a simplification; we preserve all buckets so no filter option is lost).
+const TREND_SEGMENTS: SegmentOption<TrendBucket | ''>[] = [
+  { value: '', label: 'All' },
+  ...TREND_BUCKET_ORDER.map((b) => ({ value: b, label: TREND_BUCKET_META[b].label })),
+];
+const STANDING_SEGMENTS: SegmentOption<SectorStanding | ''>[] = [
+  { value: '', label: 'All' },
+  ...STANDING_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
+];
+
 // Border color lives in ctrlBorderClass, never inline — an inline style.border always
 // wins over a stylesheet class regardless of specificity, which would make
 // `focus:border-acc` silently never take effect (found + fixed in TextInput.tsx and
 // PortfolioFilterBar.tsx earlier this same session — see TextInput.tsx's header
 // comment for the full story).
 const ctrlStyle: React.CSSProperties = {
-  height: 34,
-  padding: '0 8px',
+  height: 30,
+  padding: '0 6px',
   fontSize: FONT_SIZE.sm,
   borderRadius: 5,
   background: 'var(--bg)',
@@ -63,25 +83,20 @@ export function FilterBar({ holdings, sectors, filtered }: Props) {
   }).length;
 
   return (
-    <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' as never, flexShrink: 0 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', minWidth: 'max-content' }}>
-
+    <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', flexShrink: 0 }}>
+      {/* Row 1 — search + dropdown filters + count */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderBottom: '1px solid var(--bsub)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' as never }}>
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search ticker…"
           className={ctrlBorderClass}
-          style={{ ...ctrlStyle, width: 120, cursor: 'text' }}
+          style={{ ...ctrlStyle, width: 112, padding: '0 8px', cursor: 'text' }}
         />
 
-        <select value={basket} onChange={(e) => setBasket(e.target.value)} className={ctrlBorderClass} style={ctrlStyle}>
-          <option value="">All Baskets</option>
-          {baskets.map((b) => <option key={b} value={b}>{b}</option>)}
-        </select>
-
         <select value={tier} onChange={(e) => setTier(e.target.value)} className={ctrlBorderClass} style={ctrlStyle}>
-          <option value="">All Tiers</option>
+          <option value="">All Conviction</option>
           <option value="5">Tier 1 — Highest</option>
           <option value="4">Tier 2 — High</option>
           <option value="3">Tier 3 — Moderate</option>
@@ -90,29 +105,9 @@ export function FilterBar({ holdings, sectors, filtered }: Props) {
           <option value="0">Tier 6 — Legacy</option>
         </select>
 
-        <select value={status} onChange={(e) => setStatus(e.target.value)} className={ctrlBorderClass} style={ctrlStyle}>
-          <option value="">All Status</option>
-          <option value="New">New</option>
-          <option value="Upsized">Upsized</option>
-          <option value="Trimmed">Trimmed</option>
-          <option value="Closed">Closed</option>
-        </select>
-
-        <select value={type} onChange={(e) => setType(e.target.value)} className={ctrlBorderClass} style={ctrlStyle}>
-          <option value="">All Types</option>
-          <option value="shares">Shares</option>
-          <option value="options">Options</option>
-          <option value="mixed">Mixed</option>
-        </select>
-
-        <select value={structure} onChange={(e) => setStructure(e.target.value as TrendBucket | '')} className={ctrlBorderClass} style={ctrlStyle} title="Filter by the ticker's own 9/21/200 trend structure">
-          <option value="">All Structure</option>
-          {TREND_BUCKET_ORDER.map((b) => <option key={b} value={b}>{TREND_BUCKET_META[b].label}</option>)}
-        </select>
-
-        <select value={standing} onChange={(e) => setStanding(e.target.value as SectorStanding | '')} className={ctrlBorderClass} style={ctrlStyle} title="Filter by the ticker's sector rotation standing (sector regime)">
-          <option value="">All Sector Regime</option>
-          {STANDING_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        <select value={basket} onChange={(e) => setBasket(e.target.value)} className={ctrlBorderClass} style={ctrlStyle}>
+          <option value="">All Baskets</option>
+          {baskets.map((b) => <option key={b} value={b}>{b}</option>)}
         </select>
 
         {sectors.length > 0 && (
@@ -122,13 +117,20 @@ export function FilterBar({ holdings, sectors, filtered }: Props) {
           </select>
         )}
 
+        <select value={status} onChange={(e) => setStatus(e.target.value)} className={ctrlBorderClass} style={ctrlStyle}>
+          <option value="">All Status</option>
+          <option value="New">New</option>
+          <option value="Upsized">Upsized</option>
+          <option value="Trimmed">Trimmed</option>
+          <option value="Closed">Closed</option>
+        </select>
+
         <select value={sort} onChange={(e) => setSort(e.target.value as SortMode)} className={ctrlBorderClass} style={ctrlStyle}>
           {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
 
         <label
-          className="border border-[var(--border)]"
-          style={{ ...ctrlStyle, display: 'flex', alignItems: 'center', gap: 6, color: hideClosed ? 'var(--t2)' : 'var(--text)' }}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: FONT_SIZE.xs, color: hideClosed ? 'var(--t2)' : 'var(--text)', cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}
           title="Show closed positions"
         >
           <input
@@ -151,9 +153,33 @@ export function FilterBar({ holdings, sectors, filtered }: Props) {
           </button>
         )}
 
-        <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginLeft: 4, whiteSpace: 'nowrap' }}>
-          {filtered < total ? `${filtered} of ${total}` : `${total} positions`}
+        <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginLeft: 'auto', paddingLeft: 8, whiteSpace: 'nowrap' }}>
+          {filtered < total ? `${filtered} of ${total}` : `${total} picks`}
         </span>
+      </div>
+
+      {/* Row 2 — segmented filter groups + Show closed */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 12px', background: 'var(--bg)', borderBottom: '1px solid var(--bsub)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' as never }}>
+        <SegmentedControl
+          label="Type"
+          options={TYPE_SEGMENTS}
+          value={type}
+          onChange={setType}
+        />
+        <SegmentedControl
+          label="Trend"
+          title="Filter by the ticker's own 9/21/200 trend structure"
+          options={TREND_SEGMENTS}
+          value={structure}
+          onChange={(v) => setStructure(v as TrendBucket | '')}
+        />
+        <SegmentedControl
+          label="Sector regime"
+          title="Filter by the ticker's sector rotation standing (sector regime)"
+          options={STANDING_SEGMENTS}
+          value={standing}
+          onChange={(v) => setStanding(v as SectorStanding | '')}
+        />
       </div>
     </div>
   );

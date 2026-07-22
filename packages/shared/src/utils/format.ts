@@ -9,9 +9,35 @@ export function formatDate(iso: string | null): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
 }
 
+/** Month + full year, e.g. "Mar 2026" — for "member since"-style date-only labels. */
+export function formatMonthYear(iso: string | null): string {
+  if (!iso) return '–';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
+
+/** Mask an IBKR account id for display: first 4 + "•••" + last 2, e.g. "U842•••93". */
+export function maskAccount(account: string | null | undefined): string | null {
+  if (!account) return null;
+  const a = account.trim();
+  if (a.length <= 6) return a;
+  return `${a.slice(0, 4)}•••${a.slice(-2)}`;
+}
+
 export function formatWeight(w: number | null): string {
   if (w == null) return '–';
   return `${w.toFixed(1)}%`;
+}
+
+/**
+ * USD money. `signed: true` prefixes a GAIN with "+" (for P&L / returns / contributions,
+ * matching the design) — losses keep the standard "-$…"; zero and neutral totals (account
+ * value, market value) stay unsigned. One helper so the "+" treatment reads identically everywhere.
+ */
+export function formatMoney(value: number, opts: { signed?: boolean; maximumFractionDigits?: number } = {}): string {
+  const { signed = false, maximumFractionDigits = 0 } = opts;
+  const s = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits }).format(value);
+  return signed && value > 0 ? `+${s}` : s;
 }
 
 const ET_TZ = { timeZone: 'America/New_York' };

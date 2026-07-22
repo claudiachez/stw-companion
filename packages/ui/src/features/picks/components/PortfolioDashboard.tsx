@@ -1,11 +1,10 @@
-import { bColor, holdingPnlPct, legIsOpen, legMarkReason, fmtLegInstrument, fmtDateTime, FONT_SIZE, FONT_WEIGHT, TIERS } from '@stw/shared';
+import { bColor, holdingPnlPct, legIsOpen, legMarkReason, fmtLegInstrument, fmtDateTime, FONT_SIZE, FONT_WEIGHT, LETTER_SPACING, RADIUS, SPACE, TIERS } from '@stw/shared';
 import { usePriceCacheStore } from '../../../store/priceCache';
 import { useRecentChanges } from '../useRecentChanges';
 import { useConvictionChanges, type ConvictionChange, type ChangeDir } from '../useConvictionChanges';
 import { TickerLink } from '../../../primitives/TickerLink';
 import { SourceLink } from './SourceLink';
 import { SectionHeader } from '../../../primitives/SectionHeader';
-import { KpiCard, type KpiStatus } from '../../../primitives/KpiCard';
 import { PortfolioHeatmap, type HeatmapCell } from '../../../components/PortfolioHeatmap';
 import { useSectorMap } from '../../limits/useRiskConfig';
 import { useIsMobile } from '../../../hooks/useIsMobile';
@@ -19,7 +18,7 @@ interface DashboardProps {
 
 // "Updated: <date>" — the right-aligned slot every Overview block passes to the shared
 // SectionHeader, so the stamp's own styling (muted date, lighter value) stays identical
-// across the webinar, changes, unpriced, and stale blocks.
+// across the what-changed, treemap, and data-health blocks.
 function updatedStamp(d: Date | null) {
   if (!d) return null;
   return <>Updated: <span style={{ color: 'var(--t2)' }}>{fmtDateTime(d)}</span></>;
@@ -40,7 +39,7 @@ function renderDigest(
       return (
         <span key={i}>
           {lead}
-          <TickerLink ticker={bare.toUpperCase()} label={bare} onSelect={onSelectTicker} />
+          <TickerLink ticker={bare.toUpperCase()} label={bare} onSelect={onSelectTicker} style={{ fontSize: FONT_SIZE.sms }} />
           {trail}
         </span>
       );
@@ -54,16 +53,15 @@ function trimSnippet(s: string, n = 180): string {
 }
 
 // Per-direction presentation: a directional glyph (the change indicator) + a color-coded badge.
-const CHANGE_META: Record<ChangeDir, { label: string; color: string; bg: string; arrow: string }> = {
-  up:   { label: 'Upgraded',   color: 'var(--c5)', bg: 'var(--c5bg)', arrow: '▲' },
-  down: { label: 'Downgraded', color: 'var(--c1)', bg: 'var(--c1bg)', arrow: '▼' },
-  new:  { label: 'New',        color: 'var(--c4)', bg: 'var(--c4bg)', arrow: '★' },
-  same: { label: 'Reaffirmed', color: 'var(--t3)', bg: 'var(--s2)',  arrow: '•' },
+// ▲ upgrade → positive, ▼ downgrade → negative, ★ new → info, • reaffirm → muted.
+const CHANGE_META: Record<ChangeDir, { label: string; color: string; bg: string; border: string; arrow: string }> = {
+  up:   { label: 'Upgraded',   color: 'var(--status-positive-text)', bg: 'var(--status-positive-bg)', border: 'var(--status-positive-border)', arrow: '▲' },
+  down: { label: 'Downgraded', color: 'var(--status-negative-text)', bg: 'var(--status-negative-bg)', border: 'var(--status-negative-border)', arrow: '▼' },
+  new:  { label: 'New',        color: 'var(--status-info-text)',     bg: 'var(--status-info-bg)',     border: 'var(--status-info-border)',     arrow: '★' },
+  same: { label: 'Reaffirmed', color: 'var(--t3)',                   bg: 'var(--s2)',                 border: 'var(--bsub)',                   arrow: '•' },
 };
 
-// One conviction-change line, styled to match the "Latest Portfolio Changes" digest (13px body,
-// linkified ticker, lineHeight 1.6 from the card). Reads:
-//   TICKER ↗ [BADGE] Prev → Current: why
+// One conviction-change line: TICKER ▲ [BADGE] Prev → Current: why
 function ConvictionChangeRow({ c, onSelectTicker }: {
   c: ConvictionChange;
   onSelectTicker?: (t: string) => void;
@@ -72,16 +70,16 @@ function ConvictionChangeRow({ c, onSelectTicker }: {
   const toTier = TIERS[c.level] ?? TIERS[0];
   const fromTier = c.prevLevel != null ? (TIERS[c.prevLevel] ?? TIERS[0]) : null;
   return (
-    <div style={{ marginBottom: 5 }}>
-      <TickerLink ticker={c.ticker} onSelect={onSelectTicker} />
+    <div style={{ marginBottom: SPACE[1.5] }}>
+      <TickerLink ticker={c.ticker} onSelect={onSelectTicker} style={{ fontSize: FONT_SIZE.sms }} />
       {' '}
       <span style={{ color: m.color, fontWeight: FONT_WEIGHT.bold }}>{m.arrow}</span>
       {' '}
       <span style={{
         display: 'inline-block', verticalAlign: 'middle',
-        fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: '0.06em', textTransform: 'uppercase',
-        color: m.color, background: m.bg, border: `1px solid ${m.color}33`,
-        borderRadius: 4, padding: '1px 5px',
+        fontSize: FONT_SIZE['3xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: '0.05em', textTransform: 'uppercase',
+        color: m.color, background: 'var(--surface)', border: `1px solid ${m.color}`,
+        borderRadius: RADIUS.DEFAULT, padding: '1px 5px',
       }}>{m.label}</span>
       {' '}
       <span style={{ fontWeight: FONT_WEIGHT.semibold }}>
@@ -102,6 +100,27 @@ function ConvictionChangeRow({ c, onSelectTicker }: {
   );
 }
 
+// One stat card: its own bordered card, 9px uppercase label / 19px big value / 10px sub (ref).
+function StatCard({ label, value, sub, color = 'var(--text)' }: {
+  label: string; value: React.ReactNode; sub?: React.ReactNode; color?: string;
+}) {
+  return (
+    <div style={{ minWidth: 0, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px' }}>
+      <div style={{ fontSize: FONT_SIZE['3xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: LETTER_SPACING.label, textTransform: 'uppercase', color: 'var(--t3)' }}>
+        {label}
+      </div>
+      <div style={{ fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, color, marginTop: SPACE[0.5], fontVariantNumeric: 'tabular-nums', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {value}
+      </div>
+      {sub != null && (
+        <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[0.5], lineHeight: 1.4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {sub}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Portfolio dashboard (shown when no ticker selected) ───────
 export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps) {
   const isMobile = useIsMobile();
@@ -109,7 +128,7 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
   // the "Re-run the sync." instruction is admin-only — the explanation still shows to everyone.
   const { canEdit } = useCapabilities();
   const cache = usePriceCacheStore((s) => s.cache);
-  const { data: sectorLookup } = useSectorMap(); // ticker→market sector (distinct from the local by-basket `sectorMap` below)
+  const { data: sectorLookup } = useSectorMap(); // ticker→market sector (distinct from the local by-basket map below)
   const { data: changes } = useRecentChanges(1);
   const latestChange = changes?.[0] ?? null;
   const convBatch = useConvictionChanges(holdings);
@@ -128,8 +147,7 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
   // Equity : Options ratio by current MARKET VALUE, per leg. The host quotes the split by what
   // each sleeve is worth now (not premium paid) — so winning option legs weigh more. Shares ride
   // the live quote; option legs use their stored IBKR mark; each leg's cost weight is grossed up
-  // by mark÷entry. Per-leg (not whole-holding), so a shares+call overlay counts on BOTH sides —
-  // the old whole-holding classification dumped every mixed position into equity (read ~97:3).
+  // by mark÷entry. Per-leg (not whole-holding), so a shares+call overlay counts on BOTH sides.
   // Falls back to the leg's cost weight when a price is missing.
   let equityVal = 0;
   let optionsVal = 0;
@@ -150,16 +168,21 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
   const equityPct  = typeTotal > 0 ? Math.round(equityVal  / typeTotal * 100) : null;
   const optionsPct = typeTotal > 0 ? Math.round(optionsVal / typeTotal * 100) : null;
 
-  // Sector distribution by weight
-  const sectorMap: Record<string, number> = {};
+  // Cash % — the CASH balance row's own portfolio weight (weights are already whole-book %).
+  const cashRow = holdings.find((h) => h.ticker === 'CASH');
+  const cashPct = cashRow ? (cashRow.current_weight ?? cashRow.initial_weight ?? null) : null;
+
+  // Weight by basket (STW's thematic baskets), largest first.
+  const basketMap: Record<string, number> = {};
   active.forEach((h) => {
     const w = h.current_weight ?? h.initial_weight ?? 0;
-    sectorMap[h.basket] = (sectorMap[h.basket] ?? 0) + w;
+    basketMap[h.basket] = (basketMap[h.basket] ?? 0) + w;
   });
-  const totalWeight = Object.values(sectorMap).reduce((s, v) => s + v, 0);
-  const sectors = Object.entries(sectorMap).sort((a, b) => b[1] - a[1]);
+  const totalWeight = Object.values(basketMap).reduce((s, v) => s + v, 0);
+  const baskets = Object.entries(basketMap).sort((a, b) => b[1] - a[1]);
+  const maxBasketW = baskets.length ? baskets[0][1] : 0;
 
-  // Options data freshness = newest IBKR leg mark across all holdings.
+  // Options-mark freshness = newest IBKR leg mark across all holdings.
   const optionsSynced = holdings.reduce<Date | null>((acc, h) => {
     for (const leg of h.legs) {
       if (!leg.mark_price_at) continue;
@@ -193,8 +216,7 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
   });
 
   // Heatmap cells — box ∝ current weight; Today = Finnhub day change, Total = weighted
-  // leg P&L (shares on the live quote, options on their stored IBKR mark). Both color
-  // modes are available here because PicksView keeps the Finnhub cache populated.
+  // leg P&L (shares on the live quote, options on their stored IBKR mark).
   const heatmapCells: HeatmapCell[] = active.map((h) => ({
     ticker: h.ticker,
     weight: h.current_weight ?? h.initial_weight ?? 0,
@@ -204,167 +226,168 @@ export function PortfolioDashboard({ holdings, onSelectTicker }: DashboardProps)
     sector: sectorLookup?.[h.ticker] ?? null,
   }));
 
-  const pnlStatus: KpiStatus = avgPnl == null ? 'neutral' : avgPnl >= 0 ? 'positive' : 'negative';
-
   const tickerSet = new Set(holdings.map((h) => h.ticker.toUpperCase()));
-  const changeAt = latestChange?.ran_at ? new Date(latestChange.ran_at) : null;
+  const webinarDate = convBatch?.eventDate ? new Date(convBatch.eventDate + 'T00:00:00') : null;
+  const convChanges = convBatch?.changes ?? [];
+  const meaningful = convChanges.filter((c) => c.dir !== 'same');
+  const reaffirmed = convChanges.filter((c) => c.dir === 'same');
+  const hasWhatChanged = convChanges.length > 0 || !!latestChange?.digest;
+  const dataHealthClean = unpricedLegs.length === 0 && stalePrices.length === 0;
+
+  const avgColor = avgPnl == null ? 'var(--text)' : avgPnl >= 0 ? 'var(--pnl-gain)' : 'var(--pnl-loss)';
+  const openLots = active.reduce((n, h) => n + h.legs.filter(legIsOpen).length, 0);
+
+  // Each Overview block is its own card in a max-1100 column (ref: no single pane / eyebrow —
+  // the sub-tab bar already names the surface), matching the My Portfolio Overview tab.
+  const card: React.CSSProperties = { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px' };
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto', padding: '20px 24px' }}>
-      <SectionHeader title="Portfolio Overview" />
+    <div style={{ height: '100%', overflowY: 'auto', background: 'var(--bg)' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: isMobile ? '16px 12px 32px' : '16px 16px 40px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-      {/* Stat cards */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 24 }}>
-        <KpiCard label="Active Holdings" primaryValue={active.length} />
-        <KpiCard
-          label={`Avg Return${pnlValues.length > 0 ? ` (${pnlValues.length} positions)` : ''}`}
-          primaryValue={avgPnl != null ? `${avgPnl >= 0 ? '+' : ''}${avgPnl.toFixed(1)}%` : '—'}
-          status={pnlStatus}
-        />
-        <KpiCard
-          label="Equity : Options (by market value)"
-          primaryValue={equityPct ?? '—'}
-          secondaryValue={`: ${optionsPct ?? '—'}`}
-        />
-      </div>
-
-      {/* Portfolio Heatmap — box ∝ weight, color by day change / total return. */}
-      <div style={{ marginBottom: 24 }}>
-        <PortfolioHeatmap cells={heatmapCells} onSelectTicker={onSelectTicker} showToday />
-      </div>
-
-      {/* Two-column grid on desktop — sector breakdown beside the activity feed so the
-          wide overview tab isn't mostly empty space. Single column on mobile. */}
-      <div style={{ display: isMobile ? 'block' : 'grid', gridTemplateColumns: isMobile ? undefined : 'minmax(280px, 1fr) 1.4fr', gap: 32, alignItems: 'start' }}>
-
-      {/* Left column — sector distribution */}
-      <div>
-      <SectionHeader title="Sector Distribution" />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-        {sectors.map(([name, w]) => {
-          const pct = totalWeight > 0 ? (w / totalWeight) * 100 : 0;
-          const c = bColor(name);
-          return (
-            <div key={name}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: FONT_SIZE.sm, color: 'var(--t2)', minWidth: 0 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: 2, background: c, flexShrink: 0 }} />
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
-                </div>
-                <span style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)', marginLeft: 8, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
-                  {pct.toFixed(0)}%
-                </span>
-              </div>
-              <div style={{ height: 4, borderRadius: 2, background: 'var(--border)' }}>
-                <div style={{ width: `${pct}%`, height: '100%', borderRadius: 2, background: c, opacity: 0.85 }} />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      </div>
-
-      {/* Right column — activity + data status */}
-      <div>
-
-      {/* Conviction Changes — the latest batch, classified ▲ upgraded / ▼ downgraded / ★ new, each
-          with the level move and a one-line why. Reaffirmed (unchanged) collapse to a chip list. */}
-      {convBatch && convBatch.changes.length > 0 && (
-        <div style={{ marginTop: isMobile ? 28 : 0 }}>
-          <SectionHeader
-            title="Conviction Changes"
-            right={updatedStamp(convBatch.updatedAt ? new Date(convBatch.updatedAt) : null)}
+        {/* 1 · Stat cards — four separate bordered cards (2-up mobile). */}
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)', gap: 10 }}>
+          <StatCard label="Active holdings" value={active.length} sub={`${openLots} open lots · CASH excluded`} />
+          <StatCard
+            label="Avg return"
+            value={avgPnl != null ? `${avgPnl >= 0 ? '+' : ''}${avgPnl.toFixed(1)}%` : '—'}
+            sub={pnlValues.length > 0 ? `across ${pnlValues.length} priced position${pnlValues.length === 1 ? '' : 's'}` : 'no live prices'}
+            color={avgColor}
           />
-          {/* Same card chrome + type scale as "Latest Portfolio Changes" for consistency. */}
-          <div style={{
-            padding: '12px 14px', borderRadius: 8,
-            background: 'var(--s2)', border: '1px solid var(--acc)',
-            fontSize: FONT_SIZE.base, color: 'var(--t2)', lineHeight: 1.6,
-          }}>
-            {/* meaningful changes (up / down / new), one line each */}
-            {convBatch.changes.filter((c) => c.dir !== 'same').map((c) => (
-              <ConvictionChangeRow key={c.ticker} c={c} onSelectTicker={onSelectTicker} />
-            ))}
-            {/* reaffirmed → a trailing "Also noted"-style line */}
-            {convBatch.changes.some((c) => c.dir === 'same') && (
-              <div style={{ marginTop: convBatch.changes.some((c) => c.dir !== 'same') ? 4 : 0 }}>
-                <span style={{ color: 'var(--t3)' }}>Reaffirmed: </span>
-                {convBatch.changes.filter((c) => c.dir === 'same').map((c, i, arr) => (
-                  <span key={c.ticker}>
-                    <TickerLink ticker={c.ticker} onSelect={onSelectTicker} />{i < arr.length - 1 ? '  ' : ''}
+          <StatCard
+            label="Shares : Options"
+            value={equityPct != null ? `${equityPct} : ${optionsPct}` : '—'}
+            sub="by current market value"
+          />
+          <StatCard
+            label="Cash"
+            value={cashPct != null ? `${cashPct.toFixed(1)}%` : '—'}
+            sub="of the book, uninvested"
+          />
+        </div>
+
+        {/* 2 · What changed this week — conviction moves + reaffirmations + the run digest,
+            inside the ref's green highlight card (label + stamp on top). */}
+        {hasWhatChanged && (
+          <div style={{ ...card, background: 'var(--status-positive-bg)', border: '1px solid var(--status-positive-border)' }}>
+            <SectionHeader title="What changed this week" color="var(--status-positive-text)" right={updatedStamp(webinarDate)} />
+            <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.6 }}>
+              {meaningful.map((c) => (
+                <ConvictionChangeRow key={c.ticker} c={c} onSelectTicker={onSelectTicker} />
+              ))}
+              {reaffirmed.length > 0 && (
+                <div style={{ marginTop: meaningful.length ? SPACE[1] : 0 }}>
+                  <span style={{ color: 'var(--t3)' }}>Reaffirmed: </span>
+                  {reaffirmed.map((c, i, arr) => (
+                    <span key={c.ticker}>
+                      <TickerLink ticker={c.ticker} onSelect={onSelectTicker} style={{ fontSize: FONT_SIZE.sms }} />{i < arr.length - 1 ? '  ' : ''}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {/* Trims / rolls / adds narrative — the latest run digest. */}
+              {latestChange?.digest && (
+                <div style={{
+                  marginTop: convChanges.length ? SPACE[2] : 0,
+                  paddingTop: convChanges.length ? SPACE[2] : 0,
+                  borderTop: convChanges.length ? '1px solid var(--status-positive-border)' : 'none',
+                  whiteSpace: 'pre-wrap',
+                }}>
+                  {renderDigest(latestChange.digest, tickerSet, onSelectTicker)}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 3 · The book — treemap (box ∝ weight, color = return), grouped by basket. */}
+        <div style={card}>
+          <PortfolioHeatmap
+            cells={heatmapCells}
+            onSelectTicker={onSelectTicker}
+            showToday
+            defaultGroup="basket"
+            title="The book"
+            updated={<>Source: <span style={{ color: 'var(--t2)' }}>Finnhub live · IBKR marks</span></>}
+          />
+        </div>
+
+        {/* 4 · Weight by basket — bars sized against the largest basket. */}
+        <div style={card}>
+          <SectionHeader title="Weight by basket" />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACE[2] }}>
+            {baskets.map(([name, w]) => {
+              const pct = totalWeight > 0 ? (w / totalWeight) * 100 : 0;
+              const barPct = maxBasketW > 0 ? (w / maxBasketW) * 100 : 0;
+              const c = bColor(name);
+              return (
+                <div key={name} style={{ display: 'flex', alignItems: 'center', gap: SPACE[2] }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: SPACE[1.5], flex: `0 1 ${isMobile ? 108 : 150}px`, minWidth: 0 }}>
+                    <span style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0, height: 5, borderRadius: RADIUS.sm, background: 'var(--bsub)' }}>
+                    <div style={{ width: `${barPct}%`, height: '100%', borderRadius: RADIUS.sm, background: c, opacity: 0.85 }} />
+                  </div>
+                  <span style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)', width: 38, textAlign: 'right', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+                    {pct.toFixed(0)}%
                   </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 5 · Data health — unpriced + stale option marks, naming the tickers. */}
+        <div style={card}>
+          <SectionHeader
+            title="Data health"
+            color={dataHealthClean ? 'var(--t3)' : 'var(--status-warning-text)'}
+            right={optionsSynced ? updatedStamp(optionsSynced) : null}
+          />
+          <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.6 }}>
+            {dataHealthClean && (
+              <div style={{ color: 'var(--t3)' }}>
+                All open option marks are priced and current{optionsSynced ? <> as of <span style={{ color: 'var(--t2)' }}>{fmtDateTime(optionsSynced)}</span></> : ''}.
+              </div>
+            )}
+
+            {unpricedLegs.length > 0 && (
+              <div style={{ marginBottom: stalePrices.length ? SPACE[2] : 0 }}>
+                <div style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--status-warning-text)', marginBottom: SPACE[1] }}>
+                  ⚠ Unpriced legs ({unpricedLegs.length})
+                </div>
+                {unpricedLegs.map((u, i) => (
+                  <div key={i}>
+                    <TickerLink ticker={u.ticker} onSelect={onSelectTicker} style={{ fontSize: FONT_SIZE.xs }} /> {u.label}
+                    {u.reason && (
+                      <span style={{ color: 'var(--t3)' }}>
+                        {' — '}{u.reason.title}{canEdit && u.reason.hint ? ` (${u.reason.hint})` : ''}
+                      </span>
+                    )}
+                  </div>
                 ))}
+              </div>
+            )}
+
+            {stalePrices.length > 0 && (
+              <div>
+                <div style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--status-warning-text)', marginBottom: SPACE[1] }}>
+                  ◷ Stale prices ({stalePrices.length})
+                </div>
+                {stalePrices.map((s, i) => (
+                  <div key={i}>
+                    <TickerLink ticker={s.ticker} onSelect={onSelectTicker} style={{ fontSize: FONT_SIZE.xs }} /> — {s.label}
+                  </div>
+                ))}
+                <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[1] }}>
+                  {canEdit ? 'Showing prices from an earlier sync — the latest IBKR sync didn\'t refresh these. Re-run the sync.' : 'These option prices are from an earlier session.'}
+                </div>
               </div>
             )}
           </div>
         </div>
-      )}
 
-      {/* Latest portfolio changes (digest) */}
-      {latestChange?.digest && (
-        <div style={{ marginTop: 28 }}>
-          <SectionHeader title="Latest Portfolio Changes" right={updatedStamp(changeAt)} />
-          <div style={{
-            padding: '12px 14px', borderRadius: 8,
-            background: 'var(--s2)', border: '1px solid var(--acc)',
-            fontSize: FONT_SIZE.base, color: 'var(--t2)', lineHeight: 1.6, whiteSpace: 'pre-wrap',
-          }}>
-            {renderDigest(latestChange.digest, tickerSet, onSelectTicker)}
-          </div>
-        </div>
-      )}
-
-      {/* Options-mark freshness (IBKR). Holdings recency is already conveyed by the "Latest Portfolio
-          Changes" block above — a separate "Holdings data synced" line read as stale/contradictory
-          (it's last-CHANGED, not last-run), so it was removed. */}
-      {optionsSynced && (
-        <div style={{ marginTop: latestChange?.digest ? 12 : 24, fontSize: FONT_SIZE.xs, color: 'var(--t3)' }}>
-          Options data synced:{' '}
-          <span style={{ color: 'var(--t2)' }}>{fmtDateTime(optionsSynced)}</span>
-        </div>
-      )}
-
-      {/* Unpriced option legs — surfaced so they don't have to be hunted one-by-one. Title lives
-          OUTSIDE the card (matches the blocks above). The "Run the IBKR sync" hint is admin-only —
-          subscribers can't run the sync, so it would just confuse them. */}
-      {unpricedLegs.length > 0 && (
-        <div style={{ marginTop: 18 }}>
-          <SectionHeader title={`⚠ Unpriced Legs (${unpricedLegs.length})`} color="var(--c3)" />
-          <div style={{ padding: '8px 10px', borderRadius: 6, background: 'var(--s2)', border: '1px solid var(--bsub)', fontSize: FONT_SIZE.xs, color: 'var(--t2)', display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {unpricedLegs.map((u, i) => (
-              <div key={i}>
-                <TickerLink ticker={u.ticker} onSelect={onSelectTicker} /> {u.label}
-                {u.reason && (
-                  <span style={{ color: 'var(--t3)' }}>
-                    {' — '}{u.reason.title}{canEdit && u.reason.hint ? ` (${u.reason.hint})` : ''}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Stale prices — priced before, but the latest sync didn't refresh them (still showing old
-          prices). Title outside the card, consistent with Unpriced Legs above. */}
-      {stalePrices.length > 0 && (
-        <div style={{ marginTop: 18 }}>
-          <SectionHeader title={`◷ Stale Prices (${stalePrices.length})`} color="var(--c2)" />
-          <div style={{ padding: '8px 10px', borderRadius: 6, background: 'var(--s2)', border: '1px solid var(--bsub)' }}>
-          <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', lineHeight: 1.6 }}>
-            {stalePrices.map((s, i) => (
-              <span key={i}>{i > 0 ? '  ·  ' : ''}<TickerLink ticker={s.ticker} onSelect={onSelectTicker} /> — {s.label}</span>
-            ))}
-          </div>
-          <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 4 }}>
-            {canEdit ? 'Showing prices from an earlier sync — the latest IBKR sync didn\'t refresh these. Re-run the sync.' : 'These option prices are from an earlier session.'}
-          </div>
-          </div>
-        </div>
-      )}
-
-      </div>{/* end right column */}
-      </div>{/* end two-column grid */}
+      </div>
     </div>
   );
 }

@@ -3,33 +3,8 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
 import { getSupabase } from '../lib/supabase';
 import { useAuthStore } from '../store/auth';
-import { useThemeStore } from '../store/theme';
 
 // ── SVG icon set ────────────────────────────────────────────
-function SunIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <circle cx="12" cy="12" r="4" />
-      <line x1="12" y1="2" x2="12" y2="5" />
-      <line x1="12" y1="19" x2="12" y2="22" />
-      <line x1="2" y1="12" x2="5" y2="12" />
-      <line x1="19" y1="12" x2="22" y2="12" />
-      <line x1="4.2" y1="4.2" x2="6.3" y2="6.3" />
-      <line x1="17.7" y1="17.7" x2="19.8" y2="19.8" />
-      <line x1="19.8" y1="4.2" x2="17.7" y2="6.3" />
-      <line x1="6.3" y1="17.7" x2="4.2" y2="19.8" />
-    </svg>
-  );
-}
-
-function MoonIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-    </svg>
-  );
-}
-
 function UserIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -132,7 +107,6 @@ interface LayoutProps {
 export function Layout({ navItems = DEFAULT_NAV, headerSlot, title = 'STW Companion', showSettingsLink = false, showDesignSystemLink = false }: LayoutProps) {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
-  const { theme, toggle } = useThemeStore();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -275,17 +249,6 @@ export function Layout({ navItems = DEFAULT_NAV, headerSlot, title = 'STW Compan
                     {user?.email}
                   </div>
                 </div>
-
-                {/* Theme toggle */}
-                <button
-                  onClick={toggle}
-                  style={{ ...menuItemStyle, borderBottom: '1px solid var(--bsub)' }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
-                >
-                  <span style={{ color: 'var(--acc)' }}>{theme === 'dark' ? <SunIcon /> : <MoonIcon />}</span>
-                  <span>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
-                </button>
 
                 {/* Profile */}
                 <button

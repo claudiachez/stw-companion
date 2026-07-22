@@ -1,23 +1,39 @@
 import type { Holding } from '../api';
-import { useTradesFiltersStore, type TradeOpenClosed, type TradeSort, type TradeType } from '../useTradesFilters';
-import { FONT_SIZE, FONT_WEIGHT, CONVICTION_BAND_OPTIONS, type ConvictionBand } from '@stw/shared';
+import { useTradesFiltersStore, type TradeOpenClosed, type TradeOutcome, type TradeSort, type TradeType } from '../useTradesFilters';
+import { FONT_SIZE, CONVICTION_BAND_OPTIONS, type ConvictionBand } from '@stw/shared';
+import { SegmentedControl, type SegmentOption } from '../../../primitives/SegmentedControl';
 
 const SORT_OPTIONS: { value: TradeSort; label: string }[] = [
-  { value: 'opened_desc', label: 'Sort: Opened newest' },
-  { value: 'opened_asc',  label: 'Sort: Opened oldest' },
-  { value: 'closed_desc', label: 'Sort: Closed newest' },
-  { value: 'closed_asc',  label: 'Sort: Closed oldest' },
-  { value: 'pnl_desc',    label: 'Sort: P&L ↓' },
-  { value: 'pnl_asc',     label: 'Sort: P&L ↑' },
-  { value: 'conviction',  label: 'Sort: Conviction' },
-  { value: 'az',          label: 'Sort: A → Z' },
-  { value: 'za',          label: 'Sort: Z → A' },
+  { value: 'last', label: 'Sort: Last action' },
+  { value: 'new',  label: 'Sort: Opened newest' },
+  { value: 'old',  label: 'Sort: Opened oldest' },
+  { value: 'pnlD', label: 'Sort: P&L ↓' },
+  { value: 'pnlU', label: 'Sort: P&L ↑' },
+  { value: 'wtD',  label: 'Sort: Init Wt ↓' },
+  { value: 'az',   label: 'Sort: A → Z' },
 ];
 
-const OPEN_CLOSED: { value: TradeOpenClosed; label: string }[] = [
+// Lot lifecycle actions we can derive from a leg's own state (open → New; closed → Close;
+// closed-worthless → Expired). Add/Trim/Roll are position-narrative verbs that don't exist at
+// the leg grain, so they're intentionally omitted rather than shown as dead filters.
+const ACTION_OPTIONS = ['New', 'Close', 'Expired'];
+
+// Row-2 segmented groups (shared SegmentedControl primitive) — the "Show" state axis and the
+// "Type" instrument axis, wired to the same store fields the old toggle/select used.
+const SHOW_SEGMENTS: SegmentOption<TradeOpenClosed>[] = [
+  { value: 'all',    label: 'All' },
   { value: 'open',   label: 'Open' },
   { value: 'closed', label: 'Closed' },
+];
+const TYPE_SEGMENTS: SegmentOption<TradeType>[] = [
+  { value: '',        label: 'All' },
+  { value: 'shares',  label: 'Shares' },
+  { value: 'options', label: 'Options' },
+];
+const OUTCOME_SEGMENTS: SegmentOption<TradeOutcome>[] = [
   { value: 'all',    label: 'All' },
+  { value: 'profit', label: 'Profit' },
+  { value: 'loss',   label: 'Loss' },
 ];
 
 // Shares the FilterBar control styling so the two tabs read as one app. Border color
@@ -25,7 +41,7 @@ const OPEN_CLOSED: { value: TradeOpenClosed; label: string }[] = [
 // inline style.border always wins over a stylesheet class, which would make
 // `focus:border-acc` silently never take effect).
 const ctrlStyle: React.CSSProperties = {
-  height: 34, padding: '0 8px', fontSize: FONT_SIZE.sm, borderRadius: 5,
+  height: 30, padding: '0 6px', fontSize: FONT_SIZE.sm, borderRadius: 5,
   background: 'var(--bg)', color: 'var(--text)',
   cursor: 'pointer', flexShrink: 0,
 };
@@ -34,52 +50,33 @@ const ctrlBorderClass = 'border border-[var(--border)] focus:outline-none focus:
 interface Props {
   holdings: Holding[];
   sectors: string[];
-  /** rows matching the current filter / total candidate rows — shown as "N of M". */
+  /** rows matching the current filter / total candidate rows — shown as "N of M lots". */
   count: number;
   total: number;
 }
 
-// Filter bar for the Trades blotter. Deliberately mirrors the Ticker Details FilterBar chrome
-// (full-bleed surface bar, same control style, "All Baskets" wording, horizontal scroll — no wrap)
-// so the two tabs stay visually consistent. The status axis is an Open/Closed/All toggle (the
-// leg's own state) and Type is Shares/Options only.
+// Filter bar for the Transactions blotter. Mirrors the Ticker Details FilterBar chrome
+// (full-bleed surface, two rows: dropdown filters up top, segmented axes below) so the two
+// tabs stay visually consistent. Show = the leg's own open/closed state; Type = Shares/Options.
 export function TradesFilterBar({ holdings, sectors, count, total }: Props) {
-  const { search, basket, conviction, sector, type, openClosed, sort,
-    setSearch, setBasket, setConviction, setSector, setType, setOpenClosed, setSort, reset } =
+  const { search, basket, conviction, sector, action, type, openClosed, outcome, sort,
+    setSearch, setBasket, setConviction, setSector, setAction, setType, setOpenClosed, setOutcome, setSort, reset } =
     useTradesFiltersStore();
 
   const baskets = [...new Set(holdings.map((h) => h.basket).filter(Boolean))].sort();
-  const hasFilter = !!search || !!basket || !!conviction || !!sector || !!type || openClosed !== 'all';
+  const hasFilter = !!search || !!basket || !!conviction || !!sector || !!action || !!type || openClosed !== 'all';
 
   return (
-    <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' as never, flexShrink: 0 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', minWidth: 'max-content' }}>
-
-        {/* Open / Closed / All segmented toggle (replaces the position-level status dropdown) */}
-        <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 5, overflow: 'hidden', flexShrink: 0, height: 34 }}>
-          {OPEN_CLOSED.map((o) => (
-            <button
-              key={o.value}
-              onClick={() => setOpenClosed(o.value)}
-              style={{
-                padding: '0 12px', fontSize: FONT_SIZE.sm, border: 'none', cursor: 'pointer',
-                background: openClosed === o.value ? 'var(--acc)' : 'var(--bg)',
-                color: openClosed === o.value ? 'var(--text-inverse)' : 'var(--t2)',
-                fontWeight: openClosed === o.value ? FONT_WEIGHT.semibold : 400,
-              }}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
-
+    <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', flexShrink: 0 }}>
+      {/* Row 1 — search + dropdown filters + count */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderBottom: '1px solid var(--bsub)', flexWrap: 'wrap' }}>
         <input
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search ticker…"
           className={ctrlBorderClass}
-          style={{ ...ctrlStyle, width: 120, cursor: 'text' }}
+          style={{ ...ctrlStyle, width: 112, padding: '0 8px', cursor: 'text' }}
         />
 
         <select value={basket} onChange={(e) => setBasket(e.target.value)} className={ctrlBorderClass} style={ctrlStyle}>
@@ -99,10 +96,9 @@ export function TradesFilterBar({ holdings, sectors, count, total }: Props) {
           </select>
         )}
 
-        <select value={type} onChange={(e) => setType(e.target.value as TradeType)} className={ctrlBorderClass} style={ctrlStyle}>
-          <option value="">All Types</option>
-          <option value="shares">Shares</option>
-          <option value="options">Options</option>
+        <select value={action} onChange={(e) => setAction(e.target.value)} className={ctrlBorderClass} style={ctrlStyle} title="Filter by the lot's lifecycle action">
+          <option value="">All Actions</option>
+          {ACTION_OPTIONS.map((a) => <option key={a} value={a}>{a}</option>)}
         </select>
 
         <select value={sort} onChange={(e) => setSort(e.target.value as TradeSort)} className={ctrlBorderClass} style={ctrlStyle}>
@@ -120,9 +116,32 @@ export function TradesFilterBar({ holdings, sectors, count, total }: Props) {
           </button>
         )}
 
-        <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginLeft: 4, whiteSpace: 'nowrap' }}>
-          {count < total ? `${count} of ${total}` : `${total} trade${total === 1 ? '' : 's'}`}
+        <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginLeft: 'auto', paddingLeft: 0, whiteSpace: 'nowrap' }}>
+          {count} of {total} lots
         </span>
+      </div>
+
+      {/* Row 2 — segmented axes: Show (open/closed) + Type (instrument) */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 12px', background: 'var(--bg)', borderBottom: '1px solid var(--bsub)', flexWrap: 'wrap' }}>
+        <SegmentedControl
+          label="Show"
+          options={SHOW_SEGMENTS}
+          value={openClosed}
+          onChange={setOpenClosed}
+        />
+        <SegmentedControl
+          label="Type"
+          options={TYPE_SEGMENTS}
+          value={type}
+          onChange={setType}
+        />
+        <SegmentedControl
+          label="Outcome"
+          title="Filter closed lots by whether they booked a profit or a loss"
+          options={OUTCOME_SEGMENTS}
+          value={outcome}
+          onChange={setOutcome}
+        />
       </div>
     </div>
   );

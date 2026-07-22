@@ -487,8 +487,32 @@ function confirmDelete(del: (id: string) => Promise<void>, id: string, onlyEvent
 }
 
 // ── Add / edit form ───────────────────────────────────────────────────────────────────────────
-const fld: React.CSSProperties = { width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 5, padding: '6px 8px', fontSize: FONT_SIZE.sm, color: 'var(--text)', boxSizing: 'border-box' };
-const lbl: React.CSSProperties = { fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: LETTER_SPACING.label, marginBottom: 2, display: 'block' };
+const fld: React.CSSProperties = { width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 5, padding: '6px 8px', fontSize: FONT_SIZE.sm, color: 'var(--text)', boxSizing: 'border-box', height: 30 };
+const fldSelect: React.CSSProperties = { ...fld, padding: '0 6px' };
+const lbl: React.CSSProperties = { fontSize: FONT_SIZE['3xs'], fontWeight: FONT_WEIGHT.bold, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: LETTER_SPACING.label, marginBottom: 2, display: 'block' };
+// 9px/700/0.1em uppercase section header — the redesign's numbered form-section label.
+const sectionLbl: React.CSSProperties = { fontSize: FONT_SIZE['3xs'], fontWeight: FONT_WEIGHT.bold, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6, display: 'block' };
+const hint: React.CSSProperties = { fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: 6 };
+// Selectable pill — replaces the leg/action <select>s with chips (same state, new skin).
+function chip(active: boolean): React.CSSProperties {
+  return {
+    fontSize: FONT_SIZE.sm, padding: '5px 12px', borderRadius: 6, cursor: 'pointer',
+    border: `1px solid ${active ? 'var(--acc)' : 'var(--border)'}`,
+    background: active ? 'var(--acc)' : 'var(--bg)',
+    color: active ? 'var(--text-inverse)' : 'var(--t2)',
+    fontWeight: FONT_WEIGHT.semibold,
+  };
+}
+
+// One-line hint per action — descriptive copy of the LOCKED semantics (no logic here).
+const ACTION_HINT: Record<ActionLabel, string> = {
+  New: 'Opens a new lot at the entered weight.',
+  Upsized: 'Adds to the position — BUYs accumulate.',
+  Trimmed: 'Weight = what REMAINS after the trim, not the amount sold.',
+  Closed: 'Books the exit at this price; weight goes to 0.',
+  Exercised: 'Converts the option to shares; weight goes to 0.',
+  Expired: 'Worthless expiry — price and weight are both locked at 0.',
+};
 
 const NEW_LEG = '__new__';
 
@@ -520,6 +544,24 @@ function EventForm({ ticker, legs, event, onDone }: { ticker: string; legs: Leg[
   const type = actionToType(action);
   const weightLocked = action === 'Closed' || action === 'Expired' || action === 'Exercised';
   const weightLabel = type === 'BUY' ? 'Lot weight %' : action === 'Trimmed' ? 'Remaining %' : 'Weight %';
+  const weightHint = action === 'Trimmed'
+    ? 'Enter the weight that REMAINS after trimming — not the amount sold.'
+    : weightLocked ? 'Weight is fixed at 0 for this action.'
+    : type === 'BUY' ? 'Weight of this lot — BUYs accumulate into the position.'
+    : 'Weight after this action.';
+
+  // Display-only preview sentence for the "This will read:" box — derived from the
+  // current form state; it never writes anything.
+  const previewInstrument = (legId === NEW_LEG || (editing && editingIsOption))
+    ? (instrument === 'SHARES' ? 'Shares' : `$${strike || '?'}${instrument === 'PUT' ? 'P' : 'C'}${expiry ? ` ${fmtOptionExpiry(expiry)}` : ''}`)
+    : (() => {
+        const l = legs.find((x) => x.id === legId);
+        if (!l) return 'the leg';
+        return l.instrument_type === 'SHARES' ? 'Shares' : `$${l.option_strike}${l.option_right === 'PUT' ? 'P' : 'C'} ${fmtOptionExpiry(l.option_expiry)}`;
+      })();
+  const previewPrice = action === 'Expired' ? '$0' : (price ? `$${price}` : '—');
+  const previewWeight = weightLocked ? '0%' : (weight ? `${weight}%` : '—');
+  const preview = `${action} ${previewInstrument} — ${weightLabel.toLowerCase()} ${previewWeight} at ${previewPrice} on ${fmtDay(date)}`;
 
   async function save() {
     setSaving(true); setError('');
@@ -567,65 +609,92 @@ function EventForm({ ticker, legs, event, onDone }: { ticker: string; legs: Leg[
   }
 
   return (
-    <Modal onClose={onDone} width="md" title={editing ? 'Edit event' : 'Add event'}>
-      {!editing && (
-        <div style={{ marginBottom: 8 }}>
-          <label style={lbl}>Leg</label>
-          <select style={fld} value={legId} onChange={(e) => setLegId(e.target.value)}>
-            {legs.map((l) => <option key={l.id} value={l.id}>{l.instrument_type === 'SHARES' ? 'Shares' : `$${l.option_strike}${l.option_right === 'PUT' ? 'P' : 'C'} ${fmtOptionExpiry(l.option_expiry)}`}</option>)}
-            <option value={NEW_LEG}>＋ New leg…</option>
-          </select>
-        </div>
-      )}
+    <Modal onClose={onDone} width="lg" title={editing ? `Edit transaction — ${ticker}` : `Log a transaction — ${ticker}`}>
+      <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: -2, marginBottom: 14 }}>
+        Every row re-derives the position from the transaction ledger.
+      </div>
 
-      {!editing && legId === NEW_LEG && (
-        <div style={{ display: 'grid', gridTemplateColumns: gridCols(4), gap: 8, marginBottom: 8 }}>
-          <div><label style={lbl}>Instrument</label>
-            <select style={fld} value={instrument} onChange={(e) => setInstrument(e.target.value as 'SHARES' | 'CALL' | 'PUT')}>
-              <option value="SHARES">Shares</option><option value="CALL">Call</option><option value="PUT">Put</option>
-            </select></div>
-          <div><label style={lbl}>Direction</label>
-            <select style={fld} value={direction} onChange={(e) => setDirection(e.target.value as Direction)}>
-              <option value="long">Long</option><option value="short">Short</option>
-            </select></div>
-          {instrument !== 'SHARES' && <>
-            <div><label style={lbl}>Strike</label><input style={fld} type="number" step="0.5" value={strike} onChange={(e) => setStrike(e.target.value)} /></div>
-            <div><label style={lbl}>Expiry</label><input style={fld} type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} /></div>
-          </>}
-        </div>
+      {/* 1 · Which holding — leg chips + "＋ New leg" reveal (add mode only; editing keeps its leg) */}
+      {!editing && (
+        <section style={{ marginBottom: 14 }}>
+          <label style={sectionLbl}>1 · Which holding</label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {legs.map((l) => (
+              <button key={l.id} type="button" onClick={() => setLegId(l.id)} style={chip(legId === l.id)}>
+                {l.instrument_type === 'SHARES' ? 'Shares' : `$${l.option_strike}${l.option_right === 'PUT' ? 'P' : 'C'} ${fmtOptionExpiry(l.option_expiry)}`}
+              </button>
+            ))}
+            <button type="button" onClick={() => setLegId(NEW_LEG)} style={{ ...chip(legId === NEW_LEG), background: legId === NEW_LEG ? 'var(--acc)' : 'transparent' }}>＋ New leg</button>
+          </div>
+          {legId === NEW_LEG && (
+            <div style={{ display: 'grid', gridTemplateColumns: gridCols(4), gap: 8, marginTop: 8, padding: 10, border: '1px dashed var(--border)', borderRadius: 8 }}>
+              <div><label style={lbl}>Instrument</label>
+                <select style={fldSelect} value={instrument} onChange={(e) => setInstrument(e.target.value as 'SHARES' | 'CALL' | 'PUT')}>
+                  <option value="SHARES">Shares</option><option value="CALL">Call</option><option value="PUT">Put</option>
+                </select></div>
+              <div><label style={lbl}>Direction</label>
+                <select style={fldSelect} value={direction} onChange={(e) => setDirection(e.target.value as Direction)}>
+                  <option value="long">Long</option><option value="short">Short</option>
+                </select></div>
+              {instrument !== 'SHARES' && <>
+                <div><label style={lbl}>Strike</label><input style={fld} type="number" step="0.5" value={strike} onChange={(e) => setStrike(e.target.value)} /></div>
+                <div><label style={lbl}>Expiry</label><input style={fld} type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} /></div>
+              </>}
+            </div>
+          )}
+        </section>
       )}
 
       {editing && editingIsOption && (
-        <div style={{ display: 'grid', gridTemplateColumns: gridCols(3), gap: 8, marginBottom: 8 }}>
-          <div><label style={lbl}>Right</label>
-            <select style={fld} value={instrument} onChange={(e) => setInstrument(e.target.value as 'CALL' | 'PUT')}>
-              <option value="CALL">Call</option><option value="PUT">Put</option>
-            </select></div>
-          <div><label style={lbl}>Strike</label>
-            <input style={fld} type="number" step="0.5" value={strike} onChange={(e) => setStrike(e.target.value)} /></div>
-          <div><label style={lbl}>Expiry</label>
-            <input style={fld} type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} /></div>
-        </div>
+        <section style={{ marginBottom: 14 }}>
+          <label style={sectionLbl}>Contract</label>
+          <div style={{ display: 'grid', gridTemplateColumns: gridCols(3), gap: 8 }}>
+            <div><label style={lbl}>Right</label>
+              <select style={fldSelect} value={instrument} onChange={(e) => setInstrument(e.target.value as 'CALL' | 'PUT')}>
+                <option value="CALL">Call</option><option value="PUT">Put</option>
+              </select></div>
+            <div><label style={lbl}>Strike</label>
+              <input style={fld} type="number" step="0.5" value={strike} onChange={(e) => setStrike(e.target.value)} /></div>
+            <div><label style={lbl}>Expiry</label>
+              <input style={fld} type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} /></div>
+          </div>
+        </section>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: gridCols(4), gap: 8 }}>
-        <div><label style={lbl}>Action</label>
-          <select style={fld} value={action} onChange={(e) => setAction(e.target.value as ActionLabel)}>
-            {ACTIONS.map((a) => <option key={a} value={a}>{a}</option>)}
-          </select></div>
-        <div><label style={lbl}>Date</label><input style={fld} type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
-        <div><label style={lbl}>{type === 'BUY' ? 'Entry price' : 'Exit price'}</label>
-          <input style={fld} type="number" step="0.01" value={price} disabled={action === 'Expired'} placeholder={action === 'Expired' ? '0' : ''} onChange={(e) => setPrice(e.target.value)} /></div>
-        <div><label style={lbl}>{weightLabel}</label>
-          <input style={fld} type="number" step="0.1" value={weightLocked ? '0' : weight} disabled={weightLocked} onChange={(e) => setWeight(e.target.value)} /></div>
+      {/* 2 · What happened — action chips + per-action hint */}
+      <section style={{ marginBottom: 14 }}>
+        <label style={sectionLbl}>2 · What happened</label>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {ACTIONS.map((a) => (
+            <button key={a} type="button" onClick={() => setAction(a)} style={chip(action === a)}>{a}</button>
+          ))}
+        </div>
+        <div style={hint}>{ACTION_HINT[action]}</div>
+      </section>
+
+      {/* 3 · The details — Date / Price / Weight (labels + locked fields preserved) */}
+      <section>
+        <label style={sectionLbl}>3 · The details</label>
+        <div style={{ display: 'grid', gridTemplateColumns: gridCols(3), gap: 8 }}>
+          <div><label style={lbl}>Date</label><input style={fld} type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+          <div><label style={lbl}>{type === 'BUY' ? 'Entry price' : 'Exit price'}</label>
+            <input style={fld} type="number" step="0.01" value={price} disabled={action === 'Expired'} placeholder={action === 'Expired' ? '0' : ''} onChange={(e) => setPrice(e.target.value)} /></div>
+          <div><label style={lbl}>{weightLabel}</label>
+            <input style={fld} type="number" step="0.1" value={weightLocked ? '0' : weight} disabled={weightLocked} onChange={(e) => setWeight(e.target.value)} /></div>
+        </div>
+        <div style={hint}>{weightHint}</div>
+        <div style={{ marginTop: 10 }}><label style={lbl}>Notes (optional)</label>
+          <textarea style={{ ...fld, height: 'auto', minHeight: 44, resize: 'vertical' }} value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
+      </section>
+
+      <div style={{ background: 'var(--s2)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 12px', marginTop: 14, fontSize: FONT_SIZE.sm, color: 'var(--t2)' }}>
+        <span style={{ color: 'var(--text)', fontWeight: FONT_WEIGHT.bold }}>This will read: </span>{preview}
       </div>
-      <div style={{ marginTop: 8 }}><label style={lbl}>Notes</label>
-        <textarea style={{ ...fld, minHeight: 48, resize: 'vertical' }} value={notes} onChange={(e) => setNotes(e.target.value)} /></div>
 
       {error && <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--status-negative-text)', marginTop: 8 }}>{error}</div>}
-      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-        <button onClick={save} disabled={saving} style={{ padding: '6px 14px', borderRadius: 5, border: 'none', cursor: 'pointer', background: 'var(--acc)', color: 'var(--text-inverse)', fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, opacity: saving ? 0.6 : 1 }}>{saving ? 'Saving…' : 'Save'}</button>
-        <button onClick={onDone} disabled={saving} style={{ padding: '6px 14px', borderRadius: 5, cursor: 'pointer', background: 'none', border: '1px solid var(--border)', color: 'var(--t2)', fontSize: FONT_SIZE.sm }}>Cancel</button>
+      <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+        <button onClick={save} disabled={saving} style={{ padding: '7px 16px', borderRadius: 6, border: 'none', cursor: 'pointer', background: 'var(--acc)', color: 'var(--text-inverse)', fontSize: FONT_SIZE.sms, fontWeight: FONT_WEIGHT.bold, opacity: saving ? 0.6 : 1 }}>{saving ? 'Saving…' : 'Save event'}</button>
+        <button onClick={onDone} disabled={saving} style={{ padding: '7px 16px', borderRadius: 6, cursor: 'pointer', background: 'none', border: '1px solid var(--border)', color: 'var(--t2)', fontSize: FONT_SIZE.sms }}>Cancel</button>
       </div>
     </Modal>
   );

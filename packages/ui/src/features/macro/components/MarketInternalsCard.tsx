@@ -1,30 +1,21 @@
-import { stressLabel, creditLabel, ratesDollarLabel, FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
+import { stressLabel, creditLabel, ratesDollarLabel, FONT_SIZE } from '@stw/shared';
 import type { VolatilityStress } from '../useVolatilityStress';
 import type { CreditLiquidity } from '../useCreditLiquidity';
 import type { RatesDollar } from '../useRatesDollar';
-import { scoreColor, SourceNote } from './macroVisuals';
+import { Card, CardHeader, HelpPanel, SourceNote, bandColor } from './macroVisuals';
 
-// Modules 5–7 consolidated into one "Market Internals" table (host, 2026-07-08).
-// Volatility/Stress, Credit/Liquidity and Rates+Dollar were three near-identical
-// full-width cards that stacked into ~3 screens of scroll and duplicated the
-// Module Scores strip. Rather than an accordion (rejected — nobody wants to
-// expand), each sleeve is one static row: score chip + name + status + its key
-// values inline, plus a single source/updated footer. The per-sleeve tile
-// components (VolatilityStressCard/CreditLiquidityCard/RatesDollarCard) are kept
-// but currently unused — ready if we switch to an all-cards-shown layout instead.
+// "Under the hood" — the three stress sleeves (Volatility, Credit, Rates+Dollar) as
+// status-dot rows. Pure re-layout: scores + labels come from the same sleeve hooks
+// the regime engine reads. Source line is pinned to the card bottom so the card
+// stays equal-height alongside the GEX and Fear/Greed cards in the 3-col grid.
 
 interface Props {
   volatility: VolatilityStress | null;
   credit: CreditLiquidity | null;
   rates: RatesDollar | null;
-}
-
-interface Row {
-  key: string;
-  name: string;
-  score: number | null;
-  label: string;
-  reading: string;
+  helpOpen: boolean;
+  onToggleHelp: () => void;
+  help: React.ReactNode;
 }
 
 const n1 = (v: number | null | undefined) => (v != null ? v.toFixed(1) : '—');
@@ -38,8 +29,7 @@ function volReading(v: VolatilityStress | null): string {
 function creditReading(c: CreditLiquidity | null): string {
   if (!c) return 'unavailable';
   const band = c.belowMa50 == null ? '' : ` · ${c.belowMa50 ? 'tight' : 'wide'} vs 50D`;
-  const d5 = c.delta5 == null ? '' : ` · 5D ${c.delta5 >= 0 ? '+' : ''}${c.delta5.toFixed(2)}pp`;
-  return `HY OAS ${n2(c.oas)}%${band}${d5}`;
+  return `HY OAS ${n2(c.oas)}%${band}`;
 }
 function ratesReading(r: RatesDollar | null): string {
   if (!r) return 'unavailable';
@@ -50,67 +40,36 @@ function ratesReading(r: RatesDollar | null): string {
   return `US10Y ${n2(r.us10y)}%${bp} · $ ${dollar}`;
 }
 
-// One-sentence synthesis of the three internals — the counterpart to the GEX
-// card's "Read:" line, so both panels give a fast read, not three raw scores.
-function internalsRead(vol: number | null, credit: number | null, rates: number | null): string | null {
-  const parts: string[] = [];
-  if (vol != null) parts.push(vol >= 60 ? 'volatility calm' : vol >= 45 ? 'volatility moderate' : 'volatility elevated');
-  if (credit != null) parts.push(credit >= 60 ? 'credit tight' : credit >= 45 ? 'credit steady' : 'credit widening');
-  if (rates != null) parts.push(rates >= 55 ? 'rates supportive' : rates >= 45 ? 'rates neutral' : 'rates a headwind');
-  const present = [vol, credit, rates].filter((s): s is number => s != null);
-  if (present.length === 0) return null;
-  const avg = present.reduce((a, b) => a + b, 0) / present.length;
-  const overall = avg >= 55 ? 'supportive' : avg >= 45 ? 'mixed' : 'fragile';
-  return `Internals ${overall} — ${parts.join(', ')}.`;
-}
+interface Signal { key: string; name: string; score: number | null; verdict: string; short: string }
 
-export function MarketInternalsCard({ volatility, credit, rates }: Props) {
-  const rows: Row[] = [
-    { key: 'vol', name: 'Volatility / Stress', score: volatility?.sleeveScore ?? null, label: stressLabel(volatility?.sleeveScore ?? null), reading: volReading(volatility) },
-    { key: 'credit', name: 'Credit / Liquidity', score: credit?.sleeveScore ?? null, label: creditLabel(credit?.sleeveScore ?? null), reading: creditReading(credit) },
-    { key: 'rates', name: 'Rates + Dollar', score: rates?.sleeveScore ?? null, label: ratesDollarLabel(rates?.sleeveScore ?? null), reading: ratesReading(rates) },
+export function MarketInternalsCard({ volatility, credit, rates, helpOpen, onToggleHelp, help }: Props) {
+  const signals: Signal[] = [
+    { key: 'vol', name: 'Volatility', score: volatility?.sleeveScore ?? null, verdict: stressLabel(volatility?.sleeveScore ?? null), short: volReading(volatility) },
+    { key: 'credit', name: 'Credit', score: credit?.sleeveScore ?? null, verdict: creditLabel(credit?.sleeveScore ?? null), short: creditReading(credit) },
+    { key: 'rates', name: 'Rates + $', score: rates?.sleeveScore ?? null, verdict: ratesDollarLabel(rates?.sleeveScore ?? null), short: ratesReading(rates) },
   ];
 
-  const read = internalsRead(volatility?.sleeveScore ?? null, credit?.sleeveScore ?? null, rates?.sleeveScore ?? null);
-
   return (
-    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '4px 16px 12px' }}>
-      {rows.map((r, i) => (
-        <div
-          key={r.key}
-          style={{
-            display: 'flex', alignItems: 'baseline', gap: 10, padding: '11px 0', flexWrap: 'wrap',
-            borderBottom: i < rows.length - 1 ? '1px solid var(--bsub)' : 'none',
-          }}
-        >
-          <span style={{ fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, color: scoreColor(r.score), width: 30, flexShrink: 0, textAlign: 'right' }}>
-            {r.score ?? '—'}
-          </span>
-          <span style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>{r.name}</span>
-          {/* Status is a chip (tinted by score color), not bare colored text. */}
-          <span style={{
-            fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.semibold, whiteSpace: 'nowrap',
-            color: scoreColor(r.score), background: `color-mix(in srgb, ${scoreColor(r.score)} 12%, transparent)`,
-            border: `1px solid color-mix(in srgb, ${scoreColor(r.score)} 28%, transparent)`,
-            borderRadius: 999, padding: '2px 8px',
-          }}>
-            {r.label}
-          </span>
-          {/* Readings pushed to the right, filling the horizontal space instead of a 2nd line. */}
-          <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', marginLeft: 'auto', textAlign: 'right' }}>{r.reading}</span>
-        </div>
-      ))}
-      {read && (
-        <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.5, paddingTop: 11 }}>
-          <span style={{ color: 'var(--t3)', fontWeight: FONT_WEIGHT.semibold }}>Read:</span> {read}
-        </div>
-      )}
-      <SourceNote
-        source="FRED daily (VIX, HY OAS, DGS10, broad $) · IV: TwelveData SPY"
-        href="https://fred.stlouisfed.org"
-        asOf={volatility?.asOf}
-        updatedAt={volatility?.updatedAt}
-      />
-    </div>
+    <Card style={{ display: 'flex', flexDirection: 'column' }}>
+      <CardHeader title="Under the hood" helpOpen={helpOpen} onToggleHelp={onToggleHelp} />
+      {helpOpen && <HelpPanel>{help}</HelpPanel>}
+      <div style={{ display: 'flex', flexDirection: 'column', marginTop: 2 }}>
+        {signals.map((s) => {
+          const color = bandColor(s.score);
+          return (
+            <div key={s.key} style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '8px 0', borderTop: '1px solid var(--bsub)' }}>
+              <span style={{ flexShrink: 0, width: 8, height: 8, borderRadius: '50%', background: color, alignSelf: 'center' }} />
+              <span style={{ flex: 1, fontSize: FONT_SIZE.xs, color: 'var(--t3)', lineHeight: 1.5 }}>
+                <b style={{ color: 'var(--text)', fontSize: FONT_SIZE.sm }}>{s.name}</b>{' '}
+                <span style={{ color }}>{s.verdict}</span> · {s.short}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ marginTop: 'auto' }}>
+        <SourceNote source="FRED + CBOE" href="https://fred.stlouisfed.org" asOf={volatility?.asOf} updatedAt={volatility?.updatedAt} marginTop={8} />
+      </div>
+    </Card>
   );
 }

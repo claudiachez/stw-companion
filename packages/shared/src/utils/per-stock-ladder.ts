@@ -34,6 +34,14 @@ export const DEFAULT_PER_STOCK_LADDER: PerStockDrawdownStep[] = [
   { drawdownPct: -20, holdFractionPct: 0 },
 ];
 
+/** Default per-OPTION ladder (2026-07-20 Settings redesign): options move faster, so this
+ *  ladder starts deeper but cuts sooner than the stock ladder. Same shape/semantics. */
+export const DEFAULT_PER_STOCK_OPTION_LADDER: PerStockDrawdownStep[] = [
+  { drawdownPct: -20, holdFractionPct: 50 },
+  { drawdownPct: -30, holdFractionPct: 25 },
+  { drawdownPct: -40, holdFractionPct: 0 },
+];
+
 // ── peak reconstruction from the fill log ─────────────────────────────────────
 
 /** One fill from `user_executions` — signed quantity (BUY > 0, SELL < 0) + when. */

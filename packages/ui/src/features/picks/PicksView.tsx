@@ -58,7 +58,7 @@ export function PicksView() {
   const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
   // Resizable split: the list pane's width as a % of the row; user drags the divider to set it.
   const splitRef = useRef<HTMLDivElement>(null);
-  const [listPct, setListPct] = useState(42);
+  const [listPct, setListPct] = useState(55);
   const [dragging, setDragging] = useState(false);
   // When the list pane is narrow (split dragged small), rows drop their secondary badges so nothing
   // overlaps. Measured live so it tracks both the divider and window resizes.
@@ -232,14 +232,16 @@ export function PicksView() {
         <div style={{ display: 'flex', background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', flexShrink: 0, gap: isMobile ? 0 : 4, padding: isMobile ? 0 : '0 8px' }}>
           {TABS.map((tab) => (
             <button key={tab} style={tabBtn(tab)} onClick={() => setActiveTab(tab)}>
-              {tab === 'positions' ? `${PICKS_TAB_LABELS.positions} (${positionCount})` : PICKS_TAB_LABELS[tab]}
+              {PICKS_TAB_LABELS[tab]}
             </button>
           ))}
         </div>
       )}
 
-      {/* FilterBar belongs to the position list only */}
-      {activeTab === 'positions' && !mobileDetail && (
+      {/* FilterBar belongs to the position list only. On DESKTOP it lives inside the split's
+          left pane (below) so — exactly like My Portfolio — it's confined to the list column
+          and the detail pane rises to the top beside it. On mobile it's a full-width bar here. */}
+      {isMobile && activeTab === 'positions' && !mobileDetail && (
         <FilterBar holdings={holdings} sectors={sectorOptions} filtered={positionCount} />
       )}
 
@@ -273,10 +275,15 @@ export function PicksView() {
               />
             </div>
           ) : (
-            <div style={{ flex: 1, overflowY: 'auto' }}>
-              {sorted.length === 0
-                ? <EmptyState message="No positions match your filters." />
-                : listContent}
+            <div style={{ flex: 1, overflow: 'hidden', padding: 12, background: 'var(--bg)' }}>
+              <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+                <div style={{ flexShrink: 0, padding: '6px 14px', background: 'var(--s2)', borderBottom: '1px solid var(--bsub)', fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--t3)' }}>Stock Picks · Ticker Details</div>
+                <div style={{ flex: 1, overflowY: 'auto' }}>
+                  {sorted.length === 0
+                    ? <EmptyState message="No positions match your filters." />
+                    : listContent}
+                </div>
+              </div>
             </div>
           )
         ) : (
@@ -284,9 +291,12 @@ export function PicksView() {
             <div
               ref={listPaneRef}
               style={{
-                // hidden-X clips list content at the divider; own stacking context (relative + zIndex 0)
-                // keeps the sticky tier header (zIndex 2) from painting over the detail pane.
-                overflow: 'hidden auto',
+                // FilterBar + list live together in this column, so — exactly like My Portfolio —
+                // the bar is confined to the list and the detail pane rises to the top beside it.
+                // The list scrolls INSIDE the card below; own stacking context (relative + zIndex 0)
+                // keeps the sticky tier header from painting over the detail pane.
+                display: 'flex', flexDirection: 'column',
+                overflow: 'hidden',
                 position: 'relative', zIndex: 0,
                 flexBasis: selected ? `${listPct}%` : 'auto',
                 flexGrow: selected ? 0 : 1,
@@ -295,23 +305,31 @@ export function PicksView() {
                 ...(dragging ? {} : { transition: 'flex-basis 0.15s ease' }),
               }}
             >
-              {sorted.length === 0
-                ? <EmptyState message="No positions match your filters." />
-                : listContent}
+              <FilterBar holdings={holdings} sectors={sectorOptions} filtered={positionCount} />
+              {/* Full-width padded card (same width criteria as My Portfolio's positions list) */}
+              <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', background: 'var(--bg)', padding: '16px 16px 24px' }}>
+                <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+                  <div style={{ flexShrink: 0, padding: '6px 14px', background: 'var(--s2)', borderBottom: '1px solid var(--bsub)', fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--t3)' }}>Stock Picks · Ticker Details</div>
+                  <div style={{ flex: 1, overflowY: 'auto' }}>
+                    {sorted.length === 0
+                      ? <EmptyState message="No positions match your filters." />
+                      : listContent}
+                  </div>
+                </div>
+              </div>
             </div>
             {selected && (
               <>
-                {/* Draggable divider — click and drag to set the split width */}
+                {/* Draggable divider — click and drag to set the split width (matches Portfolio) */}
                 <div
                   onMouseDown={startResize}
                   title="Drag to resize"
                   style={{
-                    flexShrink: 0, width: 6, cursor: 'col-resize',
+                    flexShrink: 0, width: 5, cursor: 'col-resize',
                     background: dragging ? 'var(--acc)' : 'var(--border)',
-                    borderLeft: '1px solid var(--bsub)', borderRight: '1px solid var(--bsub)',
                   }}
                 />
-                <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', position: 'relative', zIndex: 0, background: 'var(--bg)' }}>
+                <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', position: 'relative', zIndex: 0, borderLeft: '1px solid var(--bsub)' }}>
                   <HoldingDetail
                     holding={selected}
                     totalCount={holdings.length}

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Holding } from '../api';
 import {
-  TIERS, fmtDateTime, FONT_SIZE, FONT_WEIGHT, SPACE,
+  TIERS, fmtDateTime, FONT_SIZE, FONT_WEIGHT, RADIUS, SPACE,
   holdingType, holdingPnlPct, closedPnlPct, closedPnlContribution, legIsOpen, legUnrealizedPnlPct, legMarkReason,
   fmtOptionExpiry, fmtLegInstrument, displayInitialWeight,
 } from '@stw/shared';
@@ -15,7 +15,7 @@ import { ConvictionTimeline } from './ConvictionTimeline';
 import { SourceLink } from './SourceLink';
 import { RegimeBadge } from './RegimeBadge';
 import { Badge } from '../../../primitives/Badge';
-import { DetailPane, DetailPaneMetricLabel } from '../../../primitives/DetailPane';
+import { DetailPane, DetailPaneMetricLabel, DetailPaneSection } from '../../../primitives/DetailPane';
 import { useUserPositions } from '../../portfolio/useUserPositions';
 import { cleanUnderlying } from '../../portfolio/api';
 import { useEarningsCalendar } from '../../earnings/useEarningsCalendar';
@@ -33,27 +33,9 @@ function fmtDate(s: string | null): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
 }
 
-function HistorySection({ title, children }: { title: string; children: React.ReactNode }) {
-  const [open, setOpen] = useState(true);
-  return (
-    <div style={{ marginTop: 20 }}>
-      <button
-        onClick={() => setOpen((v) => !v)}
-        style={{
-          width: '100%', display: 'flex', alignItems: 'center', gap: 8,
-          background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0',
-        }}
-      >
-        <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-        <span style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', whiteSpace: 'nowrap' }}>
-          {title} {open ? '▲' : '▼'}
-        </span>
-        <span style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-      </button>
-      {open && <div style={{ marginTop: 8 }}>{children}</div>}
-    </div>
-  );
-}
+// The stat block's "big" value. Design calls for 19px; there is no 19 token, so this uses
+// FONT_SIZE.xl (20) — the token documented for "at-a-glance stat numbers", 1px over spec.
+const statBig = (color: string): React.CSSProperties => ({ fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, color, lineHeight: 1.15, fontVariantNumeric: 'tabular-nums' });
 
 interface Props {
   holding: Holding;
@@ -152,7 +134,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
 
   // ── Conviction segments ───────────────────────────────────
   const convSegs = [1, 2, 3, 4, 5].map((v) => (
-    <div key={v} style={{ flex: 1, height: 6, borderRadius: 3, background: v <= h.conviction ? tier.color : 'var(--border)' }} />
+    <div key={v} style={{ flex: 1, height: 6, borderRadius: RADIUS.sm, background: v <= h.conviction ? tier.color : 'var(--border)' }} />
   ));
 
   // ── Render helpers ────────────────────────────────────────
@@ -160,18 +142,16 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
   // Options Detail) — a separate, smaller column split from the top-level DetailPane metrics.
   const colBorder: React.CSSProperties = { borderLeft: '1px solid var(--border)', paddingLeft: SPACE[3] };
 
-  // Content for DetailPane's first metric column — no outer wrapper div; DetailPane owns the
-  // flex/border/spacing for all 3 columns now.
+  // Content for DetailPane's first stat column — no outer wrapper div; DetailPane owns the
+  // grid/border/spacing for all columns now.
   function renderPriceContent() {
     return (
       <>
-        <DetailPaneMetricLabel>{isLive ? 'Live Market' : 'Last Price'}</DetailPaneMetricLabel>
+        <DetailPaneMetricLabel>{isLive ? 'Live market' : 'Last price'}</DetailPaneMetricLabel>
         {price ? (
           <>
-            <div style={{ fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)', lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
-              ${price.toFixed(2)}
-            </div>
-            {isLive && dpStr  && <div style={{ fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold, color: dpColor, marginTop: 2 }}>{dpStr}</div>}
+            <div style={statBig('var(--text)')}>${price.toFixed(2)}</div>
+            {isLive && dpStr  && <div style={{ fontSize: FONT_SIZE['2xs'], fontWeight: 400, color: dpColor, marginTop: 2 }}>{dpStr}</div>}
             {isLive && hiloStr && <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 1 }}>{hiloStr}</div>}
             <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 4, opacity: 0.8 }}>
               {srcTime ? `Finnhub · ${srcTime}` : 'Finnhub'}
@@ -243,15 +223,15 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
     const curWeight  = h.current_weight;
     return (
       <>
-        <DetailPaneMetricLabel>Initial · Current Weight</DetailPaneMetricLabel>
-        <div style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' }}>
+        <DetailPaneMetricLabel>STW's weight</DetailPaneMetricLabel>
+        <div style={{ fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)', fontVariantNumeric: 'tabular-nums', lineHeight: 1.15 }}>
           {initWeight != null ? `${initWeight}%` : '—'}
           <span style={{ color: 'var(--t3)', fontWeight: FONT_WEIGHT.medium, margin: '0 4px' }}>→</span>
           {curWeight != null ? `${curWeight}%` : '—'}
         </div>
         {openLegs.length > 0 ? (
           /* one OPEN leg per line — closed legs live in Transaction History */
-          <div style={{ fontSize: isMobile ? FONT_SIZE.xs : FONT_SIZE['2xs'], color: 'var(--t2)', marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t2)', marginTop: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
             {openLegs.map((l) => (
               <div key={l.id} style={{ fontVariantNumeric: 'tabular-nums' }}>
                 {l.weight != null && <span style={{ color: 'var(--text)', fontWeight: FONT_WEIGHT.semibold }}>{l.weight}% </span>}
@@ -261,8 +241,24 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
             ))}
           </div>
         ) : (
-          <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 4 }}>no open legs</div>
+          <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 4 }}>initial → current</div>
         )}
+      </>
+    );
+  }
+
+  // "Your side" — whether the subscriber tails this pick, the other half of the pick↔execution
+  // loop. Absent in the admin app (no /portfolio route; holdsOwn is always false there).
+  function renderYourSideContent() {
+    return (
+      <>
+        <DetailPaneMetricLabel>Your side</DetailPaneMetricLabel>
+        <div style={{ fontSize: FONT_SIZE.xl, fontWeight: FONT_WEIGHT.bold, color: holdsOwn ? 'var(--acc)' : 'var(--t3)', lineHeight: 1.15 }}>
+          {holdsOwn ? 'Tailing' : 'Not held'}
+        </div>
+        <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 4 }}>
+          {holdsOwn ? 'you hold this' : "you don't tail this pick"}
+        </div>
       </>
     );
   }
@@ -271,7 +267,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
     if (pType !== 'mixed') return null;
     if (openSharesPnl == null && openOptionsPnl == null) return null;
     return (
-      <div style={{ background: 'var(--s2)', border: '1px solid var(--bsub)', borderRadius: 6, padding: '10px 12px', marginBottom: 12 }}>
+      <div style={{ background: 'var(--s2)', border: '1px solid var(--bsub)', borderRadius: RADIUS.md, padding: '10px 12px', marginBottom: SPACE[2.5] }}>
         <DetailPaneMetricLabel>P&L Breakdown</DetailPaneMetricLabel>
         {/* Shares 25% · Options 25% · Options Detail 50% (stacks on mobile). */}
         <div style={{ display: 'flex', flexWrap: isMobile ? 'wrap' : 'nowrap', gap: isMobile ? 10 : 0, alignItems: 'flex-start' }}>
@@ -373,7 +369,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
             return (
               <div key={leg.id} style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '6px 10px', borderRadius: 5,
+                padding: '6px 10px', borderRadius: RADIUS.DEFAULT,
                 background: 'var(--s2)', border: '1px solid var(--bsub)',
                 fontSize: FONT_SIZE.xs, gap: 8,
               }}>
@@ -418,69 +414,46 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
   function renderLegsSection() {
     if (pType !== 'options' || openOptionLegs.length === 0) return null;
     return (
-      <div style={{ marginBottom: 12 }}>
-        <DetailPaneMetricLabel>Options Legs</DetailPaneMetricLabel>
+      <DetailPaneSection title="Options legs">
         {renderLegRows()}
-      </div>
+      </DetailPaneSection>
     );
   }
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-      {/* Back / Close + Edit buttons — a small custom utility bar, not DetailPane's own close
-          button: on mobile this reads "← Back" and moves first via `order`, unlike DetailPane's
-          fixed top-right icon-only close affordance, so it stays its own row above DetailPane. */}
-      <div style={{ padding: '10px 16px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <button
-          onClick={onClose}
-          style={{
-            fontSize: FONT_SIZE.sm, color: 'var(--t3)', background: 'none', border: 'none', cursor: 'pointer',
-            padding: isMobile ? '8px 0' : '4px 8px',
-            minHeight: isMobile ? 44 : 'auto',
-            display: 'flex', alignItems: 'center', order: isMobile ? 0 : 2,
-          }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--text)'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--t3)'; }}
-        >
-          {isMobile ? '← Back' : 'Close →'}
-        </button>
-        {canEdit && h.ticker !== 'CASH' && !editing && (
-          <button
-            onClick={() => setEditing(true)}
-            style={{
-              fontSize: FONT_SIZE.sm, color: 'var(--acc)', background: 'none',
-              border: '1px solid var(--border)', borderRadius: 5, cursor: 'pointer',
-              padding: '4px 10px', order: 1,
-            }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
-          >
-            ✎ Edit
-          </button>
-        )}
-      </div>
-
+    <>
       {/* Edit — a single modal: position fields + legs together (admin only) */}
       {editing && <PositionEditor holding={h} onDone={() => setEditing(false)} />}
 
       <DetailPane
+        eyebrow="Stock Picks · STW's pick"
         title={<span style={{ color: tier.color }}>{h.ticker}</span>}
-        subtitle={h.name}
+        subtitle={h.action_date ? `${h.name} · last action ${fmtDate(h.action_date)}` : h.name}
         isMobile={isMobile}
+        onClose={onClose}
         badges={
           <>
             <Badge kind="category" category={h.basket} />
-            <Badge kind="action" action={h.last_action} />
-            <span style={{ fontSize: FONT_SIZE['2xs'], padding: '2px 6px', borderRadius: 4, color: 'var(--t2)', background: 'var(--s2)', border: '1px solid var(--bsub)' }}>
+            <span style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: '0.06em', padding: '2px 8px', borderRadius: RADIUS.DEFAULT, color: 'var(--t2)', background: 'var(--s2)', border: '1px solid var(--border)' }}>
               Rank #{String(h.rank).padStart(2, '0')} / {totalCount}
             </span>
             <Badge kind="tier" tier={h.conviction} />
+            <Badge kind="action" action={h.last_action} />
             {h.ticker !== 'CASH' && <RegimeBadge regime={regime} />}
             {nextEarnings && <EarningsBadge event={nextEarnings} />}
-            {h.action_date && (
-              <span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>
-                Last action {fmtDate(h.action_date)}
-              </span>
+            {canEdit && h.ticker !== 'CASH' && !editing && (
+              <button
+                onClick={() => setEditing(true)}
+                style={{
+                  fontSize: FONT_SIZE['2xs'], color: 'var(--acc)', background: 'none',
+                  border: '1px solid var(--border)', borderRadius: RADIUS.DEFAULT, cursor: 'pointer',
+                  padding: '2px 8px',
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--s2)'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'none'; }}
+              >
+                ✎ Edit
+              </button>
             )}
           </>
         }
@@ -488,12 +461,13 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
           { key: 'price', content: renderPriceContent() },
           { key: 'pnl', content: renderPnlContent() },
           { key: 'weight', content: renderWeightContent() },
+          { key: 'yourside', content: renderYourSideContent() },
         ] : undefined}
       >
         {holdsOwn && (
           <button
             onClick={() => navigate(`/portfolio?ticker=${encodeURIComponent(h.ticker)}`)}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--acc)', background: 'none', border: '1px solid var(--c5b)', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', marginBottom: 12 }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: 'var(--acc)', background: 'none', border: '1px solid var(--c5b)', borderRadius: RADIUS.md, padding: '6px 12px', cursor: 'pointer', marginBottom: SPACE[2.5] }}
           >
             View your position →
           </button>
@@ -503,7 +477,7 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
         {h.ticker === 'CASH' && (() => {
           const cw = h.current_weight ?? h.initial_weight ?? 0;
           return (
-            <div style={{ background: 'var(--s2)', border: '1px solid var(--bsub)', borderRadius: 6, padding: '10px 12px', marginBottom: 12 }}>
+            <div style={{ background: 'var(--s2)', border: '1px solid var(--bsub)', borderRadius: RADIUS.md, padding: '10px 12px', marginBottom: SPACE[2.5] }}>
               <DetailPaneMetricLabel>Portfolio Weight</DetailPaneMetricLabel>
               {/* A negative CASH weight is leverage, not P&L — var(--status-negative-text), not
                   var(--pnl-loss). Same distinction drawn in HoldingRow.tsx's weight readout. */}
@@ -523,58 +497,68 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
         {/* Options legs */}
         {renderLegsSection()}
 
-        {/* Conviction meter */}
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
-            <DetailPaneMetricLabel>Conviction</DetailPaneMetricLabel>
-            {ddDate && <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>Updated {ddDate}</div>}
-          </div>
-          <div style={{ display: 'flex', gap: 3 }}>{convSegs}</div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 3 }}>
-            <span>Concern</span><span>Highest</span>
-          </div>
-        </div>
+        {/* STW's conviction meter */}
+        {h.ticker !== 'CASH' && (
+          <DetailPaneSection title="STW's conviction" action={ddDate ? <span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>updated {ddDate}</span> : undefined}>
+            <div style={{ display: 'flex', gap: 3 }}>{convSegs}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 3 }}>
+              <span>Concern</span><span style={{ color: 'var(--status-positive-text)', fontWeight: FONT_WEIGHT.bold }}>Highest {h.conviction}/5</span>
+            </div>
+          </DetailPaneSection>
+        )}
 
-        {/* Thesis summary — the durable "why he's in it" (green card). The ↗ opens the
-            original DD message (everyone sees it; Discord gates access). */}
+        {/* Why STW holds it — the durable "why he's in it" (green positive card). The ↗ opens
+            the original DD message (everyone sees it; Discord gates access). */}
         {h.summary && (
-          <div style={{ position: 'relative', padding: '10px 12px', paddingRight: h.dd_source_url ? 30 : 12, borderRadius: 6, background: tier.bg, border: `1px solid ${tier.border}`, marginBottom: 12, fontSize: FONT_SIZE.base, color: 'var(--text)', lineHeight: 1.6 }}>
-            {h.summary}
+          <div style={{ position: 'relative', padding: '12px 14px', paddingRight: h.dd_source_url ? 30 : 14, borderRadius: 10, background: 'var(--c5bg)', border: '1px solid var(--c5b)', marginBottom: SPACE[2.5] }}>
+            <div style={{ fontSize: FONT_SIZE['3xs'], fontWeight: FONT_WEIGHT.bold, color: 'var(--acc)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: SPACE[1.5] }}>Why STW holds it</div>
+            <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.6 }}>{h.summary}</div>
             <SourceLink url={h.dd_source_url} title="Open DD source message" style={{ position: 'absolute', top: 6, right: 6 }} />
           </div>
         )}
 
-        {/* Thesis key points (part of the durable thesis, not the latest comment) */}
+        {/* Key points (part of the durable thesis, not the latest comment) */}
         {h.bullets && h.bullets.length > 0 && (
-          <div style={{ marginBottom: 12 }}>
-            <DetailPaneMetricLabel>Key Points{ddDate ? ` · ${ddDate}` : ''}</DetailPaneMetricLabel>
+          <DetailPaneSection title={`Key points${ddDate ? ` · ${ddDate}` : ''}`}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {h.bullets.map((b, i) => (
-                <div key={i} style={{ display: 'flex', gap: 8, fontSize: FONT_SIZE.base, color: 'var(--t2)', lineHeight: 1.5 }}>
+                <div key={i} style={{ display: 'flex', gap: 8, fontSize: FONT_SIZE.sm, color: 'var(--t2)', lineHeight: 1.5 }}>
                   <span style={{ color: tier.color, flexShrink: 0, marginTop: 2 }}>◆</span>
                   <span>{b}</span>
                 </div>
               ))}
             </div>
-          </div>
+          </DetailPaneSection>
         )}
 
-        {/* Commentary — one unified conviction_comments feed (host Discord/stream notes +
-            subscriber personal notes), newest first. Replaces the old Latest Comments /
-            Conviction Notes split. */}
+        {/* Commentary — STW's public conviction_comments (user_id null: Discord/stream notes),
+            newest first. The subscriber's own private note is its own section below. */}
         {showHistory && h.ticker !== 'CASH' && (
-          <HistorySection title="Commentary">
-            <ConvictionTimeline ticker={h.ticker} currentConviction={h.conviction} />
-          </HistorySection>
+          <DetailPaneSection title="Commentary">
+            <ConvictionTimeline ticker={h.ticker} currentConviction={h.conviction} scope="stw" />
+          </DetailPaneSection>
         )}
-        {/* Transaction History — the position's evolution, from leg_transactions (same source as the
-            legs, so they can't disagree): position-level action per day + the per-leg events under it. */}
+
+        {/* Your personal note — the subscriber's own private note (RLS: only they can read it),
+            a distinct section per the design. Subscriber-only; admins author STW commentary. */}
+        {showHistory && !isAdmin && h.ticker !== 'CASH' && (
+          <DetailPaneSection title="Your personal note" action={<span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>only you see this</span>}>
+            <ConvictionTimeline ticker={h.ticker} currentConviction={h.conviction} scope="personal" />
+          </DetailPaneSection>
+        )}
+
+        {/* Transaction history — the position's evolution, from leg_transactions (same source as
+            the legs, so they can't disagree). LegTimeline carries the All/Open/Closed filters and,
+            for admins (canEdit), the + Add / ✎ edit / ✕ delete ledger controls. */}
         {showHistory && h.ticker !== 'CASH' && (
-          <HistorySection title="Transaction History">
+          <DetailPaneSection title="Transaction history">
             <LegTimeline ticker={h.ticker} legs={h.legs} />
-          </HistorySection>
+            <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: SPACE[2] }}>
+              Source: STW's posted trades{h.action_date ? ` · last action ${fmtDate(h.action_date)}` : ''}
+            </div>
+          </DetailPaneSection>
         )}
       </DetailPane>
-    </div>
+    </>
   );
 }

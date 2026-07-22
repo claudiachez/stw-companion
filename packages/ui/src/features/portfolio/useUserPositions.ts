@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { fetchUserPositions, fetchUserExecutions, fetchIbkrSettings } from './api';
+import { fetchUserPositions, fetchUserExecutions, fetchIbkrSettings, fetchIbkrAccount } from './api';
 import type { UserPosition, UserExecution, IbkrSettings } from './api';
 import { useAuthStore } from '../../store/auth';
 
@@ -30,5 +30,15 @@ export function useIbkrSettings(): ReturnType<typeof useQuery<IbkrSettings>> {
     queryFn: () => fetchIbkrSettings(userId!),
     enabled: !!userId,
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useIbkrAccount(): ReturnType<typeof useQuery<string | null>> {
+  const userId = useAuthStore((s) => s.user?.id);
+  return useQuery<string | null>({
+    queryKey: ['ibkr-account', userId],
+    queryFn: () => fetchIbkrAccount(userId!),
+    enabled: !!userId,
+    staleTime: 10 * 60 * 1000,
   });
 }

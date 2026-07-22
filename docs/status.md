@@ -4,43 +4,52 @@
 > (by `/wrap-up`). Durable rules live in CLAUDE.md; dated history in docs/session-history.md.
 
 ## State
-- All product code through **PR #149** is on `staging`. **A `staging → main` promotion is PENDING**
-  (host-approved required) — `origin/main..origin/staging` is **33 commits**. It carries the earlier
-  batch (AM recap + GEX at 8:32 #140, GEX QUICK-READ parser #141, GEX freshness guard #142, Account
-  Value NLV line #143) **plus the entire drawdown-protection overhaul** (#145–#149). **Scheduled fns
-  only run on the `main` deploy** — so none of the crons below fire on prod until the promotion.
-- **Migrations at `076`.** Applied: 072/073/075 on **PROD + sandbox**; 074/076 on **PROD only**
-  (sandbox has no `profiles` table — partial schema DB). All verified present this session.
-- CI (typecheck/lint/test/fn-parity) green on every merged PR. Run `/stw-review` before opening one.
+- **Webapp redesign is COMPLETE, pixel-QA'd, and PUSHED — `claude/webapp-redesign` → [PR #152](https://github.com/claudiachez/stw-companion/pull/152) open to `staging`** (host merges). ~76 commits.
+  typecheck + lint (0 errors) + 358 tests green locally; CI runs on the PR. Every changed surface was
+  rendered + screenshot-verified this session (dev server + the host's authed browser session), light theme
+  (dark not re-swept — the tokens are theme-aware but a dark pass is worth doing post-merge).
+- **This session** (on top of the earlier redesign + element-level re-QA): built the remaining ref screens
+  and applied the host's QA refinements — see the session-history entry for the full list. New screens:
+  **Stock Picks · Trades** (flat per-lot blotter), **Stock Picks · Portfolio Overview** (ref card system),
+  **GEX Signals** (setup sparklines from real TwelveData closes; live chart removed), **My Portfolio position
+  detail** (flat tx table). Plus: tooltip-icon restyle (app-wide), a **Default view** preference, several
+  filter/nav refinements, and a **dismissible Risk verdict banner**.
+- **Migrations at `079`** — all applied to PROD (`usmqbohcjcyszjxxvnqu`). **No new migrations this session:**
+  the Default-view pref rides the existing `profiles.preferences` (jsonb) + `set_my_preferences` RPC.
+- **`staging → main` promotion STILL PENDING** (approval-gated). `origin/main..origin/staging` = the
+  pre-redesign batch (drawdown overhaul #145–#149 + regime one-source #151); the redesign joins it once
+  #152 merges. Scheduled fns run only on `main`.
 
-## Drawdown-protection overhaul — DONE (plans/20260719_drawdown-protection-overhaul.md)
-All four items shipped + polish (details in docs/decisions.md + docs/drawdown-alerts.md):
-- **1 — Drawdown always shown** on the Risk tab + amber `near` band (user-set `drawdown_near_band_pp`).
-- **2 — Drawdown READ off LIVE prices** (Option A: live "now", peak stays synced). One-source
-  exception recorded; `ibkr_nlv` still the % denominator.
-- **3 — Alerts:** in-app (Overview chips), **email (Resend)** + **Discord DM** via
-  `drawdown-alerts-cron` — runs **every 15 min in market hours, live-priced, one alert per user per
-  day** (fires when a rung crosses). Discord token/guild managed in **admin → Config**; subscriber
-  links by **username** in Settings → Alert delivery (resolved by the `discord-link` fn).
-- **4 — Per-stock drawdown ladder** (reduce-to-% of peak, trim-aware via `user_executions`).
+## Redesign detail (plans/20260720_webapp_redesign/)
+All 11 design surfaces + foundation, recreated from the `.dc.html` refs, reuse-not-rebuild (no re-derived
+numbers, frozen regime gate untouched, event-sourcing + P&L-split byte-identical, IBKR order flow preserved).
+Per-screen flags/deviations → **plans/20260720_webapp_redesign/FLAGS.md**; element-level re-QA handover →
+**plans/20260720_webapp_redesign/REQA.md**. Design refs at `plans/20260720_webapp_redesign/refs/` are
+gitignored — re-fetch via the Claude Design MCP (project `665f2470-f119-40cb-9e5c-de3d86ad62d8`).
 
 ## Pending host actions
-1. **`staging → main` promotion** (approval-gated) — required for ALL scheduled fns to run on prod,
-   including the new alert cron. Nothing sends until this lands.
-2. **To enable off-app alerts** (set on the **web** Netlify site): `RESEND_API_KEY` + `ALERT_FROM_EMAIL`
-   (email); Discord bot token + server (guild) ID in **admin → Config → Discord alert bot**; enable the
-   bot's **GUILD_MEMBERS** intent + invite it to the STW server. `VITE_FINNHUB_KEY` is already set.
-   Dormant (no-op) until a channel is configured.
+1. **Review + merge [PR #152](https://github.com/claudiachez/stw-companion/pull/152)** to `staging`.
+2. **`staging → main` promotion** (approval-gated) — required for scheduled fns (incl. the drawdown-alert
+   cron) to run on prod. The redesign rides the next promotion after it reaches staging.
+3. Confirm the Delete-account support email (interim `cc@claudiachez.com` in ProfilePage).
 
-## Next work
-1. **Whop integration** (the locked direction — docs/decisions.md "flow through WHOP"): app access
-   mirrors Whop membership (`/me/has_access` + `membership.activated`/`deactivated` webhooks and/or
-   Login-with-Whop), and Whop feeds `profiles.discord_user_id`/`discord_username`. Do NOT build a
-   separate auth or Discord-OAuth — it would contradict this. The manual username-link is interim.
-2. **Parked follow-ups:** a Settings **email opt-out** toggle (the cron already honors
-   `preferences.drawdownAlertsOptOut`); the RegimeLight ↔ Macro-trend one-source fix (SPY shows
-   Momentum on Risk vs Healthy Pullback on Macro — two independent close fetches; pre-existing).
+## Next work (after #152 merges)
+1. **Deferred redesign follow-ups:**
+   - Rebuild the Stock Picks `HoldingDetail` tx table to the flat DATE·ACTION·DETAILS·PRICE·**Weight**
+     form (its mock variant has a Weight column + admin add/edit) — bring it to parity with the Portfolio
+     twin's new flat table. **Flagged/known divergence** — the shared `DetailPane` skeleton matches; only
+     the tx-table body differs.
+   - Wire the `useDefaultView` landing into the **admin** shell (web is wired; admin index still hardcoded).
+   - Wire the guardrail `*_enabled` flags into the **drawdown-alert cron** (the Risk tab already honors them).
+   - Add `SegmentedControl` to the DesignSystemGallery.
+   - Optional: a dark-theme visual sweep of the redesigned screens.
+2. **Parked (pre-redesign):** Whop integration (locked direction, not built); multi-trader tailing (needs a
+   proposal + host conflict rule before building); transcripts library tab; global activity feed; subscriber
+   closed-position P&L history (postponed). Full context in session-history.md.
 
 ## Notes
-- `ibkr_nlv` refreshes on every sync (`ibkr_nlv_at` stamps it); only `cumulative_cashflow` is
-  import-only. `risk_config.updated_at` is stale/unrelated — never use it as an as-of.
+- `ibkr_nlv` refreshes on every sync (`ibkr_nlv_at` stamps it); only `cumulative_cashflow` is import-only.
+- The GEX setup sparklines + the old live chart both pull TwelveData intraday; local dev has no market-data
+  key, so sparklines/quotes are empty there (graceful) and populate on staging/prod where the keys are set.
+- **Sandbox gaps (dev-only, not blocking):** `prev_conviction_level` backfill + `recent_changes` view
+  (migration 008) never applied to sandbox — those Overview blocks hide there; both render on PROD.

@@ -1,4 +1,4 @@
-import { ACTION_VARS, bColor, TIERS, FONT_SIZE, LETTER_SPACING, RADIUS, SPACE } from '@stw/shared';
+import { ACTION_VARS, bColor, TIERS, FONT_SIZE, RADIUS, SPACE } from '@stw/shared';
 
 // Phase 3 core component (plans/stw-design-system.md §3.2). One component, five kinds,
 // replacing the audit's 6 ad hoc badge treatments (green source chip, purple basket
@@ -50,19 +50,28 @@ const pillStyle = (color: string, bg: string, border = 'transparent'): React.CSS
   border: `1px solid ${border}`,
   background: bg,
   color,
-  fontSize: FONT_SIZE['2xs'],
+  fontSize: FONT_SIZE['3xs'],
   fontWeight: 700,
-  letterSpacing: LETTER_SPACING.label,
+  letterSpacing: '0.05em',
   textTransform: 'uppercase',
   lineHeight: 1.4,
   whiteSpace: 'nowrap',
 });
 
+// The source (trader) badge is the design's solid-green filled pill with white text —
+// distinct from the tinted category/tier/flag chips above.
+const sourceStyle: React.CSSProperties = {
+  display: 'inline-flex', alignItems: 'center', padding: `${SPACE[0.5]}px ${SPACE[2.5]}px`,
+  borderRadius: RADIUS.full, background: 'var(--acc)', color: 'var(--text-inverse)',
+  fontSize: FONT_SIZE.xs, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase',
+  lineHeight: 1.4, whiteSpace: 'nowrap',
+};
+
 export function Badge(props: BadgeProps) {
   switch (props.kind) {
     case 'source': {
       const name = props.trader ?? props.label ?? '—';
-      return <span style={pillStyle('var(--acc)', 'var(--c5bg)', 'var(--c5b)')}>{name}</span>;
+      return <span style={sourceStyle}>{name}</span>;
     }
     case 'category': {
       const name = props.category ?? props.label ?? '—';

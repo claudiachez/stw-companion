@@ -19,3 +19,6 @@ __pycache__/
 
 # Local DB snapshots (contain subscriber PII — never commit)
 backups/
+
+# Webapp redesign design references (large HTML/PNG — do not ship, keep local)
+plans/20260720_webapp_redesign/refs/

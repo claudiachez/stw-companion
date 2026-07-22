@@ -24,8 +24,8 @@ const VARIANT_STYLE: Record<ButtonVariant, React.CSSProperties> = {
     border: '1px solid var(--acc)',
   },
   secondary: {
-    background: 'var(--s2)',
-    color: 'var(--text)',
+    background: 'transparent',
+    color: 'var(--t2)',
     border: '1px solid var(--border)',
   },
   ghost: {
@@ -36,7 +36,7 @@ const VARIANT_STYLE: Record<ButtonVariant, React.CSSProperties> = {
   destructive: {
     background: 'transparent',
     color: 'var(--status-negative-text)',
-    border: '1px solid var(--status-negative-text)',
+    border: '1px solid var(--status-negative-border)',
   },
 };
 
@@ -49,9 +49,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       ref={ref}
       disabled={disabled}
       style={{
-        padding: `${SPACE[1.5]}px ${SPACE[4]}px`,
-        borderRadius: RADIUS.DEFAULT + 1,
-        fontSize: FONT_SIZE.base,
+        padding: `${SPACE[1.5]}px ${SPACE[3.5]}px`,
+        borderRadius: RADIUS.md,
+        fontSize: FONT_SIZE.sm,
         fontWeight: FONT_WEIGHT.semibold,
         cursor: disabled ? 'default' : 'pointer',
         opacity: disabled ? 0.55 : 1,

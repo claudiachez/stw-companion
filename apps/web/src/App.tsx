@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthGuard, LoginPage, Layout, ProfilePage, MacroView, type NavItem } from '@stw/ui';
+import { AuthGuard, LoginPage, Layout, ProfilePage, MacroView, useDefaultViewStore, type NavItem } from '@stw/ui';
 import { PicksRoute } from './features/picks/PicksRoute';
 import { SignalsRoute } from './features/signals/SignalsRoute';
 import { PortfolioRoute } from './features/portfolio/PortfolioRoute';
@@ -12,6 +12,12 @@ const WEB_NAV: NavItem[] = [
   { to: '/portfolio', label: 'My Portfolio', short: 'Portfolio' },
 ];
 
+// Land on the user's preferred view (Profile › Preferences › Default view); '/picks' by default.
+function LandingRedirect() {
+  const to = useDefaultViewStore((s) => s.defaultView);
+  return <Navigate to={to} replace />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -19,7 +25,7 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route element={<AuthGuard />}>
           <Route element={<Layout navItems={WEB_NAV} showSettingsLink />}>
-            <Route index element={<Navigate to="/picks" replace />} />
+            <Route index element={<LandingRedirect />} />
             <Route path="/picks"     element={<PicksRoute />} />
             <Route path="/signals"   element={<SignalsRoute />} />
             <Route path="/macro"     element={<MacroView />} />

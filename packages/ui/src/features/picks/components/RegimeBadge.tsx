@@ -33,9 +33,8 @@ export function RegimeBadge({ regime, compact = false }: { regime: TickerRegime 
         <span
           title="This ticker's own 9/21/200 EMA trend structure"
           style={{
-            fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.semibold, padding: '2px 6px', borderRadius: 4,
-            color: BUCKET_COLOR[regime.bucket], background: BUCKET_COLOR[regime.bucket] + '18',
-            border: `1px solid ${BUCKET_COLOR[regime.bucket]}28`, whiteSpace: 'nowrap',
+            fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.semibold,
+            color: BUCKET_COLOR[regime.bucket], whiteSpace: 'nowrap',
           }}
         >
           {TREND_BUCKET_META[regime.bucket].label}
@@ -45,9 +44,8 @@ export function RegimeBadge({ regime, compact = false }: { regime: TickerRegime 
         <span
           title={regime.sectorName ? `${regime.sectorName} sector rotation standing` : 'Sector rotation standing'}
           style={{
-            fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.semibold, padding: '2px 6px', borderRadius: 4,
-            color: STANDING_META[regime.standing].color, background: STANDING_META[regime.standing].color + '18',
-            border: `1px solid ${STANDING_META[regime.standing].color}28`, whiteSpace: 'nowrap',
+            fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.semibold,
+            color: STANDING_META[regime.standing].color, whiteSpace: 'nowrap',
           }}
         >
           {STANDING_META[regime.standing].label}

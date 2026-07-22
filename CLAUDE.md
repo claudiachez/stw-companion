@@ -67,6 +67,9 @@ order placement out of web. `plans/` files are date-prefixed `YYYYMMDD_<name>`.
   `categories`, `traders`, `app_config`, `gex_snapshots`, `macro_daily_snapshots`/`_recaps`,
   `profiles`/`tiers`, `ops_log`.
 - RLS: `holdings`/`signals` write = editor only; `user_*`/`risk_config`/`regime_exit_audit` = user-owned.
+  `profiles` has NO broad UPDATE policy — self-edits go through SECURITY DEFINER RPCs (`set_my_preferences`,
+  `set_my_display_name`, `set_my_avatar_url`). `risk_config` carries per-guardrail `*_enabled` toggles +
+  `per_stock_option_ladder` (078); `profiles.avatar_url` + a public `avatars` bucket (079).
 - `holding_transactions` is trigger-logged (016) on any `holdings` action change — never written
   directly. `holdings.action_date` is a SEPARATE write path from a leg's own date — fix both.
 - Destructive migration → snapshot affected tables to gitignored `backups/` first.
@@ -113,6 +116,10 @@ order placement out of web. `plans/` files are date-prefixed `YYYYMMDD_<name>`.
 - **Frozen:** regime gate at engine 1.1.0; the gate and the Macro composite never blend; no new gate indicators.
 - **Access + Discord via Whop (direction, not built):** app access will mirror Whop membership; Whop
   links Discord + feeds `profiles.discord_user_id`. Don't build separate auth / Discord-OAuth.
+- **Webapp redesign (2026-07-21):** whole app rebuilt from the Claude Design refs — pixel-exact,
+  reuse-not-rebuild. `FONT_SIZE` expanded to the design's px ladder (`lg`=16); every ticker is a sized
+  `TickerLink` (Macro index/ETF exempt); `showMoney` global privacy pref. On `claude/webapp-redesign`
+  (unpushed pending QA). Full detail → docs/decisions.md; per-screen flags → plans/20260720_webapp_redesign/FLAGS.md.
 
 ## Tech stack
 React 18 + Vite 5 + TS · pnpm workspace · react-router 6 · TanStack Query 5 (60s stale) · Zustand 5 ·

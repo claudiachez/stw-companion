@@ -14,8 +14,11 @@ const ACTIONS = ['New', 'Upsized', 'Trimmed', 'Hold', 'Closed'];
 // Market sector options: canonical GICS-11 + the non-equity buckets (ETF / Cash).
 const SECTOR_OPTIONS = [...GICS_SECTORS, ...NON_EQUITY_BUCKETS];
 
-const label: React.CSSProperties = { fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3, display: 'block' };
-const field: React.CSSProperties = { width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 5, padding: '6px 8px', fontSize: FONT_SIZE.base, color: 'var(--text)', boxSizing: 'border-box' };
+const label: React.CSSProperties = { fontSize: FONT_SIZE['3xs'], fontWeight: FONT_WEIGHT.bold, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 3, display: 'block' };
+// 9px/700/0.1em uppercase section header — the redesign's grouped-form label.
+const sectionLbl: React.CSSProperties = { fontSize: FONT_SIZE['3xs'], fontWeight: FONT_WEIGHT.bold, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6, display: 'block' };
+const field: React.CSSProperties = { width: '100%', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 5, padding: '6px 8px', fontSize: FONT_SIZE.sm, color: 'var(--text)', boxSizing: 'border-box', height: 30 };
+const fieldSelect: React.CSSProperties = { ...field, padding: '0 6px' };
 
 interface Props { holding: Holding; onDone: () => void; }
 
@@ -88,36 +91,68 @@ export function PositionEditor({ holding: h, onDone }: Props) {
     }
   }
 
+  const isClosing = lastAction === 'Closed' || lastAction === 'Expired';
+  const derivedCell: React.CSSProperties = { background: 'var(--s2)', padding: '9px 12px' };
+  const derivedVal: React.CSSProperties = { fontSize: FONT_SIZE.lg, fontWeight: FONT_WEIGHT.bold, color: 'var(--text)', fontVariantNumeric: 'tabular-nums' };
+
   return (
-    <Modal onClose={onDone} width="lg" title={`✎ Edit ${h.ticker}`}>
-        {/* Position fields */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <div><label style={label}>Conviction</label>
-            <select style={field} value={conviction} onChange={(e) => setConviction(e.target.value)}>{CONVICTIONS.map((v) => <option key={v} value={v}>{v} — {TIERS[v].short}</option>)}</select></div>
-          <div><label style={label}>Status</label>
-            <select style={field} value={lastAction} onChange={(e) => setLastAction(e.target.value)}>{ACTIONS.map((a) => <option key={a} value={a}>{a}</option>)}</select></div>
-          <div><label style={label}>Basket</label>
-            <select style={field} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}><option value="">— Uncategorized —</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-          <div><label style={label}>Sector</label>
-            <select style={field} value={sector} onChange={(e) => setSectorDraft(e.target.value)}><option value="">— Unmapped —</option>{SECTOR_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
-          <div><label style={label}>Last Action Date</label>
-            <input style={field} type="date" value={actionDate} onChange={(e) => setActionDate(e.target.value)} /></div>
-          <div><label style={label}>Initial Position Weight %</label>
-            <div style={{ ...field, background: 'var(--s2)', color: 'var(--text)', fontWeight: 600 }}>{initWeight != null ? `${initWeight}%` : '—'}</div></div>
-          <div><label style={label}>Current Position Weight %</label>
-            <div style={{ ...field, background: 'var(--s2)', color: 'var(--text)', fontWeight: 600 }}>{curWeight != null ? `${curWeight}%` : '—'}</div></div>
-          <div><label style={label}>Equity % of split</label>
-            <input style={field} type="number" step="1" min="0" max="100" value={equityPct} placeholder="default" onChange={(e) => setEquityPct(e.target.value)} /></div>
-        </div>
-        <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 6 }}>
-          Initial = the sum of the open legs’ lots (from the diary). Current = the live weight the routines
-          restate weekly. Both auto-derive — move weight by editing legs in Transaction History.
-          Equity % sets this position’s equity:options split (e.g. 30 → 30:70); blank uses the Config default (90:10).
+    <Modal onClose={onDone} width="lg" title={`Edit position — ${h.ticker}`}>
+        {/* Read-only derived block — Initial / Current / Rank all come from the ledger + routines */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 0, border: '1px solid var(--bsub)', borderRadius: 8, overflow: 'hidden' }}>
+            <div style={derivedCell}>
+              <div style={label}>Initial weight</div>
+              <div style={derivedVal}>{initWeight != null ? `${initWeight}%` : '—'}</div>
+            </div>
+            <div style={{ ...derivedCell, borderLeft: '1px solid var(--bsub)' }}>
+              <div style={label}>Current weight</div>
+              <div style={derivedVal}>{curWeight != null ? `${curWeight}%` : '—'}</div>
+            </div>
+            <div style={{ ...derivedCell, borderLeft: '1px solid var(--bsub)' }}>
+              <div style={label}>Rank</div>
+              <div style={derivedVal}>#{h.rank}</div>
+            </div>
+          </div>
+          <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: 8 }}>
+            These derive from the transaction ledger — to move weight, log a transaction instead of editing here.
+          </div>
         </div>
 
+        {/* Rating & status */}
+        <section style={{ marginBottom: 14 }}>
+          <label style={sectionLbl}>Rating &amp; status</label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+            <div><label style={label}>Conviction</label>
+              <select style={fieldSelect} value={conviction} onChange={(e) => setConviction(e.target.value)}>{CONVICTIONS.map((v) => <option key={v} value={v}>{v} — {TIERS[v].short}</option>)}</select></div>
+            <div><label style={label}>Status</label>
+              <select style={fieldSelect} value={lastAction} onChange={(e) => setLastAction(e.target.value)}>{ACTIONS.map((a) => <option key={a} value={a}>{a}</option>)}</select></div>
+            <div><label style={label}>Last action date</label>
+              <input style={field} type="date" value={actionDate} onChange={(e) => setActionDate(e.target.value)} /></div>
+          </div>
+          <div style={{ fontSize: FONT_SIZE.xs, color: isClosing ? 'var(--status-warning-text)' : 'var(--t3)', marginTop: 6 }}>
+            ⚠ Setting Status to Closed or Expired zeroes the current weight — subscribers see the position leave the list.
+          </div>
+        </section>
+
+        {/* Classification */}
+        <section>
+          <label style={sectionLbl}>Classification</label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+            <div><label style={label}>Basket</label>
+              <select style={fieldSelect} value={categoryId} onChange={(e) => setCategoryId(e.target.value)}><option value="">— Uncategorized —</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+            <div><label style={label}>Sector (GICS)</label>
+              <select style={fieldSelect} value={sector} onChange={(e) => setSectorDraft(e.target.value)}><option value="">— Unmapped —</option>{SECTOR_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
+            <div><label style={label}>Equity % of split</label>
+              <input style={field} type="number" step="1" min="0" max="100" value={equityPct} placeholder="default 90" onChange={(e) => setEquityPct(e.target.value)} /></div>
+          </div>
+          <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: 6 }}>
+            Equity % sets this position’s shares:options split (e.g. 30 → 30:70); blank uses the Config default (90:10).
+          </div>
+        </section>
+
         {/* Open legs — read-only reference; edit via Transaction History */}
-        <div style={{ marginTop: 14, borderTop: '1px dashed var(--border)', paddingTop: 12 }}>
-          <div style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, color: 'var(--t3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Open legs</div>
+        <div style={{ marginTop: 14 }}>
+          <div style={sectionLbl}>Open legs</div>
           {openLegs.length === 0 ? (
             <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)' }}>No open legs.</div>
           ) : (
@@ -125,8 +160,8 @@ export function PositionEditor({ holding: h, onDone }: Props) {
               {openLegs.map((l) => <OpenLegRow key={l.id} leg={l} />)}
             </div>
           )}
-          <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 8 }}>
-            Add, edit, trim or close legs in <strong>Transaction History</strong> below — legs derive from those events.
+          <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: 5 }}>
+            Add, trim or close legs by logging a transaction in <strong>Transaction History</strong> below — legs derive from those events.
           </div>
         </div>
 
@@ -149,7 +184,7 @@ function fmtOpenDate(s: string | null): string {
 function OpenLegRow({ leg }: { leg: Leg }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, background: 'var(--s2)', border: '1px solid var(--bsub)', borderRadius: 6, padding: '6px 10px', fontSize: FONT_SIZE.sm }}>
-      <span style={{ color: 'var(--text)', fontWeight: FONT_WEIGHT.semibold }}>
+      <span style={{ color: 'var(--text)', fontWeight: FONT_WEIGHT.bold }}>
         {leg.instrument_type === 'SHARES' ? 'Shares' : fmtLegInstrument(leg)}
         {leg.opened_at && <span style={{ color: 'var(--t3)', fontWeight: 400, marginLeft: 6 }}>· opened {fmtOpenDate(leg.opened_at)}</span>}
       </span>

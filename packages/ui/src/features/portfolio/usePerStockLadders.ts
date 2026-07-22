@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import {
-  perStockLadderStatus, reconstructPositionEpisode, DEFAULT_PER_STOCK_LADDER, DRAWDOWN_NEAR_BAND_PP,
+  perStockLadderStatus, reconstructPositionEpisode, DEFAULT_PER_STOCK_LADDER,
+  DEFAULT_PER_STOCK_OPTION_LADDER, DRAWDOWN_NEAR_BAND_PP,
   type PerStockLadderStatus, type PositionFill,
 } from '@stw/shared';
 import { usePriceCacheStore } from '../../store/priceCache';
@@ -36,35 +37,45 @@ const RECONCILE_TOL = 1e-3;
  * running quantity against the live snapshot — a mismatch means missing history, and we
  * surface it as "incomplete" (peak unknown) rather than trusting a half-seen peak.
  *
- * Keyed by cleaned underlying; only names with a real long/short stock position and a usable
+ * Keyed by cleaned underlying; only names with a real long/short position and a usable
  * avg_cost appear. Advisory/display-only.
+ *
+ * `assetClass` selects BOTH the positions/fills evaluated AND the ladder used: shares
+ * (`STK`) are judged against `per_stock_ladder`, options (`OPT`) against the separate,
+ * faster-cutting `per_stock_option_ladder` (migration 078) — the deferred honoring of the
+ * two-ladder Settings model. The shared `perStockLadderStatus` is already ladder-agnostic
+ * (it takes the ladder as an argument), so only the ladder + position filter change here.
  */
 export function usePerStockLadders(
   positions: UserPosition[],
   executions: UserExecution[],
   config: RiskConfigRow | null | undefined,
+  assetClass: 'STK' | 'OPT' = 'STK',
 ): Map<string, PerStockLadderInfo> {
   const cache = usePriceCacheStore((s) => s.cache);
-  const ladder = config?.per_stock_ladder ?? DEFAULT_PER_STOCK_LADDER;
+  const ladder = assetClass === 'OPT'
+    ? (config?.per_stock_option_ladder ?? DEFAULT_PER_STOCK_OPTION_LADDER)
+    : (config?.per_stock_ladder ?? DEFAULT_PER_STOCK_LADDER);
   const nearBand = config?.drawdown_near_band_pp ?? DRAWDOWN_NEAR_BAND_PP;
 
   return useMemo(() => {
     const out = new Map<string, PerStockLadderInfo>();
     if (!ladder.length) return out;
 
-    // Stock fills per underlying, for peak reconstruction.
+    // Fills per underlying for the chosen asset class, for peak reconstruction.
     const fillsByUnderlying = new Map<string, PositionFill[]>();
     for (const e of executions) {
-      if (e.asset_class !== 'STK') continue;
+      if (e.asset_class !== assetClass) continue;
       const u = cleanUnderlying(e.underlying);
       if (!fillsByUnderlying.has(u)) fillsByUnderlying.set(u, []);
       fillsByUnderlying.get(u)!.push({ quantity: e.quantity, executedAt: e.executed_at });
     }
 
-    // Aggregate STK legs per underlying (usually one row; sum + weight avg_cost if more).
+    // Aggregate legs of the chosen asset class per underlying (options of different
+    // strikes/expiries on one name roll up together, mirroring the stock-lot rollup).
     const stk = new Map<string, { qty: number; costWeighted: number; absQty: number; mark: number | null }>();
     for (const p of positions) {
-      if (p.asset_class !== 'STK') continue;
+      if (p.asset_class !== assetClass) continue;
       const u = cleanUnderlying(p.underlying);
       const qty = p.quantity ?? 0;
       if (qty === 0 || p.avg_cost == null) continue;
@@ -102,5 +113,5 @@ export function usePerStockLadders(
       });
     }
     return out;
-  }, [positions, executions, cache, ladder, nearBand]);
+  }, [positions, executions, cache, ladder, nearBand, assetClass]);
 }

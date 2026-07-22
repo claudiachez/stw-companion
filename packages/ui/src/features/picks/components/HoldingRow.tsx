@@ -6,12 +6,6 @@ import { RegimeBadge } from './RegimeBadge';
 import { Badge } from '../../../primitives/Badge';
 import type { TickerRegime } from '../useTickerRegime';
 
-function fmtDate(s: string | null): string {
-  if (!s) return '–';
-  const d = new Date(s + 'T12:00:00');
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
-}
-
 interface Props {
   holding: Holding;
   isSelected: boolean;
@@ -41,6 +35,14 @@ export function HoldingRow({ holding: h, isSelected, maxWeight, onClick, isUserH
 
   const w = h.current_weight ?? h.initial_weight ?? 0;
   const wPct = maxWeight > 0 ? (w / maxWeight) * 100 : 0;
+
+  // Secondary metric line — the design's "price · weight%". Price from the live quote (when
+  // present); weight always shown for CASH and any non-zero position. A negative weight with
+  // no price is margin/leverage, so it reads red (same distinction as HoldingDetail's CASH card).
+  const priceStr = quote?.c != null ? `$${quote.c.toFixed(2)}` : null;
+  const showWeight = h.ticker === 'CASH' || w !== 0;
+  const m2Parts = [priceStr, showWeight ? `${w.toFixed(1)}%` : null].filter(Boolean);
+  const m2Color = !priceStr && showWeight && w < 0 ? 'var(--status-negative-text)' : 'var(--t3)';
 
   return (
     <button
@@ -75,7 +77,8 @@ export function HoldingRow({ holding: h, isSelected, maxWeight, onClick, isUserH
               exactly what CONTRIBUTING.md warns against). */}
           {isUserHeld && (
             <span style={{
-              fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.semibold, padding: '1px 5px', borderRadius: 4,
+              fontSize: FONT_SIZE['3xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: '0.05em', textTransform: 'uppercase',
+              padding: '1px 6px', borderRadius: 4,
               color: 'var(--acc)', background: 'var(--c5bg)', border: '1px solid var(--c5b)',
             }}>
               Held
@@ -89,31 +92,22 @@ export function HoldingRow({ holding: h, isSelected, maxWeight, onClick, isUserH
       </div>
 
       {/* Right side: weight bar + P&L + weight */}
-      <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, minWidth: 60 }}>
+      <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, minWidth: 66 }}>
         {/* Weight bar */}
-        <div style={{ width: 48, height: 3, borderRadius: 2, background: 'var(--border)' }}>
+        <div style={{ width: 48, height: 3, borderRadius: 2, background: 'var(--bsub)' }}>
           <div style={{ width: `${Math.max(0, wPct)}%`, height: '100%', borderRadius: 2, background: tier.color }} />
         </div>
 
         {pnlPct != null && (
-          <span style={{ fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold, color: pnlColor, fontVariantNumeric: 'tabular-nums' }}>
+          <span style={{ fontSize: FONT_SIZE.sm, fontWeight: FONT_WEIGHT.semibold, color: pnlColor, fontVariantNumeric: 'tabular-nums' }}>
             {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%
           </span>
         )}
-        {quote?.c != null && (
-          <span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>
-            ${quote.c.toFixed(2)}
+        {m2Parts.length > 0 && (
+          <span style={{ fontSize: FONT_SIZE['2xs'], color: m2Color, fontVariantNumeric: 'tabular-nums' }}>
+            {m2Parts.join(' · ')}
           </span>
         )}
-        {/* Weight readout — always shown for CASH (incl. negative = margin/leverage). A negative
-            weight here is leverage, not P&L, so it reads var(--status-negative-text), not
-            var(--pnl-loss) — same distinction drawn in HoldingDetail.tsx's own CASH weight card. */}
-        {!quote && (h.ticker === 'CASH' || w !== 0) && (
-          <span style={{ fontSize: FONT_SIZE['2xs'], color: w < 0 ? 'var(--status-negative-text)' : 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>
-            {w.toFixed(1)}%
-          </span>
-        )}
-        <span style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>{fmtDate(h.action_date)}</span>
       </div>
     </button>
   );

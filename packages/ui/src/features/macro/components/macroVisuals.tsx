@@ -1,6 +1,85 @@
-import { useState, type ReactNode } from 'react';
+import { useState, type ReactNode, type CSSProperties } from 'react';
 import { formatDate, fmtDateTime, FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
 import { Icon } from '../../../primitives/Icon';
+
+// ── Redesign shell + one-open-at-a-time ⓘ help ──────────────────────────────
+// The webapp redesign lays Macro out as a single 900px column of surface cards
+// (radius 12, padding 16). Every card header carries an 18px round "i" button; the
+// explainer panel opens inline below the header. Only ONE panel is open across the
+// whole page at a time — the open section id lives in a single `help` state in
+// MacroView, and each card is told whether it's the open one (`helpOpen`) plus how
+// to toggle it (`onToggleHelp`). (HelpToggle, the shared primitive, owns its own
+// independent open state + renders a floating popover — neither fits the controlled
+// single-open inline-panel behavior this screen specifies, so it's replicated here.)
+
+/** A surface card — the redesign's one container idiom (radius 12, padding 16). */
+export function Card({ children, style }: { children: ReactNode; style?: CSSProperties }) {
+  return (
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 16, ...style }}>
+      {children}
+    </div>
+  );
+}
+
+/** The 18px round ⓘ toggle in a card header. Controlled by the parent. */
+export function InfoButton({ open, onClick }: { open: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={open ? 'Hide explanation' : 'What is this?'}
+      aria-expanded={open}
+      style={{
+        width: 18, height: 18, borderRadius: '50%', border: '1px solid var(--border)',
+        background: 'var(--s2)', color: 'var(--t3)',
+        cursor: 'pointer', padding: 0, flexShrink: 0,
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      }}
+    >
+      <Icon name="info" size={11} />
+    </button>
+  );
+}
+
+/** The inline `--s2` explainer panel shown below a card header when its ⓘ is open. */
+export function HelpPanel({ children }: { children: ReactNode }) {
+  return (
+    <div style={{
+      background: 'var(--s2)', border: '1px solid var(--border)', borderRadius: 8,
+      padding: '8px 12px', fontSize: FONT_SIZE.xs, color: 'var(--t2)', lineHeight: 1.6, marginTop: 8,
+    }}>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Card header: title (+ optional ⓘ) on the left, optional muted `meta` right-aligned.
+ * `helpOpen`/`onToggleHelp` wire the single-open ⓘ; omit them for a header with no help.
+ */
+export function CardHeader({ title, meta, helpOpen, onToggleHelp }: {
+  title: string; meta?: ReactNode; helpOpen?: boolean; onToggleHelp?: () => void;
+}) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+      <span style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)' }}>{title}</span>
+      {onToggleHelp && <InfoButton open={!!helpOpen} onClick={onToggleHelp} />}
+      {meta != null && <span style={{ marginLeft: 'auto', fontSize: FONT_SIZE['2xs'], color: 'var(--t3)' }}>{meta}</span>}
+    </div>
+  );
+}
+
+/**
+ * Redesign status-color thresholds (distinct from scoreColor's ≥60/≥40 split):
+ * score ≥ 60 green · 45–59 amber · < 45 red. Used by the sleeve bars, the regime
+ * pill and the stress dots so every 0–100 read on the page bands identically.
+ */
+export function bandColor(score: number | null): string {
+  if (score === null) return 'var(--t3)';
+  if (score >= 60) return 'var(--status-positive-text)';
+  if (score >= 45) return 'var(--status-warning-text)';
+  return 'var(--status-negative-text)';
+}
 
 // Shared visual primitives for the macro module cards.
 //
@@ -66,9 +145,9 @@ export function ModuleHeader({ title, color = 'var(--t3)', help }: { title: stri
  * footer is a clickable source, matching the GEX card (host: consistency across
  * the board, 2026-07-13).
  */
-export function SourceNote({ source, href, asOf, updatedAt }: { source: string; href?: string; asOf?: string | null; updatedAt?: Date | string | null }) {
+export function SourceNote({ source, href, asOf, updatedAt, marginTop = 10 }: { source: string; href?: string; asOf?: string | null; updatedAt?: Date | string | null; marginTop?: number }) {
   return (
-    <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop: 10, lineHeight: 1.4 }}>
+    <div style={{ fontSize: FONT_SIZE['2xs'], color: 'var(--t3)', marginTop, lineHeight: 1.4 }}>
       {href
         ? <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--t3)', textDecoration: 'underline' }}>{source}</a>
         : source}

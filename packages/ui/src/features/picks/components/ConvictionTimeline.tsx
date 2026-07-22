@@ -11,19 +11,30 @@ import { FONT_SIZE } from '@stw/shared';
 interface Props {
   ticker: string;
   currentConviction: number;
+  /** Which rows + add-affordance to show: STW public notes (user_id null), the subscriber's
+   *  own private notes, or everything (default). Lets the pick pane render STW commentary and
+   *  the "Your personal note" section (design: two distinct sections) from the one feed. */
+  scope?: 'all' | 'stw' | 'personal';
 }
 
-// Unified "Commentary" feed: every conviction_comments row for the ticker, newest first
-// (host Discord/stream notes + subscriber personal notes), with + Add Note at the bottom.
-export function ConvictionTimeline({ ticker, currentConviction }: Props) {
+// A conviction_comments feed for the ticker, newest first. RLS already limits a subscriber to
+// STW's public notes (user_id null) + their OWN notes, so `scope` just partitions those two.
+export function ConvictionTimeline({ ticker, currentConviction, scope = 'all' }: Props) {
   const { canEdit, canViewHistory, isAdmin } = useCapabilities();
   const user = useAuthStore((s) => s.user);
   const { data: comments = [], isLoading } = useConvictionComments(ticker);
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
 
-  // Subscribers can add their own notes too
-  const canAddNote = canEdit || canViewHistory || isAdmin;
+  const visible = scope === 'stw' ? comments.filter((cc) => cc.user_id == null)
+    : scope === 'personal' ? comments.filter((cc) => cc.user_id != null)
+    : comments;
+  // STW commentary is admin-authored (canEdit); a personal note is the subscriber's own.
+  const canAddNote = scope === 'personal' ? (!canEdit && canViewHistory)
+    : scope === 'stw' ? !!canEdit
+    : (canEdit || canViewHistory || isAdmin);
+  const addLabel = scope === 'personal' ? 'Add a personal note' : (canEdit ? 'Add Note' : 'Add Personal Note');
+  const emptyText = scope === 'personal' ? 'No personal note yet.' : 'No commentary yet.';
 
   async function handleDelete(id: number) {
     try {
@@ -39,16 +50,16 @@ export function ConvictionTimeline({ ticker, currentConviction }: Props) {
   }
 
   // Hide when nobody can interact and there's nothing to show
-  if (!canAddNote && comments.length === 0) return null;
+  if (!canAddNote && visible.length === 0) return null;
 
   return (
     <div>
-      {comments.length === 0 && !showForm && (
-        <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)', padding: '4px 0' }}>No commentary yet.</div>
+      {visible.length === 0 && !showForm && (
+        <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)', padding: '4px 0' }}>{emptyText}</div>
       )}
 
       <div>
-        {comments.map((cc) => (
+        {visible.map((cc) => (
           <CommentRow
             key={cc.id}
             cc={cc}
@@ -74,7 +85,7 @@ export function ConvictionTimeline({ ticker, currentConviction }: Props) {
             padding: '5px 10px', width: '100%',
           }}
         >
-          ＋ {canEdit ? 'Add Note' : 'Add Personal Note'}
+          ＋ {addLabel}
         </button>
       )}
     </div>

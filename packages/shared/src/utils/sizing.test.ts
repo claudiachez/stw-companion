@@ -18,14 +18,14 @@ describe('sizingTone', () => {
   it('heavier than the trader → oversized, warning tone', () => {
     const t = sizingTone(1.2);
     expect(t.state).toBe('oversized');
-    expect(t.label).toBe('+1.2% oversized');
+    expect(t.label).toBe('1.2 points heavier');
     expect(t.textVar).toContain('warning');
   });
 
   it('lighter than the trader → undersized, info tone (distinct from oversized)', () => {
     const t = sizingTone(-1.2);
     expect(t.state).toBe('undersized');
-    expect(t.label).toBe('-1.2% undersized');
+    expect(t.label).toBe('1.2 points lighter');
     expect(t.textVar).toContain('info');
     expect(t.textVar).not.toBe(sizingTone(1.2).textVar);
   });

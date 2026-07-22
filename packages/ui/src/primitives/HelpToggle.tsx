@@ -1,6 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { FONT_SIZE } from '@stw/shared';
-import { Icon } from './Icon';
+import { FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
 
 /**
  * A small ⓘ toggle that reveals a "what / why / how" help blurb in a popover —
@@ -15,21 +14,30 @@ import { Icon } from './Icon';
  */
 export function HelpToggle({ children, ariaLabel = 'What is this?' }: { children: ReactNode; ariaLabel?: string }) {
   const [open, setOpen] = useState(false);
+  const [hover, setHover] = useState(false);
+  // Ref style: an 18px circle with a bold "i", muted --s2 by default, filling to accent on
+  // hover/open. (The glossary "?" text link is a separate affordance and stays as-is.)
+  const active = open || hover;
   return (
     <span style={{ position: 'relative', display: 'inline-flex', verticalAlign: 'middle' }}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
         aria-label={open ? 'Hide explanation' : ariaLabel}
         aria-expanded={open}
         style={{
-          width: 15, height: 15, borderRadius: '50%', border: '1px solid var(--border)',
-          background: open ? 'var(--s2)' : 'transparent', color: 'var(--t3)',
+          width: 18, height: 18, borderRadius: '50%',
+          border: `1px solid ${active ? 'var(--acc)' : 'var(--border)'}`,
+          background: active ? 'var(--acc)' : 'var(--s2)',
+          color: active ? 'var(--text-inverse)' : 'var(--t3)',
+          fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, lineHeight: 1,
           cursor: 'pointer', padding: 0, flexShrink: 0,
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         }}
       >
-        <Icon name="info" size={10} />
+        i
       </button>
       {open && (
         <>

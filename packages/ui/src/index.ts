@@ -21,6 +21,8 @@ export { usePriceCacheStore } from './store/priceCache';
 export type { Quote, PriceFetchStatus } from './store/priceCache';
 export { useAuthStore } from './store/auth';
 export { useThemeStore } from './store/theme';
+export { usePrivacyStore } from './store/privacy';
+export { useDefaultViewStore } from './store/defaultView';
 
 // ── Hooks ─────────────────────────────────────────────────────
 export { useQuote, useLivePrice } from './hooks/useLivePrice';
@@ -45,7 +47,7 @@ export { Button } from './primitives/Button';
 export type { ButtonProps, ButtonVariant } from './primitives/Button';
 export { DataTable } from './primitives/DataTable';
 export type { DataTableColumn, DataTableProps } from './primitives/DataTable';
-export { DetailPane, DetailPaneMetricLabel } from './primitives/DetailPane';
+export { DetailPane, DetailPaneMetricLabel, DetailPaneSection } from './primitives/DetailPane';
 export type { DetailPaneProps, DetailPaneMetric } from './primitives/DetailPane';
 export { ListDetailSplit } from './primitives/ListDetailSplit';
 export type { ListDetailSplitProps } from './primitives/ListDetailSplit';
@@ -82,7 +84,7 @@ export { ConvictionBadge } from './features/picks/components/ConvictionBadge';
 
 // ── Portfolio ─────────────────────────────────────────────────
 export { PortfolioPage } from './features/portfolio/PortfolioPage';
-export { useUserPositions, useIbkrSettings } from './features/portfolio/useUserPositions';
+export { useUserPositions, useIbkrSettings, useIbkrAccount } from './features/portfolio/useUserPositions';
 export { useSyncPortfolio } from './features/portfolio/useSyncPortfolio';
 export { saveIbkrSettings, fetchDiscordLink, linkDiscord } from './features/portfolio/api';
 export type { UserPosition, IbkrSettings } from './features/portfolio/api';
@@ -114,7 +116,4 @@ export type { Signal, LevelSet, LogEntry, GraddoxData } from './features/signals
 export { LevelCard } from './features/signals/components/LevelCard';
 export { SignalsTable } from './features/signals/components/SignalsTable';
 export { BiasChip } from './features/signals/components/BiasChip';
-export { GexCharts } from './features/signals/components/GexCharts';
-export { GexChart } from './features/signals/components/GexChart';
-export type { Timeframe } from './features/signals/components/GexChart';
 export { DayLog } from './features/signals/components/DayLog';

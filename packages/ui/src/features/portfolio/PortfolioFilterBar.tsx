@@ -1,10 +1,13 @@
-// Filter + sort controls for the My Portfolio tab. Control ORDER mirrors the Ticker Details /
-// Trades filter bars (Search → Baskets → Types → Sort → toggles → Clear → count) so the tabs
-// read as one app. Renders inner controls only (no surface wrapper); the page hosts them in one
-// bar with the synced stamp + sync cluster. State is owned by PortfolioPage.
+// Filter + sort controls for the My Portfolio Positions tab. Reshaped to the unified Listing
+// Pages redesign (plans/20260720_webapp_redesign): a two-row bar shared with the Stock Picks
+// FilterBar — row 1 = search + dropdown filters + count; row 2 = segmented filter-chip groups
+// (Type / Stops / Trend / Sector regime) + the Tailed-only / Group-by-ticker toggles. Owns its
+// OWN surface wrapper now (the page just drops it in a flexShrink:0 slot). State is owned by
+// PortfolioPage; the synced stamp + Sync live in the page's global control cluster, not here.
 
 import { FONT_SIZE, TREND_BUCKET_META, TREND_BUCKET_ORDER, CONVICTION_BAND_OPTIONS } from '@stw/shared';
 import type { TrendBucket, SectorStanding, ConvictionBand } from '@stw/shared';
+import { SegmentedControl, type SegmentOption } from '../../primitives/SegmentedControl';
 
 export type PortfolioSort =
   | 'pnl_desc' | 'pnl_asc'
@@ -66,12 +69,35 @@ const SORT_OPTIONS: { value: PortfolioSort; label: string }[] = [
   { value: 'za',         label: 'Sort: Z → A' },
 ];
 
+// Row-2 segmented groups (Listing Pages redesign) — the axes shown as one-tap segments rather
+// than a dropdown. Wired to the same filter fields the old <select>s used, so every filter
+// option is preserved.
+const TYPE_SEGMENTS: SegmentOption<PortfolioType>[] = [
+  { value: '',       label: 'All' },
+  { value: 'stocks', label: 'Stocks' },
+  { value: 'options', label: 'Options' },
+];
+const STOP_SEGMENTS: SegmentOption<PortfolioStopFilter>[] = [
+  { value: '',          label: 'All' },
+  { value: 'attention', label: '⚠ Near' },
+  { value: 'breach',    label: '● Past' },
+];
+// Full 9/21/200 trend-bucket set (keeps every existing structure filter working).
+const TREND_SEGMENTS: SegmentOption<TrendBucket | ''>[] = [
+  { value: '', label: 'All' },
+  ...TREND_BUCKET_ORDER.map((b) => ({ value: b, label: TREND_BUCKET_META[b].label })),
+];
+const STANDING_SEGMENTS: SegmentOption<SectorStanding | ''>[] = [
+  { value: '', label: 'All' },
+  ...STANDING_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
+];
+
 // Border color lives in the class below, never in this inline style object — an inline
 // `style.border` always wins over a stylesheet class regardless of specificity, which
 // would make `ctrlBorderClass`'s `focus:border-acc` silently never take effect (found +
 // fixed in TextInput.tsx the same session — see its header comment for the full story).
 const ctrlStyle: React.CSSProperties = {
-  height: 34, padding: '0 8px', fontSize: FONT_SIZE.sm, borderRadius: 5,
+  height: 30, padding: '0 6px', fontSize: FONT_SIZE.sm, borderRadius: 5,
   background: 'var(--bg)', color: 'var(--text)',
   cursor: 'pointer', flexShrink: 0,
 };
@@ -79,12 +105,9 @@ const ctrlStyle: React.CSSProperties = {
 // For real keyboard-focus targets (text input, selects) — pairs the removed native
 // outline with a visible border-color change on focus instead of just deleting it.
 const ctrlBorderClass = 'border border-[var(--border)] focus:outline-none focus:border-acc';
-// For the toggle `<label>` chips — same visible border, but the label itself never
-// receives focus (the checkbox inside it does, and keeps its own native focus ring).
-const ctrlBorderClassStatic = 'border border-[var(--border)]';
-
+// Toggle `<label>`s are plain checkbox + text (no border/pill), per the design ref.
 const toggleStyle = (on: boolean): React.CSSProperties => ({
-  ...ctrlStyle, display: 'flex', alignItems: 'center', gap: 6, color: on ? 'var(--text)' : 'var(--t2)',
+  display: 'flex', alignItems: 'center', gap: 5, fontSize: FONT_SIZE.xs, color: on ? 'var(--text)' : 'var(--t2)', cursor: 'pointer',
 });
 
 interface Props {
@@ -101,85 +124,97 @@ export function PortfolioFilterBar({ filters, onChange, baskets, sectors, filter
   const hasFilter = !!search || !!basket || !!conviction || !!structure || !!standing || !!sector || !!stop || type !== '' || tailedOnly;
 
   return (
-    <>
-      <input
-        type="text"
-        value={search}
-        onChange={(e) => onChange({ ...filters, search: e.target.value })}
-        placeholder="Search ticker…"
-        className={ctrlBorderClass}
-        style={{ ...ctrlStyle, width: 120, cursor: 'text' }}
-      />
+    <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--bsub)', flexShrink: 0 }}>
+      {/* Row 1 — search + dropdown filters + count */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderBottom: '1px solid var(--bsub)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' as never }}>
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => onChange({ ...filters, search: e.target.value })}
+          placeholder="Search ticker…"
+          className={ctrlBorderClass}
+          style={{ ...ctrlStyle, width: 112, padding: '0 8px', cursor: 'text' }}
+        />
 
-      {baskets.length > 0 && (
-        <select value={basket} onChange={(e) => onChange({ ...filters, basket: e.target.value })} className={ctrlBorderClass} style={ctrlStyle}>
-          <option value="">All Baskets</option>
-          {baskets.map((b) => <option key={b} value={b}>{b}</option>)}
+        {baskets.length > 0 && (
+          <select value={basket} onChange={(e) => onChange({ ...filters, basket: e.target.value })} className={ctrlBorderClass} style={ctrlStyle}>
+            <option value="">All Baskets</option>
+            {baskets.map((b) => <option key={b} value={b}>{b}</option>)}
+          </select>
+        )}
+
+        <select value={conviction} onChange={(e) => onChange({ ...filters, conviction: e.target.value as ConvictionBand })} className={ctrlBorderClass} style={ctrlStyle} title="Filter by the tailed pick's STW conviction tier">
+          <option value="">All Conviction</option>
+          {CONVICTION_BAND_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
-      )}
 
-      <select value={conviction} onChange={(e) => onChange({ ...filters, conviction: e.target.value as ConvictionBand })} className={ctrlBorderClass} style={ctrlStyle} title="Filter by the tailed pick's STW conviction tier">
-        <option value="">All Conviction</option>
-        {CONVICTION_BAND_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
+        {sectors.length > 0 && (
+          <select value={sector} onChange={(e) => onChange({ ...filters, sector: e.target.value })} className={ctrlBorderClass} style={ctrlStyle} title="Filter by GICS market sector">
+            <option value="">All Sectors</option>
+            {sectors.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        )}
 
-      <select value={structure} onChange={(e) => onChange({ ...filters, structure: e.target.value as TrendBucket | '' })} className={ctrlBorderClass} style={ctrlStyle} title="Filter by the ticker's own 9/21/200 trend structure">
-        <option value="">All Structure</option>
-        {TREND_BUCKET_ORDER.map((b) => <option key={b} value={b}>{TREND_BUCKET_META[b].label}</option>)}
-      </select>
-
-      <select value={standing} onChange={(e) => onChange({ ...filters, standing: e.target.value as SectorStanding | '' })} className={ctrlBorderClass} style={ctrlStyle} title="Filter by the ticker's sector rotation standing (sector regime)">
-        <option value="">All Sector Regime</option>
-        {STANDING_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-
-      {sectors.length > 0 && (
-        <select value={sector} onChange={(e) => onChange({ ...filters, sector: e.target.value })} className={ctrlBorderClass} style={ctrlStyle} title="Filter by GICS market sector">
-          <option value="">All Sectors</option>
-          {sectors.map((s) => <option key={s} value={s}>{s}</option>)}
+        <select value={sort} onChange={(e) => onChange({ ...filters, sort: e.target.value as PortfolioSort })} className={ctrlBorderClass} style={ctrlStyle}>
+          {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
-      )}
 
-      <select value={stop} onChange={(e) => onChange({ ...filters, stop: e.target.value as PortfolioStopFilter })} className={ctrlBorderClass} style={ctrlStyle} title="Filter by each stock's per-stock drawdown stop-ladder status">
-        <option value="">All Stops</option>
-        <option value="attention">Near / past a stop</option>
-        <option value="breach">Past a stop (not trimmed)</option>
-      </select>
+        <label style={{ ...toggleStyle(tailedOnly), flexShrink: 0, whiteSpace: 'nowrap' }} title="Show only positions that match a followed trader's pick">
+          <input type="checkbox" checked={tailedOnly} onChange={(e) => onChange({ ...filters, tailedOnly: e.target.checked })} style={{ accentColor: 'var(--acc)', cursor: 'pointer' }} />
+          Tailed only
+        </label>
 
-      <select value={type} onChange={(e) => onChange({ ...filters, type: e.target.value as PortfolioType })} className={ctrlBorderClass} style={ctrlStyle}>
-        <option value="">All Types</option>
-        <option value="stocks">Stocks</option>
-        <option value="options">Options</option>
-      </select>
+        <label style={{ ...toggleStyle(groupByTicker), flexShrink: 0, whiteSpace: 'nowrap' }} title="Group legs by underlying ticker (off = flat per-leg table)">
+          <input type="checkbox" checked={groupByTicker} onChange={(e) => onChange({ ...filters, groupByTicker: e.target.checked })} style={{ accentColor: 'var(--acc)', cursor: 'pointer' }} />
+          Group by ticker
+        </label>
 
-      <select value={sort} onChange={(e) => onChange({ ...filters, sort: e.target.value as PortfolioSort })} className={ctrlBorderClass} style={ctrlStyle}>
-        {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
+        {hasFilter && (
+          <button
+            onClick={() => onChange({ ...filters, search: '', basket: '', conviction: '', structure: '', standing: '', sector: '', stop: '', type: '', tailedOnly: false })}
+            style={{ ...ctrlStyle, border: 'none', background: 'none', color: 'var(--t3)', padding: '0 4px' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--t2)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--t3)'; }}
+          >
+            Clear
+          </button>
+        )}
 
-      <label className={ctrlBorderClassStatic} style={toggleStyle(tailedOnly)} title="Show only positions that match a followed trader's pick">
-        <input type="checkbox" checked={tailedOnly} onChange={(e) => onChange({ ...filters, tailedOnly: e.target.checked })} style={{ accentColor: 'var(--acc)', cursor: 'pointer' }} />
-        Tailed only
-      </label>
+        <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginLeft: 'auto', paddingLeft: 8, whiteSpace: 'nowrap' }}>
+          {filtered < total ? `${filtered} of ${total}` : `${total} position${total === 1 ? '' : 's'}`}
+        </span>
+      </div>
 
-      <label className={ctrlBorderClassStatic} style={toggleStyle(groupByTicker)} title="Group legs by underlying ticker (off = flat per-leg table)">
-        <input type="checkbox" checked={groupByTicker} onChange={(e) => onChange({ ...filters, groupByTicker: e.target.checked })} style={{ accentColor: 'var(--acc)', cursor: 'pointer' }} />
-        Group by ticker
-      </label>
-
-      {hasFilter && (
-        <button
-          onClick={() => onChange({ ...filters, search: '', basket: '', conviction: '', structure: '', standing: '', sector: '', stop: '', type: '', tailedOnly: false })}
-          style={{ ...ctrlStyle, background: 'none', color: 'var(--t3)', padding: '0 4px' }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--t2)'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--t3)'; }}
-        >
-          Clear
-        </button>
-      )}
-
-      <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginLeft: 4, whiteSpace: 'nowrap' }}>
-        {filtered < total ? `${filtered} of ${total}` : `${total} position${total === 1 ? '' : 's'}`}
-      </span>
-    </>
+      {/* Row 2 — segmented filter groups + toggles */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 12px', background: 'var(--bg)', borderBottom: '1px solid var(--bsub)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' as never }}>
+        <SegmentedControl
+          label="Type"
+          options={TYPE_SEGMENTS}
+          value={type}
+          onChange={(v) => onChange({ ...filters, type: v })}
+        />
+        <SegmentedControl
+          label="Stops"
+          title="Filter by each stock's per-stock drawdown stop-ladder status"
+          options={STOP_SEGMENTS}
+          value={stop}
+          onChange={(v) => onChange({ ...filters, stop: v })}
+        />
+        <SegmentedControl
+          label="Trend"
+          title="Filter by the ticker's own 9/21/200 trend structure"
+          options={TREND_SEGMENTS}
+          value={structure}
+          onChange={(v) => onChange({ ...filters, structure: v })}
+        />
+        <SegmentedControl
+          label="Sector regime"
+          title="Filter by the ticker's sector rotation standing (sector regime)"
+          options={STANDING_SEGMENTS}
+          value={standing}
+          onChange={(v) => onChange({ ...filters, standing: v })}
+        />
+      </div>
+    </div>
   );
 }

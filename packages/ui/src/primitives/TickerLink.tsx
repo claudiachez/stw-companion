@@ -15,13 +15,13 @@ interface TickerLinkProps {
 
 export function TickerLink({ ticker, onSelect, label, style }: TickerLinkProps) {
   const text = label ?? ticker;
-  if (!onSelect) return <span style={{ fontWeight: 600, ...style }}>{text}</span>;
+  if (!onSelect) return <span style={{ fontWeight: 700, ...style }}>{text}</span>;
   return (
     <button
       onClick={() => onSelect(ticker)}
       style={{
         background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-        color: 'var(--acc)', fontWeight: 600, fontSize: 'inherit', fontFamily: 'inherit',
+        color: 'var(--acc)', fontWeight: 700, fontSize: 'inherit', fontFamily: 'inherit',
         ...style,
       }}
     >

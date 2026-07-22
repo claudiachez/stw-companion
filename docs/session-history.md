@@ -2,6 +2,70 @@
 
 > Dated handoff/status narratives + old Next Steps, moved out of CLAUDE.md. Historical record only — durable rules live in CLAUDE.md / docs/decisions.md / docs/ui-conventions.md. Current status is docs/status.md.
 
+## Session — redesign QA + new screens; PUSHED to PR #152 (2026-07-21)
+
+The redesign branch `claude/webapp-redesign` was **pushed and opened as [PR #152](https://github.com/claudiachez/stw-companion/pull/152) → `staging`** (host merges) after this session's work. ~76 commits total on the branch. typecheck + lint (0 err) + 358 tests green; every changed surface rendered + screenshot-verified live (dev server + the host's authed browser). Light theme swept; dark deferred.
+
+New ref screens built this session (mock fidelity, real data — no fabricated fields):
+- **Stock Picks · Trades** — replaced the story-line list with the redesigned flat **one-row-per-lot blotter**: 5 summary stat cards + a wide sortable grid grouped Opened · Closed · Result by vertical rules; filters Show/Type/**Outcome (Profit/Loss)**/Action; sticky header; horizontal scroll under min-width; Edit column admin-only. New `TradeOutcome` + `action` filter fields in `useTradesFilters`.
+- **Stock Picks · Portfolio Overview** — reshaped to the ref card system (max-1100 column of separate cards; dropped the single pane + eyebrow; 4 separate stat cards; green "What changed", treemap, weight-by-basket, data-health).
+- **GEX Signals** — removed the embedded "Live chart · SPY & QQQ" (deleted `GexChart`/`GexCharts`); added per-setup **mini price sparklines** (new `useSignalCloses` hook → real 15-min TwelveData closes; dashed trigger parsed from the host's trigger text, ±15% guard) + an **All/Calls/Puts** filter.
+- **My Portfolio position detail** — rebuilt to the mock: white pane bg (shared `DetailPane`), bolded/colored emphasis values, and the flat **DATE·ACTION·DETAILS·PRICE·REALIZED-P&L** tx table (realized rides the closing sell). Picks detail now opens contained like the Portfolio split (`listPct` 55, plain divider, `borderLeft`).
+
+Host QA refinements:
+- **Tooltip icon** (`HelpToggle`, app-wide): ref style — 18px circle with a bold text "i", `--s2` default, fills to accent on hover/open (was a lucide `Info` SVG in a 15px transparent circle). The glossary "?" link is a separate affordance, untouched.
+- **Profile › Preferences: Default view** — new picker (Stock Picks / GEX / Macro / My Portfolio) for the landing page; new `useDefaultViewStore` synced to `profiles.preferences.defaultView`; web app root `/` redirects to it (falls back `/picks`). **Web only** — admin index still hardcoded.
+- **Filter/nav:** Trades Profit/Loss outcome filter; Positions **Tailed-only/Group-by-ticker** and Ticker-Details **Show-closed** moved next to Sort (row 1); removed the `(N)` count from the Ticker-Details tab.
+- **Risk verdict banner is dismissible** — a ✕ button; dismissal remembered against the current breach *signature* (localStorage) so it stays closed until breaches change, then re-announces once. Detail always remains in the Size caps / stops blocks.
+- Also: shared primitives matched to refs globally (StatusPill/Badge/AlertStrip/Button/TickerLink/SegmentedControl/AccordionList/RegimeBadge/DetailPane/Modal); Picks Overview + Trades contained in max-width columns; Positions rows rebuilt to the dense ref cluster.
+
+**No migrations** this session (Default-view uses existing `profiles.preferences` + `set_my_preferences`). Migrations remain at 079 (all on PROD). Deferred/flagged: Picks `HoldingDetail` tx table not yet rebuilt to the flat form (Weight-column variant); admin default-view landing not wired; drawdown-alert cron still doesn't honor the `*_enabled` flags.
+
+## Session — full webapp redesign built (2026-07-21)
+
+Recreated the entire "STW Companion Web App Redesign" (Claude Design project
+`665f2470-f119-40cb-9e5c-de3d86ad62d8`, 11 `.dc.html` surfaces) in the codebase. **All on the local
+branch `claude/webapp-redesign` — 21 commits, NOT pushed, NO PR** (host is holding for a **QA session
+next**, then `/stw-review` → push → single PR to `staging`). Verified locally each commit (typecheck both
+apps + lint 0 errors + 358 tests + boot clean); **no screen visually verified** — auth-gated, that's QA's job.
+Full per-screen deviations: `plans/20260720_webapp_redesign/FLAGS.md`.
+
+Also merged separately: **#151 regime one-source fix** — `trendStructure(closes)` in `@stw/shared`; both the
+Macro trend table and the Risk-tab per-ticker bucket now classify off the SAME daily close (was live-quote on
+Macro vs daily-close on Risk → "SPY reads two states"). Applied via MCP + merged to `staging` before the redesign.
+
+Shipped on the redesign branch (order = commits):
+- **Foundation:** `FONT_SIZE` EXPANDED to the design's exact px ladder (`lg` 18→16; added 9/13/15/20/22/30) so
+  redesigned screens are pixel-exact while lint's no-literal-fontSize rule holds. New `SegmentedControl`
+  primitive; `DetailPane` gained an eyebrow strip / N-col stat grid / exported `DetailPaneSection`. New
+  **`showMoney`** global privacy pref (`usePrivacyStore` + `profiles.preferences.showMoney`) — one toggle
+  drives $ across My Portfolio + Profile.
+- **Profile** — identity + editable First/Last name + avatar upload/change/remove + masked IBKR account;
+  pending pill amber (new StatusPill `warning` variant); theme moved OFF the hamburger menu onto Profile.
+- **Settings** — 4-tab guardrails (per-guardrail on/off toggles + draggable monotonic ladder columns +
+  stocks/options per-position ladders) + re-skinned IBKR connection editor (Reveal/Test/Disconnect, masked
+  account). IMPORT stays a Flex-XML file upload (the mock's one-click 365-day fetch isn't possible).
+- **My Portfolio** — Overview (hero, attention strip reusing the Risk warnings, movers, concentration +
+  heatmap), Risk (verdict banner + market health + account-vs-plan cards; HONORS the new guardrail flags +
+  routes options to the option ladder), Tailing (diverging sizing-vs-STW bars).
+- **Stock Picks** — unified Listing (Picks + Positions, shared row anatomy + SegmentedControl filters),
+  unified Detail panes (position + pick over the shared skeleton; admin leg edit/note preserved), Overview
+  & Trades (dashboard + one-row-per-lot blotter).
+- **Macro** — 7-section rebuild (merged Event-Risk + Earnings into one "Coming up" feed; removed
+  ModuleScoreStrip/MacroEventRiskCard/EarningsAheadCard). **GEX Signals** — verdict + zoned price-map
+  ladders + setups + day log (per-setup sparkline omitted: no intraday series in the real data).
+- **Admin** — Log-a-transaction + Edit-position modals re-skinned; every locked event-sourcing rule +
+  IBKR order gate byte-identical (the mock's "Save + place real IBKR order" footer button NOT added — no
+  combined handler exists).
+
+Migrations authored + **applied to PROD via MCP** (host authorized MCP-apply this session): **077**
+`set_my_display_name` RPC · **078** `risk_config` guardrail toggles (`caps/ladder/per_stock/regime_enabled`)
++ `per_stock_option_ladder` · **079** `profiles.avatar_url` + public `avatars` bucket + own-folder RLS +
+`set_my_avatar_url`. Not applied to sandbox.
+
+Durable rules recorded: `docs/decisions.md` (redesign block), `docs/ui-conventions.md` (TickerLink must be
+explicitly sized; the expanded type scale), CLAUDE.md index lines.
+
 ## Session — drawdown-protection overhaul built + alerts + Whop direction (2026-07-19, cont.)
 
 Built the overhaul the prior session diagnosed (`plans/20260719_drawdown-protection-overhaul.md`).
