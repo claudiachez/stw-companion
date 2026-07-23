@@ -166,9 +166,19 @@ export function MacroView() {
   const lastSeriesScore = [...trendHistory.regimeSeries].reverse().find((p) => p.score !== null)?.score ?? null;
   const displayRegime = (isTradingDay(todayET) || lastSeriesScore === null) ? regime : regimeBand(lastSeriesScore);
 
+  // True only during the RTH session (9:30–16:00 ET on a trading day) — the drift line only
+  // claims "Live" while the tape is actually moving; after the close it reads "at today's close".
+  const marketLive = useMemo(() => {
+    if (!isTradingDay(todayET)) return false;
+    const nowEt = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const mins = nowEt.getHours() * 60 + nowEt.getMinutes();
+    return mins >= 570 && mins < 960;
+  }, [todayET]);
+
   // Honest live-price CONTEXT for the regime card: the composite score is the daily-close
   // read (structure = price vs the daily MAs — see #151), but this shows how the headline
-  // indexes are moving intraday so the card reflects today without faking a recompute.
+  // indexes are moving intraday so the card reflects today without faking a recompute. The
+  // "refreshes daily after the close" cadence lives in the card footer — not restated here.
   const liveDrift = useMemo(() => {
     const spy = indicators.find((i) => i.symbol === 'SPY');
     const qqq = indicators.find((i) => i.symbol === 'QQQ');
@@ -188,8 +198,8 @@ export function MacroView() {
         if (Math.abs((spyClose - nearest[1]) / nearest[1]) * 100 <= 0.6) maNote = ` · testing the ${nearest[0]} line`;
       }
     }
-    return `${parts.join(' · ')} today${maNote} — the score re-reads at the close.`;
-  }, [indicators]);
+    return `${parts.join(' · ')} ${marketLive ? 'today' : "at today's close"}${maNote}`;
+  }, [indicators, marketLive]);
 
   function handleRefreshRecap(note?: string, session?: 'am' | 'pm') {
     if (!regime) return;
@@ -230,6 +240,7 @@ export function MacroView() {
           updatedAt={updatedAt}
           series={trendHistory.regimeSeries}
           liveDrift={liveDrift}
+          driftLive={marketLive}
           helpOpen={help === 'verdict'}
           onToggleHelp={() => toggleHelp('verdict')}
           help={HELP.verdict(regimeWeights)}

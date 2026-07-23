@@ -70,7 +70,7 @@ export function RegimeTrajectory({ series, days = 9 }: Props) {
     <div style={{ position: 'relative', display: 'inline-flex', gap: 4 }} onMouseLeave={() => setHovered(null)}>
       {slots.map((slot, i) => {
         const isNow = !slot.placeholder && slot.date === today;
-        const label = slot.placeholder ? '·' : isNow ? 'Now' : weekdayLetter(slot.date);
+        const label = slot.placeholder ? '·' : isNow ? 'Today' : weekdayLetter(slot.date);
         const color = lampColor(slot.score);
         return (
           <div

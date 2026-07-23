@@ -20,6 +20,7 @@ import { useUserPositions } from '../../portfolio/useUserPositions';
 import { cleanUnderlying } from '../../portfolio/api';
 import { useEarningsCalendar } from '../../earnings/useEarningsCalendar';
 import { EarningsBadge } from '../../earnings/EarningsBadge';
+import { useSectorMap } from '../../limits/useRiskConfig';
 import type { TickerRegime } from '../useTickerRegime';
 
 function PriceEmptyState({ fetchStatus }: { fetchStatus: string }) {
@@ -62,6 +63,9 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
 
   const { getNext: getNextEarnings } = useEarningsCalendar([h.ticker]);
   const nextEarnings = h.ticker !== 'CASH' ? getNextEarnings(h.ticker) : null;
+  // GICS sector (ticker_sector_map — the same source the edit form writes). Basket ≠ Sector.
+  const { data: sectorMap = {} } = useSectorMap();
+  const sector = sectorMap[h.ticker];
 
   const quote       = useQuote(h.ticker);
   const fetchStatus = usePriceCacheStore((s) => s.fetchStatus);
@@ -434,6 +438,11 @@ export function HoldingDetail({ holding: h, totalCount, onClose, isMobile = fals
         badges={
           <>
             <Badge kind="category" category={h.basket} />
+            {sector && h.ticker !== 'CASH' && (
+              <span style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: '0.06em', padding: '2px 8px', borderRadius: RADIUS.DEFAULT, color: 'var(--t2)', background: 'var(--s2)', border: '1px solid var(--border)' }}>
+                {sector}
+              </span>
+            )}
             <span style={{ fontSize: FONT_SIZE['2xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: '0.06em', padding: '2px 8px', borderRadius: RADIUS.DEFAULT, color: 'var(--t2)', background: 'var(--s2)', border: '1px solid var(--border)' }}>
               Rank #{String(h.rank).padStart(2, '0')} / {totalCount}
             </span>

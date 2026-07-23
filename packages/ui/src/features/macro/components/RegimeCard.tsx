@@ -9,9 +9,11 @@ interface Props {
   updatedAt: Date | null;
   /** Per-day regime scores (oldest → newest) — drives the trend chip + trajectory. */
   series: RegimeSeriesPoint[];
-  /** Honest live-price context (e.g. "S&P +0.4% · Nasdaq −0.2% today — the score re-reads at
-   *  the close"); the composite itself stays the daily-close read. Shown only on a trading day. */
+  /** Honest live-price context (e.g. "S&P +0.4% · Nasdaq −0.2% today"); the composite itself
+   *  stays the daily-close read. Shown on a trading day. */
   liveDrift?: string | null;
+  /** True only during RTH — drives the "● Live" dot vs a plain "at today's close" read. */
+  driftLive?: boolean;
   helpOpen: boolean;
   onToggleHelp: () => void;
   help: React.ReactNode;
@@ -40,7 +42,7 @@ function deltaVsPriorSession(series: RegimeSeriesPoint[]): number | null {
 // Δ-vs-prior-session chip, the 9-day history dots (right-aligned), a one-line
 // action-guidance sentence, and a source + freshness stamp — with the single-open
 // ⓘ explainer between the header row and the guidance line.
-export function RegimeCard({ regime, updatedAt, series, liveDrift, helpOpen, onToggleHelp, help }: Props) {
+export function RegimeCard({ regime, updatedAt, series, liveDrift, driftLive, helpOpen, onToggleHelp, help }: Props) {
   if (!regime) {
     return (
       <Card style={{ padding: '14px 16px' }}>
@@ -92,7 +94,7 @@ export function RegimeCard({ regime, updatedAt, series, liveDrift, helpOpen, onT
 
       {marketOpen && liveDrift && (
         <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: 8 }}>
-          <span style={{ color: 'var(--acc)', fontWeight: FONT_WEIGHT.semibold }}>● Live</span> {liveDrift}
+          {driftLive && <span style={{ color: 'var(--acc)', fontWeight: FONT_WEIGHT.semibold }}>● Live </span>}{liveDrift}
         </div>
       )}
 
