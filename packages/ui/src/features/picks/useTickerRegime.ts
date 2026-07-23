@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { trendStructure, mapIndustryToSector, sectorStanding } from '@stw/shared';
 import type { TrendBucket, SectorStanding } from '@stw/shared';
-import { loadCloses, tdBatchCloses } from '../macro/maCache';
+import { loadCloses, tdBatchCloses, liveQuotesCached } from '../macro/maCache';
 import { useSectorRotation } from '../macro/useSectorRotation';
 
 export interface TickerRegime {
@@ -90,13 +90,16 @@ export function useTickerRegime(tickers: string[], finnhubKey?: string, twelveDa
           if (i < toFetch.length - 1) await delay(1100);
         }
       }
+      // Live prices so the per-ticker bucket classifies off the live quote vs the fixed daily
+      // MAs — identical criteria to the Macro Trend table + the regime gate (host, 2026-07-23).
+      const live = await liveQuotesCached(tickers, finnhubKey);
       if (cancelled) return;
 
       const sectorRowBySymbol = Object.fromEntries(sectorRows.map((r) => [r.symbol, r]));
       const result: Record<string, TickerRegime> = {};
       for (const t of tickers) {
         const closes = closesMap[t] ?? [];
-        const { close, ma9, ma21, ma200, bucket } = trendStructure(closes);
+        const { close, ma9, ma21, ma200, bucket } = trendStructure(closes, live[t]);
         const sectorSymbol = loadCachedSector(t) ?? null;
         const sectorRow = sectorSymbol ? sectorRowBySymbol[sectorSymbol] : undefined;
         result[t] = {

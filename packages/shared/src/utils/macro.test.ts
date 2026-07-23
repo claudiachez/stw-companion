@@ -54,16 +54,23 @@ describe('trendStructure', () => {
     expect(s.bucket).toBe(trendBucket(s.close, s.ma9, s.ma21, s.ma200));
   });
 
-  it('derives the bucket only from daily closes — never a substituted live tick', () => {
-    // A recent pop lifts the 9-day MA; the last daily close dips just under it.
-    const closes = [
-      ...Array.from({ length: 191 }, (_, i) => 100 + i * 0.5),
-      205, 206, 207, 208, 209, 210, 211, 212,
-      206, // the classified close
-    ];
-    const s = trendStructure(closes);
-    expect(s.close).toBe(206);
-    expect(s.bucket).toBe(trendBucket(206, s.ma9, s.ma21, s.ma200));
+  it('classifies off the LIVE price when supplied — MAs stay close-based', () => {
+    // Same close-based MAs as `rising` (bucket = momentum off the 299 close), but a live
+    // price that has crashed below every MA regroups to risk_off intraday.
+    const closeBased = trendStructure(rising);
+    const live = trendStructure(rising, 50);
+    expect(live.close).toBe(50);
+    expect(live.ma9).toBe(closeBased.ma9);   // MAs unchanged — a moving average is fixed intraday
+    expect(live.ma200).toBe(closeBased.ma200);
+    expect(live.bucket).toBe(trendBucket(50, live.ma9, live.ma21, live.ma200));
+    expect(live.bucket).toBe('risk_off');
+    expect(live.bucket).not.toBe(closeBased.bucket); // the live price actually changed the group
+  });
+
+  it('ignores a non-positive/absent live price and falls back to the daily close', () => {
+    expect(trendStructure(rising, 0).close).toBe(299);
+    expect(trendStructure(rising, null).close).toBe(299);
+    expect(trendStructure(rising, undefined).close).toBe(299);
   });
 
   it('is all-null until there is enough history for the 200-day MA', () => {

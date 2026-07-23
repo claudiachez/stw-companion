@@ -2,7 +2,7 @@ import {
   regimeGate, cashflowAdjustedDrawdownPct, drawdownLadderTarget, bindingGrossTarget,
   type BindingGrossTarget,
 } from '@stw/shared';
-import { useLatestRegime } from '../regime/useLatestRegime';
+import { useLatestRegimeLive } from '../regime/useLatestRegimeLive';
 import type { RiskConfigRow } from './api';
 
 /**
@@ -32,7 +32,7 @@ export function useBindingGrossTarget(
   liveNlv?: number | null,
 ): BindingGrossTarget | null {
   // Must run unconditionally (hook rule) — the config guard comes after.
-  const { data: row } = useLatestRegime(instrument);
+  const { data: row } = useLatestRegimeLive(instrument);
   if (!config) return null;
 
   // `undefined` = no live feed (admin) → synced NLV; a passed value (incl. null) wins.

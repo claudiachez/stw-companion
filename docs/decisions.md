@@ -298,7 +298,15 @@ per-screen re-layout, not a token rebuild. Standing consequences:
   RLS keyed by `<uid>/…`). The masked IBKR account number comes from `user_executions.account` (`maskAccount`).
 - **`RegimeLight` presentation is replaced by the Risk-tab "market health" card on the subscriber side**;
   `RegimeLight.tsx` itself is untouched and still used on the admin Limits tab.
-- **Regime trend one-source (#151, merged):** `trendStructure(closes)` in `@stw/shared` is the single
-  `closes → {close, ma9/21/200, bucket}` read — the classified `close` is the latest DAILY close (same series
-  the MAs use), so Macro's trend table and the Risk-tab per-ticker bucket never disagree. A live intraday quote
-  may be DISPLAYED but must never be substituted into `trendBucket` (that was the "SPY reads two states" bug).
+- **Regime trend classification is LIVE (host 2026-07-23 — supersedes #151's close-only rule):**
+  `trendStructure(closes, livePrice?)` in `@stw/shared` is the single read. The 9/21/200 MAs are the fixed,
+  intraday-static reference lines (a moving average only gets a new point at the close); the price classified
+  against them is the **LIVE quote** when supplied. Every bucket surface — Macro trend table, sector rows,
+  Risk-tab RegimeLight, per-ticker badges — AND the regime gate's price leg (`useLatestRegimeLive`) pass the
+  SAME live price (shared `stw-price-cache`), so they never disagree — which is the consistency #151 was
+  actually after (its close-only fix was one of two valid resolutions; the host chose the live-consistent one,
+  because the dashboard is an actionable tool and a breach must show the moment it happens, not at the next
+  close). The gate's `sma200` + VIX stay the daily `regime_daily` row (VIX has no free intraday feed). The
+  Macro composite therefore moves intraday on the trend + GEX sleeves; volatility/credit/rates settle at the
+  close (FRED). The gate's own LOGIC/thresholds remain frozen at engine 1.1.0 — only its price INPUT changed
+  from the daily close to the live quote.

@@ -99,7 +99,7 @@ export function RegimeCard({ regime, updatedAt, series, liveDrift, driftLive, he
       )}
 
       <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', marginTop: 2 }}>
-        {stamp ? `${stamp} · ` : ''}refreshes daily after the close
+        {stamp ? `${stamp} · ` : ''}prices update live; volatility, credit &amp; rates settle at the close
       </div>
     </Card>
   );

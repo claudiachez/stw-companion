@@ -8,7 +8,7 @@ import { Badge } from '../../primitives/Badge';
 import { StatusPill } from '../../primitives/StatusPill';
 import { EmptyState } from '../../primitives/EmptyState';
 import { useRiskConfig, useSectorMap } from '../limits/useRiskConfig';
-import { useLatestRegime } from '../regime/useLatestRegime';
+import { useLatestRegimeLive } from '../regime/useLatestRegimeLive';
 import { useRegimeInstrumentStore } from '../regime/useRegimeInstrument';
 import { RegimeBadge } from '../picks/components/RegimeBadge';
 import { useEarningsCalendar } from '../earnings/useEarningsCalendar';
@@ -225,7 +225,7 @@ export function PortfolioPositionDetail({
   const { data: config } = useRiskConfig(userId);
   const { data: sectorMap } = useSectorMap();
   const regimeInstrument = useRegimeInstrumentStore((s) => s.instrument);
-  const { data: regime, isLoading: regimeLoading } = useLatestRegime(regimeInstrument);
+  const { data: regime, isLoading: regimeLoading } = useLatestRegimeLive(regimeInstrument);
   const [txFilter, setTxFilter] = useState<TxFilter>('all');
 
   const gate = regime ? regimeGate(
