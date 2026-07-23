@@ -73,7 +73,7 @@ function sma(closes: number[], n: number): number | null {
 
 /** A ticker/index's full 9/21/200 structure read, derived once from a closes array. */
 export interface TrendStructure {
-  /** The classified close — the latest DAILY close, the same series the MAs use. */
+  /** The classified price — the LIVE quote when supplied, else the latest daily close. */
   close: number | null;
   ma9: number | null;
   ma21: number | null;
@@ -82,19 +82,23 @@ export interface TrendStructure {
 }
 
 /**
- * The ONE source of truth for an index/ticker's trend-structure read, derived
- * from a daily-close series (oldest → newest). The `close` classified against the
- * 9/21/200 MAs is the latest DAILY close — the same series the MAs are built from
- * — so every surface that shows a trend bucket (Macro Trend table, the Risk-tab
- * RegimeLight, per-ticker regime badges, sector rows) agrees on the same state.
+ * The ONE source of truth for an index/ticker's trend-structure read. The 9/21/200
+ * MAs are simple averages of the daily-close series (oldest → newest) — they are
+ * fixed intraday (a moving average only gets a new point at the close). The price
+ * classified against those lines is the **LIVE quote** when one is supplied
+ * (`livePrice`), else the latest daily close.
  *
- * A live intraday quote may be displayed alongside for price/change, but it must
- * NOT be substituted for `close` here: doing so was the "SPY reads Momentum on
- * Risk vs Healthy Pullback on Macro" discrepancy (an intraday tick straddling the
- * 9-day MA flipped the bucket only on the surface that used the live quote).
+ * Classifying off the live price is deliberate (host, 2026-07-23): the dashboard is
+ * an actionable tool, so a name breaching a line should regroup the moment it
+ * happens, not at the next close. The MAs are the static reference; the live price
+ * is the moving point. Every surface that shows a bucket — the Macro Trend table,
+ * the sector rows, the Risk-tab RegimeLight, per-ticker badges — MUST pass the same
+ * `livePrice` so they never disagree (the consistency #151 was really about; the
+ * earlier close-only rule is superseded — see docs/decisions.md).
  */
-export function trendStructure(closes: number[]): TrendStructure {
-  const close = closes.length > 0 ? closes[closes.length - 1] : null;
+export function trendStructure(closes: number[], livePrice?: number | null): TrendStructure {
+  const dailyClose = closes.length > 0 ? closes[closes.length - 1] : null;
+  const close = livePrice != null && livePrice > 0 ? livePrice : dailyClose;
   const ma9 = sma(closes, 9);
   const ma21 = sma(closes, 21);
   const ma200 = sma(closes, 200);

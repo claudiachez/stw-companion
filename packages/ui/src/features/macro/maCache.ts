@@ -45,6 +45,42 @@ export async function finnhubQuote(fhSym: string, key: string): Promise<number |
   } catch { return null; }
 }
 
+const PRICE_TTL = 15 * 60 * 1000; // 15 min — matches useMacroIndicators' quote cache
+
+/**
+ * Live prices for several symbols at once, sharing the same `stw-price-cache`
+ * localStorage entry (15-min TTL) that useMacroIndicators writes — so a symbol
+ * fetched by one macro surface is reused by another, and the live trend
+ * classification is identical wherever it's read. Calls are staggered ~1.1s to
+ * respect Finnhub's free 60/min cap; a missing/failed quote is simply absent
+ * (the caller falls back to the daily close). Returns { symbol: livePrice }.
+ */
+export async function liveQuotesCached(symbols: string[], key?: string): Promise<Record<string, number>> {
+  const out: Record<string, number> = {};
+  let cache: Record<string, { data: { c: number; d: number; dp: number }; ts: number }> = {};
+  try { cache = JSON.parse(localStorage.getItem('stw-price-cache') || '{}'); } catch { /* ignore */ }
+  const now = Date.now();
+  const stale: string[] = [];
+  for (const s of symbols) {
+    const e = cache[s];
+    if (e && now - e.ts < PRICE_TTL && e.data?.c) out[s] = e.data.c;
+    else stale.push(s);
+  }
+  if (stale.length > 0 && key) {
+    await Promise.all(stale.map((s, i) => new Promise<void>((resolve) => {
+      setTimeout(async () => {
+        try {
+          const d = await (await fetch(`https://finnhub.io/api/v1/quote?symbol=${s}&token=${key}`)).json();
+          if (d.c) { out[s] = d.c; cache[s] = { data: { c: d.c, d: d.d ?? 0, dp: d.dp ?? 0 }, ts: now }; }
+        } catch { /* ignore */ }
+        resolve();
+      }, i * 1100);
+    })));
+    try { localStorage.setItem('stw-price-cache', JSON.stringify(cache)); } catch { /* ignore */ }
+  }
+  return out;
+}
+
 /** Daily closes (oldest → newest) from TwelveData, cached for the day. */
 export async function tdDailyCloses(tdSym: string, key: string, outputsize = 252): Promise<number[]> {
   const cached = loadCloses(tdSym);

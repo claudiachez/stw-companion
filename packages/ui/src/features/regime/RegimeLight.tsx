@@ -1,6 +1,6 @@
 import { regimeGate, regimeExitAdvice, formatDate, TREND_BUCKET_META, type RegimeExitRule, type TrendBucket, type BindingGrossTarget } from '@stw/shared';
 import { HelpToggle } from '../../primitives/HelpToggle';
-import { useLatestRegime } from './useLatestRegime';
+import { useLatestRegimeLive } from './useLatestRegimeLive';
 
 const STATE_COLOR: Record<'GREEN' | 'RED' | 'UNKNOWN', string> = {
   GREEN: 'var(--acc)',
@@ -43,7 +43,7 @@ export function RegimeLight({ instrument = 'IWM', exitRule, structure, bindingGr
    * gross-exposure card shows, so the two surfaces never disagree. */
   bindingGross?: BindingGrossTarget | null;
 }) {
-  const { data: row, isLoading } = useLatestRegime(instrument);
+  const { data: row, isLoading } = useLatestRegimeLive(instrument);
 
   if (isLoading) return null;
 

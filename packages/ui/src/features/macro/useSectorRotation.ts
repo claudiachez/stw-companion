@@ -1,15 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { trendStructure, relativeStrength, RS_LOOKBACKS, SECTOR_ETFS, SECTOR_CONSTITUENTS, rankSectorConstituents } from '@stw/shared';
 import type { SectorRotationRow } from '@stw/shared';
-import { loadCloses, loadLastDate, tdBatchCloses, fetchClosesChunked } from './maCache';
+import { loadCloses, loadLastDate, tdBatchCloses, fetchClosesChunked, liveQuotesCached } from './maCache';
 
 export interface SectorConstituents {
   leaders: SectorRotationRow[];
   settingUp: SectorRotationRow[];
 }
 
-function buildRow(meta: { symbol: string; name: string }, closes: number[], spyCloses: number[]): SectorRotationRow {
-  const { close, ma9, ma21, ma200, bucket } = trendStructure(closes);
+function buildRow(meta: { symbol: string; name: string }, closes: number[], spyCloses: number[], livePrice?: number | null): SectorRotationRow {
+  const { close, ma9, ma21, ma200, bucket } = trendStructure(closes, livePrice);
   return {
     symbol: meta.symbol,
     name: meta.name,
@@ -32,7 +32,7 @@ function buildRow(meta: { symbol: string; name: string }, closes: number[], spyC
 // ~66-symbol constituent fetch used only for this module's own Leaders/Setting Up
 // stock chips. Without this, every Picks tab visit would also trigger that fetch
 // and compete with it for TwelveData's free-tier rate limit.
-export function useSectorRotation(twelveDataKey?: string, skipConstituents = false) {
+export function useSectorRotation(twelveDataKey?: string, skipConstituents = false, finnhubKey?: string) {
   const [rows, setRows] = useState<SectorRotationRow[]>([]);
   const [asOf, setAsOf] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -61,13 +61,19 @@ export function useSectorRotation(twelveDataKey?: string, skipConstituents = fal
       if (cancelled) return;
 
       const spyCloses = closesMap.SPY ?? [];
-      const result = SECTOR_ETFS.map((meta) => buildRow(meta, closesMap[meta.symbol] ?? [], spyCloses));
-
+      // Paint immediately off daily closes, then overlay the LIVE-classified buckets once the
+      // quotes arrive — the rows regroup off the live price vs the fixed daily MAs (host,
+      // 2026-07-23), the same live read the Trend table uses, without blocking first paint on
+      // ~12 staggered quotes.
       if (!cancelled && mountedRef.current) {
-        setRows(result);
+        setRows(SECTOR_ETFS.map((meta) => buildRow(meta, closesMap[meta.symbol] ?? [], spyCloses)));
         setAsOf(loadLastDate('SPY'));
         setLoading(false);
       }
+      liveQuotesCached(['SPY', ...SECTOR_ETFS.map((s) => s.symbol)], finnhubKey).then((liveMap) => {
+        if (cancelled || !mountedRef.current) return;
+        setRows(SECTOR_ETFS.map((meta) => buildRow(meta, closesMap[meta.symbol] ?? [], spyCloses, liveMap[meta.symbol])));
+      });
 
       if (skipConstituents) {
         if (!cancelled && mountedRef.current) setConstituentsLoading(false);
@@ -100,7 +106,7 @@ export function useSectorRotation(twelveDataKey?: string, skipConstituents = fal
 
     fetchAll();
     return () => { cancelled = true; };
-  }, [twelveDataKey, skipConstituents]);
+  }, [twelveDataKey, skipConstituents, finnhubKey]);
 
   return { rows, asOf, loading, constituents, constituentsLoading };
 }

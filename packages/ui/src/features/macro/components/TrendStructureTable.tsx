@@ -147,7 +147,7 @@ export function TrendStructureTable({ indicators, visibleSymbols, onToggle, asOf
         </div>
       </div>
 
-      <SourceNote source="Quotes: Finnhub (live, ≤15m) · MAs: TwelveData daily" href="https://twelvedata.com" asOf={asOf} updatedAt={updatedAt} marginTop={8} />
+      <SourceNote source="Structure classified on the live price vs the daily MAs — regroups intraday · Finnhub quotes (≤15m) · TwelveData MAs" href="https://twelvedata.com" asOf={asOf} updatedAt={updatedAt} marginTop={8} />
     </Card>
   );
 }

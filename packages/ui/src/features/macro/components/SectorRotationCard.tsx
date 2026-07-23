@@ -110,7 +110,7 @@ export function SectorRotationCard({ rows, loading, asOf, updatedAt, constituent
   if (loading && rows.length === 0) {
     return (
       <Card>
-        <CardHeader title="Where money is rotating" meta="11 SPDR sectors · daily after the close" helpOpen={helpOpen} onToggleHelp={onToggleHelp} />
+        <CardHeader title="Where money is rotating" meta="11 SPDR sectors · structure live · RS daily" helpOpen={helpOpen} onToggleHelp={onToggleHelp} />
         {helpOpen && <HelpPanel>{help}</HelpPanel>}
         <div style={{ fontSize: FONT_SIZE.sm, color: 'var(--t3)', marginTop: 8 }}>Loading sector data…</div>
       </Card>
@@ -128,7 +128,7 @@ export function SectorRotationCard({ rows, loading, asOf, updatedAt, constituent
 
   return (
     <Card>
-      <CardHeader title="Where money is rotating" meta="11 SPDR sectors · daily after the close" helpOpen={helpOpen} onToggleHelp={onToggleHelp} />
+      <CardHeader title="Where money is rotating" meta="11 SPDR sectors · structure live · RS daily" helpOpen={helpOpen} onToggleHelp={onToggleHelp} />
       <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', lineHeight: 1.5, marginTop: 2, marginBottom: 8 }}>
         Ranked #1 (leading) → #11 (lagging) by structure + 1-month relative strength vs SPY. Bar length = size of the move.
       </div>
@@ -181,7 +181,7 @@ export function SectorRotationCard({ rows, loading, asOf, updatedAt, constituent
         <span><span style={{ display: 'inline-flex', padding: '0 7px', borderRadius: 999, border: '1px dashed var(--border)', color: 'var(--t2)', fontWeight: FONT_WEIGHT.semibold, fontSize: FONT_SIZE['3xs'] }}>setting up</span> turning positive on 1M RS</span>
       </div>
       <SourceNote
-        source={`SPDR sector ETFs vs SPY · Leaders/Setting Up are each sector's own constituents${constituentsLoading ? ' (loading…)' : ''}, not STW holdings · MAs: TwelveData daily`}
+        source={`SPDR sector ETFs vs SPY · structure classified on live prices vs daily MAs (regroups intraday); RS daily · Leaders/Setting Up are each sector's own constituents${constituentsLoading ? ' (loading…)' : ''}, not STW holdings · TwelveData MAs`}
         href="https://twelvedata.com"
         asOf={asOf}
         updatedAt={updatedAt}

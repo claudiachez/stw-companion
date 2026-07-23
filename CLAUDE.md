@@ -84,7 +84,8 @@ order placement out of web. `plans/` files are date-prefixed `YYYYMMDD_<name>`.
   `schedule(...)` fns run cron ONLY on the prod (`main`) deploy.
 - **One value, one source** — never two pipelines for one number: account equity = `risk_config.ibkr_nlv`;
   Macro GEX = `gex_snapshots`; live equity quotes = Finnhub via `priceCache` (`useLiveQuotes`); regime
-  gate = `regime_daily` (read the latest COMPLETE row — VIX lags a day).
+  gate = `regime_daily` for `sma200` + VIX, but its **price leg is the LIVE quote** (`useLatestRegimeLive`,
+  host 2026-07-23) — same `stw-price-cache` the trend buckets use, so every structure/gate surface agrees.
 - **Tickers:** every ticker is a `TickerLink` to its detail (except Macro index/ETF symbols — no detail
   page). A new row field ships with its filter + sort on every list surface that shows it, same change.
 - **Sector taxonomy:** GICS-11 + `ETF` + `Cash` (`resolveSector`); auto-mapped by `sector-map-sync`,
@@ -113,7 +114,9 @@ order placement out of web. `plans/` files are date-prefixed `YYYYMMDD_<name>`.
   peak stays synced (Option A); a **per-stock** ladder (reduce-to-% of peak, trim-aware via
   `user_executions`); alerts in-app + email/Discord. Three de-risking surfaces stay visually distinct.
 - **REGIME_EXIT:** per-user `risk_config` setting, advisory/display-only, one source `regimeExitAdvice`.
-- **Frozen:** regime gate at engine 1.1.0; the gate and the Macro composite never blend; no new gate indicators.
+- **Frozen:** regime gate LOGIC/thresholds at engine 1.1.0 (unchanged); the gate and the Macro composite never
+  blend; no new gate indicators. NOTE: the gate + all trend/sector buckets classify off the LIVE price now
+  (host 2026-07-23) — that changed the price INPUT, not the engine logic. See decisions.md "Regime trend live".
 - **Access + Discord via Whop (direction, not built):** app access will mirror Whop membership; Whop
   links Discord + feeds `profiles.discord_user_id`. Don't build separate auth / Discord-OAuth.
 - **Webapp redesign (2026-07-21):** whole app rebuilt from the Claude Design refs — pixel-exact,

@@ -18,7 +18,7 @@ import { useUserPositions, useUserExecutions } from '../portfolio/useUserPositio
 import { useSyncPortfolio } from '../portfolio/useSyncPortfolio';
 import { usePerStockLadders, type PerStockLadderInfo } from '../portfolio/usePerStockLadders';
 import { useRegimeInstrumentStore, REGIME_INSTRUMENTS } from '../regime/useRegimeInstrument';
-import { useLatestRegime } from '../regime/useLatestRegime';
+import { useLatestRegimeLive } from '../regime/useLatestRegimeLive';
 import type { TickerRegime } from '../picks/useTickerRegime';
 import { useRiskConfig, useSectorMap, useViolationAcks, useAcknowledgeViolation, useEnsureRiskConfig } from './useRiskConfig';
 import type { ViolationType, AckStatus } from './api';
@@ -208,7 +208,7 @@ function MarketCard({ instrument, setInstrument, regimeEnabled, structure, setti
   settingsRef: ReactNode;
 }) {
   const [showNums, setShowNums] = useState(false);
-  const { data: row, isLoading } = useLatestRegime(instrument);
+  const { data: row, isLoading } = useLatestRegimeLive(instrument);
   const { data: config } = useRiskConfig(useAuthStore((s) => s.user?.id));
 
   const gate = row

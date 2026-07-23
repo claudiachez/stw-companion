@@ -110,7 +110,7 @@ export function MacroView() {
     () => upcomingEarningsFor(earningsTickers),
     [upcomingEarningsFor, earningsTickers],
   );
-  const { rows: sectorRows, loading: sectorLoading, asOf: sectorAsOf, constituents: sectorConstituents, constituentsLoading: sectorConstituentsLoading } = useSectorRotation(twelveDataKey);
+  const { rows: sectorRows, loading: sectorLoading, asOf: sectorAsOf, constituents: sectorConstituents, constituentsLoading: sectorConstituentsLoading } = useSectorRotation(twelveDataKey, false, finnhubKey);
 
   const visibleIndicators = indicators.filter((i) => visibleSymbols.includes(i.symbol));
 
@@ -359,7 +359,7 @@ const HELP = {
     <>
       <div>STW's daily market-health score (0–100), a weighted blend of the five inputs below: trend {w.trend}%, volatility {w.volatility}%, credit {w.credit}%, rates/USD {w.rates_dollar}%, GEX {w.gex}%.</div>
       <div style={dim}><b style={{ color: 'var(--status-positive-text)' }}>Green ≥ 60</b> risk-on · <b style={{ color: 'var(--status-warning-text)' }}>amber 45–59</b> selective · <b style={{ color: 'var(--status-negative-text)' }}>red &lt; 45</b> defensive.</div>
-      <div style={dim}>The pill is today's label + score; the chip is the change vs the prior session; the dots are the last 9 sessions — hover one for that day's score. Refreshes daily after the close.</div>
+      <div style={dim}>The pill is today's label + score; the chip is the change vs the prior session; the dots are the last 9 sessions — hover one for that day's score. Structure is classified off live prices, so the score moves through the session; volatility, credit &amp; rates settle at the close.</div>
     </>
   ),
   sleeves: (

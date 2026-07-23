@@ -81,16 +81,15 @@ export function useMacroIndicators(symbols: string[], finnhubKey?: string, twelv
         const meta = ALL_INDICATORS.find((x) => x.symbol === sym) ?? { symbol: sym, name: sym };
         const closes = maMap[sym] ?? [];
         const quote = quoteMap[sym];
-        // Structure (bucket + MAs) is classified off the settled DAILY close, the
-        // same source of truth every other surface uses (trendStructure). The live
-        // Finnhub quote drives only the displayed price/change — never the bucket,
-        // so this table can't disagree with the Risk-tab RegimeLight for the same
-        // index (the intraday-quote-vs-daily-close discrepancy, fixed 2026-07-20).
-        const { close: dailyClose, ma9, ma21, ma200, bucket } = trendStructure(closes);
+        // Structure is classified off the LIVE quote vs the (fixed intraday) daily MAs, so the
+        // Trend table regroups the moment a name breaches a line — the same live read the Risk-tab
+        // RegimeLight + per-ticker badges use, so they never disagree (host, 2026-07-23; supersedes
+        // the earlier close-only rule — see docs/decisions.md).
+        const { close, ma9, ma21, ma200, bucket } = trendStructure(closes, quote?.c);
         return {
           symbol: sym,
           name: meta.name,
-          close: quote?.c ?? dailyClose,
+          close,
           chg: quote?.d ?? null,
           chgPct: quote?.dp ?? null,
           ma9, ma21, ma200,
