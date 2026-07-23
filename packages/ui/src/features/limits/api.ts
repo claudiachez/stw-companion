@@ -46,7 +46,7 @@ export interface RiskConfigRow {
 }
 
 export type AckStatus = 'new' | 'acknowledged' | 'glide_path';
-export type ViolationType = 'position' | 'sector' | 'gross';
+export type ViolationType = 'position' | 'sector' | 'gross' | 'option';
 
 export interface ViolationAck {
   id: number;

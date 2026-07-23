@@ -6,7 +6,7 @@ import { ConvictionCommentForm } from './ConvictionCommentForm';
 import { CommentRow } from './CommentRow';
 import { useCapabilities } from '../../../context/AppCapabilities';
 import { useAuthStore } from '../../../store/auth';
-import { FONT_SIZE } from '@stw/shared';
+import { FONT_SIZE, FONT_WEIGHT } from '@stw/shared';
 
 interface Props {
   ticker: string;
@@ -25,10 +25,17 @@ export function ConvictionTimeline({ ticker, currentConviction, scope = 'all' }:
   const { data: comments = [], isLoading } = useConvictionComments(ticker);
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  const [showAll, setShowAll] = useState(false);
 
   const visible = scope === 'stw' ? comments.filter((cc) => cc.user_id == null)
     : scope === 'personal' ? comments.filter((cc) => cc.user_id != null)
     : comments;
+  // Long-held names accrete a lot of "still holding" notes; show the 5 most recent, the rest
+  // behind a toggle. (Comments arrive newest-first.) Interim until the routines only log real
+  // conviction moves — see docs/status.md.
+  const CAP = 5;
+  const shown = showAll ? visible : visible.slice(0, CAP);
+  const hidden = visible.length - shown.length;
   // STW commentary is admin-authored (canEdit); a personal note is the subscriber's own.
   const canAddNote = scope === 'personal' ? (!canEdit && canViewHistory)
     : scope === 'stw' ? !!canEdit
@@ -59,7 +66,7 @@ export function ConvictionTimeline({ ticker, currentConviction, scope = 'all' }:
       )}
 
       <div>
-        {visible.map((cc) => (
+        {shown.map((cc) => (
           <CommentRow
             key={cc.id}
             cc={cc}
@@ -69,6 +76,15 @@ export function ConvictionTimeline({ ticker, currentConviction, scope = 'all' }:
           />
         ))}
       </div>
+
+      {(hidden > 0 || showAll) && visible.length > CAP && (
+        <button
+          onClick={() => setShowAll((v) => !v)}
+          style={{ marginTop: 6, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit', fontSize: FONT_SIZE.xs, fontWeight: FONT_WEIGHT.semibold, color: 'var(--acc)' }}
+        >
+          {showAll ? 'Show fewer ↑' : `Show ${hidden} older ↓`}
+        </button>
+      )}
 
       {showForm ? (
         <ConvictionCommentForm

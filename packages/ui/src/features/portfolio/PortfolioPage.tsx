@@ -536,7 +536,7 @@ function MoversCard({ groups, portfolioValue, onOpenPosition }: { groups: Portfo
           return (
             <button key={g.underlying} onClick={() => onOpenPosition(g.underlying)}
               style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', padding: '5px 0', cursor: 'pointer', width: '100%', textAlign: 'left' }}>
-              <span style={{ width: 52, flexShrink: 0, fontSize: FONT_SIZE.sms, fontWeight: FONT_WEIGHT.bold, color: 'var(--acc)' }}>{g.underlying}</span>
+              <span style={{ width: 52, flexShrink: 0, fontSize: FONT_SIZE.sms, fontWeight: FONT_WEIGHT.bold, color }}>{g.underlying}</span>
               <span style={{ width: 44, flexShrink: 0, fontSize: FONT_SIZE.xs, color: 'var(--t3)', fontVariantNumeric: 'tabular-nums' }}>{wt != null ? `${wt.toFixed(1)}%` : '—'}</span>
               <span style={{ flex: 1, height: 8, background: 'var(--s2)', borderRadius: 4, overflow: 'hidden' }}>
                 <span style={{ display: 'block', height: '100%', width: barW, background: color, borderRadius: 4 }} />
@@ -667,7 +667,7 @@ function ConvictionNote({ conviction, declining }: { conviction: number | null; 
 function TailingTab({ groups, portfolioValue, pickMap, decliningTailed, showMoney, isMobile, onSelectTicker }: {
   groups: PortfolioGroup[];
   portfolioValue: number;
-  pickMap: Map<string, { conviction: number | null; basket: string; traders: string[]; stwWeight: number | null }>;
+  pickMap: Map<string, { conviction: number | null; basket: string; traders: string[]; stwWeight: number | null; stwActive: boolean }>;
   decliningTailed: { ticker: string }[];
   showMoney: boolean;
   isMobile: boolean;
@@ -677,9 +677,18 @@ function TailingTab({ groups, portfolioValue, pickMap, decliningTailed, showMone
   const trader = FOLLOWED_TRADERS[0]; // only STW has picks in the DB today; structured for more
   const decliningSet = useMemo(() => new Set(decliningTailed.map((c) => c.ticker)), [decliningTailed]);
 
-  const untailed = groups.filter((g) => !g.isTailed);
+  // Own calls = STW never had it. Exited = STW had it but has since closed out (0% / closed) —
+  // you still hold. Neither is "tailed" (isTailed is active-only now), so both key off pickMap.
+  const untailed = groups.filter((g) => !pickMap.has(g.underlying));
+  const isActive = (g: PortfolioGroup) => pickMap.get(g.underlying)?.stwActive ?? false;
+  const exited = useMemo(() => groups
+    .filter((g) => pickMap.has(g.underlying) && !isActive(g))
+    .map((g) => ({ g, yourPct: portfolioValue > 0 ? (g.marketValue / portfolioValue) * 100 : 0 }))
+    .sort((a, b) => b.yourPct - a.yourPct),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [groups, portfolioValue, pickMap]);
   const rows = useMemo(() => groups
-    .filter((g) => g.isTailed && g.traders.includes(trader))
+    .filter((g) => isActive(g) && g.traders.includes(trader))
     .map((g) => {
       const yourPct = portfolioValue > 0 ? (g.marketValue / portfolioValue) * 100 : 0;
       const stwWeight = pickMap.get(g.underlying)?.stwWeight ?? null;
@@ -687,6 +696,7 @@ function TailingTab({ groups, portfolioValue, pickMap, decliningTailed, showMone
       return { g, yourPct, stwWeight, delta, conviction: pickMap.get(g.underlying)?.conviction ?? g.conviction, declining: decliningSet.has(g.underlying) };
     })
     .sort((a, b) => Math.abs(b.delta ?? 0) - Math.abs(a.delta ?? 0)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [groups, trader, portfolioValue, pickMap, decliningSet]);
 
   // §1 count chips — sizingTone(delta, 1) is the single classifier (±1pt = matched).
@@ -727,6 +737,7 @@ function TailingTab({ groups, portfolioValue, pickMap, decliningTailed, showMone
           {chip(counts.more, 'you hold more', 'warning')}
           {chip(counts.less, 'you hold less', 'info')}
           {chip(untailed.length, 'your own calls', 'neutral')}
+          {exited.length > 0 && chip(exited.length, `${trader} exited`, 'warning')}
         </div>
       </div>
 
@@ -812,27 +823,51 @@ function TailingTab({ groups, portfolioValue, pickMap, decliningTailed, showMone
         )}
       </div>
 
-      {/* §4 — your own calls */}
-      {untailed.length > 0 && (
+      {/* §4 — your own calls + names STW has exited */}
+      {(untailed.length > 0 || exited.length > 0) && (
         <div style={card}>
-          <div style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)', marginBottom: 2 }}>Your own calls</div>
-          <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', lineHeight: 1.5, marginBottom: 10 }}>
-            You hold these, but no trader you follow tracks them — they&rsquo;re entirely your judgment, so {trader} alerts and conviction changes never cover them.
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {untailed.map((g) => {
-              const wt = portfolioValue > 0 ? (g.marketValue / portfolioValue) * 100 : null;
-              return (
-                <button key={g.underlying} onClick={() => onSelectTicker(g.underlying)}
-                  style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8, background: 'var(--bg)', border: '1px solid var(--bsub)', borderRadius: 8, padding: '8px 12px', cursor: 'pointer' }}>
-                  <span style={{ fontSize: FONT_SIZE.sms, fontWeight: FONT_WEIGHT.bold, color: 'var(--acc)' }}>{g.underlying}</span>
-                  <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>
-                    {wt != null ? `${wt.toFixed(1)}%` : '—'} of your account{showMoney ? ` · ${fmtMoneyCompact(g.marketValue)}` : ''}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          {untailed.length > 0 && (
+            <>
+              <div style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)', marginBottom: 2 }}>Your own calls</div>
+              <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', lineHeight: 1.5, marginBottom: 10 }}>
+                You hold these, but no trader you follow tracks them — they&rsquo;re entirely your judgment, so {trader} alerts and conviction changes never cover them.
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {untailed.map((g) => {
+                  const wt = portfolioValue > 0 ? (g.marketValue / portfolioValue) * 100 : null;
+                  return (
+                    <button key={g.underlying} onClick={() => onSelectTicker(g.underlying)}
+                      style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8, background: 'var(--bg)', border: '1px solid var(--bsub)', borderRadius: 8, padding: '8px 12px', cursor: 'pointer' }}>
+                      <span style={{ fontSize: FONT_SIZE.sms, fontWeight: FONT_WEIGHT.bold, color: 'var(--acc)' }}>{g.underlying}</span>
+                      <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>
+                        {wt != null ? `${wt.toFixed(1)}%` : '—'} of your account{showMoney ? ` · ${fmtMoneyCompact(g.marketValue)}` : ''}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+          {exited.length > 0 && (
+            <div style={{ marginTop: untailed.length > 0 ? 16 : 0 }}>
+              <div style={{ fontSize: FONT_SIZE.base, fontWeight: FONT_WEIGHT.semibold, color: 'var(--text)', marginBottom: 2 }}>{trader} has exited — you still hold</div>
+              <div style={{ fontSize: FONT_SIZE.xs, color: 'var(--t3)', lineHeight: 1.5, marginBottom: 10 }}>
+                {trader} once held these but has since closed out (0% of their book). You&rsquo;re on your own here — treat them like your own calls, not a tail.
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {exited.map(({ g, yourPct }) => (
+                  <button key={g.underlying} onClick={() => onSelectTicker(g.underlying)}
+                    style={{ display: 'inline-flex', alignItems: 'baseline', gap: 8, background: 'var(--bg)', border: '1px solid var(--bsub)', borderRadius: 8, padding: '8px 12px', cursor: 'pointer' }}>
+                    <span style={{ fontSize: FONT_SIZE.sms, fontWeight: FONT_WEIGHT.bold, color: 'var(--acc)' }}>{g.underlying}</span>
+                    <span style={{ fontSize: FONT_SIZE.xs, color: 'var(--t2)', fontVariantNumeric: 'tabular-nums' }}>
+                      {yourPct.toFixed(1)}% of your account{showMoney ? ` · ${fmtMoneyCompact(g.marketValue)}` : ''}
+                    </span>
+                    <span style={{ fontSize: FONT_SIZE['3xs'], fontWeight: FONT_WEIGHT.bold, letterSpacing: LETTER_SPACING.label, textTransform: 'uppercase', color: 'var(--status-warning-text)' }}>{trader} out</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -891,9 +926,11 @@ export function PortfolioPage() {
   // ticker → followed-trader pick (conviction + basket + STW's own weight). Single trader today;
   // structured for more.
   const pickMap = useMemo(() => {
-    const m = new Map<string, { conviction: number | null; basket: string; traders: string[]; stwWeight: number | null }>();
+    const m = new Map<string, { conviction: number | null; basket: string; traders: string[]; stwWeight: number | null; stwActive: boolean }>();
     for (const h of stwHoldings) {
-      m.set(h.ticker, { conviction: h.conviction ?? null, basket: h.basket ?? '', traders: [FOLLOWED_TRADERS[0]], stwWeight: h.current_weight ?? null });
+      // stwActive = STW currently holds it (open, weight > 0). A closed / zero-weight pick means
+      // STW has EXITED — you're holding something they dropped, which is not the same as tailing.
+      m.set(h.ticker, { conviction: h.conviction ?? null, basket: h.basket ?? '', traders: [FOLLOWED_TRADERS[0]], stwWeight: h.current_weight ?? null, stwActive: h.last_action !== 'Closed' && (h.current_weight ?? 0) > 0 });
     }
     return m;
   }, [stwHoldings]);
@@ -963,7 +1000,9 @@ export function PortfolioPage() {
         optionsValue: optionLegs.reduce((s, p) => s + posMV(p), 0),
         optionsRisk: optionLegs.reduce((s, p) => s + posCost(p), 0),
         optionCount: optionLegs.length,
-        isTailed: !!pick,
+        // Tailed = STW CURRENTLY holds it. A pick STW has exited (closed / 0%) is no longer a
+        // tail — it drops to "your own calls" (with an exited tag in the Tailing tab).
+        isTailed: !!pick && pick.stwActive,
         traders: pick?.traders ?? [],
         conviction: pick?.conviction ?? null,
         basket: pick?.basket ?? '',
@@ -1118,7 +1157,7 @@ export function PortfolioPage() {
     const rows = positions.map((p) => {
       const underlying = cleanUnderlying(p.underlying);
       const pick = pickMap.get(underlying);
-      return { p, underlying, isTailed: !!pick, traders: pick?.traders ?? [], conviction: pick?.conviction ?? null, basket: pick?.basket ?? '' };
+      return { p, underlying, isTailed: !!pick && pick.stwActive, traders: pick?.traders ?? [], conviction: pick?.conviction ?? null, basket: pick?.basket ?? '' };
     }).filter((r) => matchFilters(r.underlying, r.isTailed, r.basket, r.p.asset_class === 'OPT', r.conviction, regimes[r.underlying]));
     return rows.sort((a, b) => {
       switch (filters.sort) {
