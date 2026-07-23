@@ -677,19 +677,18 @@ function TailingTab({ groups, portfolioValue, pickMap, decliningTailed, showMone
   const trader = FOLLOWED_TRADERS[0]; // only STW has picks in the DB today; structured for more
   const decliningSet = useMemo(() => new Set(decliningTailed.map((c) => c.ticker)), [decliningTailed]);
 
-  const untailed = groups.filter((g) => !g.isTailed);
-  // A pick STW has EXITED (closed / zero weight) but you still hold — shown beside "your own
-  // calls", NOT in the sizing comparison (comparing your size to their 0% reads as a false
-  // "you hold way more", when the real story is "STW is out").
+  // Own calls = STW never had it. Exited = STW had it but has since closed out (0% / closed) —
+  // you still hold. Neither is "tailed" (isTailed is active-only now), so both key off pickMap.
+  const untailed = groups.filter((g) => !pickMap.has(g.underlying));
   const isActive = (g: PortfolioGroup) => pickMap.get(g.underlying)?.stwActive ?? false;
   const exited = useMemo(() => groups
-    .filter((g) => g.isTailed && g.traders.includes(trader) && !isActive(g))
+    .filter((g) => pickMap.has(g.underlying) && !isActive(g))
     .map((g) => ({ g, yourPct: portfolioValue > 0 ? (g.marketValue / portfolioValue) * 100 : 0 }))
     .sort((a, b) => b.yourPct - a.yourPct),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [groups, trader, portfolioValue, pickMap]);
+    [groups, portfolioValue, pickMap]);
   const rows = useMemo(() => groups
-    .filter((g) => g.isTailed && g.traders.includes(trader) && isActive(g))
+    .filter((g) => isActive(g) && g.traders.includes(trader))
     .map((g) => {
       const yourPct = portfolioValue > 0 ? (g.marketValue / portfolioValue) * 100 : 0;
       const stwWeight = pickMap.get(g.underlying)?.stwWeight ?? null;
@@ -1001,7 +1000,9 @@ export function PortfolioPage() {
         optionsValue: optionLegs.reduce((s, p) => s + posMV(p), 0),
         optionsRisk: optionLegs.reduce((s, p) => s + posCost(p), 0),
         optionCount: optionLegs.length,
-        isTailed: !!pick,
+        // Tailed = STW CURRENTLY holds it. A pick STW has exited (closed / 0%) is no longer a
+        // tail — it drops to "your own calls" (with an exited tag in the Tailing tab).
+        isTailed: !!pick && pick.stwActive,
         traders: pick?.traders ?? [],
         conviction: pick?.conviction ?? null,
         basket: pick?.basket ?? '',
@@ -1156,7 +1157,7 @@ export function PortfolioPage() {
     const rows = positions.map((p) => {
       const underlying = cleanUnderlying(p.underlying);
       const pick = pickMap.get(underlying);
-      return { p, underlying, isTailed: !!pick, traders: pick?.traders ?? [], conviction: pick?.conviction ?? null, basket: pick?.basket ?? '' };
+      return { p, underlying, isTailed: !!pick && pick.stwActive, traders: pick?.traders ?? [], conviction: pick?.conviction ?? null, basket: pick?.basket ?? '' };
     }).filter((r) => matchFilters(r.underlying, r.isTailed, r.basket, r.p.asset_class === 'OPT', r.conviction, regimes[r.underlying]));
     return rows.sort((a, b) => {
       switch (filters.sort) {
